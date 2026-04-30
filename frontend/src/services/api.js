@@ -22,31 +22,29 @@ api.interceptors.request.use((config) => {
 
 /* =========================
    PRODUCTS API
+   Returns full Axios response because some pages use response.data
 ========================= */
 export const productsAPI = {
   getAll: async () => {
-    const response = await api.get("/products");
-    return response.data;
+    return await api.get("/products");
   },
 
   getById: async (id) => {
-    const response = await api.get(`/products/${id}`);
-    return response.data;
+    return await api.get(`/products/${id}`);
   },
 };
 
 /* =========================
    PACKS API
+   Returns full Axios response because some pages use response.data
 ========================= */
 export const packsAPI = {
   getAll: async () => {
-    const response = await api.get("/packs");
-    return response.data;
+    return await api.get("/packs");
   },
 
   getById: async (id) => {
-    const response = await api.get(`/packs/${id}`);
-    return response.data;
+    return await api.get(`/packs/${id}`);
   },
 };
 
@@ -55,8 +53,7 @@ export const packsAPI = {
 ========================= */
 export const categoriesAPI = {
   getAll: async () => {
-    const response = await api.get("/categories");
-    return response.data;
+    return await api.get("/categories");
   },
 };
 
@@ -147,10 +144,22 @@ export const adminAPI = {
 
 /* =========================
    BACKWARD-COMPATIBLE HELPERS
+   These return only the real data array/object
 ========================= */
-export const getProducts = async () => productsAPI.getAll();
-export const getPacks = async () => packsAPI.getAll();
-export const getCategories = async () => categoriesAPI.getAll();
+export const getProducts = async () => {
+  const response = await productsAPI.getAll();
+  return response.data;
+};
+
+export const getPacks = async () => {
+  const response = await packsAPI.getAll();
+  return response.data;
+};
+
+export const getCategories = async () => {
+  const response = await categoriesAPI.getAll();
+  return response.data;
+};
 
 export const loginUser = async (payload) => authAPI.login(payload);
 export const registerUser = async (payload) => authAPI.register(payload);
