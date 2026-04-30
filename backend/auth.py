@@ -26,7 +26,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 
-async def get_current_user(credentials: HTTPAuthCredentials = Depends(security)):
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     credential_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -44,7 +44,7 @@ async def get_current_user(credentials: HTTPAuthCredentials = Depends(security))
     
     return {"user_id": user_id, "is_admin": is_admin}
 
-async def get_current_admin(user: dict = Depends(get_current_user)):
+async def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)):
     if not user.get("is_admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
