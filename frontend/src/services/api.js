@@ -101,12 +101,18 @@ export const ordersAPI = {
     return response.data;
   },
 
-  uploadReceipt: async (orderId, formData) => {
-    const response = await api.post(`/orders/${orderId}/receipt`, formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+  uploadReceipt: async (orderId, fileOrFormData) => {
+    const formData = fileOrFormData instanceof FormData
+      ? fileOrFormData
+      : new FormData();
+
+    if (!(fileOrFormData instanceof FormData)) {
+      formData.append("file", fileOrFormData);
+    }
+
+    // Do NOT manually set Content-Type for FormData.
+    // Axios/browser must add the multipart boundary automatically.
+    const response = await api.post(`/orders/${orderId}/receipt`, formData);
 
     return response.data;
   },
