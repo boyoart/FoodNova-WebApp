@@ -1,5 +1,11 @@
-from fastapi import FastAPI
+from datetime import datetime
+from typing import Dict, List, Optional
+from uuid import uuid4
+
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr
+
 
 app = FastAPI(title="FoodNova API")
 
@@ -22,44 +28,55 @@ app.add_middleware(
 
 
 # =========================
-# OPTIONAL DATABASE INIT
-# This will not crash if database files/models are different.
+# TEMP STORAGE
+# This keeps the app working while we later rebuild real DB auth.
 # =========================
-try:
-    from database import Base, engine
+USERS: Dict[str, dict] = {}
+TOKENS: Dict[str, str] = {}
+ORDERS: List[dict] = []
 
-    Base.metadata.create_all(bind=engine)
-except Exception as e:
-    print("DATABASE INIT SKIPPED:", str(e))
+
+# Default admin
+ADMIN_EMAIL = "admin@foodnova.com"
+ADMIN_PASSWORD = "Admin123!"
+
+USERS[ADMIN_EMAIL] = {
+    "id": 1,
+    "full_name": "FoodNova Admin",
+    "email": ADMIN_EMAIL,
+    "phone": "",
+    "password": ADMIN_PASSWORD,
+    "role": "admin",
+}
 
 
 # =========================
-# OPTIONAL ROUTERS
-# These are loaded only if they do not crash.
-# This prevents one bad router/model from killing the whole API.
+# SCHEMAS
 # =========================
-try:
-    from routes import auth
-
-    app.include_router(auth.router)
-except Exception as e:
-    print("AUTH ROUTER SKIPPED:", str(e))
-
-
-try:
-    from routes import orders
-
-    app.include_router(orders.router)
-except Exception as e:
-    print("ORDERS ROUTER SKIPPED:", str(e))
+class RegisterPayload(BaseModel):
+    full_name: Optional[str] = None
+    fullName: Optional[str] = None
+    name: Optional[str] = None
+    email: EmailStr
+    phone: Optional[str] = ""
+    password: str
+    confirm_password: Optional[str] = None
+    confirmPassword: Optional[str] = None
 
 
-try:
-    from routes import admin
+class LoginPayload(BaseModel):
+    email: EmailStr
+    password: str
 
-    app.include_router(admin.router)
-except Exception as e:
-    print("ADMIN ROUTER SKIPPED:", str(e))
+
+class OrderPayload(BaseModel):
+    items: Optional[list] = []
+    total: Optional[float] = 0
+    total_amount: Optional[float] = 0
+    delivery_address: Optional[str] = ""
+    address: Optional[str] = ""
+    phone: Optional[str] = ""
+    payment_method: Optional[str] = "bank"
 
 
 # =========================
@@ -84,8 +101,7 @@ def health():
 
 
 # =========================
-# PUBLIC FOODNOVA DATA
-# Safe static data for frontend display
+# PUBLIC DATA
 # =========================
 @app.get("/categories")
 def list_categories():
@@ -186,10 +202,171 @@ def list_packs():
 
 @app.get("/packs/{pack_id}")
 def get_pack(pack_id: int):
-    packs = list_packs()
-
-    for pack in packs:
+    for pack in list_packs():
         if pack["id"] == pack_id:
             return pack
 
-    return {"detail": "Pack not found"}
+    raise HTTPException(status_code=404, detail="Pack not found")
+
+
+# =========================
+# AUTH ROUTES
+# =========================
+@app.post("/auth/register")
+def register(payload: RegisterPayload):
+    email = payload.email.lower()
+
+    if email in USERS:
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    confirm = payload.confirm_password or payload.confirmPassword
+
+    if confirm and confirm != payload.password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    full_name = payload.full_name or payload.fullName or payload.name or "FoodNova Customer"
+
+    user = {
+        "id": len(USERS) + 1,
+        "full_name": full_name,
+        "email": email,
+        "phone": payload.phone or "",
+        "password": payload.password,
+        "role": "customer",
+    }
+
+    USERS[email] = user
+
+    token = f"token-{uuid4()}"
+    TOKENS[token] = email
+
+    return {
+        "message": "Registration successful",
+        "access_token": token,
+        "token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "full_name": user["full_name"],
+            "email": user["email"],
+            "phone": user["phone"],
+            "role": user["role"],
+        },
+    }
+
+
+@app.post("/auth/login")
+def login(payload: LoginPayload):
+    email = payload.email.lower()
+    user = USERS.get(email)
+
+    if not user or user["password"] != payload.password:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    token = f"token-{uuid4()}"
+    TOKENS[token] = email
+
+    return {
+        "message": "Login successful",
+        "access_token": token,
+        "token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user["id"],
+            "full_name": user["full_name"],
+            "email": user["email"],
+            "phone": user.get("phone", ""),
+            "role": user["role"],
+        },
+    }
+
+
+@app.get("/auth/me")
+def me():
+    return {
+        "message": "Auth check available",
+        "note": "Temporary auth active for FoodNova testing",
+    }
+
+
+# =========================
+# ORDER ROUTES
+# =========================
+@app.post("/orders")
+def create_order(payload: OrderPayload):
+    order = {
+        "id": len(ORDERS) + 1,
+        "items": payload.items or [],
+        "total_amount": payload.total_amount or payload.total or 0,
+        "delivery_address": payload.delivery_address or payload.address or "",
+        "phone": payload.phone or "",
+        "payment_method": payload.payment_method or "bank",
+        "status": "pending",
+        "created_at": datetime.utcnow().isoformat(),
+        "receipt": None,
+    }
+
+    ORDERS.append(order)
+
+    return {
+        "message": "Order created successfully",
+        "order": order,
+    }
+
+
+@app.get("/orders/my")
+def my_orders():
+    return ORDERS
+
+
+@app.get("/orders/{order_id}")
+def get_order(order_id: int):
+    for order in ORDERS:
+        if order["id"] == order_id:
+            return order
+
+    raise HTTPException(status_code=404, detail="Order not found")
+
+
+@app.post("/orders/{order_id}/receipt")
+async def upload_receipt(order_id: int, file: UploadFile = File(...)):
+    for order in ORDERS:
+        if order["id"] == order_id:
+            order["receipt"] = {
+                "filename": file.filename,
+                "status": "submitted",
+                "uploaded_at": datetime.utcnow().isoformat(),
+            }
+
+            return {
+                "message": "Receipt uploaded successfully",
+                "receipt": order["receipt"],
+            }
+
+    raise HTTPException(status_code=404, detail="Order not found")
+
+
+# =========================
+# ADMIN ROUTES
+# =========================
+@app.get("/admin/orders")
+def admin_orders():
+    return ORDERS
+
+
+@app.get("/admin/products")
+def admin_products():
+    return list_products()
+
+
+@app.patch("/admin/orders/{order_id}")
+def update_order(order_id: int, payload: dict):
+    for order in ORDERS:
+        if order["id"] == order_id:
+            order.update(payload)
+            return {
+                "message": "Order updated successfully",
+                "order": order,
+            }
+
+    raise HTTPException(status_code=404, detail="Order not found")
