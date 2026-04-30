@@ -1,0 +1,153 @@
+.order-history-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  min-height: 60vh;
+}
+
+.order-history-page h1 {
+  margin-bottom: 2rem;
+  color: var(--dark);
+}
+
+.not-logged-in,
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: var(--light);
+  border-radius: 0.75rem;
+  color: var(--text-light);
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.empty-state svg {
+  opacity: 0.5;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-light);
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.order-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.order-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--light);
+}
+
+.order-header h3 {
+  margin: 0;
+  color: var(--dark);
+  font-size: 1.1rem;
+}
+
+.order-date {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.85rem;
+}
+
+.order-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.status-warning {
+  background-color: rgba(247, 127, 0, 0.1);
+  color: var(--warning);
+}
+
+.status-info {
+  background-color: rgba(0, 78, 137, 0.1);
+  color: var(--secondary);
+}
+
+.status-success {
+  background-color: rgba(6, 168, 125, 0.1);
+  color: var(--success);
+}
+
+.status-default {
+  background-color: var(--light);
+  color: var(--text-light);
+}
+
+.order-items {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.order-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.order-item:last-child {
+  margin-bottom: 0;
+}
+
+.order-footer {
+  padding: 1.5rem;
+}
+
+.order-total {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--dark);
+}
+
+.order-address {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .order-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .order-status {
+    align-self: flex-start;
+  }
+}
