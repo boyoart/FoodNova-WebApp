@@ -10,11 +10,13 @@ const api = axios.create({
   },
 });
 
+const getAuthToken = () =>
+  localStorage.getItem("foodnova_token") ||
+  localStorage.getItem("token") ||
+  localStorage.getItem("admin_token");
+
 api.interceptors.request.use((config) => {
-  const token =
-    localStorage.getItem("foodnova_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("admin_token");
+  const token = getAuthToken();
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -110,11 +112,36 @@ export const ordersAPI = {
       formData.append("file", fileOrFormData);
     }
 
-    // Do NOT manually set Content-Type for FormData.
-    // Axios/browser must add the multipart boundary automatically.
-    const response = await api.post(`/orders/${orderId}/receipt`, formData);
+    const headers = {};
+    const token = getAuthToken();
 
-    return response.data;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    // IMPORTANT: use fetch instead of the axios instance here.
+    // The axios instance has JSON defaults, and manually setting
+    // multipart/form-data causes FastAPI to throw: Missing boundary in multipart.
+    // fetch lets the browser set Content-Type with the required boundary.
+    const response = await fetch(`${API_BASE_URL}/orders/${orderId}/receipt`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw {
+        response: {
+          status: response.status,
+          data,
+        },
+        message: data?.detail || "Receipt upload failed",
+      };
+    }
+
+    return data;
   },
 };
 
