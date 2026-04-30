@@ -98,6 +98,14 @@ export const ordersAPI = {
     return response.data;
   },
 
+  // OrderHistoryPage uses this method and expects { data: [...] }
+  getCustomerOrders: async () => {
+    const response = await api.get("/orders/my");
+    const body = response.data;
+    const orders = Array.isArray(body) ? body : body?.orders || body?.data || [];
+    return { data: orders };
+  },
+
   getById: async (id) => {
     const response = await api.get(`/orders/${id}`);
     return response.data;
