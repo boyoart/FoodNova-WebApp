@@ -23,9 +23,28 @@ export default function RegisterPage() {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
+  const extractAuthPayload = (res) => {
+    // Supports both Axios response format and plain JSON format
+    const body = res?.data ?? res
+    const nested = body?.data ?? {}
+
+    const user = body?.user || nested?.user
+    const token =
+      body?.access_token ||
+      body?.accessToken ||
+      body?.token ||
+      body?.jwt ||
+      nested?.access_token ||
+      nested?.accessToken ||
+      nested?.token ||
+      nested?.jwt
+
+    return { body, user, token }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match')
       return
@@ -33,18 +52,31 @@ export default function RegisterPage() {
 
     try {
       setLoading(true)
+
       const res = await authAPI.register({
         name: formData.name,
+        full_name: formData.name,
+        fullName: formData.name,
         email: formData.email,
         phone: formData.phone,
         password: formData.password,
+        confirmPassword: formData.confirmPassword,
+        confirm_password: formData.confirmPassword,
       })
 
-      login(res.data.user, res.data.access_token)
+      const { user, token } = extractAuthPayload(res)
+
+      if (!user || !token) {
+        console.error('Unexpected registration response:', res)
+        throw new Error('Registration response missing user or token')
+      }
+
+      login(user, token)
       toast.success('Registration successful!')
       navigate('/')
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Registration failed')
+      console.error('Registration error:', error)
+      toast.error(error.response?.data?.detail || error.message || 'Registration failed')
     } finally {
       setLoading(false)
     }
