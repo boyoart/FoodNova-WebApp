@@ -13,9 +13,9 @@ export default function CheckoutPage() {
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
-    name: user?.name || '',
+    name: user?.name || user?.full_name || user?.fullName || '',
     email: user?.email || '',
-    phone: '',
+    phone: user?.phone || '',
     address: '',
     city: '',
     postcode: '',
@@ -35,7 +35,12 @@ export default function CheckoutPage() {
     )
   }
 
-  const total = getTotalPrice() * 1.1
+  const subtotal = Number(getTotalPrice() || 0)
+  const total = subtotal * 1.1
+
+  const formatCurrency = (amount) => {
+    return `₦${Number(amount || 0).toLocaleString()}`
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -46,8 +51,16 @@ export default function CheckoutPage() {
     setReceiptFile(e.target.files?.[0] || null)
   }
 
+  const extractOrder = (res) => {
+    // Supports every current backend response shape:
+    // { order }, { data }, raw order object, or Axios-like { data: { order } }
+    const body = res?.data ?? res
+    return body?.order || body?.data || body
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
+
     if (!receiptFile) {
       toast.error('Please upload a bank transfer receipt')
       return
@@ -55,24 +68,44 @@ export default function CheckoutPage() {
 
     try {
       setLoading(true)
+
       const orderData = {
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: formData.phone,
+        phone: formData.phone,
         delivery_address: `${formData.address}, ${formData.city} ${formData.postcode}`,
-        items: items.map(item => ({ product_id: item.id, quantity: item.quantity })),
+        address: `${formData.address}, ${formData.city} ${formData.postcode}`,
+        items: items.map(item => ({
+          id: item.id,
+          product_id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity || item.qty || 1,
+          qty: item.quantity || item.qty || 1,
+        })),
         payment_method: 'bank_transfer',
         total_amount: total,
+        total,
       }
 
-      const res = await ordersAPI.create(orderData)
-      await ordersAPI.uploadReceipt(res.data.id, receiptFile)
+      const createdOrderResponse = await ordersAPI.create(orderData)
+      const createdOrder = extractOrder(createdOrderResponse)
+      const orderId = createdOrder?.id
+
+      if (!orderId) {
+        console.error('Unexpected order creation response:', createdOrderResponse)
+        throw new Error('Order was created but no order ID was returned')
+      }
+
+      await ordersAPI.uploadReceipt(orderId, receiptFile)
 
       toast.success('Order placed successfully! Awaiting payment approval.')
       clearCart()
       navigate('/orders')
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to place order')
+      console.error('Checkout error:', error)
+      toast.error(error.response?.data?.detail || error.message || 'Failed to place order')
     } finally {
       setLoading(false)
     }
@@ -203,8 +236,8 @@ export default function CheckoutPage() {
           <div className="summary-items">
             {items.map((item) => (
               <div key={item.id} className="summary-item">
-                <span>{item.name} x {item.quantity}</span>
-                <span>${(item.price * item.quantity).toFixed(2)}</span>
+                <span>{item.name} x {item.quantity || item.qty || 1}</span>
+                <span>{formatCurrency(item.price * (item.quantity || item.qty || 1))}</span>
               </div>
             ))}
           </div>
@@ -212,15 +245,15 @@ export default function CheckoutPage() {
           <div className="summary-totals">
             <div className="summary-row">
               <span>Subtotal:</span>
-              <span>${getTotalPrice().toFixed(2)}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </div>
             <div className="summary-row">
-              <span>Tax (10%):</span>
-              <span>${(getTotalPrice() * 0.1).toFixed(2)}</span>
+              <span>Service/Tax (10%):</span>
+              <span>{formatCurrency(subtotal * 0.1)}</span>
             </div>
             <div className="summary-row total">
               <span>Total:</span>
-              <span>${total.toFixed(2)}</span>
+              <span>{formatCurrency(total)}</span>
             </div>
           </div>
         </div>
