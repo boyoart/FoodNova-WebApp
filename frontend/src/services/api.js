@@ -11,7 +11,10 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("foodnova_token");
+  const token =
+    localStorage.getItem("foodnova_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("admin_token");
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -22,7 +25,7 @@ api.interceptors.request.use((config) => {
 
 /* =========================
    PRODUCTS API
-   Returns full Axios response because some pages use response.data
+   Returns full Axios response because ProductsPage uses response.data
 ========================= */
 export const productsAPI = {
   getAll: async () => {
@@ -36,7 +39,7 @@ export const productsAPI = {
 
 /* =========================
    PACKS API
-   Returns full Axios response because some pages use response.data
+   Returns full Axios response because ProductsPage uses response.data
 ========================= */
 export const packsAPI = {
   getAll: async () => {
@@ -59,21 +62,23 @@ export const categoriesAPI = {
 
 /* =========================
    AUTH API
+   Returns full Axios response because Login/Register pages use res.data
 ========================= */
 export const authAPI = {
   login: async (payload) => {
-    const response = await api.post("/auth/login", payload);
-    return response.data;
+    return await api.post("/auth/login", payload);
+  },
+
+  adminLogin: async (payload) => {
+    return await api.post("/auth/login", payload);
   },
 
   register: async (payload) => {
-    const response = await api.post("/auth/register", payload);
-    return response.data;
+    return await api.post("/auth/register", payload);
   },
 
   me: async () => {
-    const response = await api.get("/auth/me");
-    return response.data;
+    return await api.get("/auth/me");
   },
 };
 
@@ -144,7 +149,6 @@ export const adminAPI = {
 
 /* =========================
    BACKWARD-COMPATIBLE HELPERS
-   These return only the real data array/object
 ========================= */
 export const getProducts = async () => {
   const response = await productsAPI.getAll();
@@ -161,8 +165,15 @@ export const getCategories = async () => {
   return response.data;
 };
 
-export const loginUser = async (payload) => authAPI.login(payload);
-export const registerUser = async (payload) => authAPI.register(payload);
+export const loginUser = async (payload) => {
+  const response = await authAPI.login(payload);
+  return response.data;
+};
+
+export const registerUser = async (payload) => {
+  const response = await authAPI.register(payload);
+  return response.data;
+};
 
 export const createOrder = async (payload) => ordersAPI.create(payload);
 export const getMyOrders = async () => ordersAPI.getMine();
