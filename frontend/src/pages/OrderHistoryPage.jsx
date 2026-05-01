@@ -160,14 +160,6 @@ export default function OrderHistoryPage() {
             </div>
 
             <div className="order-items">
-<<<<<<< HEAD
-              {order.items?.map((item, idx) => (
-                <div key={idx} className="order-item">
-                  <span>{item.product_name} x {item.quantity}</span>
-                  <span>{formatPrice(item.price * item.quantity)}</span>
-                </div>
-              ))}
-=======
               {(order.items || []).map((item, idx) => {
                 const name = getItemName(item)
                 const qty = getItemQty(item)
@@ -180,16 +172,11 @@ export default function OrderHistoryPage() {
                   </div>
                 )
               })}
->>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
             </div>
 
             <div className="order-footer">
               <div className="order-total">
-<<<<<<< HEAD
-                Total: <strong>{formatPrice(order.total_amount)}</strong>
-=======
                 Total: <strong>{formatCurrency(getOrderTotal(order))}</strong>
->>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
               </div>
               <p className="order-address">📍 {order.delivery_address || order.address || 'Delivery address unavailable'}</p>
             </div>

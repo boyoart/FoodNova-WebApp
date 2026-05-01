@@ -71,10 +71,6 @@ export default function ProductsPage() {
     fetchProducts()
   }
 
-  const formatCurrency = (amount) => {
-    return `₦${Number(amount || 0).toLocaleString()}`
-  }
-
   const items = activeTab === 'products' ? products : packs
 
   return (
@@ -120,17 +116,9 @@ export default function ProductsPage() {
             <div key={`${activeTab}-${item.id}`} className="product-card">
               <div className="product-image">
                 <img
-<<<<<<< HEAD
                   src={getImageUrl(item)}
                   alt={item.name}
                   onError={handleImageError}
-=======
-                  src={item.image || item.image_url || '/placeholder.png'}
-                  alt={item.name}
-                  onError={(e) => {
-                    e.currentTarget.src = '/placeholder.png'
-                  }}
->>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
                 />
                 {item.stock <= 0 && <div className="out-of-stock">Out of Stock</div>}
               </div>
@@ -139,11 +127,7 @@ export default function ProductsPage() {
                 <p className="description">{item.description}</p>
                 {item.category && <span className="category">{item.category}</span>}
                 <div className="product-footer">
-<<<<<<< HEAD
                   <span className="price">{formatPrice(item.price)}</span>
-=======
-                  <span className="price">{formatCurrency(item.price)}</span>
->>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
                   <button
                     className="btn-add"
                     onClick={() => handleAddToCart(item)}
