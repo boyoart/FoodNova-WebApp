@@ -14,6 +14,8 @@ export default function OrderHistoryPage() {
   useEffect(() => {
     if (isAuthenticated) {
       fetchOrders()
+    } else {
+      setLoading(false)
     }
   }, [isAuthenticated])
 
@@ -21,13 +23,55 @@ export default function OrderHistoryPage() {
     try {
       setLoading(true)
       const res = await ordersAPI.getCustomerOrders()
-      setOrders(res.data || [])
+      const rawOrders = Array.isArray(res?.data) ? res.data : []
+
+      // Remove accidental duplicate orders from retry/double-click tests.
+      // This is display cleanup only; production DB flow should prevent duplicates server-side.
+      const seen = new Set()
+      const uniqueOrders = rawOrders.filter((order) => {
+        const itemKey = JSON.stringify(order.items || [])
+        const key = `${order.total_amount || order.total || 0}-${order.delivery_address || ''}-${itemKey}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
+      setOrders(uniqueOrders)
     } catch (error) {
       toast.error('Failed to load orders')
       console.error(error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const formatCurrency = (amount) => {
+    const value = Number(amount || 0)
+    return `₦${value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
+  }
+
+  const getItemName = (item) => {
+    return item?.product_name || item?.name || item?.title || 'FoodNova Item'
+  }
+
+  const getItemQty = (item) => {
+    return Number(item?.quantity || item?.qty || 1)
+  }
+
+  const getItemPrice = (item) => {
+    return Number(item?.price || item?.unit_price || item?.unitPrice || 0)
+  }
+
+  const getOrderTotal = (order) => {
+    const backendTotal = Number(order?.total_amount || order?.total || 0)
+    if (backendTotal > 0) return backendTotal
+
+    return (order?.items || []).reduce((sum, item) => {
+      return sum + getItemPrice(item) * getItemQty(item)
+    }, 0)
   }
 
   if (!isAuthenticated) {
@@ -40,30 +84,40 @@ export default function OrderHistoryPage() {
     )
   }
 
-  const getStatusIcon = (status) => {
+  const getStatusIcon = (status = '') => {
     switch (status) {
       case 'pending_payment':
+      case 'pending':
         return <AlertCircle size={20} />
       case 'processing':
+      case 'receipt_submitted':
         return <Clock size={20} />
       case 'completed':
+      case 'confirmed':
         return <CheckCircle size={20} />
       default:
         return <Package size={20} />
     }
   }
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status = '') => {
     switch (status) {
       case 'pending_payment':
+      case 'pending':
         return 'status-warning'
       case 'processing':
+      case 'receipt_submitted':
         return 'status-info'
       case 'completed':
+      case 'confirmed':
         return 'status-success'
       default:
         return 'status-default'
     }
+  }
+
+  const formatStatus = (status = 'pending') => {
+    return status.replaceAll('_', ' ').toUpperCase()
   }
 
   if (loading) {
@@ -90,35 +144,54 @@ export default function OrderHistoryPage() {
       <h1>Your Orders</h1>
 
       <div className="orders-list">
-        {orders.map((order) => (
-          <div key={order.id} className="order-card">
+        {orders.map((order, index) => (
+          <div key={order.id || index} className="order-card">
             <div className="order-header">
               <div>
-                <h3>Order #{order.id}</h3>
+                <h3>Order #{order.order_code || order.id || index + 1}</h3>
                 <p className="order-date">
-                  {new Date(order.created_at).toLocaleDateString()}
+                  {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'Today'}
                 </p>
               </div>
               <div className={`order-status ${getStatusColor(order.status)}`}>
                 {getStatusIcon(order.status)}
-                <span>{order.status.replace('_', ' ').toUpperCase()}</span>
+                <span>{formatStatus(order.status)}</span>
               </div>
             </div>
 
             <div className="order-items">
+<<<<<<< HEAD
               {order.items?.map((item, idx) => (
                 <div key={idx} className="order-item">
                   <span>{item.product_name} x {item.quantity}</span>
                   <span>{formatPrice(item.price * item.quantity)}</span>
                 </div>
               ))}
+=======
+              {(order.items || []).map((item, idx) => {
+                const name = getItemName(item)
+                const qty = getItemQty(item)
+                const price = getItemPrice(item)
+
+                return (
+                  <div key={idx} className="order-item">
+                    <span>{name} x {qty}</span>
+                    <span>{formatCurrency(price * qty)}</span>
+                  </div>
+                )
+              })}
+>>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
             </div>
 
             <div className="order-footer">
               <div className="order-total">
+<<<<<<< HEAD
                 Total: <strong>{formatPrice(order.total_amount)}</strong>
+=======
+                Total: <strong>{formatCurrency(getOrderTotal(order))}</strong>
+>>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
               </div>
-              <p className="order-address">📍 {order.delivery_address}</p>
+              <p className="order-address">📍 {order.delivery_address || order.address || 'Delivery address unavailable'}</p>
             </div>
           </div>
         ))}

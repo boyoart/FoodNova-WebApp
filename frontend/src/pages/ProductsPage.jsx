@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Filter } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { productsAPI, packsAPI } from '../services/api'
 import { useCartStore } from '../store/cartStore'
 import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
@@ -18,6 +18,28 @@ export default function ProductsPage() {
     fetchProducts()
   }, [])
 
+  const normalizeStoreItem = (item) => {
+    const name = item?.name || item?.product_name || 'FoodNova Item'
+    const price = Number(item?.price || item?.unit_price || 0)
+    const stock = Number(item?.stock || item?.stock_qty || 999)
+
+    return {
+      ...item,
+      id: item?.id,
+      name,
+      product_name: name,
+      price,
+      unit_price: price,
+      stock,
+      stock_qty: stock,
+      quantity: item?.quantity || item?.qty || 1,
+      qty: item?.quantity || item?.qty || 1,
+      image: item?.image || item?.image_url || '/placeholder.png',
+      image_url: item?.image_url || item?.image || '/placeholder.png',
+      category: item?.category || item?.category_name || '',
+    }
+  }
+
   const fetchProducts = async () => {
     try {
       setLoading(true)
@@ -25,8 +47,12 @@ export default function ProductsPage() {
         productsAPI.getAll({ search: searchTerm }),
         packsAPI.getAll({ search: searchTerm }),
       ])
-      setProducts(productsRes.data || [])
-      setPacks(packsRes.data || [])
+
+      const productData = Array.isArray(productsRes.data) ? productsRes.data : []
+      const packData = Array.isArray(packsRes.data) ? packsRes.data : []
+
+      setProducts(productData.map(normalizeStoreItem))
+      setPacks(packData.map(normalizeStoreItem))
     } catch (error) {
       toast.error('Failed to load products')
       console.error(error)
@@ -36,13 +62,17 @@ export default function ProductsPage() {
   }
 
   const handleAddToCart = (item) => {
-    addItem(item)
+    addItem(normalizeStoreItem(item))
     toast.success('Added to cart!')
   }
 
   const handleSearch = (e) => {
     e.preventDefault()
     fetchProducts()
+  }
+
+  const formatCurrency = (amount) => {
+    return `₦${Number(amount || 0).toLocaleString()}`
   }
 
   const items = activeTab === 'products' ? products : packs
@@ -87,12 +117,20 @@ export default function ProductsPage() {
       ) : (
         <div className="products-grid">
           {items.map((item) => (
-            <div key={item.id} className="product-card">
+            <div key={`${activeTab}-${item.id}`} className="product-card">
               <div className="product-image">
                 <img
+<<<<<<< HEAD
                   src={getImageUrl(item)}
                   alt={item.name}
                   onError={handleImageError}
+=======
+                  src={item.image || item.image_url || '/placeholder.png'}
+                  alt={item.name}
+                  onError={(e) => {
+                    e.currentTarget.src = '/placeholder.png'
+                  }}
+>>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
                 />
                 {item.stock <= 0 && <div className="out-of-stock">Out of Stock</div>}
               </div>
@@ -101,7 +139,11 @@ export default function ProductsPage() {
                 <p className="description">{item.description}</p>
                 {item.category && <span className="category">{item.category}</span>}
                 <div className="product-footer">
+<<<<<<< HEAD
                   <span className="price">{formatPrice(item.price)}</span>
+=======
+                  <span className="price">{formatCurrency(item.price)}</span>
+>>>>>>> da500aed489f9e67b930870e81e4e71f8dbbb3d7
                   <button
                     className="btn-add"
                     onClick={() => handleAddToCart(item)}
