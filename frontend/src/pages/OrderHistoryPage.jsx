@@ -178,7 +178,32 @@ export default function OrderHistoryPage() {
               <div className="order-total">
                 Total: <strong>{formatCurrency(getOrderTotal(order))}</strong>
               </div>
-              <p className="order-address">📍 {order.delivery_address || order.address || 'Delivery address unavailable'}</p>
+              
+              {/* Display delivery method */}
+              <div className="order-delivery-info">
+                <p className="delivery-method">
+                  <strong>Delivery Method:</strong> {order.delivery_method === 'pickup' ? 'Pickup' : 'Delivery'}
+                </p>
+                
+                {order.delivery_method === 'delivery' && (
+                  <>
+                    <p className="order-address">
+                      📍 {order.delivery_address || order.address || 'Delivery address unavailable'}
+                    </p>
+                    {order.delivery_fee_payment && (
+                      <p className="delivery-fee-note">
+                        Delivery Fee: Paid to rider after delivery
+                      </p>
+                    )}
+                  </>
+                )}
+                
+                {order.delivery_method === 'pickup' && (
+                  <p className="pickup-note">
+                    ✓ Pickup selected - Contact number: {order.customer_phone || 'Not available'}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         ))}

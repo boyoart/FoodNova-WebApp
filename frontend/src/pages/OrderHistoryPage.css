@@ -140,6 +140,32 @@
   font-size: 0.9rem;
 }
 
+.order-delivery-info {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.delivery-method {
+  margin: 0 0 0.5rem 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.delivery-fee-note {
+  margin: 0.25rem 0;
+  color: var(--warning);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.pickup-note {
+  margin: 0.25rem 0;
+  color: var(--success);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
 @media (max-width: 768px) {
   .order-header {
     flex-direction: column;

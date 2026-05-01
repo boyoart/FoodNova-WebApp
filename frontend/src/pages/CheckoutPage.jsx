@@ -13,13 +13,17 @@ export default function CheckoutPage() {
   const { items, getTotalPrice, clearCart } = useCartStore()
   const { user } = useAuthStore()
   const [loading, setLoading] = useState(false)
+  const [deliveryMethod, setDeliveryMethod] = useState('delivery')
   const [formData, setFormData] = useState({
     name: user?.name || user?.full_name || user?.fullName || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    address: '',
+    state: '',
     city: '',
-    postcode: '',
+    lga: '',
+    street_address: '',
+    landmark: '',
+    delivery_notes: '',
   })
   const [receiptFile, setReceiptFile] = useState(null)
 
@@ -37,7 +41,8 @@ export default function CheckoutPage() {
   }
 
   const subtotal = Number(getTotalPrice() || 0)
-  const total = subtotal * 1.1
+  const serviceCharge = subtotal * 0.1
+  const amountToTransfer = subtotal
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -63,27 +68,49 @@ export default function CheckoutPage() {
       return
     }
 
+    // Validate required fields based on delivery method
+    if (deliveryMethod === 'delivery') {
+      if (!formData.state || !formData.city || !formData.lga || !formData.street_address || !formData.landmark) {
+        toast.error('Please fill in all required delivery address fields')
+        return
+      }
+    }
+
     try {
       setLoading(true)
+
+      const deliveryAddress = deliveryMethod === 'pickup' 
+        ? 'Pickup selected' 
+        : `${formData.street_address}, ${formData.landmark}, ${formData.city}, ${formData.lga}, ${formData.state}`
 
       const orderData = {
         customer_name: formData.name,
         customer_email: formData.email,
         customer_phone: formData.phone,
         phone: formData.phone,
-        delivery_address: `${formData.address}, ${formData.city} ${formData.postcode}`,
-        address: `${formData.address}, ${formData.city} ${formData.postcode}`,
+        delivery_method: deliveryMethod,
+        delivery_address: deliveryAddress,
+        address: deliveryAddress,
+        state: formData.state,
+        city: formData.city,
+        lga: formData.lga,
+        street_address: formData.street_address,
+        landmark: formData.landmark,
+        delivery_notes: formData.delivery_notes,
+        delivery_fee_payment: deliveryMethod === 'delivery' ? 'paid_to_rider_after_delivery' : null,
         items: items.map(item => ({
           id: item.id,
           product_id: item.id,
           name: item.name,
+          product_name: item.name,
           price: item.price,
+          unit_price: item.price,
           quantity: item.quantity || item.qty || 1,
           qty: item.quantity || item.qty || 1,
         })),
         payment_method: 'bank_transfer',
-        total_amount: total,
-        total,
+        total_amount: subtotal,
+        total: subtotal,
       }
 
       const createdOrderResponse = await ordersAPI.create(orderData)
@@ -115,7 +142,43 @@ export default function CheckoutPage() {
           <h1>Checkout</h1>
           <form onSubmit={handleSubmit}>
             <fieldset>
-              <legend>Delivery Information</legend>
+              <legend>Delivery Method</legend>
+              <div className="delivery-options">
+                <div className="radio-group">
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="deliveryMethod"
+                      value="delivery"
+                      checked={deliveryMethod === 'delivery'}
+                      onChange={(e) => setDeliveryMethod(e.target.value)}
+                    />
+                    <span className="radio-text">
+                      <strong>Delivery</strong>
+                      <small>Get your order delivered to your door</small>
+                    </span>
+                  </label>
+                </div>
+                <div className="radio-group">
+                  <label className="radio-label">
+                    <input
+                      type="radio"
+                      name="deliveryMethod"
+                      value="pickup"
+                      checked={deliveryMethod === 'pickup'}
+                      onChange={(e) => setDeliveryMethod(e.target.value)}
+                    />
+                    <span className="radio-text">
+                      <strong>Pickup</strong>
+                      <small>Pick up your order at our location</small>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend>Customer Information</legend>
 
               <div className="form-group">
                 <label>
@@ -145,7 +208,7 @@ export default function CheckoutPage() {
               <div className="form-group">
                 <label>
                   <Phone size={18} />
-                  Phone
+                  Phone Number
                 </label>
                 <input
                   type="tel"
@@ -155,45 +218,105 @@ export default function CheckoutPage() {
                   required
                 />
               </div>
-
-              <div className="form-group">
-                <label>
-                  <MapPin size={18} />
-                  Street Address
-                </label>
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  required
-                  placeholder="123 Main St"
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>City</label>
-                  <input
-                    type="text"
-                    name="city"
-                    value={formData.city}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Postal Code</label>
-                  <input
-                    type="text"
-                    name="postcode"
-                    value={formData.postcode}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-              </div>
             </fieldset>
+
+            {deliveryMethod === 'delivery' && (
+              <fieldset>
+                <legend>Delivery Address</legend>
+                
+                <div className="form-notice">
+                  <p>Please provide your complete delivery address in Nigeria</p>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>State *</label>
+                    <input
+                      type="text"
+                      name="state"
+                      placeholder="e.g., Lagos"
+                      value={formData.state}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>City / Town *</label>
+                    <input
+                      type="text"
+                      name="city"
+                      placeholder="e.g., Ikeja"
+                      value={formData.city}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Local Government Area (LGA) *</label>
+                  <input
+                    type="text"
+                    name="lga"
+                    placeholder="e.g., Ikeja"
+                    value={formData.lga}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    <MapPin size={18} />
+                    Street Address / House Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="street_address"
+                    placeholder="e.g., No. 12 Allen Avenue"
+                    value={formData.street_address}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Nearest Bus Stop / Landmark *</label>
+                  <input
+                    type="text"
+                    name="landmark"
+                    placeholder="e.g., Near Computer Village"
+                    value={formData.landmark}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Delivery Notes (Optional)</label>
+                  <textarea
+                    name="delivery_notes"
+                    placeholder="Any special instructions for delivery, gate codes, etc."
+                    value={formData.delivery_notes}
+                    onChange={handleChange}
+                    rows="3"
+                  />
+                </div>
+
+                <div className="form-notice warning">
+                  <p>⚠️ Delivery fee is not included in this order total. Delivery fee will be paid directly to the rider after delivery.</p>
+                </div>
+              </fieldset>
+            )}
+
+            {deliveryMethod === 'pickup' && (
+              <fieldset>
+                <legend>Pickup Notice</legend>
+                <div className="form-notice info">
+                  <p>✓ You have selected pickup. We will contact you at <strong>{formData.phone}</strong> when your order is ready for pickup.</p>
+                </div>
+              </fieldset>
+            )}
 
             <fieldset>
               <legend>Payment Method</legend>
@@ -241,16 +364,22 @@ export default function CheckoutPage() {
 
           <div className="summary-totals">
             <div className="summary-row">
-              <span>Subtotal:</span>
+              <span>Product Total:</span>
               <span>{formatPrice(subtotal)}</span>
             </div>
             <div className="summary-row">
-              <span>Service/Tax (10%):</span>
-              <span>{formatPrice(subtotal * 0.1)}</span>
+              <span>Service Charge (10%):</span>
+              <span>{formatPrice(serviceCharge)}</span>
             </div>
+            {deliveryMethod === 'delivery' && (
+              <div className="summary-row">
+                <span>Delivery Fee:</span>
+                <span className="delivery-fee">Paid to rider after delivery</span>
+              </div>
+            )}
             <div className="summary-row total">
-              <span>Total:</span>
-              <span>{formatPrice(total)}</span>
+              <span>Amount to Transfer Now:</span>
+              <span>{formatPrice(amountToTransfer)}</span>
             </div>
           </div>
         </div>
