@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
+import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
@@ -81,7 +82,7 @@ export default function AdminOrders() {
                 <tr key={order.id}>
                   <td>#{order.id}</td>
                   <td>{order.customer_name}</td>
-                  <td>${order.total_amount.toFixed(2)}</td>
+                  <td>{formatPrice(order.total_amount)}</td>
                   <td>
                     <select
                       value={order.status}

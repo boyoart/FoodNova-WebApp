@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { ordersAPI } from '../services/api'
+import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import { Package, Clock, CheckCircle, AlertCircle } from 'lucide-react'
 import './OrderHistoryPage.css'
@@ -108,14 +109,14 @@ export default function OrderHistoryPage() {
               {order.items?.map((item, idx) => (
                 <div key={idx} className="order-item">
                   <span>{item.product_name} x {item.quantity}</span>
-                  <span>${(item.price * item.quantity).toFixed(2)}</span>
+                  <span>{formatPrice(item.price * item.quantity)}</span>
                 </div>
               ))}
             </div>
 
             <div className="order-footer">
               <div className="order-total">
-                Total: <strong>${order.total_amount.toFixed(2)}</strong>
+                Total: <strong>{formatPrice(order.total_amount)}</strong>
               </div>
               <p className="order-address">📍 {order.delivery_address}</p>
             </div>

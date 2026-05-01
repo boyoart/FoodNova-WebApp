@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Search, Filter } from 'lucide-react'
 import { productsAPI, packsAPI } from '../services/api'
 import { useCartStore } from '../store/cartStore'
+import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './ProductsPage.css'
 
@@ -89,11 +90,9 @@ export default function ProductsPage() {
             <div key={item.id} className="product-card">
               <div className="product-image">
                 <img
-                  src={item.image || '/placeholder.png'}
+                  src={getImageUrl(item)}
                   alt={item.name}
-                  onError={(e) => {
-                    e.target.src = '/placeholder.png'
-                  }}
+                  onError={handleImageError}
                 />
                 {item.stock <= 0 && <div className="out-of-stock">Out of Stock</div>}
               </div>
@@ -102,7 +101,7 @@ export default function ProductsPage() {
                 <p className="description">{item.description}</p>
                 {item.category && <span className="category">{item.category}</span>}
                 <div className="product-footer">
-                  <span className="price">${item.price.toFixed(2)}</span>
+                  <span className="price">{formatPrice(item.price)}</span>
                   <button
                     className="btn-add"
                     onClick={() => handleAddToCart(item)}

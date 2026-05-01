@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
+import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
@@ -68,7 +69,7 @@ export default function AdminStock() {
                 <tr key={product.id}>
                   <td>{product.name}</td>
                   <td>{product.category}</td>
-                  <td>${product.price.toFixed(2)}</td>
+                  <td>{formatPrice(product.price)}</td>
                   <td>
                     {editingId === product.id ? (
                       <input

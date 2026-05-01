@@ -21,9 +21,13 @@ export default function HomePage() {
         </div>
         <div className="hero-image">
           <div className="placeholder-image">
-            <img src="/hero-banner.png" alt="Fresh Food" onError={(e) => {
-              e.target.style.display = 'none'
-            }} />
+            <img 
+              src="https://images.unsplash.com/photo-1542838132-92c53300491e?w=800&h=600&fit=crop" 
+              alt="Fresh Food Groceries" 
+              onError={(e) => {
+                e.target.src = 'https://images.unsplash.com/photo-1488459716781-6815comet.jpg?w=800&h=600&fit=crop'
+              }} 
+            />
           </div>
         </div>
       </section>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
 import { ordersAPI } from '../services/api'
+import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import { Upload, MapPin, Phone, Mail } from 'lucide-react'
 import './CheckoutPage.css'
@@ -37,10 +38,6 @@ export default function CheckoutPage() {
 
   const subtotal = Number(getTotalPrice() || 0)
   const total = subtotal * 1.1
-
-  const formatCurrency = (amount) => {
-    return `₦${Number(amount || 0).toLocaleString()}`
-  }
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -237,7 +234,7 @@ export default function CheckoutPage() {
             {items.map((item) => (
               <div key={item.id} className="summary-item">
                 <span>{item.name} x {item.quantity || item.qty || 1}</span>
-                <span>{formatCurrency(item.price * (item.quantity || item.qty || 1))}</span>
+                <span>{formatPrice(item.price * (item.quantity || item.qty || 1))}</span>
               </div>
             ))}
           </div>
@@ -245,15 +242,15 @@ export default function CheckoutPage() {
           <div className="summary-totals">
             <div className="summary-row">
               <span>Subtotal:</span>
-              <span>{formatCurrency(subtotal)}</span>
+              <span>{formatPrice(subtotal)}</span>
             </div>
             <div className="summary-row">
               <span>Service/Tax (10%):</span>
-              <span>{formatCurrency(subtotal * 0.1)}</span>
+              <span>{formatPrice(subtotal * 0.1)}</span>
             </div>
             <div className="summary-row total">
               <span>Total:</span>
-              <span>{formatCurrency(total)}</span>
+              <span>{formatPrice(total)}</span>
             </div>
           </div>
         </div>

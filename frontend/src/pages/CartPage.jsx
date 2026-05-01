@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react'
 import { useCartStore } from '../store/cartStore'
+import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
 import './CartPage.css'
 
 export default function CartPage() {
@@ -28,16 +29,14 @@ export default function CartPage() {
           {items.map((item) => (
             <div key={item.id} className="cart-item">
               <img
-                src={item.image || '/placeholder.png'}
+                src={getImageUrl(item)}
                 alt={item.name}
                 className="item-image"
-                onError={(e) => {
-                  e.target.src = '/placeholder.png'
-                }}
+                onError={handleImageError}
               />
               <div className="item-details">
                 <h3>{item.name}</h3>
-                <p className="item-price">${item.price.toFixed(2)}</p>
+                <p className="item-price">{formatPrice(item.price)}</p>
               </div>
 
               <div className="quantity-control">
@@ -51,7 +50,7 @@ export default function CartPage() {
               </div>
 
               <div className="item-subtotal">
-                ${(item.price * item.quantity).toFixed(2)}
+                {formatPrice(item.price * item.quantity)}
               </div>
 
               <button
@@ -68,19 +67,19 @@ export default function CartPage() {
         <div className="cart-summary">
           <div className="summary-row">
             <span>Subtotal:</span>
-            <span>${getTotalPrice().toFixed(2)}</span>
+            <span>{formatPrice(getTotalPrice())}</span>
           </div>
           <div className="summary-row">
             <span>Shipping:</span>
-            <span>$0.00</span>
+            <span>{formatPrice(0)}</span>
           </div>
           <div className="summary-row">
             <span>Tax:</span>
-            <span>${(getTotalPrice() * 0.1).toFixed(2)}</span>
+            <span>{formatPrice(getTotalPrice() * 0.1)}</span>
           </div>
           <div className="summary-row total">
             <span>Total:</span>
-            <span>${(getTotalPrice() * 1.1).toFixed(2)}</span>
+            <span>{formatPrice(getTotalPrice() * 1.1)}</span>
           </div>
 
           <div className="cart-actions">

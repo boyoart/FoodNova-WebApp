@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
+import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import { BarChart3, Package, ShoppingBag, DollarSign } from 'lucide-react'
 import './AdminDashboard.css'
@@ -62,7 +63,7 @@ export default function AdminDashboard() {
           <DollarSign size={32} />
           <div>
             <p className="stat-label">Revenue</p>
-            <p className="stat-value">${stats?.total_revenue?.toFixed(2) || '0.00'}</p>
+            <p className="stat-value">{formatPrice(stats?.total_revenue || 0)}</p>
           </div>
         </div>
 

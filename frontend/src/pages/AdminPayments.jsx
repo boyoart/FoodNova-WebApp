@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
+import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
@@ -78,7 +79,7 @@ export default function AdminPayments() {
                 <tr key={payment.id}>
                   <td>#{payment.id}</td>
                   <td>{payment.customer_name}</td>
-                  <td>${payment.total_amount.toFixed(2)}</td>
+                  <td>{formatPrice(payment.total_amount)}</td>
                   <td>
                     <button
                       className="btn-view-receipt"
