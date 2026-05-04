@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { ordersAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import { Upload, MapPin, Phone, Mail } from 'lucide-react'
+import { MapPin, Phone, Mail } from 'lucide-react'
 import './CheckoutPage.css'
 
 export default function CheckoutPage() {
@@ -25,7 +25,6 @@ export default function CheckoutPage() {
     landmark: '',
     delivery_notes: '',
   })
-  const [receiptFile, setReceiptFile] = useState(null)
 
   if (items.length === 0) {
     return (
@@ -45,12 +44,10 @@ export default function CheckoutPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
   const extractOrder = (res) => {
-    // Supports every current backend response shape:
-    // { order }, { data }, raw order object, or Axios-like { data: { order } }
     const body = res?.data ?? res
     return body?.order || body?.data || body
   }
@@ -58,7 +55,6 @@ export default function CheckoutPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    // Validate required fields based on delivery method
     if (deliveryMethod === 'delivery') {
       if (!formData.state || !formData.city || !formData.lga || !formData.street_address || !formData.landmark) {
         toast.error('Please fill in all required delivery address fields')
@@ -69,8 +65,8 @@ export default function CheckoutPage() {
     try {
       setLoading(true)
 
-      const deliveryAddress = deliveryMethod === 'pickup' 
-        ? 'Pickup selected' 
+      const deliveryAddress = deliveryMethod === 'pickup'
+        ? 'Pickup selected'
         : `${formData.street_address}, ${formData.landmark}, ${formData.city}, ${formData.lga}, ${formData.state}`
 
       const orderData = {
@@ -87,17 +83,23 @@ export default function CheckoutPage() {
         street_address: formData.street_address,
         landmark: formData.landmark,
         delivery_notes: formData.delivery_notes,
-        delivery_fee_payment: deliveryMethod === 'delivery' ? 'paid_to_rider_after_delivery' : null,
-        items: items.map(item => ({
-          id: item.id,
-          product_id: item.id,
-          name: item.name,
-          product_name: item.name,
-          price: item.price,
-          unit_price: item.price,
-          quantity: item.quantity || item.qty || 1,
-          qty: item.quantity || item.qty || 1,
-        })),
+        delivery_fee_payment: deliveryMethod === 'delivery' ? 'paid_to_rider_after_delivery' : '',
+        items: items.map((item) => {
+          const quantity = item.quantity || item.qty || 1
+          const price = Number(item.price || item.unit_price || 0)
+          const name = item.name || item.product_name || 'FoodNova Item'
+
+          return {
+            id: item.id,
+            product_id: item.product_id || item.id,
+            name,
+            product_name: name,
+            price,
+            unit_price: price,
+            quantity,
+            qty: quantity,
+          }
+        }),
         payment_method: 'bank_transfer',
         total_amount: subtotal,
         total: subtotal,
@@ -105,14 +107,12 @@ export default function CheckoutPage() {
 
       const createdOrderResponse = await ordersAPI.create(orderData)
       const createdOrder = extractOrder(createdOrderResponse)
-      const orderId = createdOrder?.id
 
-      if (!orderId) {
+      if (!createdOrder?.id) {
         console.error('Unexpected order creation response:', createdOrderResponse)
         throw new Error('Order was created but no order ID was returned')
       }
 
-      setCreatedOrder(createdOrder)
       clearCart()
       toast.success('Order placed successfully. Use your Order Code as payment narration, then upload your receipt.')
       navigate('/orders')
@@ -148,6 +148,7 @@ export default function CheckoutPage() {
                     </span>
                   </label>
                 </div>
+
                 <div className="radio-group">
                   <label className="radio-label">
                     <input
@@ -159,7 +160,7 @@ export default function CheckoutPage() {
                     />
                     <span className="radio-text">
                       <strong>Pickup</strong>
-                      <small>Pick up your order at our location</small>
+                      <small>Pick up your order when it is ready</small>
                     </span>
                   </label>
                 </div>
@@ -212,9 +213,9 @@ export default function CheckoutPage() {
             {deliveryMethod === 'delivery' && (
               <fieldset>
                 <legend>Delivery Address</legend>
-                
+
                 <div className="form-notice">
-                  <p>Please provide your complete delivery address in Nigeria</p>
+                  <p>Please provide your complete delivery address in Nigeria.</p>
                 </div>
 
                 <div className="form-row">
@@ -229,6 +230,7 @@ export default function CheckoutPage() {
                       required
                     />
                   </div>
+
                   <div className="form-group">
                     <label>City / Town *</label>
                     <input
@@ -285,7 +287,7 @@ export default function CheckoutPage() {
                   <label>Delivery Notes (Optional)</label>
                   <textarea
                     name="delivery_notes"
-                    placeholder="Any special instructions for delivery, gate codes, etc."
+                    placeholder="Any special delivery instructions"
                     value={formData.delivery_notes}
                     onChange={handleChange}
                     rows="3"
@@ -293,7 +295,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="form-notice warning">
-                  <p>⚠️ Delivery fee is not included in this order total. Delivery fee will be paid directly to the rider after delivery.</p>
+                  <p>Delivery fee is not included in this order total. Delivery fee will be paid directly to the rider after delivery.</p>
                 </div>
               </fieldset>
             )}
@@ -302,7 +304,7 @@ export default function CheckoutPage() {
               <fieldset>
                 <legend>Pickup Notice</legend>
                 <div className="form-notice info">
-                  <p>✓ You have selected pickup. We will contact you at <strong>{formData.phone}</strong> when your order is ready for pickup.</p>
+                  <p>You selected pickup. We will contact you when your order is ready for pickup.</p>
                 </div>
               </fieldset>
             )}
@@ -310,13 +312,11 @@ export default function CheckoutPage() {
             <fieldset>
               <legend>Payment Method</legend>
               <div className="payment-info">
-                <p>
-                  <strong>Bank Transfer Details:</strong>
-                </p>
+                <p><strong>Bank Transfer Details:</strong></p>
                 <p>Account: FoodNova Inc.</p>
                 <p>Bank: Main Bank</p>
                 <p>Account Number: 1234567890</p>
-                <p>Reference: Your Order ID</p>
+                <p>Reference: Use your Order Code after placing the order.</p>
               </div>
             </fieldset>
 
@@ -329,12 +329,16 @@ export default function CheckoutPage() {
         <div className="checkout-summary">
           <h2>Order Summary</h2>
           <div className="summary-items">
-            {items.map((item) => (
-              <div key={item.id} className="summary-item">
-                <span>{item.name} x {item.quantity || item.qty || 1}</span>
-                <span>{formatPrice(item.price * (item.quantity || item.qty || 1))}</span>
-              </div>
-            ))}
+            {items.map((item) => {
+              const quantity = item.quantity || item.qty || 1
+              const price = Number(item.price || item.unit_price || 0)
+              return (
+                <div key={item.id} className="summary-item">
+                  <span>{item.name || item.product_name || 'FoodNova Item'} x {quantity}</span>
+                  <span>{formatPrice(price * quantity)}</span>
+                </div>
+              )
+            })}
           </div>
 
           <div className="summary-totals">
@@ -342,18 +346,19 @@ export default function CheckoutPage() {
               <span>Product Total:</span>
               <span>{formatPrice(subtotal)}</span>
             </div>
+
             {deliveryMethod === 'delivery' && (
               <div className="summary-row">
                 <span>Delivery Fee:</span>
                 <span className="delivery-fee">Paid to rider after delivery</span>
               </div>
             )}
+
             <div className="summary-row total">
               <span>Amount to Transfer Now:</span>
               <span>{formatPrice(amountToTransfer)}</span>
             </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
