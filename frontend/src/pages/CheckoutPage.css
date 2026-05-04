@@ -253,3 +253,72 @@ legend {
     height: 20px;
   }
 }
+
+/* Order Confirmation */
+.order-confirmation {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  grid-column: 1 / -1;
+}
+
+.order-confirmation h1 {
+  color: var(--success);
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.confirmation-details {
+  margin-bottom: 2rem;
+}
+
+.order-code,
+.amount-to-transfer {
+  background: var(--light);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.bank-details {
+  background: var(--light);
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.bank-details h3 {
+  margin-top: 0;
+  color: var(--dark);
+}
+
+.bank-details p {
+  margin: 0.5rem 0;
+  color: var(--text);
+}
+
+.delivery-notice {
+  background: rgba(255, 152, 0, 0.05);
+  border-left: 4px solid #ff9800;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.delivery-notice p {
+  margin: 0;
+  color: var(--text);
+}
+
+.receipt-upload {
+  border-top: 1px solid var(--border);
+  padding-top: 2rem;
+}
+
+.receipt-upload h3 {
+  margin-bottom: 1rem;
+  color: var(--dark);
+}

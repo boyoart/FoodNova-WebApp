@@ -26,6 +26,8 @@ export default function CheckoutPage() {
     delivery_notes: '',
   })
   const [receiptFile, setReceiptFile] = useState(null)
+  const [createdOrder, setCreatedOrder] = useState(null)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
 
   if (items.length === 0) {
     return (
@@ -41,7 +43,6 @@ export default function CheckoutPage() {
   }
 
   const subtotal = Number(getTotalPrice() || 0)
-  const serviceCharge = subtotal * 0.1
   const amountToTransfer = subtotal
 
   const handleChange = (e) => {
@@ -49,8 +50,25 @@ export default function CheckoutPage() {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleFileChange = (e) => {
-    setReceiptFile(e.target.files?.[0] || null)
+  const handleReceiptSubmit = async (e) => {
+    e.preventDefault()
+
+    if (!receiptFile) {
+      toast.error('Please select a receipt file')
+      return
+    }
+
+    try {
+      setUploadingReceipt(true)
+      await ordersAPI.uploadReceipt(createdOrder.id, receiptFile)
+      toast.success('Receipt uploaded successfully. Your payment is awaiting confirmation.')
+      navigate('/orders')
+    } catch (error) {
+      console.error('Receipt upload error:', error)
+      toast.error(error.response?.data?.detail || error.message || 'Failed to upload receipt')
+    } finally {
+      setUploadingReceipt(false)
+    }
   }
 
   const extractOrder = (res) => {
@@ -62,11 +80,6 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-
-    if (!receiptFile) {
-      toast.error('Please upload a bank transfer receipt')
-      return
-    }
 
     // Validate required fields based on delivery method
     if (deliveryMethod === 'delivery') {
@@ -122,11 +135,9 @@ export default function CheckoutPage() {
         throw new Error('Order was created but no order ID was returned')
       }
 
-      await ordersAPI.uploadReceipt(orderId, receiptFile)
-
-      toast.success('Order placed successfully! Awaiting payment approval.')
+      setCreatedOrder(createdOrder)
       clearCart()
-      navigate('/orders')
+      toast.success('Order created successfully!')
     } catch (error) {
       console.error('Checkout error:', error)
       toast.error(error.response?.data?.detail || error.message || 'Failed to place order')
@@ -138,9 +149,11 @@ export default function CheckoutPage() {
   return (
     <div className="checkout-page">
       <div className="checkout-container">
-        <div className="checkout-form">
-          <h1>Checkout</h1>
-          <form onSubmit={handleSubmit}>
+        {!createdOrder ? (
+          <>
+            <div className="checkout-form">
+              <h1>Checkout</h1>
+              <form onSubmit={handleSubmit}>
             <fieldset>
               <legend>Delivery Method</legend>
               <div className="delivery-options">
@@ -329,20 +342,6 @@ export default function CheckoutPage() {
                 <p>Account Number: 1234567890</p>
                 <p>Reference: Your Order ID</p>
               </div>
-
-              <div className="form-group">
-                <label>
-                  <Upload size={18} />
-                  Upload Receipt
-                </label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={handleFileChange}
-                  required
-                />
-                {receiptFile && <p className="file-selected">✓ {receiptFile.name}</p>}
-              </div>
             </fieldset>
 
             <button type="submit" className="btn btn-primary btn-large" disabled={loading}>
@@ -367,10 +366,6 @@ export default function CheckoutPage() {
               <span>Product Total:</span>
               <span>{formatPrice(subtotal)}</span>
             </div>
-            <div className="summary-row">
-              <span>Service Charge (10%):</span>
-              <span>{formatPrice(serviceCharge)}</span>
-            </div>
             {deliveryMethod === 'delivery' && (
               <div className="summary-row">
                 <span>Delivery Fee:</span>
@@ -383,6 +378,53 @@ export default function CheckoutPage() {
             </div>
           </div>
         </div>
+          </>
+        ) : (
+          <div className="order-confirmation">
+            <h1>Order Created Successfully</h1>
+            <div className="confirmation-details">
+              <div className="order-code">
+                <strong>Order Code:</strong> {createdOrder.order_code || createdOrder.id}
+              </div>
+              <div className="amount-to-transfer">
+                <strong>Amount to Transfer Now:</strong> {formatPrice(amountToTransfer)}
+              </div>
+              <div className="bank-details">
+                <h3>Bank Transfer Details</h3>
+                <p><strong>Bank Name:</strong> Main Bank</p>
+                <p><strong>Account Name:</strong> FoodNova Inc.</p>
+                <p><strong>Account Number:</strong> 1234567890</p>
+                <p><strong>Payment Narration/Reference:</strong> Use your Order Code</p>
+              </div>
+              {deliveryMethod === 'delivery' && (
+                <div className="delivery-notice">
+                  <p>Delivery fee is not included in this order total. Delivery fee will be paid directly to the rider after delivery.</p>
+                </div>
+              )}
+            </div>
+            <div className="receipt-upload">
+              <h3>Upload Payment Receipt</h3>
+              <form onSubmit={handleReceiptSubmit}>
+                <div className="form-group">
+                  <label>
+                    <Upload size={18} />
+                    Select Receipt File
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={handleFileChange}
+                    required
+                  />
+                  {receiptFile && <p className="file-selected">✓ {receiptFile.name}</p>}
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={uploadingReceipt}>
+                  {uploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
