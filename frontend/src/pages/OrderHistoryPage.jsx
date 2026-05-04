@@ -10,6 +10,9 @@ export default function OrderHistoryPage() {
   const { isAuthenticated } = useAuthStore()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [receiptFile, setReceiptFile] = useState(null)
+  const [uploadingReceipt, setUploadingReceipt] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -72,6 +75,44 @@ export default function OrderHistoryPage() {
     return (order?.items || []).reduce((sum, item) => {
       return sum + getItemPrice(item) * getItemQty(item)
     }, 0)
+  }
+
+  const handleViewOrder = (order) => {
+    setSelectedOrder(order)
+    setReceiptFile(null)
+  }
+
+  const handleCloseOrder = () => {
+    setSelectedOrder(null)
+    setReceiptFile(null)
+  }
+
+  const handleFileChange = (e) => {
+    setReceiptFile(e.target.files?.[0] || null)
+  }
+
+  const handleReceiptUpload = async (e) => {
+    e.preventDefault()
+
+    if (!receiptFile) {
+      toast.error('Please select a receipt file')
+      return
+    }
+
+    try {
+      setUploadingReceipt(true)
+      await ordersAPI.uploadReceipt(selectedOrder.id, receiptFile)
+      toast.success('Receipt uploaded successfully. Payment awaiting confirmation.')
+      // Refresh orders to update status
+      await fetchOrders()
+      setSelectedOrder(null)
+      setReceiptFile(null)
+    } catch (error) {
+      console.error('Receipt upload error:', error)
+      toast.error(error.response?.data?.detail || error.message || 'Failed to upload receipt')
+    } finally {
+      setUploadingReceipt(false)
+    }
   }
 
   if (!isAuthenticated) {
@@ -204,10 +245,102 @@ export default function OrderHistoryPage() {
                   </p>
                 )}
               </div>
+
+              <button className="btn btn-secondary" onClick={() => handleViewOrder(order)}>
+                View / Upload Receipt
+              </button>
             </div>
           </div>
         ))}
       </div>
+
+      {selectedOrder && (
+        <div className="order-detail-modal">
+          <div className="modal-overlay" onClick={handleCloseOrder}></div>
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>Order Details</h2>
+              <button className="close-btn" onClick={handleCloseOrder}>×</button>
+            </div>
+
+            <div className="order-detail-content">
+              <div className="order-code-section">
+                <h3>Order Code: {selectedOrder.order_code || selectedOrder.id}</h3>
+              </div>
+
+              <div className="order-items-section">
+                <h4>Items Ordered</h4>
+                <div className="order-items-list">
+                  {(selectedOrder.items || []).map((item, idx) => {
+                    const name = getItemName(item)
+                    const qty = getItemQty(item)
+                    const price = getItemPrice(item)
+                    return (
+                      <div key={idx} className="order-item-detail">
+                        <span>{name} x {qty}</span>
+                        <span>{formatCurrency(price * qty)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="order-total-detail">
+                  <strong>Total Amount: {formatCurrency(getOrderTotal(selectedOrder))}</strong>
+                </div>
+              </div>
+
+              <div className="payment-section">
+                <h4>Payment Information</h4>
+                <div className="payment-details">
+                  <p><strong>Amount to Transfer:</strong> {formatCurrency(getOrderTotal(selectedOrder))}</p>
+                  <div className="bank-info">
+                    <p><strong>Bank Name:</strong> Main Bank</p>
+                    <p><strong>Account Name:</strong> FoodNova Inc.</p>
+                    <p><strong>Account Number:</strong> 1234567890</p>
+                    <p><strong>Payment Narration/Reference:</strong> Use your Order Code</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="delivery-section">
+                <h4>Delivery Information</h4>
+                <p><strong>Delivery Method:</strong> {selectedOrder.delivery_method === 'pickup' ? 'Pickup' : 'Delivery'}</p>
+                {selectedOrder.delivery_method === 'delivery' && (
+                  <>
+                    <p><strong>Delivery Address:</strong> {selectedOrder.delivery_address || selectedOrder.address || 'Not available'}</p>
+                    <p className="delivery-fee-notice">Delivery fee is paid directly to the rider after delivery.</p>
+                  </>
+                )}
+                {selectedOrder.delivery_method === 'pickup' && (
+                  <p>✓ You selected pickup. We will contact you when your order is ready for pickup.</p>
+                )}
+              </div>
+
+              <div className="receipt-upload-section">
+                <h4>Upload Payment Receipt</h4>
+                {selectedOrder.status === 'receipt_submitted' ? (
+                  <p className="receipt-status">✓ Receipt submitted</p>
+                ) : (
+                  <form onSubmit={handleReceiptUpload}>
+                    <div className="form-group">
+                      <label>Select Receipt File (Image or PDF)</label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleFileChange}
+                        required
+                      />
+                      {receiptFile && <p className="file-selected">✓ {receiptFile.name}</p>}
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={uploadingReceipt}>
+                      {uploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
+                    </button>
+                  </form>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

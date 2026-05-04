@@ -177,3 +177,160 @@
     align-self: flex-start;
   }
 }
+
+/* Order Detail Modal */
+.order-detail-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+  position: relative;
+  background: white;
+  border-radius: 0.75rem;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 90%;
+  margin: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--light);
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--dark);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  cursor: pointer;
+  color: var(--text-light);
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.order-detail-content {
+  padding: 1.5rem;
+}
+
+.order-code-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--light);
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.order-code-section h3 {
+  margin: 0;
+  color: var(--primary);
+  font-size: 1.2rem;
+}
+
+.order-items-section {
+  margin-bottom: 1.5rem;
+}
+
+.order-items-section h4 {
+  margin-bottom: 1rem;
+  color: var(--dark);
+}
+
+.order-items-list {
+  margin-bottom: 1rem;
+}
+
+.order-item-detail {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.order-total-detail {
+  text-align: right;
+  font-size: 1.1rem;
+  color: var(--dark);
+}
+
+.payment-section,
+.delivery-section {
+  margin-bottom: 1.5rem;
+}
+
+.payment-section h4,
+.delivery-section h4 {
+  margin-bottom: 1rem;
+  color: var(--dark);
+}
+
+.payment-details p {
+  margin: 0.5rem 0;
+  color: var(--text);
+}
+
+.bank-info {
+  background: var(--light);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-top: 1rem;
+}
+
+.delivery-fee-notice {
+  color: var(--warning);
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+.receipt-upload-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+.receipt-upload-section h4 {
+  margin-bottom: 1rem;
+  color: var(--dark);
+}
+
+.receipt-status {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.file-selected {
+  color: var(--success);
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
