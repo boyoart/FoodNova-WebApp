@@ -115,6 +115,74 @@ export default function OrderHistoryPage() {
     }
   }
 
+  const getPaymentStatus = (order) => {
+    const status = order.status || order.payment_status || 'pending_payment'
+    switch (status) {
+      case 'pending_payment':
+      case 'pending':
+        return 'Pending Payment'
+      case 'receipt_submitted':
+        return 'Receipt Submitted'
+      case 'payment_confirmed':
+      case 'confirmed':
+        return 'Payment Confirmed'
+      case 'payment_rejected':
+      case 'rejected':
+        return 'Payment Rejected'
+      default:
+        return 'Pending Payment'
+    }
+  }
+
+  const getOrderStatus = (order) => {
+    const status = order.order_status || order.fulfillment_status || order.status || 'pending_payment'
+    switch (status) {
+      case 'pending_payment':
+      case 'receipt_submitted':
+        return 'Order Placed'
+      case 'processing':
+        return 'Processing'
+      case 'ready_for_pickup':
+        return 'Ready for Pickup'
+      case 'picked_up':
+        return 'Picked Up'
+      case 'out_for_delivery':
+        return 'Out for Delivery'
+      case 'delivered':
+        return 'Delivered'
+      case 'cancelled':
+        return 'Cancelled'
+      default:
+        return 'Order Placed'
+    }
+  }
+
+  const getTimelineSteps = (order) => {
+    const isPickup = order.delivery_method === 'pickup'
+    const paymentStatus = getPaymentStatus(order)
+    const orderStatus = getOrderStatus(order)
+
+    const baseSteps = [
+      { label: 'Order Placed', completed: true },
+      { label: 'Payment Confirmed', completed: paymentStatus === 'Payment Confirmed' },
+      { label: 'Processing', completed: ['Processing', 'Ready for Pickup', 'Picked Up', 'Out for Delivery', 'Delivered'].includes(orderStatus) },
+    ]
+
+    if (isPickup) {
+      baseSteps.push(
+        { label: 'Ready for Pickup', completed: ['Ready for Pickup', 'Picked Up'].includes(orderStatus) },
+        { label: 'Picked Up', completed: orderStatus === 'Picked Up' }
+      )
+    } else {
+      baseSteps.push(
+        { label: 'Out for Delivery', completed: ['Out for Delivery', 'Delivered'].includes(orderStatus) },
+        { label: 'Delivered', completed: orderStatus === 'Delivered' }
+      )
+    }
+
+    return baseSteps
+  }
+
   if (!isAuthenticated) {
     return (
       <div className="order-history-page">
@@ -186,7 +254,7 @@ export default function OrderHistoryPage() {
 
       <div className="orders-list">
         {orders.map((order, index) => (
-          <div key={order.id || index} className="order-card">
+          <div key={order.id || index} className="order-card" onClick={() => handleViewOrder(order)}>
             <div className="order-header">
               <div>
                 <h3>Order #{order.order_code || order.id || index + 1}</h3>
@@ -245,10 +313,6 @@ export default function OrderHistoryPage() {
                   </p>
                 )}
               </div>
-
-              <button className="btn btn-secondary" onClick={() => handleViewOrder(order)}>
-                View / Upload Receipt
-              </button>
             </div>
           </div>
         ))}
@@ -264,12 +328,113 @@ export default function OrderHistoryPage() {
             </div>
 
             <div className="order-detail-content">
-              <div className="order-code-section">
-                <h3>Order Code: {selectedOrder.order_code || selectedOrder.id}</h3>
+              {/* Order Identity */}
+              <div className="order-identity-section">
+                <div className="order-code-display">
+                  <h3>Order Code: {selectedOrder.order_code || selectedOrder.id}</h3>
+                </div>
+                <div className="order-meta">
+                  <p><strong>Date Placed:</strong> {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleDateString() : 'Today'}</p>
+                  <p><strong>Customer Name:</strong> {selectedOrder.customer_name || 'N/A'}</p>
+                  <p><strong>Customer Phone:</strong> {selectedOrder.customer_phone || selectedOrder.phone || 'N/A'}</p>
+                  <p><strong>Delivery Method:</strong> {selectedOrder.delivery_method === 'pickup' ? 'Pickup' : 'Delivery'}</p>
+                </div>
               </div>
 
-              <div className="order-items-section">
-                <h4>Items Ordered</h4>
+              {/* Payment Status */}
+              <div className="status-section">
+                <h4>Payment Status</h4>
+                <div className={`status-badge payment-status ${getPaymentStatus(selectedOrder).toLowerCase().replace(' ', '-')}`}>
+                  {getPaymentStatus(selectedOrder)}
+                </div>
+              </div>
+
+              {/* Order Status */}
+              <div className="status-section">
+                <h4>Order Status</h4>
+                <div className={`status-badge order-status ${getOrderStatus(selectedOrder).toLowerCase().replace(' ', '-')}`}>
+                  {getOrderStatus(selectedOrder)}
+                </div>
+              </div>
+
+              {/* Visual Timeline */}
+              <div className="timeline-section">
+                <h4>Order Tracking</h4>
+                <div className="timeline">
+                  {getTimelineSteps(selectedOrder).map((step, index) => (
+                    <div key={index} className={`timeline-step ${step.completed ? 'completed' : 'pending'}`}>
+                      <div className="timeline-dot"></div>
+                      <div className="timeline-content">
+                        <span className="timeline-label">{step.label}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Payment Instruction and Receipt Upload */}
+              <div className="payment-instruction-section">
+                <h4>Payment Instructions</h4>
+                {(() => {
+                  const paymentStatus = getPaymentStatus(selectedOrder)
+                  if (paymentStatus === 'Payment Confirmed') {
+                    return <p className="payment-message confirmed">✓ Payment confirmed.</p>
+                  } else if (paymentStatus === 'Payment Rejected') {
+                    return <p className="payment-message rejected">✗ Payment rejected. Please upload a clearer receipt or contact support.</p>
+                  } else if (paymentStatus === 'Receipt Submitted') {
+                    return <p className="payment-message submitted">✓ Receipt submitted. Payment awaiting confirmation.</p>
+                  } else {
+                    return (
+                      <div className="payment-pending">
+                        <div className="bank-details">
+                          <p><strong>Amount to Transfer:</strong> {formatCurrency(getOrderTotal(selectedOrder))}</p>
+                          <div className="bank-info">
+                            <p><strong>Bank Name:</strong> Main Bank</p>
+                            <p><strong>Account Name:</strong> FoodNova Inc.</p>
+                            <p><strong>Account Number:</strong> 1234567890</p>
+                            <p><strong>Payment Narration/Reference:</strong> Use your Order Code</p>
+                          </div>
+                        </div>
+                        <form onSubmit={handleReceiptUpload}>
+                          <div className="form-group">
+                            <label>Upload Payment Receipt (Image or PDF)</label>
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              onChange={handleFileChange}
+                              required
+                            />
+                            {receiptFile && <p className="file-selected">✓ {receiptFile.name}</p>}
+                          </div>
+                          <button type="submit" className="btn btn-primary" disabled={uploadingReceipt}>
+                            {uploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
+                          </button>
+                        </form>
+                      </div>
+                    )
+                  }
+                })()}
+              </div>
+
+              {/* Delivery/Pickup Information */}
+              <div className="delivery-info-section">
+                <h4>Delivery Information</h4>
+                {selectedOrder.delivery_method === 'delivery' ? (
+                  <div className="delivery-details">
+                    <p><strong>Delivery Address:</strong> {selectedOrder.delivery_address || selectedOrder.address || 'Not available'}</p>
+                    {selectedOrder.delivery_notes && (
+                      <p><strong>Delivery Notes:</strong> {selectedOrder.delivery_notes}</p>
+                    )}
+                    <p className="delivery-fee-notice">Delivery fee is paid directly to the rider after delivery.</p>
+                  </div>
+                ) : (
+                  <p>✓ You selected pickup. We will contact you when your order is ready for pickup.</p>
+                )}
+              </div>
+
+              {/* Items and Total */}
+              <div className="items-total-section">
+                <h4>Order Items</h4>
                 <div className="order-items-list">
                   {(selectedOrder.items || []).map((item, idx) => {
                     const name = getItemName(item)
@@ -284,58 +449,8 @@ export default function OrderHistoryPage() {
                   })}
                 </div>
                 <div className="order-total-detail">
-                  <strong>Total Amount: {formatCurrency(getOrderTotal(selectedOrder))}</strong>
+                  <strong>Total: {formatCurrency(getOrderTotal(selectedOrder))}</strong>
                 </div>
-              </div>
-
-              <div className="payment-section">
-                <h4>Payment Information</h4>
-                <div className="payment-details">
-                  <p><strong>Amount to Transfer:</strong> {formatCurrency(getOrderTotal(selectedOrder))}</p>
-                  <div className="bank-info">
-                    <p><strong>Bank Name:</strong> Main Bank</p>
-                    <p><strong>Account Name:</strong> FoodNova Inc.</p>
-                    <p><strong>Account Number:</strong> 1234567890</p>
-                    <p><strong>Payment Narration/Reference:</strong> Use your Order Code</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="delivery-section">
-                <h4>Delivery Information</h4>
-                <p><strong>Delivery Method:</strong> {selectedOrder.delivery_method === 'pickup' ? 'Pickup' : 'Delivery'}</p>
-                {selectedOrder.delivery_method === 'delivery' && (
-                  <>
-                    <p><strong>Delivery Address:</strong> {selectedOrder.delivery_address || selectedOrder.address || 'Not available'}</p>
-                    <p className="delivery-fee-notice">Delivery fee is paid directly to the rider after delivery.</p>
-                  </>
-                )}
-                {selectedOrder.delivery_method === 'pickup' && (
-                  <p>✓ You selected pickup. We will contact you when your order is ready for pickup.</p>
-                )}
-              </div>
-
-              <div className="receipt-upload-section">
-                <h4>Upload Payment Receipt</h4>
-                {selectedOrder.status === 'receipt_submitted' ? (
-                  <p className="receipt-status">✓ Receipt submitted</p>
-                ) : (
-                  <form onSubmit={handleReceiptUpload}>
-                    <div className="form-group">
-                      <label>Select Receipt File (Image or PDF)</label>
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        onChange={handleFileChange}
-                        required
-                      />
-                      {receiptFile && <p className="file-selected">✓ {receiptFile.name}</p>}
-                    </div>
-                    <button type="submit" className="btn btn-primary" disabled={uploadingReceipt}>
-                      {uploadingReceipt ? 'Uploading...' : 'Upload Receipt'}
-                    </button>
-                  </form>
-                )}
               </div>
             </div>
           </div>

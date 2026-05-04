@@ -48,10 +48,12 @@
   border-radius: 0.75rem;
   overflow: hidden;
   transition: all 0.3s;
+  cursor: pointer;
 }
 
 .order-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
 }
 
 .order-header {
@@ -333,4 +335,230 @@
   color: var(--success);
   font-size: 0.9rem;
   margin-top: 0.25rem;
+}
+
+/* New Order Detail Sections */
+.order-identity-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--light);
+  border-radius: 0.5rem;
+}
+
+.order-code-display h3 {
+  margin: 0 0 1rem 0;
+  color: var(--primary);
+  font-size: 1.3rem;
+  text-align: center;
+}
+
+.order-meta p {
+  margin: 0.5rem 0;
+  color: var(--text);
+}
+
+.status-section {
+  margin-bottom: 1.5rem;
+}
+
+.status-section h4 {
+  margin-bottom: 0.75rem;
+  color: var(--dark);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Payment Status Colors */
+.payment-status.pending-payment {
+  background-color: rgba(247, 127, 0, 0.1);
+  color: var(--warning);
+}
+
+.payment-status.receipt-submitted {
+  background-color: rgba(0, 78, 137, 0.1);
+  color: var(--secondary);
+}
+
+.payment-status.payment-confirmed {
+  background-color: rgba(6, 168, 125, 0.1);
+  color: var(--success);
+}
+
+.payment-status.payment-rejected {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+}
+
+/* Order Status Colors */
+.order-status.order-placed {
+  background-color: rgba(247, 127, 0, 0.1);
+  color: var(--warning);
+}
+
+.order-status.processing {
+  background-color: rgba(0, 78, 137, 0.1);
+  color: var(--secondary);
+}
+
+.order-status.ready-for-pickup,
+.order-status.out-for-delivery {
+  background-color: rgba(63, 81, 181, 0.1);
+  color: #3f51b5;
+}
+
+.order-status.picked-up,
+.order-status.delivered {
+  background-color: rgba(6, 168, 125, 0.1);
+  color: var(--success);
+}
+
+.order-status.cancelled {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+}
+
+/* Timeline */
+.timeline-section {
+  margin-bottom: 1.5rem;
+}
+
+.timeline-section h4 {
+  margin-bottom: 1rem;
+  color: var(--dark);
+}
+
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.timeline-step {
+  position: relative;
+  margin-bottom: 1.5rem;
+  padding-left: 1rem;
+}
+
+.timeline-step:last-child {
+  margin-bottom: 0;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -2.5rem;
+  top: 0.25rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--border);
+  border: 3px solid white;
+  box-shadow: 0 0 0 2px var(--border);
+}
+
+.timeline-step.completed .timeline-dot {
+  background: var(--success);
+  box-shadow: 0 0 0 2px var(--success);
+}
+
+.timeline-step.completed .timeline-label {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.timeline-step.pending .timeline-label {
+  color: var(--text-light);
+}
+
+.timeline-label {
+  font-size: 0.95rem;
+  display: block;
+}
+
+/* Payment Instruction Section */
+.payment-instruction-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: var(--light);
+  border-radius: 0.5rem;
+}
+
+.payment-instruction-section h4 {
+  margin-bottom: 1rem;
+  color: var(--dark);
+}
+
+.payment-message {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+}
+
+.payment-message.confirmed {
+  background: rgba(6, 168, 125, 0.1);
+  color: var(--success);
+}
+
+.payment-message.submitted {
+  background: rgba(0, 78, 137, 0.1);
+  color: var(--secondary);
+}
+
+.payment-message.rejected {
+  background: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+}
+
+.payment-pending .bank-details {
+  margin-bottom: 1rem;
+}
+
+.payment-pending .bank-info {
+  background: white;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+/* Delivery Info Section */
+.delivery-info-section {
+  margin-bottom: 1.5rem;
+}
+
+.delivery-info-section h4 {
+  margin-bottom: 1rem;
+  color: var(--dark);
+}
+
+.delivery-details p {
+  margin: 0.5rem 0;
+  color: var(--text);
+}
+
+/* Items Total Section */
+.items-total-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+.items-total-section h4 {
+  margin-bottom: 1rem;
+  color: var(--dark);
 }
