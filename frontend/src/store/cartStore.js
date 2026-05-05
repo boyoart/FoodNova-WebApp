@@ -1,7 +1,19 @@
 import { create } from 'zustand'
 
+const safeJsonParse = (key, fallback) => {
+  try {
+    const value = localStorage.getItem(key)
+    if (!value || value === 'undefined' || value === 'null') return fallback
+    return JSON.parse(value)
+  } catch (error) {
+    console.warn(`Invalid localStorage value for ${key}. Resetting it.`, error)
+    localStorage.removeItem(key)
+    return fallback
+  }
+}
+
 export const useCartStore = create((set, get) => ({
-  items: JSON.parse(localStorage.getItem('cart')) || [],
+  items: safeJsonParse('cart', []),
 
   addItem: (product) => {
     const items = get().items
@@ -43,10 +55,10 @@ export const useCartStore = create((set, get) => ({
   },
 
   getTotalPrice: () => {
-    return get().items.reduce((total, item) => total + (item.price * item.quantity), 0)
+    return get().items.reduce((total, item) => total + (Number(item.price || item.unit_price || 0) * Number(item.quantity || item.qty || 1)), 0)
   },
 
   getTotalItems: () => {
-    return get().items.reduce((total, item) => total + item.quantity, 0)
+    return get().items.reduce((total, item) => total + Number(item.quantity || item.qty || 1), 0)
   },
 }))
