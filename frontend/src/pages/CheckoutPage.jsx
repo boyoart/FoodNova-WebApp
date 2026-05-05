@@ -41,6 +41,32 @@ const formatFullAddress = (address = {}) =>
     .filter(Boolean)
     .join(', ')
 
+const getFriendlyErrorMessage = (error, fallback = 'Something went wrong') => {
+  const detail = error?.response?.data?.detail || error?.detail
+
+  if (typeof detail === 'string') return detail
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item?.msg) {
+          const location = Array.isArray(item.loc) ? item.loc.join(' → ') : item.loc
+          return location ? `${location}: ${item.msg}` : item.msg
+        }
+        return null
+      })
+      .filter(Boolean)
+      .join(' | ') || fallback
+  }
+
+  if (detail && typeof detail === 'object') {
+    return detail.msg || detail.message || fallback
+  }
+
+  return error?.response?.data?.message || error?.message || fallback
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate()
   const { items, getTotalPrice, clearCart } = useCartStore()
@@ -211,7 +237,7 @@ export default function CheckoutPage() {
           }
         } catch (error) {
           console.warn('Address save failed, placing order with address snapshot only', error)
-          toast.error('Address could not be saved, but checkout will continue with this address')
+          toast.error(getFriendlyErrorMessage(error, 'Address could not be saved, but checkout will continue with this address'))
         }
       }
 
@@ -270,7 +296,7 @@ export default function CheckoutPage() {
       navigate('/orders')
     } catch (error) {
       console.error('Checkout error:', error)
-      toast.error(error.response?.data?.detail || error.message || 'Failed to place order')
+      toast.error(getFriendlyErrorMessage(error, 'Failed to place order'))
     } finally {
       setLoading(false)
     }
@@ -414,7 +440,7 @@ export default function CheckoutPage() {
                       <div className="form-group">
                         <label>Country</label>
                         <input name="country" value={manualAddress.country} onChange={handleAddressChange} />
-                      </div>
+                    </div>
                     </div>
 
                     <div className="form-row three-columns">
