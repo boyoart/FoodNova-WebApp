@@ -16,7 +16,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 72px;
+  min-height: 82px;
   gap: 1rem;
 }
 
@@ -34,10 +34,9 @@
 
 .logo-image {
   display: block;
-  max-width: 156px;
-  max-height: 42px;
+  max-width: 220px;
+  height: 62px;
   width: auto;
-  height: auto;
   object-fit: contain;
 }
 
@@ -337,12 +336,12 @@
 
 @media (max-width: 900px) {
   .navbar-container {
-    min-height: 64px;
+    min-height: 72px;
   }
 
   .logo-image {
-    max-height: 34px;
-    max-width: 132px;
+    height: 48px;
+    max-width: 180px;
   }
 
   .menu-toggle {
@@ -351,7 +350,7 @@
 
   .nav-menu {
     position: absolute;
-    top: 64px;
+    top: 72px;
     left: 0.75rem;
     right: 0.75rem;
     background: var(--fn-surface);
