@@ -1,0 +1,237 @@
+.admin-customers-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+.customers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+
+.customers-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin: 0 0 0.35rem;
+  font-size: 2rem;
+}
+
+.customers-header p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.customers-refresh,
+.customers-table button {
+  border: 0;
+  background: #e85d04;
+  color: #fff;
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.customers-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.customers-summary > div {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 1.1rem;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.04);
+}
+
+.customers-summary strong {
+  display: block;
+  font-size: 1.7rem;
+  color: #111827;
+}
+
+.customers-summary span {
+  color: #6b7280;
+  font-weight: 700;
+}
+
+.customers-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.customers-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.85rem;
+  padding: 0 0.85rem;
+}
+
+.customers-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 0.85rem 0;
+  font-size: 1rem;
+}
+
+.customers-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.customers-table-wrap {
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+}
+
+.customers-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 780px;
+}
+
+.customers-table th,
+.customers-table td {
+  padding: 0.9rem;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+  vertical-align: top;
+}
+
+.customers-table th {
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.customers-table td span {
+  display: block;
+  color: #6b7280;
+  margin-top: 0.2rem;
+}
+
+.customer-details-card {
+  position: sticky;
+  top: 86px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 1.2rem;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.08);
+}
+
+.close-details {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.8rem;
+  border: 0;
+  background: #f3f4f6;
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 1.1rem;
+}
+
+.customer-avatar-big {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #e85d04;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 1.4rem;
+  font-weight: 900;
+  margin-bottom: 0.8rem;
+}
+
+.customer-details-card h2 {
+  margin: 0 0 0.6rem;
+}
+
+.customer-details-card p {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  color: #374151;
+}
+
+.customer-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.customer-metrics div {
+  background: #fff7ed;
+  border-radius: 0.85rem;
+  padding: 0.85rem;
+}
+
+.customer-metrics strong,
+.customer-metrics span {
+  display: block;
+}
+
+.customer-orders-mini h3 {
+  margin-bottom: 0.7rem;
+}
+
+.mini-order-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  border-top: 1px solid #f1f5f9;
+  padding: 0.65rem 0;
+}
+
+.customers-empty {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  padding: 2rem;
+  text-align: center;
+  color: #6b7280;
+}
+
+@media (max-width: 900px) {
+  .customers-header,
+  .customers-toolbar {
+    flex-direction: column;
+  }
+
+  .customers-summary,
+  .customers-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .customer-details-card {
+    position: static;
+  }
+}
