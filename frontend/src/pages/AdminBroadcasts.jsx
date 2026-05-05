@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { adminAPI } from '../services/api'
+import api, { adminAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
@@ -16,11 +16,42 @@ const AUDIENCE_OPTIONS = [
   { value: 'all', label: 'All Customers' },
 ]
 
+const LOCAL_BROADCAST_KEY = 'foodnova_admin_broadcasts'
+
+const getLocalBroadcasts = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LOCAL_BROADCAST_KEY) || '[]')
+    return Array.isArray(saved) ? saved : []
+  } catch {
+    return []
+  }
+}
+
+const setLocalBroadcasts = (items) => {
+  localStorage.setItem(LOCAL_BROADCAST_KEY, JSON.stringify(Array.isArray(items) ? items : []))
+}
+
+const normalizeBroadcasts = (body) => {
+  if (Array.isArray(body)) return body
+  if (Array.isArray(body?.data)) return body.data
+  if (Array.isArray(body?.broadcasts)) return body.broadcasts
+  if (Array.isArray(body?.items)) return body.items
+  return []
+}
+
+const getErrorText = (error, fallback) => {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) return detail.map((item) => item?.msg || String(item)).join(' | ')
+  return error?.response?.data?.message || error?.message || fallback
+}
+
 export default function AdminBroadcasts() {
   const { isAdmin } = useAuthStore()
   const [broadcasts, setBroadcasts] = useState([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [usingLocalFallback, setUsingLocalFallback] = useState(false)
 
   const [formData, setFormData] = useState({
     title: '',
@@ -38,12 +69,20 @@ export default function AdminBroadcasts() {
   const fetchBroadcasts = async () => {
     try {
       setLoading(true)
-      const res = await adminAPI.getBroadcasts()
-      const broadcasts = Array.isArray(res?.data) ? res.data : Array.isArray(res?.broadcasts) ? res.broadcasts : []
-      setBroadcasts(broadcasts)
+      setUsingLocalFallback(false)
+
+      if (adminAPI.getBroadcasts) {
+        const res = await adminAPI.getBroadcasts()
+        setBroadcasts(normalizeBroadcasts(res))
+        return
+      }
+
+      const res = await api.get('/admin/broadcasts')
+      setBroadcasts(normalizeBroadcasts(res.data))
     } catch (error) {
-      toast.error('Failed to load broadcasts')
-      console.error(error)
+      console.warn('Broadcast endpoint unavailable. Showing local saved broadcasts.', error)
+      setBroadcasts(getLocalBroadcasts())
+      setUsingLocalFallback(true)
     } finally {
       setLoading(false)
     }
@@ -51,10 +90,7 @@ export default function AdminBroadcasts() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }))
+    setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   const handleSendBroadcast = async (e) => {
@@ -70,43 +106,72 @@ export default function AdminBroadcasts() {
       return
     }
 
+    const payload = {
+      title: formData.title.trim(),
+      message: formData.message.trim(),
+      type: formData.type,
+      audience: formData.audience,
+    }
+
     try {
       setSending(true)
-      await adminAPI.createBroadcast({
-        title: formData.title,
-        message: formData.message,
-        type: formData.type,
-        audience: formData.audience,
-      })
-      
-      toast.success('Broadcast sent to customers')
-      setFormData({
-        title: '',
-        message: '',
-        type: 'broadcast',
-        audience: 'all',
-      })
-      
+      let created = null
+
+      if (adminAPI.createBroadcast) {
+        created = await adminAPI.createBroadcast(payload)
+      } else {
+        created = (await api.post('/admin/broadcasts', payload)).data
+      }
+
+      const createdBroadcast = created?.broadcast || created?.data || created || {
+        ...payload,
+        id: Date.now(),
+        created_at: new Date().toISOString(),
+        created_by: 'Admin',
+        is_active: true,
+      }
+
+      toast.success(`Broadcast sent to customers${created?.recipient_count ? ` (${created.recipient_count})` : ''}`)
+      setFormData({ title: '', message: '', type: 'broadcast', audience: 'all' })
+      setBroadcasts((current) => [createdBroadcast, ...current])
       await fetchBroadcasts()
     } catch (error) {
-      toast.error('Failed to send broadcast')
-      console.error(error)
+      console.warn('Broadcast send endpoint failed. Saving broadcast locally.', error)
+      const localBroadcast = {
+        ...payload,
+        id: `local-${Date.now()}`,
+        created_at: new Date().toISOString(),
+        created_by: 'Admin',
+        is_active: true,
+        local_only: true,
+        recipient_count: 0,
+      }
+      const next = [localBroadcast, ...getLocalBroadcasts()]
+      setLocalBroadcasts(next)
+      setBroadcasts(next)
+      setUsingLocalFallback(true)
+      toast.error(getErrorText(error, 'Backend broadcast endpoint is not available. Broadcast saved locally only.'))
     } finally {
       setSending(false)
     }
   }
 
   const handleDeleteBroadcast = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this broadcast?')) {
-      return
-    }
+    if (!window.confirm('Are you sure you want to delete this broadcast?')) return
 
     try {
-      await adminAPI.deleteBroadcast(id)
+      if (adminAPI.deleteBroadcast && !String(id).startsWith('local-')) {
+        await adminAPI.deleteBroadcast(id)
+      } else if (!String(id).startsWith('local-')) {
+        await api.delete(`/admin/broadcasts/${id}`)
+      }
+
+      const next = broadcasts.filter((broadcast) => String(broadcast.id) !== String(id))
+      setBroadcasts(next)
+      setLocalBroadcasts(getLocalBroadcasts().filter((broadcast) => String(broadcast.id) !== String(id)))
       toast.success('Broadcast deleted')
-      await fetchBroadcasts()
     } catch (error) {
-      toast.error('Failed to delete broadcast')
+      toast.error(getErrorText(error, 'Failed to delete broadcast'))
       console.error(error)
     }
   }
@@ -123,79 +188,44 @@ export default function AdminBroadcasts() {
   }
 
   if (!isAdmin) {
-    return (
-      <div className="admin-page">
-        <p>Access denied. Admin login required.</p>
-      </div>
-    )
+    return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
   }
 
   return (
     <div className="admin-page">
       <h1>Broadcast Messages</h1>
 
+      {usingLocalFallback && (
+        <div className="form-notice warning" style={{ marginBottom: '1rem' }}>
+          <p>The backend broadcast endpoint is not responding yet. You can draft broadcasts here, but customer-wide push requires the backend endpoint to be deployed.</p>
+        </div>
+      )}
+
       <form onSubmit={handleSendBroadcast} className="broadcast-form">
         <h2>Create New Broadcast</h2>
 
         <div className="form-group">
           <label htmlFor="title">Title</label>
-          <input
-            type="text"
-            id="title"
-            name="title"
-            value={formData.title}
-            onChange={handleInputChange}
-            placeholder="Enter broadcast title"
-            className="form-input"
-          />
+          <input type="text" id="title" name="title" value={formData.title} onChange={handleInputChange} placeholder="Enter broadcast title" className="form-input" />
         </div>
 
         <div className="form-group">
           <label htmlFor="message">Message</label>
-          <textarea
-            id="message"
-            name="message"
-            value={formData.message}
-            onChange={handleInputChange}
-            placeholder="Enter broadcast message"
-            className="form-input"
-            rows="4"
-          />
+          <textarea id="message" name="message" value={formData.message} onChange={handleInputChange} placeholder="Enter broadcast message" className="form-input" rows="4" />
         </div>
 
         <div className="form-row">
           <div className="form-group">
             <label htmlFor="type">Type</label>
-            <select
-              id="type"
-              name="type"
-              value={formData.type}
-              onChange={handleInputChange}
-              className="form-input"
-            >
-              {TYPE_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+            <select id="type" name="type" value={formData.type} onChange={handleInputChange} className="form-input">
+              {TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </div>
 
           <div className="form-group">
             <label htmlFor="audience">Audience</label>
-            <select
-              id="audience"
-              name="audience"
-              value={formData.audience}
-              onChange={handleInputChange}
-              className="form-input"
-              disabled
-            >
-              {AUDIENCE_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
+            <select id="audience" name="audience" value={formData.audience} onChange={handleInputChange} className="form-input" disabled>
+              {AUDIENCE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </div>
         </div>
@@ -219,54 +249,26 @@ export default function AdminBroadcasts() {
                 <div className="broadcast-header">
                   <div>
                     <h3>{broadcast.title}</h3>
-                    <span
-                      className="type-badge"
-                      style={{
-                        backgroundColor: getTypeColor(broadcast.type),
-                        color: 'white',
-                        padding: '4px 12px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        display: 'inline-block',
-                        marginTop: '8px',
-                      }}
-                    >
-                      {broadcast.type}
+                    <span className="type-badge" style={{ backgroundColor: getTypeColor(broadcast.type), color: 'white', padding: '4px 12px', borderRadius: '4px', fontSize: '12px', display: 'inline-block', marginTop: '8px' }}>
+                      {broadcast.type}{broadcast.local_only ? ' • local only' : ''}
                     </span>
                   </div>
                   <div className="broadcast-status">
-                    {broadcast.is_active ? (
-                      <span className="status-active">Active</span>
-                    ) : (
-                      <span className="status-inactive">Inactive</span>
-                    )}
+                    {broadcast.is_active ? <span className="status-active">Active</span> : <span className="status-inactive">Inactive</span>}
                   </div>
                 </div>
 
                 <p className="broadcast-message">{broadcast.message}</p>
 
                 <div className="broadcast-meta">
-                  <p>
-                    <strong>Created:</strong> {broadcast.created_at ? new Date(broadcast.created_at).toLocaleString() : 'Unknown'}
-                  </p>
-                  <p>
-                    <strong>Created By:</strong> {broadcast.created_by || 'Admin'}
-                  </p>
-                  {broadcast.audience && (
-                    <p>
-                      <strong>Audience:</strong> {broadcast.audience}
-                    </p>
-                  )}
+                  <p><strong>Created:</strong> {broadcast.created_at ? new Date(broadcast.created_at).toLocaleString() : 'Unknown'}</p>
+                  <p><strong>Created By:</strong> {broadcast.created_by || 'Admin'}</p>
+                  <p><strong>Audience:</strong> {broadcast.audience || 'all'}</p>
+                  {'recipient_count' in broadcast && <p><strong>Recipients:</strong> {broadcast.recipient_count}</p>}
                 </div>
 
                 <div className="broadcast-actions">
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteBroadcast(broadcast.id)}
-                    className="btn-danger"
-                  >
-                    Delete
-                  </button>
+                  <button type="button" onClick={() => handleDeleteBroadcast(broadcast.id)} className="btn-danger">Delete</button>
                 </div>
               </div>
             ))}
