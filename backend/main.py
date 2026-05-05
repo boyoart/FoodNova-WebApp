@@ -7,6 +7,12 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
+try:
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+except Exception:
+    pwd_context = None
+
 app = FastAPI(title="FoodNova API")
 
 app.add_middleware(
@@ -153,6 +159,12 @@ class LoginPayload(BaseModel):
     password: str
 
 
+class ChangePasswordPayload(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+
 class OrderPayload(BaseModel):
     items: Optional[list] = []
     total: Optional[float] = 0
@@ -219,6 +231,29 @@ def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
     if not email:
         return None
     return USERS.get(email)
+
+
+def _password_matches(plain_password: str, stored_password: str) -> bool:
+    if not stored_password:
+        return False
+
+    if pwd_context and str(stored_password).startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            return pwd_context.verify(plain_password, stored_password)
+        except Exception:
+            return False
+
+    return stored_password == plain_password
+
+
+def _hash_new_password(password: str) -> str:
+    if pwd_context:
+        try:
+            return pwd_context.hash(password)
+        except Exception:
+            pass
+
+    return password
 
 
 def auth_response(message: str, user: dict, token: str) -> dict:
@@ -471,7 +506,7 @@ def login(payload: LoginPayload):
     email = payload.email.lower().strip()
     user = USERS.get(email)
 
-    if not user or user["password"] != payload.password:
+    if not user or not _password_matches(payload.password, user.get("password", "")):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = f"token-{uuid4()}"
@@ -488,6 +523,30 @@ def register_fallback(payload: RegisterPayload):
 @app.post("/login")
 def login_fallback(payload: LoginPayload):
     return login(payload)
+
+
+@app.post("/auth/change-password")
+def change_password(request: Request, payload: ChangePasswordPayload):
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    if user.get("role") == "admin":
+        raise HTTPException(status_code=403, detail="Admins cannot use customer password changes")
+
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="New passwords do not match")
+
+    if len(payload.new_password or "") < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+
+    if not _password_matches(payload.current_password, user.get("password", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    email = user.get("email")
+    USERS[email]["password"] = _hash_new_password(payload.new_password)
+
+    return {"success": True, "message": "Password changed successfully"}
 
 
 @app.get("/auth/me")

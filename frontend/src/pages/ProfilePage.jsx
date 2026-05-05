@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Home, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
-import { profileAPI } from '../services/api'
+import { Home, KeyRound, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
+import { authAPI, profileAPI } from '../services/api'
 import './ProfilePage.css'
 
 const emptyAddress = {
@@ -30,11 +30,17 @@ const getInitials = (name = 'User') =>
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState({ full_name: '', email: '', phone: '', avatar_url: '' })
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+  })
   const [addresses, setAddresses] = useState([])
   const [form, setForm] = useState(emptyAddress)
   const [editingId, setEditingId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [savingProfile, setSavingProfile] = useState(false)
+  const [changingPassword, setChangingPassword] = useState(false)
   const [savingAddress, setSavingAddress] = useState(false)
 
   const hasGoogleKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY)
@@ -83,6 +89,41 @@ export default function ProfilePage() {
       console.error(error)
     } finally {
       setSavingProfile(false)
+    }
+  }
+
+  const changePassword = async (event) => {
+    event.preventDefault()
+
+    if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
+      toast.error('Please complete all password fields')
+      return
+    }
+
+    if (passwordForm.new_password.length < 6) {
+      toast.error('New password must be at least 6 characters')
+      return
+    }
+
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      toast.error('New password and confirmation must match')
+      return
+    }
+
+    try {
+      setChangingPassword(true)
+      const res = await authAPI.changePassword(passwordForm)
+      toast.success(res?.data?.message || 'Password changed successfully')
+      setPasswordForm({
+        current_password: '',
+        new_password: '',
+        confirm_password: '',
+      })
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to change password')
+      console.error(error)
+    } finally {
+      setChangingPassword(false)
     }
   }
 
@@ -173,48 +214,99 @@ export default function ProfilePage() {
       </div>
 
       <div className="profile-grid">
-        <section className="profile-panel">
-          <div className="section-heading">
-            <UserRound size={20} />
-            <div>
-              <h2>Personal Information</h2>
-              <p>Keep your contact details updated for orders and delivery.</p>
+        <div className="profile-column">
+          <section className="profile-panel">
+            <div className="section-heading">
+              <UserRound size={20} />
+              <div>
+                <h2>Personal Information</h2>
+                <p>Keep your contact details updated for orders and delivery.</p>
+              </div>
             </div>
-          </div>
 
-          <form className="profile-form premium-form" onSubmit={saveProfile}>
-            <label>
-              <span>Full Name</span>
-              <input
-                value={profile.full_name || ''}
-                onChange={(event) => setProfile({ ...profile, full_name: event.target.value })}
-                placeholder="Enter full name"
-              />
-            </label>
+            <form className="profile-form premium-form" onSubmit={saveProfile}>
+              <label>
+                <span>Full Name</span>
+                <input
+                  value={profile.full_name || ''}
+                  onChange={(event) => setProfile({ ...profile, full_name: event.target.value })}
+                  placeholder="Enter full name"
+                />
+              </label>
 
-            <label>
-              <span>Phone Number</span>
-              <input
-                value={profile.phone || ''}
-                onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
-                placeholder="080... or +234..."
-              />
-            </label>
+              <label>
+                <span>Phone Number</span>
+                <input
+                  value={profile.phone || ''}
+                  onChange={(event) => setProfile({ ...profile, phone: event.target.value })}
+                  placeholder="080... or +234..."
+                />
+              </label>
 
-            <label>
-              <span>Avatar Image URL</span>
-              <input
-                value={profile.avatar_url || ''}
-                onChange={(event) => setProfile({ ...profile, avatar_url: event.target.value })}
-                placeholder="https://example.com/photo.jpg"
-              />
-            </label>
+              <label>
+                <span>Avatar Image URL</span>
+                <input
+                  value={profile.avatar_url || ''}
+                  onChange={(event) => setProfile({ ...profile, avatar_url: event.target.value })}
+                  placeholder="https://example.com/photo.jpg"
+                />
+              </label>
 
-            <button type="submit" className="primary-action" disabled={savingProfile}>
-              <Save size={18} /> {savingProfile ? 'Saving...' : 'Save Profile'}
-            </button>
-          </form>
-        </section>
+              <button type="submit" className="primary-action" disabled={savingProfile}>
+                <Save size={18} /> {savingProfile ? 'Saving...' : 'Save Profile'}
+              </button>
+            </form>
+          </section>
+
+          <section className="profile-panel security-panel">
+            <div className="section-heading">
+              <KeyRound size={20} />
+              <div>
+                <h2>Account Security</h2>
+                <p>Change your customer account password.</p>
+              </div>
+            </div>
+
+            <form className="security-form premium-form" onSubmit={changePassword}>
+              <label>
+                <span>Current Password</span>
+                <input
+                  type="password"
+                  value={passwordForm.current_password}
+                  onChange={(event) => setPasswordForm({ ...passwordForm, current_password: event.target.value })}
+                  placeholder="Enter current password"
+                  autoComplete="current-password"
+                />
+              </label>
+
+              <label>
+                <span>New Password</span>
+                <input
+                  type="password"
+                  value={passwordForm.new_password}
+                  onChange={(event) => setPasswordForm({ ...passwordForm, new_password: event.target.value })}
+                  placeholder="At least 6 characters"
+                  autoComplete="new-password"
+                />
+              </label>
+
+              <label>
+                <span>Confirm New Password</span>
+                <input
+                  type="password"
+                  value={passwordForm.confirm_password}
+                  onChange={(event) => setPasswordForm({ ...passwordForm, confirm_password: event.target.value })}
+                  placeholder="Re-enter new password"
+                  autoComplete="new-password"
+                />
+              </label>
+
+              <button type="submit" className="primary-action" disabled={changingPassword}>
+                <KeyRound size={18} /> {changingPassword ? 'Changing...' : 'Change Password'}
+              </button>
+            </form>
+          </section>
+        </div>
 
         <section className="profile-panel address-panel">
           <div className="section-heading">

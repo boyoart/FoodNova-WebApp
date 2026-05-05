@@ -81,6 +81,12 @@
   margin-bottom: 1.25rem;
 }
 
+.profile-column {
+  display: grid;
+  gap: 1.25rem;
+  align-content: start;
+}
+
 .profile-panel {
   background: #fff;
   border: 1px solid var(--border);
@@ -193,11 +199,18 @@
 .primary-action:disabled {
   opacity: 0.65;
   cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .secondary-action {
   background: var(--light);
   color: var(--dark);
+}
+
+.security-panel {
+  border-color: rgba(232, 93, 4, 0.18);
+  background: linear-gradient(180deg, #ffffff 0%, #fffaf4 100%);
 }
 
 .address-list {

@@ -134,6 +134,28 @@ export const authAPI = {
   adminLogin: async (payload) => await api.post("/auth/login", payload),
   register: async (payload) => await api.post("/auth/register", payload),
   me: async () => await api.get("/auth/me"),
+  changePassword: async (payload) => {
+    const endpoints = [
+      { method: "post", url: "/auth/change-password" },
+      { method: "patch", url: "/profile/password" },
+      { method: "post", url: "/profile/change-password" },
+    ];
+
+    let lastError;
+    for (const endpoint of endpoints) {
+      try {
+        return await api[endpoint.method](endpoint.url, payload);
+      } catch (error) {
+        lastError = error;
+        const status = error?.response?.status;
+        if (status !== 404 && status !== 405) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError;
+  },
 };
 
 export const ordersAPI = {
