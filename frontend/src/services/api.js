@@ -191,6 +191,32 @@ export const adminAPI = {
     return response.data;
   },
 
+  deleteProduct: async (id) => {
+    const response = await api.delete(`/admin/products/${id}`);
+    return response.data;
+  },
+
+  getPacks: async () => {
+    const response = await api.get("/admin/packs");
+    const packs = normalizeList(response.data, ["packs"]);
+    return { data: packs, raw: response.data };
+  },
+
+  createPack: async (payload) => {
+    const response = await api.post("/admin/packs", payload);
+    return response.data;
+  },
+
+  updatePack: async (id, payload) => {
+    const response = await api.patch(`/admin/packs/${id}`, payload);
+    return response.data;
+  },
+
+  deletePack: async (id) => {
+    const response = await api.delete(`/admin/packs/${id}`);
+    return response.data;
+  },
+
   getDashboardStats: async () => {
     const fallback = {
       total_orders: 0,
