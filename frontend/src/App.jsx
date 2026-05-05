@@ -21,6 +21,7 @@ import TermsPage from './pages/TermsPage'
 import ContactPage from './pages/ContactPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
+import InboxPage from './pages/InboxPage'
 import './modal-scroll-fix.css'
 
 function App() {
@@ -39,6 +40,7 @@ function App() {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/orders" element={<OrderHistoryPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/inbox" element={<InboxPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
