@@ -50,6 +50,32 @@ export default function AdminPayments() {
     }
   }
 
+  const openReceipt = (payment) => {
+    const receipt = payment.receipt || {}
+    const receiptSource =
+      receipt.data_url ||
+      receipt.url ||
+      receipt.receipt_url ||
+      payment.receipt_url ||
+      payment.receiptUrl ||
+      payment.receipt_image ||
+      null
+
+    setSelectedReceipt({
+      orderId: payment.id,
+      orderCode: payment.order_code,
+      customerName: payment.customer_name,
+      amount: payment.total_amount,
+      filename: receipt.filename || payment.receipt_filename || 'Receipt uploaded',
+      uploadedAt: receipt.uploaded_at || payment.receipt_uploaded_at,
+      status: receipt.status || payment.payment_status || payment.status,
+      source: receiptSource,
+      raw: receipt,
+    })
+  }
+
+  const closeReceipt = () => setSelectedReceipt(null)
+
   if (!isAdmin) {
     return <div className="admin-page"><p>Access denied.</p></div>
   }
@@ -77,25 +103,28 @@ export default function AdminPayments() {
             <tbody>
               {payments.map(payment => (
                 <tr key={payment.id}>
-                  <td>#{payment.id}</td>
-                  <td>{payment.customer_name}</td>
-                  <td>{formatPrice(payment.total_amount)}</td>
+                  <td>#{payment.order_code || payment.id}</td>
+                  <td>{payment.customer_name || 'Customer'}</td>
+                  <td>{formatPrice(payment.total_amount || payment.total || 0)}</td>
                   <td>
                     <button
+                      type="button"
                       className="btn-view-receipt"
-                      onClick={() => setSelectedReceipt(payment.receipt_url)}
+                      onClick={() => openReceipt(payment)}
                     >
                       View Receipt
                     </button>
                   </td>
                   <td>
                     <button
+                      type="button"
                       className="btn-approve"
                       onClick={() => handleApprove(payment.id)}
                     >
                       Approve
                     </button>
                     <button
+                      type="button"
                       className="btn-reject"
                       onClick={() => handleReject(payment.id)}
                     >
@@ -110,10 +139,50 @@ export default function AdminPayments() {
       )}
 
       {selectedReceipt && (
-        <div className="modal" onClick={() => setSelectedReceipt(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setSelectedReceipt(null)}>×</button>
-            <img src={selectedReceipt} alt="Receipt" />
+        <div className="admin-receipt-modal">
+          <div className="admin-receipt-overlay" onClick={closeReceipt}></div>
+          <div className="admin-receipt-content">
+            <div className="admin-receipt-header">
+              <h2>Payment Receipt</h2>
+              <button type="button" className="modal-close" onClick={closeReceipt}>×</button>
+            </div>
+
+            <div className="admin-receipt-body">
+              <div className="receipt-meta-card">
+                <p><strong>Order:</strong> #{selectedReceipt.orderCode || selectedReceipt.orderId}</p>
+                <p><strong>Customer:</strong> {selectedReceipt.customerName || 'Customer'}</p>
+                <p><strong>Amount:</strong> {formatPrice(selectedReceipt.amount || 0)}</p>
+                <p><strong>File:</strong> {selectedReceipt.filename}</p>
+                {selectedReceipt.uploadedAt && (
+                  <p><strong>Uploaded:</strong> {new Date(selectedReceipt.uploadedAt).toLocaleString()}</p>
+                )}
+              </div>
+
+              {selectedReceipt.source ? (
+                selectedReceipt.source.toLowerCase().includes('.pdf') ? (
+                  <iframe
+                    title="Payment receipt"
+                    src={selectedReceipt.source}
+                    className="receipt-frame"
+                  />
+                ) : (
+                  <img
+                    src={selectedReceipt.source}
+                    alt="Payment receipt"
+                    className="receipt-preview-image"
+                  />
+                )
+              ) : (
+                <div className="receipt-placeholder">
+                  <h3>Receipt submitted</h3>
+                  <p>The customer uploaded a receipt file named:</p>
+                  <strong>{selectedReceipt.filename}</strong>
+                  <p className="receipt-note">
+                    This temporary backend currently stores the receipt metadata. New uploads can be upgraded to store an image preview/file URL when we connect permanent file storage.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
