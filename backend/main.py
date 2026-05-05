@@ -210,6 +210,27 @@ class AddressPayload(BaseModel):
     is_default: Optional[bool] = False
 
 
+class BroadcastPayload(BaseModel):
+    title: str
+    message: str
+    type: Optional[str] = "broadcast"
+    audience: Optional[str] = "all"
+    is_active: Optional[bool] = True
+
+
+class BroadcastUpdatePayload(BaseModel):
+    title: Optional[str] = None
+    message: Optional[str] = None
+    type: Optional[str] = None
+    audience: Optional[str] = None
+    is_active: Optional[bool] = None
+    resend: Optional[bool] = False
+
+
+class NotificationUpdatePayload(BaseModel):
+    is_read: Optional[bool] = None
+
+
 def public_user(user: dict) -> dict:
     full_name = user.get("full_name") or user.get("fullName") or user.get("name") or "FoodNova User"
     return {
@@ -231,6 +252,20 @@ def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
     if not email:
         return None
     return USERS.get(email)
+
+
+def require_user(request: Request):
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return user
+
+
+def require_admin(request: Request):
+    user = require_user(request)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 
 def _password_matches(plain_password: str, stored_password: str) -> bool:
@@ -292,6 +327,7 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
     """Create a general user notification."""
     if not email:
         return None
+    email = str(email).strip().lower()
     
     notifications = ORDER_NOTIFICATIONS.setdefault(email, [])
     notif = {
@@ -332,12 +368,17 @@ def _create_broadcast_notification(title: str, message: str, notif_type: str = "
     # From USERS
     for email, user in USERS.items():
         if user.get("role") == "customer":
-            customer_emails.add(email)
+            customer_emails.add(str(email).strip().lower())
     
     # From ORDERS
     for order in ORDERS:
-        if order.get("customer_email"):
-            customer_emails.add(order.get("customer_email"))
+        email = str(order.get("customer_email") or "").strip().lower()
+        if not email:
+            continue
+        user = USERS.get(email)
+        if user and user.get("role") != "customer":
+            continue
+        customer_emails.add(email)
     
     # Push notification to all customers
     for email in customer_emails:
@@ -719,9 +760,7 @@ def set_default_address(address_id: int, request: Request):
 
 @app.get("/notifications")
 def get_notifications(request: Request):
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    user = require_user(request)
     email = user.get("email")
     items = sorted(ORDER_NOTIFICATIONS.get(email, []), key=lambda x: x.get("created_at", ""), reverse=True)
     return {"success": True, "notifications": items, "data": items}
@@ -729,19 +768,15 @@ def get_notifications(request: Request):
 
 @app.get("/notifications/unread-count")
 def unread_count(request: Request):
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    user = require_user(request)
     email = user.get("email")
     count = len([n for n in ORDER_NOTIFICATIONS.get(email, []) if not n.get("is_read")])
-    return {"count": count}
+    return {"success": True, "count": count, "data": {"count": count}}
 
 
 @app.patch("/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: int, request: Request):
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    user = require_user(request)
     email = user.get("email")
     for n in ORDER_NOTIFICATIONS.get(email, []):
         if n.get("id") == notification_id:
@@ -752,13 +787,37 @@ def mark_notification_read(notification_id: int, request: Request):
 
 @app.patch("/notifications/read-all")
 def mark_all_notifications_read(request: Request):
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    user = require_user(request)
     email = user.get("email")
     for n in ORDER_NOTIFICATIONS.get(email, []):
         n["is_read"] = True
-    return {"success": True}
+    return {"success": True, "message": "Notifications marked as read"}
+
+
+@app.delete("/notifications/{notification_id}")
+def delete_notification(notification_id: int, request: Request):
+    user = require_user(request)
+    email = user.get("email")
+    notifications = ORDER_NOTIFICATIONS.get(email, [])
+    for index, notification in enumerate(notifications):
+        if notification.get("id") == notification_id:
+            removed = notifications.pop(index)
+            ORDER_NOTIFICATIONS[email] = notifications
+            return {
+                "success": True,
+                "message": "Notification deleted",
+                "notification": removed,
+                "data": removed,
+            }
+    raise HTTPException(status_code=404, detail="Notification not found")
+
+
+@app.delete("/notifications")
+def clear_notifications(request: Request):
+    user = require_user(request)
+    email = user.get("email")
+    ORDER_NOTIFICATIONS[email] = []
+    return {"success": True, "message": "Notifications cleared", "data": []}
 
 @app.post("/orders")
 def create_order(payload: OrderPayload, request: Request):
@@ -798,6 +857,14 @@ def create_order(payload: OrderPayload, request: Request):
     }
 
     ORDERS.append(order)
+    if order.get("customer_email"):
+        _create_order_notification(
+            order,
+            "Order Placed",
+            f"Your order {order.get('order_code')} has been placed successfully. Use your order code as payment narration, then upload your receipt.",
+            "order_update",
+            "order",
+        )
 
     return {
         "success": True,
@@ -808,8 +875,11 @@ def create_order(payload: OrderPayload, request: Request):
 
 
 @app.get("/orders/my")
-def my_orders():
-    return {"success": True, "orders": ORDERS, "data": ORDERS}
+def my_orders(request: Request):
+    user = require_user(request)
+    email = user.get("email")
+    user_orders = [order for order in ORDERS if order.get("customer_email") == email]
+    return {"success": True, "orders": user_orders, "data": user_orders}
 
 
 @app.get("/orders")
@@ -858,12 +928,14 @@ async def upload_receipt(order_id: int, file: UploadFile = File(...)):
 
 
 @app.get("/admin/orders")
-def admin_orders():
+def admin_orders(request: Request):
+    require_admin(request)
     return {"success": True, "orders": ORDERS, "data": ORDERS}
 
 
 @app.get("/admin/orders/{order_id}")
-def admin_get_order(order_id: int):
+def admin_get_order(order_id: int, request: Request):
+    require_admin(request)
     for order in ORDERS:
         if order["id"] == order_id:
             return {"success": True, "order": order, "data": order}
@@ -872,14 +944,15 @@ def admin_get_order(order_id: int):
 
 
 @app.patch("/admin/orders/{order_id}")
-def update_order(order_id: int, payload: dict):
+def update_order(order_id: int, payload: dict, request: Request):
+    require_admin(request)
     for order in ORDERS:
         if order["id"] == order_id:
             # Store old values for comparison
+            old_status = order.get("status")
             old_payment_status = order.get("payment_status")
             old_order_status = order.get("order_status")
             old_fulfillment_status = order.get("fulfillment_status")
-            old_delivery_code = order.get("delivery_code")
             old_delivery_method = order.get("delivery_method")
             old_admin_note = order.get("admin_note")
             old_service_note = order.get("service_note")
@@ -900,47 +973,65 @@ def update_order(order_id: int, payload: dict):
             email = order.get("customer_email") or order.get("user_email")
             
             if email:
-                # Payment status changes
-                new_payment_status = order.get("payment_status")
-                if new_payment_status != old_payment_status:
-                    if new_payment_status == "receipt_submitted":
+                notified_statuses = set()
+                order_code = order.get("order_code")
+
+                notified_payment_statuses = set()
+
+                def notify_payment_status(status_value: str):
+                    if not status_value or status_value in notified_payment_statuses:
+                        return
+                    notified_payment_statuses.add(status_value)
+                    if status_value == "receipt_submitted":
                         _create_order_notification(order, "Receipt Submitted", 
                             f"Your receipt for order {order.get('order_code')} has been submitted and is awaiting review.",
                             "payment_update", "payment")
-                    elif new_payment_status == "payment_confirmed":
+                    elif status_value == "payment_confirmed":
                         _create_order_notification(order, "Payment Confirmed",
                             f"Your payment for order {order.get('order_code')} has been confirmed.",
                             "payment_update", "payment")
-                    elif new_payment_status == "payment_rejected":
+                    elif status_value == "payment_rejected":
                         _create_order_notification(order, "Payment Rejected",
                             f"Your payment for order {order.get('order_code')} was rejected. Please upload a clearer receipt or contact support.",
                             "payment_update", "payment")
+
+                # Payment status changes
+                new_payment_status = order.get("payment_status")
+                if new_payment_status != old_payment_status:
+                    notify_payment_status(new_payment_status)
                 
-                # Order status changes
-                new_order_status = order.get("order_status")
-                if new_order_status != old_order_status:
-                    if new_order_status == "processing":
+                def notify_order_status(status_value: str):
+                    if not status_value or status_value in notified_statuses:
+                        return
+                    notified_statuses.add(status_value)
+                    if status_value == "processing":
                         _create_order_notification(order, "Order Processing",
-                            f"Your order {order.get('order_code')} is now being processed.",
+                            f"Your order {order_code} is now being processed.",
                             "order_update", "order")
-                    elif new_order_status == "ready_for_pickup":
+                    elif status_value == "ready_for_pickup":
                         _create_order_notification(order, "Ready for Pickup",
-                            f"Your order {order.get('order_code')} is ready for pickup.",
+                            f"Your order {order_code} is ready for pickup.",
                             "order_update", "order")
-                    elif new_order_status == "out_for_delivery":
+                    elif status_value == "out_for_delivery":
                         _create_order_notification(order, "Out for Delivery",
-                            f"Your order {order.get('order_code')} is out for delivery. Please keep your delivery confirmation code ready.",
+                            f"Your order {order_code} is out for delivery. The dispatch rider will provide the delivery confirmation code when they arrive. Enter it in the app only after you have received your order.",
                             "delivery_update", "delivery")
-                    elif new_order_status == "delivered":
+                    elif status_value == "delivered":
                         _create_order_notification(order, "Order Delivered",
-                            f"Your order {order.get('order_code')} has been marked as delivered.",
+                            f"Your order {order_code} has been marked as delivered.",
                             "delivery_update", "delivery")
-                
-                # Delivery code generation notification
-                if order.get("delivery_code") and not old_delivery_code:
-                    _create_order_notification(order, "Delivery Code Generated",
-                        f"Your delivery confirmation code has been generated for order {order.get('order_code')}. Share it only after receiving your order.",
-                        "delivery_update", "delivery")
+
+                # Order/fulfillment/status changes
+                new_order_status = order.get("order_status")
+                new_fulfillment_status = order.get("fulfillment_status")
+                new_status = order.get("status")
+                if new_order_status != old_order_status:
+                    notify_order_status(new_order_status)
+                if new_fulfillment_status != old_fulfillment_status:
+                    notify_order_status(new_fulfillment_status)
+                if new_status != old_status:
+                    notify_payment_status(new_status)
+                    notify_order_status(new_status)
                 
                 # Service note added
                 new_service_note = order.get("service_note")
@@ -1140,16 +1231,14 @@ def admin_delete_pack(pack_id: int):
 # ============================================
 
 @app.post("/admin/broadcasts")
-def create_broadcast(payload: dict, request: Request):
+def create_broadcast(payload: BroadcastPayload, request: Request):
     """Create and send a broadcast message to all customers."""
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user or user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    user = require_admin(request)
     
-    title = payload.get("title", "")
-    message = payload.get("message", "")
-    notif_type = payload.get("type", "broadcast")
-    audience = payload.get("audience", "all")
+    title = payload.title.strip()
+    message = payload.message.strip()
+    notif_type = (payload.type or "broadcast").strip() or "broadcast"
+    audience = (payload.audience or "all").strip() or "all"
     
     if not title or not message:
         raise HTTPException(status_code=400, detail="Title and message are required")
@@ -1165,34 +1254,32 @@ def create_broadcast(payload: dict, request: Request):
         "message": message,
         "type": notif_type,
         "audience": audience,
+        "is_active": payload.is_active is not False,
+        "recipient_count": 0,
         "created_by": user.get("email"),
         "created_at": datetime.utcnow().isoformat(),
-        "is_active": True,
+        "updated_at": datetime.utcnow().isoformat(),
     }
     
     BROADCAST_MESSAGES.append(broadcast)
     
     # Send notifications to all customers
     recipient_count = _create_broadcast_notification(title, message, notif_type, audience)
+    broadcast["recipient_count"] = recipient_count
     
     return {
         "success": True,
         "message": "Broadcast sent successfully",
         "broadcast": broadcast,
         "recipient_count": recipient_count,
-        "data": {
-            "broadcast": broadcast,
-            "recipient_count": recipient_count,
-        }
+        "data": broadcast,
     }
 
 
 @app.get("/admin/broadcasts")
 def get_broadcasts(request: Request):
     """Get all broadcast messages."""
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user or user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    require_admin(request)
     
     # Sort by created_at descending (newest first)
     sorted_broadcasts = sorted(BROADCAST_MESSAGES, key=lambda x: x.get("created_at", ""), reverse=True)
@@ -1205,25 +1292,32 @@ def get_broadcasts(request: Request):
 
 
 @app.patch("/admin/broadcasts/{broadcast_id}")
-def update_broadcast(broadcast_id: int, payload: dict, request: Request):
+def update_broadcast(broadcast_id: int, payload: BroadcastUpdatePayload, request: Request):
     """Update a broadcast message."""
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user or user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    require_admin(request)
+    updates = payload.dict(exclude_unset=True)
     
     for i, broadcast in enumerate(BROADCAST_MESSAGES):
         if broadcast["id"] == broadcast_id:
             # Update allowed fields
-            if "title" in payload:
-                broadcast["title"] = payload["title"]
-            if "message" in payload:
-                broadcast["message"] = payload["message"]
-            if "type" in payload:
-                broadcast["type"] = payload["type"]
-            if "is_active" in payload:
-                broadcast["is_active"] = payload["is_active"]
+            for field in ["title", "message", "type", "is_active", "audience"]:
+                if field in updates and updates[field] is not None:
+                    value = updates[field]
+                    if isinstance(value, str):
+                        value = value.strip()
+                        if field in ["title", "message"] and not value:
+                            raise HTTPException(status_code=400, detail="Title and message are required")
+                    broadcast[field] = value
             
             broadcast["updated_at"] = datetime.utcnow().isoformat()
+            if updates.get("resend"):
+                recipient_count = _create_broadcast_notification(
+                    broadcast.get("title", ""),
+                    broadcast.get("message", ""),
+                    broadcast.get("type", "broadcast"),
+                    broadcast.get("audience", "all"),
+                )
+                broadcast["recipient_count"] = recipient_count
             BROADCAST_MESSAGES[i] = broadcast
             
             return {
@@ -1238,23 +1332,18 @@ def update_broadcast(broadcast_id: int, payload: dict, request: Request):
 
 @app.delete("/admin/broadcasts/{broadcast_id}")
 def delete_broadcast(broadcast_id: int, request: Request):
-    """Delete or mark a broadcast as inactive."""
-    user = _get_user_from_token(request.headers.get("authorization"))
-    if not user or user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+    """Delete a broadcast record without removing customer notification history."""
+    require_admin(request)
     
     for i, broadcast in enumerate(BROADCAST_MESSAGES):
         if broadcast["id"] == broadcast_id:
-            # Mark as inactive instead of deleting
-            broadcast["is_active"] = False
-            broadcast["deleted_at"] = datetime.utcnow().isoformat()
-            BROADCAST_MESSAGES[i] = broadcast
+            removed = BROADCAST_MESSAGES.pop(i)
             
             return {
                 "success": True,
                 "message": "Broadcast deleted successfully",
-                "broadcast": broadcast,
-                "data": broadcast,
+                "broadcast": removed,
+                "data": removed,
             }
     
     raise HTTPException(status_code=404, detail="Broadcast not found")

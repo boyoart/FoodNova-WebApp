@@ -22,6 +22,13 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
 
+  const isBackendNotification = (notification) => (
+    notification?.id &&
+    !String(notification.id).startsWith('order-') &&
+    !String(notification.id).startsWith('broadcast-') &&
+    !String(notification.id).startsWith('local-')
+  )
+
   const loadInbox = async () => {
     try {
       setLoading(true)
@@ -32,10 +39,14 @@ export default function InboxPage() {
 
       const backendBody = notificationsRes.status === 'fulfilled' ? notificationsRes.value || {} : {}
       const backendNotifications = backendBody.notifications || backendBody.data || []
-      const orders = ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : []
-      const derived = createDerivedNotificationsFromOrders(orders)
-      const broadcasts = createBroadcastNotifications()
-      setNotifications(mergeNotifications(backendNotifications, derived, broadcasts))
+      if (notificationsRes.status === 'fulfilled') {
+        setNotifications(backendNotifications)
+      } else {
+        const orders = ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : []
+        const derived = createDerivedNotificationsFromOrders(orders)
+        const broadcasts = createBroadcastNotifications()
+        setNotifications(mergeNotifications([], derived, broadcasts))
+      }
     } catch (error) {
       console.error('Failed to load inbox', error)
       toast.error('Failed to load inbox')
@@ -56,7 +67,7 @@ export default function InboxPage() {
 
   const markOneRead = async (notification) => {
     markLocalNotificationRead(notification)
-    if (notification.id && !String(notification.id).startsWith('order-') && !String(notification.id).startsWith('broadcast-') && !String(notification.id).startsWith('local-')) {
+    if (isBackendNotification(notification)) {
       await notificationsAPI.markRead(notification.id).catch(() => null)
     }
     setNotifications((current) => current.map((item) => getNotificationKey(item) === getNotificationKey(notification) ? { ...item, is_read: true } : item))
@@ -71,9 +82,19 @@ export default function InboxPage() {
     toast.success('Inbox marked as read')
   }
 
-  const deleteNotification = (notification) => {
-    deleteLocalNotification(notification)
+  const deleteNotification = async (notification) => {
+    try {
+      if (isBackendNotification(notification)) {
+        await notificationsAPI.deleteNotification(notification.id)
+      } else {
+        deleteLocalNotification(notification)
+      }
+    } catch (error) {
+      console.warn('Backend notification delete failed. Applying local inbox fallback.', error)
+      deleteLocalNotification(notification)
+    }
     setNotifications((current) => current.filter((item) => getNotificationKey(item) !== getNotificationKey(notification)))
+    window.dispatchEvent(new Event('foodnova-notifications-updated'))
     toast.success('Notification deleted from inbox')
   }
 

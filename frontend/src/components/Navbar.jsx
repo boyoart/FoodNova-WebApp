@@ -95,13 +95,14 @@ export default function Navbar() {
         backendNotifications = body.notifications || body.data || []
       }
 
-      const orders = ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : []
-      const derivedNotifications = createDerivedNotificationsFromOrders(orders)
-      const broadcastNotifications = createBroadcastNotifications()
-      const merged = mergeNotifications(backendNotifications, derivedNotifications, broadcastNotifications)
+      const backendAvailable = notificationsRes.status === 'fulfilled'
+      const orders = backendAvailable ? [] : (ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : [])
+      const derivedNotifications = backendAvailable ? [] : createDerivedNotificationsFromOrders(orders)
+      const broadcastNotifications = backendAvailable ? [] : createBroadcastNotifications()
+      const merged = backendAvailable ? backendNotifications : mergeNotifications([], derivedNotifications, broadcastNotifications)
       setNotifications(merged)
 
-      if (countRes.status === 'fulfilled' && backendNotifications.length && !derivedNotifications.length && !broadcastNotifications.length) {
+      if (backendAvailable && countRes.status === 'fulfilled') {
         const body = countRes.value || {}
         setUnreadCount(Number(body.count || body.data?.count || 0))
       } else {

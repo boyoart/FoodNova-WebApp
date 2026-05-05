@@ -109,8 +109,8 @@ export default function AdminBroadcasts() {
         is_active: true,
       }
 
-      pushLocalBroadcastToCustomerSide(createdBroadcast)
-      toast.success(`Broadcast sent to customers${created?.recipient_count ? ` (${created.recipient_count})` : ''}`)
+      const recipientCount = created?.recipient_count ?? createdBroadcast?.recipient_count
+      toast.success(`Broadcast sent successfully${recipientCount !== undefined ? ` (${recipientCount} recipients)` : ''}`)
       setFormData({ title: '', message: '', type: 'broadcast', audience: 'all' })
       setBroadcasts((current) => [createdBroadcast, ...current])
       await fetchBroadcasts()
