@@ -22,11 +22,13 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [profile, setProfile] = useState(null)
+  const [avatarOpen, setAvatarOpen] = useState(false)
   const [refreshingNotifications, setRefreshingNotifications] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('foodnova_theme') || 'light')
   const [logoSrc, setLogoSrc] = useState('/foodnova-logo.png')
   const [logoFailed, setLogoFailed] = useState(false)
   const notificationRef = useRef(null)
+  const avatarRef = useRef(null)
 
   const { user, admin, isAuthenticated, isAdmin, logout } = useAuthStore()
   const { getTotalItems } = useCartStore()
@@ -120,6 +122,7 @@ export default function Navbar() {
   useEffect(() => {
     setMobileMenuOpen(false)
     setNotificationsOpen(false)
+    setAvatarOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
@@ -141,11 +144,15 @@ export default function Navbar() {
   }, [isAuthenticated, isAdmin])
 
   useEffect(() => {
-    if (!notificationsOpen) return undefined
+    if (!notificationsOpen && !avatarOpen) return undefined
 
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
         setNotificationsOpen(false)
+      }
+
+      if (avatarRef.current && !avatarRef.current.contains(event.target)) {
+        setAvatarOpen(false)
       }
     }
 
@@ -156,7 +163,7 @@ export default function Navbar() {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('touchstart', handleClickOutside)
     }
-  }, [notificationsOpen])
+  }, [notificationsOpen, avatarOpen])
 
   const handleLogout = () => {
     logout()
@@ -197,8 +204,37 @@ export default function Navbar() {
 
   const toggleNotifications = () => {
     setNotificationsOpen((value) => !value)
+    setAvatarOpen(false)
     if (!notificationsOpen) loadCustomerHeaderData()
   }
+
+  const toggleAvatarMenu = () => {
+    setAvatarOpen((value) => !value)
+    setNotificationsOpen(false)
+  }
+
+  const handleDropdownLogout = () => {
+    setAvatarOpen(false)
+    handleLogout()
+  }
+
+  const customerMenuLinks = [
+    { to: '/profile', label: 'Profile' },
+    { to: '/orders', label: 'Orders' },
+    { to: '/inbox', label: 'Inbox' },
+    { to: '/cart', label: 'Cart' },
+  ]
+
+  const adminMenuLinks = [
+    { to: '/admin/dashboard', label: 'Dashboard' },
+    { to: '/admin/orders', label: 'Orders' },
+    { to: '/admin/stock', label: 'Stock' },
+    { to: '/admin/payments', label: 'Payments' },
+    { to: '/admin/broadcasts', label: 'Broadcasts' },
+    { to: '/admin/customers', label: 'Customers' },
+  ]
+
+  const avatarMenuLinks = isAdmin ? adminMenuLinks : customerMenuLinks
 
   const themeToggle = (
     <button
@@ -293,7 +329,36 @@ export default function Navbar() {
 
           {(isAuthenticated || isAdmin) ? (
             <>
-              <li className="nav-item nav-user-card"><span className="nav-avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt="Avatar" /> : initials}</span><span className="nav-text">Hi, {displayName}</span></li>
+              <li className="nav-item nav-user-menu" ref={avatarRef}>
+                <button type="button" className="nav-user-card" onClick={toggleAvatarMenu} aria-haspopup="menu" aria-expanded={avatarOpen}>
+                  <span className="nav-avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt="Avatar" /> : initials}</span>
+                  <span className="nav-text">Hi, {displayName}</span>
+                </button>
+
+                {avatarOpen && (
+                  <div className="avatar-dropdown" role="menu">
+                    <div className="avatar-dropdown-header">
+                      <span className="nav-avatar dropdown-avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt="Avatar" /> : initials}</span>
+                      <div>
+                        <strong>{displayName}</strong>
+                        <small>{activeUser?.email || (isAdmin ? 'FoodNova admin' : 'FoodNova customer')}</small>
+                      </div>
+                    </div>
+
+                    <div className="avatar-dropdown-links">
+                      {avatarMenuLinks.map((link) => (
+                        <Link key={link.to} to={link.to} className={isActivePath(link.to) ? 'active' : ''} role="menuitem">
+                          {link.label}
+                        </Link>
+                      ))}
+                    </div>
+
+                    <button type="button" className="avatar-dropdown-logout" onClick={handleDropdownLogout}>
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </div>
+                )}
+              </li>
               <li className="nav-item"><button type="button" className="nav-link logout-btn" onClick={handleLogout}><LogOut size={18} /><span>Logout</span></button></li>
             </>
           ) : (

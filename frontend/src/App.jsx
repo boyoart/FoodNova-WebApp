@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
+import FloatingCartButton from './components/FloatingCartButton'
 import HomePage from './pages/HomePage'
 import ProductsPage from './pages/ProductsPage'
 import CartPage from './pages/CartPage'
@@ -59,6 +60,7 @@ function App() {
             </Routes>
           </main>
           <Footer />
+          <FloatingCartButton />
           <Toaster position="bottom-right" />
         </div>
       </ErrorBoundary>
