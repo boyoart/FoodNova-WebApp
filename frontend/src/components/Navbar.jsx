@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Home, Inbox, LogIn, LogOut, Menu, Package, RefreshCw, ShoppingCart, User, Users, X } from 'lucide-react'
+import { Bell, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, ShoppingCart, Sun, User, Users, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI } from '../services/api'
@@ -23,6 +23,9 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [profile, setProfile] = useState(null)
   const [refreshingNotifications, setRefreshingNotifications] = useState(false)
+  const [theme, setTheme] = useState(() => localStorage.getItem('foodnova_theme') || 'light')
+  const [logoSrc, setLogoSrc] = useState('/foodnova-logo.png')
+  const [logoFailed, setLogoFailed] = useState(false)
   const notificationRef = useRef(null)
 
   const { user, admin, isAuthenticated, isAdmin, logout } = useAuthStore()
@@ -40,6 +43,37 @@ export default function Navbar() {
     .join('')
     .slice(0, 2)
     .toUpperCase() || 'U'
+
+  const isDark = theme === 'dark'
+
+  useEffect(() => {
+    const nextTheme = theme === 'dark' ? 'dark' : 'light'
+    document.documentElement.classList.remove('theme-light', 'theme-dark')
+    document.documentElement.classList.add(`theme-${nextTheme}`)
+    document.documentElement.dataset.theme = nextTheme
+    localStorage.setItem('foodnova_theme', nextTheme)
+  }, [theme])
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
+  }
+
+  const handleLogoError = () => {
+    if (logoSrc === '/foodnova-logo.png') {
+      setLogoSrc('/logo.png')
+      return
+    }
+
+    setLogoFailed(true)
+  }
+
+  const isActivePath = (path) => {
+    if (path === '/') return location.pathname === '/'
+    return location.pathname === path || location.pathname.startsWith(`${path}/`)
+  }
+
+  const navLinkClass = (path, extra = '') =>
+    ['nav-link', isActivePath(path) ? 'active' : '', extra].filter(Boolean).join(' ')
 
   const loadCustomerHeaderData = async () => {
     if (!isAuthenticated || isAdmin) return
@@ -166,12 +200,25 @@ export default function Navbar() {
     if (!notificationsOpen) loadCustomerHeaderData()
   }
 
+  const themeToggle = (
+    <button
+      type="button"
+      className="nav-link theme-toggle"
+      onClick={toggleTheme}
+      title={isDark ? 'Light Mode' : 'Dark Mode'}
+      aria-label={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+    >
+      {isDark ? <Sun size={18} /> : <Moon size={18} />}
+      <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+    </button>
+  )
+
   return (
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
-          <img src="/logo.png" alt="FoodNova" className="logo-image" onError={(e) => { e.currentTarget.style.display = 'none' }} />
-          <span>FoodNova</span>
+          {!logoFailed && <img src={logoSrc} alt="FoodNova" className="logo-image" onError={handleLogoError} />}
+          <span className={logoFailed ? 'logo-wordmark visible' : 'logo-wordmark'}>FoodNova</span>
         </Link>
 
         <button type="button" className="menu-toggle" onClick={() => setMobileMenuOpen((value) => !value)} aria-label="Toggle navigation menu">
@@ -179,14 +226,14 @@ export default function Navbar() {
         </button>
 
         <ul className={`nav-menu ${mobileMenuOpen ? 'active' : ''}`}>
-          <li className="nav-item"><Link to="/" className="nav-link"><Home size={18} /><span>Home</span></Link></li>
-          <li className="nav-item"><Link to="/products" className="nav-link"><Package size={18} /><span>Products</span></Link></li>
+          <li className="nav-item"><Link to="/" className={navLinkClass('/')}><Home size={18} /><span>Home</span></Link></li>
+          <li className="nav-item"><Link to="/products" className={navLinkClass('/products')}><Package size={18} /><span>Products</span></Link></li>
 
           {isAuthenticated && !isAdmin && (
             <>
-              <li className="nav-item"><Link to="/orders" className="nav-link"><span>Orders</span></Link></li>
-              <li className="nav-item"><Link to="/profile" className="nav-link"><User size={18} /><span>Profile</span></Link></li>
-              <li className="nav-item"><Link to="/inbox" className="nav-link"><Inbox size={18} /><span>Inbox</span></Link></li>
+              <li className="nav-item"><Link to="/orders" className={navLinkClass('/orders')}><span>Orders</span></Link></li>
+              <li className="nav-item"><Link to="/profile" className={navLinkClass('/profile')}><User size={18} /><span>Profile</span></Link></li>
+              <li className="nav-item"><Link to="/inbox" className={navLinkClass('/inbox')}><Inbox size={18} /><span>Inbox</span></Link></li>
               <li className="nav-item nav-bell" ref={notificationRef}>
                 <button type="button" className="nav-link bell-btn" onClick={toggleNotifications} aria-label="Notifications">
                   <Bell size={18} />
@@ -231,16 +278,18 @@ export default function Navbar() {
 
           {isAdmin && (
             <>
-              <li className="nav-item"><Link to="/admin/dashboard" className="nav-link">Dashboard</Link></li>
-              <li className="nav-item"><Link to="/admin/orders" className="nav-link">Orders</Link></li>
-              <li className="nav-item"><Link to="/admin/stock" className="nav-link">Stock</Link></li>
-              <li className="nav-item"><Link to="/admin/payments" className="nav-link">Payments</Link></li>
-              <li className="nav-item"><Link to="/admin/broadcasts" className="nav-link">Broadcasts</Link></li>
-              <li className="nav-item"><Link to="/admin/customers" className="nav-link"><Users size={18} /> Customers</Link></li>
+              <li className="nav-item"><Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>Dashboard</Link></li>
+              <li className="nav-item"><Link to="/admin/orders" className={navLinkClass('/admin/orders')}>Orders</Link></li>
+              <li className="nav-item"><Link to="/admin/stock" className={navLinkClass('/admin/stock')}>Stock</Link></li>
+              <li className="nav-item"><Link to="/admin/payments" className={navLinkClass('/admin/payments')}>Payments</Link></li>
+              <li className="nav-item"><Link to="/admin/broadcasts" className={navLinkClass('/admin/broadcasts')}>Broadcasts</Link></li>
+              <li className="nav-item"><Link to="/admin/customers" className={navLinkClass('/admin/customers')}><Users size={18} /> Customers</Link></li>
             </>
           )}
 
-          {!isAdmin && <li className="nav-item"><Link to="/cart" className="nav-link cart-link"><ShoppingCart size={20} />{totalCartItems > 0 && <span className="cart-badge">{totalCartItems}</span>}</Link></li>}
+          <li className="nav-item nav-theme">{themeToggle}</li>
+
+          {isAuthenticated && !isAdmin && <li className="nav-item"><Link to="/cart" className={navLinkClass('/cart', 'cart-link')}><ShoppingCart size={20} /><span>Cart</span>{totalCartItems > 0 && <span className="cart-badge">{totalCartItems}</span>}</Link></li>}
 
           {(isAuthenticated || isAdmin) ? (
             <>
@@ -249,9 +298,9 @@ export default function Navbar() {
             </>
           ) : (
             <>
-              <li className="nav-item"><Link to="/login" className="nav-link"><LogIn size={18} /><span>Login</span></Link></li>
-              <li className="nav-item"><Link to="/register" className="nav-link register-btn">Register</Link></li>
-              <li className="nav-item"><Link to="/admin/login" className="nav-link admin-login-link">Admin</Link></li>
+              <li className="nav-item"><Link to="/login" className={navLinkClass('/login')}><LogIn size={18} /><span>Login</span></Link></li>
+              <li className="nav-item"><Link to="/register" className={navLinkClass('/register', 'register-btn')}>Register</Link></li>
+              <li className="nav-item"><Link to="/admin/login" className={navLinkClass('/admin/login', 'admin-login-link')}>Admin</Link></li>
             </>
           )}
         </ul>

@@ -1,9 +1,9 @@
 .footer {
-  background-color: var(--dark);
+  background-color: var(--fn-footer-bg);
   color: #fff;
   padding: 3rem 1rem 1rem;
   margin-top: 4rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--fn-border);
 }
 
 .footer-container {
