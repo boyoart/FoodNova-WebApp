@@ -121,7 +121,7 @@
   background: var(--fn-primary);
   color: white;
   border-color: var(--fn-primary);
-  box-shadow: 0 10px 20px rgba(255, 107, 53, 0.22);
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--fn-primary) 24%, transparent);
 }
 
 .register-btn:hover,
@@ -153,8 +153,8 @@
   position: absolute;
   top: -2px;
   right: -1px;
-  background: #f04b23;
-  color: white;
+  background: var(--fn-accent);
+  color: var(--fn-brand-text);
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
@@ -189,7 +189,7 @@
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--fn-primary), var(--fn-primary-dark));
+  background: linear-gradient(135deg, var(--fn-primary), var(--fn-accent-green));
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -198,7 +198,7 @@
   font-size: 0.78rem;
   font-weight: 900;
   flex: 0 0 auto;
-  box-shadow: 0 8px 18px rgba(255, 107, 53, 0.24);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--fn-primary) 28%, transparent);
 }
 
 .nav-avatar img {

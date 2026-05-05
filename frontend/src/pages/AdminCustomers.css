@@ -29,7 +29,7 @@
 .customers-refresh,
 .customers-table button {
   border: 0;
-  background: #e85d04;
+  background: var(--fn-primary);
   color: #fff;
   border-radius: 0.7rem;
   padding: 0.7rem 0.9rem;
@@ -163,7 +163,7 @@
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: #e85d04;
+  background: var(--fn-primary);
   color: #fff;
   display: grid;
   place-items: center;

@@ -8,21 +8,24 @@
 .theme-light,
 :root.theme-light,
 :root[data-theme="light"] {
-  --fn-bg: #f8fafc;
+  --fn-bg: #F8FAF7;
   --fn-surface: #ffffff;
-  --fn-surface-2: #fff7ed;
-  --fn-text: #111827;
-  --fn-heading: #0f172a;
+  --fn-surface-2: #F2FAF3;
+  --fn-text: #103820;
+  --fn-heading: #103820;
   --fn-muted: #64748b;
-  --fn-border: #e5e7eb;
+  --fn-border: #DDE8DD;
   --fn-input-bg: #ffffff;
   --fn-input-text: #111827;
   --fn-input-placeholder: #94a3b8;
-  --fn-primary: #e85d04;
-  --fn-primary-dark: #c2410c;
+  --fn-primary: #087A34;
+  --fn-primary-dark: #065F2A;
+  --fn-accent: #FFD23F;
+  --fn-accent-green: #A7D948;
+  --fn-brand-text: #103820;
   --fn-footer-bg: #151515;
   --fn-footer-text: #f9fafb;
-  --fn-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --fn-shadow: 0 12px 30px rgba(16, 56, 32, 0.09);
   --primary: var(--fn-primary);
   --primary-dark: var(--fn-primary-dark);
   --secondary: #004E89;
@@ -40,18 +43,21 @@
 :root.theme-dark,
 .theme-dark,
 :root[data-theme="dark"] {
-  --fn-bg: #0f1115;
-  --fn-surface: #171a21;
-  --fn-surface-2: #232733;
+  --fn-bg: #07120B;
+  --fn-surface: #101A14;
+  --fn-surface-2: #17291E;
   --fn-text: #f8fafc;
   --fn-heading: #ffffff;
   --fn-muted: #cbd5e1;
-  --fn-border: #334155;
+  --fn-border: #284434;
   --fn-input-bg: #111827;
   --fn-input-text: #f8fafc;
   --fn-input-placeholder: #94a3b8;
-  --fn-primary: #ff7a1a;
-  --fn-primary-dark: #e85d04;
+  --fn-primary: #2BBE63;
+  --fn-primary-dark: #22A652;
+  --fn-accent: #FFD23F;
+  --fn-accent-green: #A7D948;
+  --fn-brand-text: #F8FAFC;
   --fn-footer-bg: #05070a;
   --fn-footer-text: #f8fafc;
   --fn-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
@@ -170,7 +176,7 @@ option {
 input:focus, textarea:focus, select:focus {
   outline: none;
   border-color: var(--fn-primary);
-  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fn-primary) 18%, transparent);
 }
 
 table,

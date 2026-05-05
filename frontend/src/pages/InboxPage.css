@@ -47,13 +47,13 @@
 }
 
 .btn-primary {
-  background: var(--primary, #e85d04);
+  background: var(--fn-primary);
   color: #fff;
 }
 
 .btn-secondary {
   background: var(--fn-surface-2);
-  color: var(--primary, #e85d04);
+  color: var(--fn-primary);
   border: 1px solid var(--fn-border);
 }
 
@@ -75,9 +75,9 @@
 }
 
 .inbox-filters button.active {
-  background: var(--primary, #e85d04);
+  background: var(--fn-primary);
   color: #fff;
-  border-color: var(--primary, #e85d04);
+  border-color: var(--fn-primary);
 }
 
 .inbox-list {
@@ -97,7 +97,7 @@
 }
 
 .inbox-card.unread {
-  border-left: 5px solid var(--primary, #e85d04);
+  border-left: 5px solid var(--fn-primary);
   background: var(--fn-surface-2);
 }
 
@@ -125,8 +125,8 @@
 }
 
 .inbox-card-top span {
-  background: rgba(232, 93, 4, 0.1);
-  color: var(--primary, #e85d04);
+  background: color-mix(in srgb, var(--fn-primary) 12%, var(--fn-surface));
+  color: var(--fn-primary);
   border-radius: 999px;
   padding: 0.25rem 0.55rem;
   font-size: 0.75rem;
@@ -148,7 +148,7 @@
 }
 
 .inbox-meta strong {
-  color: var(--primary, #e85d04);
+  color: var(--fn-primary);
 }
 
 .inbox-card-actions {

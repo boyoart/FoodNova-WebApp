@@ -41,8 +41,8 @@
 
 .form-input:focus {
   outline: none;
-  border-color: #FF9800;
-  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.1);
+  border-color: var(--fn-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fn-primary) 18%, transparent);
 }
 
 .form-input:disabled {
@@ -70,7 +70,7 @@ textarea.form-input {
 }
 
 .btn-primary {
-  background-color: #FF9800;
+  background-color: var(--fn-primary);
   color: white;
   padding: 12px 24px;
   border: none;
@@ -83,7 +83,7 @@ textarea.form-input {
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #FB8C00;
+  background-color: var(--fn-primary-dark);
 }
 
 .btn-primary:disabled {

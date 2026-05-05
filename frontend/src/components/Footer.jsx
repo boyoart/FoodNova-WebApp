@@ -4,13 +4,25 @@ import './Footer.css'
 
 export default function Footer() {
   const currentYear = new Date().getFullYear()
+  const handleLogoError = (event) => {
+    if (event.currentTarget.dataset.fallback !== 'true') {
+      event.currentTarget.dataset.fallback = 'true'
+      event.currentTarget.src = '/logo.png'
+      return
+    }
+
+    event.currentTarget.style.display = 'none'
+  }
 
   return (
     <footer className="footer">
       <div className="footer-container">
         <div className="footer-content">
           <div className="footer-section">
-            <h4>FoodNova</h4>
+            <div className="footer-brand">
+              <img src="/foodnova-logo.png" alt="FoodNova" onError={handleLogoError} />
+              <h4>FoodNova</h4>
+            </div>
             <p>Fresh food delivery for everyone, everywhere.</p>
             <div className="social-links">
               <a href="#" aria-label="Facebook">

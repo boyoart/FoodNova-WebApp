@@ -21,7 +21,27 @@
 .footer-section h4,
 .footer-section h5 {
   margin-bottom: 1rem;
-  color: var(--primary);
+  color: var(--fn-accent);
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1rem;
+}
+
+.footer-brand img {
+  max-width: 138px;
+  max-height: 42px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.footer-brand h4 {
+  margin-bottom: 0;
+  color: var(--fn-accent);
 }
 
 .footer-section p {
@@ -48,7 +68,7 @@
 }
 
 .footer-section a:hover {
-  color: var(--primary);
+  color: var(--fn-accent);
 }
 
 .social-links {
@@ -69,8 +89,8 @@
 }
 
 .social-links a:hover {
-  background-color: var(--primary);
-  color: white;
+  background-color: var(--fn-primary);
+  color: #fff;
 }
 
 .footer-bottom {
