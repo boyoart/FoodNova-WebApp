@@ -45,7 +45,7 @@ export default function ContactPage() {
               <Mail size={32} />
               <div>
                 <h3>Email</h3>
-                <a href="mailto:support@foodnova.com">support@foodnova.com</a>
+                <a href="mailto:support@foodnova.ng">support@foodnova.ng</a>
               </div>
             </div>
 
@@ -53,7 +53,7 @@ export default function ContactPage() {
               <Phone size={32} />
               <div>
                 <h3>Phone</h3>
-                <a href="tel:+1234567890">+1 (234) 567-890</a>
+                <a href="tel:+2348148242485">+234 814 824 2485</a>
               </div>
             </div>
 
@@ -61,7 +61,7 @@ export default function ContactPage() {
               <MapPin size={32} />
               <div>
                 <h3>Address</h3>
-                <p>123 Main Street<br />City, Country 12345</p>
+                <p>33 Ariyo Akinloye Street<br />Isheri-Bucknor, Lagos, Nigeria</p>
               </div>
             </div>
           </div>

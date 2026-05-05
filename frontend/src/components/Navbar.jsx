@@ -365,7 +365,6 @@ export default function Navbar() {
             <>
               <li className="nav-item"><Link to="/login" className={navLinkClass('/login')}><LogIn size={18} /><span>Login</span></Link></li>
               <li className="nav-item"><Link to="/register" className={navLinkClass('/register', 'register-btn')}>Register</Link></li>
-              <li className="nav-item"><Link to="/admin/login" className={navLinkClass('/admin/login', 'admin-login-link')}>Admin</Link></li>
             </>
           )}
         </ul>

@@ -43,7 +43,8 @@ export default function Footer() {
               <li><Link to="/">Home</Link></li>
               <li><Link to="/products">Products</Link></li>
               <li><Link to="/contact">Contact</Link></li>
-              <li><Link to="/admin/login">Admin</Link></li>
+              <li><Link to="/privacy">Privacy Policy</Link></li>
+              <li><Link to="/terms">Terms of Service</Link></li>
             </ul>
           </div>
 
@@ -52,7 +53,7 @@ export default function Footer() {
             <ul>
               <li><Link to="/privacy">Privacy Policy</Link></li>
               <li><Link to="/terms">Terms of Service</Link></li>
-              <li><a href="mailto:support@foodnova.com">Report Issue</a></li>
+              <li><a href="mailto:support@foodnova.ng">Report Issue</a></li>
             </ul>
           </div>
 
@@ -60,21 +61,21 @@ export default function Footer() {
             <h5>Contact</h5>
             <ul>
               <li>
-                <a href="mailto:support@foodnova.com">
+                <a href="mailto:support@foodnova.ng">
                   <Mail size={16} />
-                  support@foodnova.com
+                  support@foodnova.ng
                 </a>
               </li>
               <li>
-                <a href="tel:+1234567890">
+                <a href="tel:+2348148242485">
                   <Phone size={16} />
-                  +1 (234) 567-890
+                  +234 814 824 2485
                 </a>
               </li>
               <li>
                 <span>
                   <MapPin size={16} />
-                  123 Main St, City, Country
+                  33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria
                 </span>
               </li>
             </ul>
