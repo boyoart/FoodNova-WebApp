@@ -18,9 +18,14 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
+        // Use stable asset names to prevent blank screens from stale cached HTML
+        // requesting old hashed Vercel asset files after redeploys.
+        entryFileNames: 'assets/app.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name][extname]',
         manualChunks: {
-          'vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui': ['lucide-react', 'react-hot-toast']
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['lucide-react', 'react-hot-toast']
         }
       }
     }
