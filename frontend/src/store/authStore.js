@@ -1,8 +1,20 @@
 import { create } from 'zustand'
 
+const safeJsonParse = (key, fallback) => {
+  try {
+    const value = localStorage.getItem(key)
+    if (!value || value === 'undefined' || value === 'null') return fallback
+    return JSON.parse(value)
+  } catch (error) {
+    console.warn(`Invalid localStorage value for ${key}. Resetting it.`, error)
+    localStorage.removeItem(key)
+    return fallback
+  }
+}
+
 export const useAuthStore = create((set) => ({
-  user: JSON.parse(localStorage.getItem('user')) || null,
-  admin: JSON.parse(localStorage.getItem('admin')) || null,
+  user: safeJsonParse('user', null),
+  admin: safeJsonParse('admin', null),
   isAuthenticated: !!localStorage.getItem('token'),
   isAdmin: !!localStorage.getItem('admin_token'),
 
