@@ -2,6 +2,7 @@
   max-width: 1280px;
   margin: 0 auto;
   padding: 2rem 1rem 4rem;
+  color: var(--fn-text);
 }
 
 .customers-header {
@@ -22,7 +23,7 @@
 
 .customers-header p {
   margin: 0;
-  color: #6b7280;
+  color: var(--fn-muted);
 }
 
 .customers-refresh,
@@ -47,8 +48,8 @@
 }
 
 .customers-summary > div {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 1rem;
   padding: 1.1rem;
   box-shadow: 0 8px 24px rgba(0,0,0,0.04);
@@ -57,11 +58,11 @@
 .customers-summary strong {
   display: block;
   font-size: 1.7rem;
-  color: #111827;
+  color: var(--fn-heading);
 }
 
 .customers-summary span {
-  color: #6b7280;
+  color: var(--fn-muted);
   font-weight: 700;
 }
 
@@ -78,8 +79,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 0.85rem;
   padding: 0 0.85rem;
 }
@@ -101,8 +102,8 @@
 
 .customers-table-wrap {
   overflow-x: auto;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 1rem;
 }
 
@@ -115,13 +116,13 @@
 .customers-table th,
 .customers-table td {
   padding: 0.9rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--fn-border);
   text-align: left;
   vertical-align: top;
 }
 
 .customers-table th {
-  background: #fff7ed;
+  background: var(--fn-surface-2);
   color: #9a3412;
   font-size: 0.82rem;
   text-transform: uppercase;
@@ -137,8 +138,8 @@
 .customer-details-card {
   position: sticky;
   top: 86px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 1rem;
   padding: 1.2rem;
   box-shadow: 0 12px 30px rgba(0,0,0,0.08);
@@ -149,7 +150,8 @@
   top: 0.7rem;
   right: 0.8rem;
   border: 0;
-  background: #f3f4f6;
+  background: var(--fn-surface-2);
+  color: var(--fn-text);
   border-radius: 999px;
   width: 28px;
   height: 28px;
@@ -178,7 +180,7 @@
   display: flex;
   gap: 0.45rem;
   align-items: flex-start;
-  color: #374151;
+  color: var(--fn-text);
 }
 
 .customer-metrics {
@@ -189,7 +191,7 @@
 }
 
 .customer-metrics div {
-  background: #fff7ed;
+  background: var(--fn-surface-2);
   border-radius: 0.85rem;
   padding: 0.85rem;
 }
@@ -207,17 +209,17 @@
   display: flex;
   justify-content: space-between;
   gap: 0.7rem;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--fn-border);
   padding: 0.65rem 0;
 }
 
 .customers-empty {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 1rem;
   padding: 2rem;
   text-align: center;
-  color: #6b7280;
+  color: var(--fn-muted);
 }
 
 @media (max-width: 900px) {

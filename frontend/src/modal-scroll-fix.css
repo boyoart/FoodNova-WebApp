@@ -33,7 +33,9 @@
   overflow-y: scroll !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch !important;
-  background: #fff !important;
+  background: var(--fn-surface) !important;
+  color: var(--fn-text) !important;
+  border: 1px solid var(--fn-border) !important;
   border-radius: 12px !important;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.32) !important;
   margin: 0 !important;
@@ -44,7 +46,9 @@
   position: sticky !important;
   top: 0 !important;
   z-index: 5 !important;
-  background: #f7f7f7 !important;
+  background: var(--fn-surface-2) !important;
+  color: var(--fn-heading) !important;
+  border-bottom: 1px solid var(--fn-border) !important;
 }
 
 .order-detail-modal .order-detail-content {

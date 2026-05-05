@@ -1,5 +1,7 @@
 .home-page {
   width: 100%;
+  background: var(--fn-bg);
+  color: var(--fn-text);
 }
 
 /* Hero Section */
@@ -16,12 +18,12 @@
 .hero-content h1 {
   font-size: 2.5rem;
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .hero-content p {
   font-size: 1.1rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
   margin-bottom: 2rem;
 }
 
@@ -77,14 +79,14 @@
 }
 
 .placeholder-image {
-  background: linear-gradient(135deg, var(--light) 0%, #f0f0f0 100%);
+  background: linear-gradient(135deg, var(--fn-surface-2) 0%, var(--fn-surface) 100%);
   border-radius: 1rem;
   overflow: hidden;
   min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .placeholder-image img {
@@ -103,7 +105,7 @@
 
 .features h2 {
   margin-bottom: 2rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .features-grid {
@@ -113,10 +115,11 @@
 }
 
 .feature-card {
-  background: white;
+  background: var(--fn-surface);
   padding: 2rem;
   border-radius: 1rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
+  color: var(--fn-text);
   transition: all 0.3s;
 }
 
@@ -132,11 +135,11 @@
 
 .feature-card h3 {
   margin-bottom: 0.5rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .feature-card p {
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 0.95rem;
 }
 
@@ -171,7 +174,8 @@
 }
 
 .info-item {
-  background: white;
+  background: var(--fn-surface);
+  color: var(--fn-text);
   padding: 2rem;
   border-radius: 1rem;
   border-left: 4px solid var(--primary);
@@ -179,12 +183,12 @@
 
 .info-item h3 {
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .info-item p {
   margin-bottom: 1rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .info-item a {

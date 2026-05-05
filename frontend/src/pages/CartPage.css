@@ -3,6 +3,7 @@
   margin: 0 auto;
   padding: 2rem 1rem;
   min-height: 60vh;
+  color: var(--fn-text);
 }
 
 .cart-page.empty-cart {
@@ -15,16 +16,16 @@
 }
 
 .cart-page.empty-cart svg {
-  color: var(--border);
+  color: var(--fn-border);
   opacity: 0.5;
 }
 
 .cart-page.empty-cart h2 {
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .cart-page.empty-cart p {
-  color: var(--text-light);
+  color: var(--fn-muted);
   margin-bottom: 1rem;
 }
 
@@ -50,10 +51,10 @@
   grid-template-columns: 80px 1fr auto auto auto;
   gap: 1rem;
   align-items: center;
-  background: white;
+  background: var(--fn-surface);
   padding: 1rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
 }
 
 .item-image {
@@ -61,7 +62,7 @@
   height: 80px;
   object-fit: cover;
   border-radius: 0.25rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
 }
 
 .item-details h3 {
@@ -78,7 +79,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
   border-radius: 0.25rem;
   padding: 0.25rem;
 }
@@ -91,7 +92,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text);
+  color: var(--fn-text);
   transition: color 0.2s;
 }
 
@@ -107,7 +108,7 @@
 
 .item-subtotal {
   font-weight: 700;
-  color: var(--dark);
+  color: var(--fn-heading);
   text-align: right;
   min-width: 80px;
 }
@@ -129,8 +130,8 @@
 }
 
 .cart-summary {
-  background: white;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 0.5rem;
   padding: 1.5rem;
   height: fit-content;
@@ -143,14 +144,14 @@
   justify-content: space-between;
   margin-bottom: 0.75rem;
   font-size: 0.95rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .summary-row.total {
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--dark);
-  border-top: 2px solid var(--border);
+  color: var(--fn-heading);
+  border-top: 2px solid var(--fn-border);
   padding-top: 0.75rem;
   margin-top: 0.75rem;
 }

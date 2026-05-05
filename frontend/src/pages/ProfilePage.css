@@ -2,23 +2,23 @@
   max-width: 1180px;
   margin: 0 auto;
   padding: 2.5rem 1rem 4rem;
-  color: var(--dark);
+  color: var(--fn-text);
 }
 
 .profile-loading {
-  background: #fff;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 1rem;
   padding: 2rem;
   text-align: center;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .profile-hero {
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  background: linear-gradient(135deg, #fff7ed, #ffffff 58%);
+  background: linear-gradient(135deg, var(--fn-surface-2), var(--fn-surface) 58%);
   border: 1px solid rgba(232, 93, 4, 0.16);
   border-radius: 1.25rem;
   padding: 1.5rem;
@@ -65,7 +65,7 @@
 
 .profile-hero-text p {
   margin: 0.35rem 0 0;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .profile-phone {
@@ -88,8 +88,8 @@
 }
 
 .profile-panel {
-  background: #fff;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 1rem;
   padding: 1.25rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
@@ -114,7 +114,7 @@
 
 .section-heading p {
   margin: 0.25rem 0 0;
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 0.9rem;
 }
 
@@ -127,22 +127,22 @@
   display: grid;
   gap: 0.4rem;
   font-weight: 700;
-  color: var(--dark);
+  color: var(--fn-heading);
   font-size: 0.9rem;
 }
 
 .premium-form label span {
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .premium-form input,
 .premium-form textarea {
   width: 100%;
   padding: 0.85rem 0.95rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
   border-radius: 0.75rem;
-  background: #fff;
-  color: var(--dark);
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
   font: inherit;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -204,13 +204,13 @@
 }
 
 .secondary-action {
-  background: var(--light);
-  color: var(--dark);
+  background: var(--fn-surface-2);
+  color: var(--fn-text);
 }
 
 .security-panel {
   border-color: rgba(232, 93, 4, 0.18);
-  background: linear-gradient(180deg, #ffffff 0%, #fffaf4 100%);
+  background: linear-gradient(180deg, var(--fn-surface) 0%, var(--fn-surface-2) 100%);
 }
 
 .address-list {
@@ -219,10 +219,10 @@
 }
 
 .address-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
   border-radius: 0.9rem;
   padding: 1rem;
-  background: #fff;
+  background: var(--fn-surface);
 }
 
 .address-card-header {
@@ -249,7 +249,7 @@
 .address-text,
 .address-landmark {
   margin: 0.35rem 0;
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 0.92rem;
   line-height: 1.4;
 }
@@ -262,8 +262,8 @@
 }
 
 .address-actions button {
-  background: var(--light);
-  color: var(--dark);
+  background: var(--fn-surface-2);
+  color: var(--fn-text);
   padding: 0.55rem 0.75rem;
   font-size: 0.85rem;
 }
@@ -280,10 +280,10 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
   border-radius: 0.85rem;
   padding: 1rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .empty-address-state p {
@@ -291,11 +291,11 @@
 }
 
 .google-address-note {
-  background: #fff7ed;
+  background: var(--fn-surface-2);
   border: 1px solid rgba(232, 93, 4, 0.18);
   border-radius: 0.75rem;
   padding: 0.85rem 1rem;
-  color: var(--text);
+  color: var(--fn-text);
   margin-bottom: 1rem;
 }
 

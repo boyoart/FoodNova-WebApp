@@ -3,6 +3,7 @@
   margin: 0 auto;
   padding: 2rem 1rem;
   min-height: 60vh;
+  color: var(--fn-text);
 }
 
 .contact-header {
@@ -12,11 +13,11 @@
 
 .contact-header h1 {
   margin-bottom: 0.5rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .contact-header p {
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 1.1rem;
 }
 
@@ -46,12 +47,12 @@
 
 .info-item h3 {
   margin: 0 0 0.5rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .info-item p {
   margin: 0;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .info-item a {
@@ -65,8 +66,8 @@
 }
 
 .contact-form {
-  background: white;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 0.75rem;
   padding: 1.5rem;
 }
@@ -79,14 +80,16 @@
   display: block;
   font-weight: 600;
   margin-bottom: 0.5rem;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .contact-form input,
 .contact-form textarea {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
   border-radius: 0.5rem;
   font-family: inherit;
   font-size: 1rem;

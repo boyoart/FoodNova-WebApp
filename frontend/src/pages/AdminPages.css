@@ -17,7 +17,7 @@
 }
 
 .stat-card {
-  background: white;
+  background: var(--fn-surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 1.5rem;
@@ -56,8 +56,8 @@
   margin-top: 2rem;
 }
 
-.nav-link {
-  background: white;
+.dashboard-nav .nav-link {
+  background: var(--fn-surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 1.5rem;
@@ -68,7 +68,7 @@
   transition: all 0.3s;
 }
 
-.nav-link:hover {
+.dashboard-nav .nav-link:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border-color: var(--primary);
 }
@@ -82,7 +82,7 @@
 
 .tab {
   padding: 0.75rem 1rem;
-  background: white;
+  background: var(--fn-surface);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   cursor: pointer;
@@ -99,7 +99,7 @@
 .orders-table,
 .stock-table,
 .payments-table {
-  background: white;
+  background: var(--fn-surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   overflow-x: auto;
@@ -200,7 +200,7 @@ tbody tr:hover {
 }
 
 .modal-content {
-  background: white;
+  background: var(--fn-surface);
   border-radius: 1rem;
   max-width: 90vw;
   max-height: 90vh;
@@ -286,7 +286,7 @@ tbody tr:hover {
 }
 
 .order-details-modal {
-  background: white;
+  background: var(--fn-surface);
   border-radius: 1rem;
   max-width: 900px;
   max-height: 90vh;
@@ -337,7 +337,7 @@ tbody tr:hover {
 }
 
 .admin-order-section {
-  background-color: #f9f9f9;
+  background-color: var(--fn-surface);
   border: 1px solid var(--border);
   border-radius: 0.75rem;
   padding: 1.5rem;
@@ -505,7 +505,7 @@ tbody tr:hover {
 }
 
 .modal {
-  background: white;
+  background: var(--fn-surface);
   border-radius: 1rem;
   max-width: 600px;
   max-height: 90vh;
@@ -614,7 +614,7 @@ tbody tr:hover {
 }
 
 .items-table tbody tr:hover {
-  background-color: #f5f5f5;
+  background-color: var(--fn-surface-2);
 }
 
 .order-total {
@@ -703,7 +703,7 @@ tbody tr:hover {
 }
 
 .delivery-code-instruction {
-  background-color: #fffbf0;
+  background-color: color-mix(in srgb, var(--warning) 12%, var(--fn-surface));
   border-left: 4px solid var(--warning);
   padding: 1rem;
   border-radius: 0.5rem;
@@ -733,6 +733,86 @@ tbody tr:hover {
   color: #2e7d32;
   margin: 0;
   font-weight: 600;
+}
+
+.theme-dark .admin-page {
+  background: var(--fn-bg);
+  color: var(--fn-text);
+}
+
+.theme-dark .admin-page h1,
+.theme-dark .admin-page h2,
+.theme-dark .admin-page h3,
+.theme-dark .admin-page h4,
+.theme-dark .stat-value,
+.theme-dark .modal-header h2,
+.theme-dark .admin-order-section h4,
+.theme-dark .info-item strong,
+.theme-dark .order-total,
+.theme-dark .status-control-group label,
+.theme-dark .delivery-code-instruction {
+  color: var(--fn-heading);
+}
+
+.theme-dark .stat-card,
+.theme-dark .dashboard-nav .nav-link,
+.theme-dark .tab,
+.theme-dark .orders-table,
+.theme-dark .stock-table,
+.theme-dark .payments-table,
+.theme-dark .modal,
+.theme-dark .modal-content,
+.theme-dark .order-details-modal,
+.theme-dark .admin-order-section,
+.theme-dark .payment-pending .bank-info,
+.theme-dark .delivery-confirmed-section {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark th,
+.theme-dark .modal-header,
+.theme-dark .empty-state,
+.theme-dark .loading,
+.theme-dark .admin-order-section,
+.theme-dark .delivery-code-note,
+.theme-dark .delivery-code-instruction {
+  background: var(--fn-surface-2);
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark td,
+.theme-dark .admin-order-section p,
+.theme-dark .info-item span,
+.theme-dark .items-table td,
+.theme-dark .form-group label {
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark .stat-label,
+.theme-dark .tabs .tab,
+.theme-dark .code-none {
+  color: var(--fn-muted);
+}
+
+.theme-dark tbody tr:hover,
+.theme-dark .items-table tbody tr:hover,
+.theme-dark .modal-close:hover,
+.theme-dark .close-btn:hover {
+  background: var(--fn-surface-2);
+}
+
+.theme-dark .form-group input,
+.theme-dark .form-group textarea,
+.theme-dark .form-group select,
+.theme-dark .status-select,
+.theme-dark .edit-input {
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  border-color: var(--fn-border);
 }
 
 @media (max-width: 768px) {

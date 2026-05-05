@@ -3,6 +3,7 @@
   margin: 0 auto;
   padding: 2rem 1rem;
   min-height: 60vh;
+  color: var(--fn-text);
 }
 
 .empty-cart-message {
@@ -18,8 +19,8 @@
 }
 
 .checkout-form {
-  background: white;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 0.9rem;
   padding: 2rem;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.04);
@@ -27,7 +28,7 @@
 
 .checkout-form h1 {
   margin-bottom: 1.5rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 fieldset {
@@ -39,7 +40,7 @@ fieldset {
 legend {
   font-size: 1.1rem;
   font-weight: 800;
-  color: var(--dark);
+  color: var(--fn-heading);
   margin-bottom: 1rem;
   padding: 0;
 }
@@ -54,18 +55,18 @@ legend {
   gap: 0.5rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .form-group input,
 .form-group textarea {
   width: 100%;
   padding: 0.85rem 0.95rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
   border-radius: 0.75rem;
-  background: #fff;
+  background: var(--fn-input-bg);
   font: inherit;
-  color: var(--dark);
+  color: var(--fn-input-text);
 }
 
 .form-group textarea {
@@ -90,7 +91,7 @@ legend {
 }
 
 .payment-info {
-  background: var(--light);
+  background: var(--fn-surface-2);
   padding: 1rem;
   border-radius: 0.75rem;
   margin-bottom: 1rem;
@@ -99,7 +100,7 @@ legend {
 
 .payment-info p {
   margin: 0.25rem 0;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .file-selected {
@@ -115,8 +116,8 @@ legend {
 }
 
 .checkout-summary {
-  background: white;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 0.9rem;
   padding: 2rem;
   height: fit-content;
@@ -127,12 +128,12 @@ legend {
 
 .checkout-summary h2 {
   margin-bottom: 1.5rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .summary-items {
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--fn-border);
   padding-bottom: 1rem;
 }
 
@@ -154,14 +155,14 @@ legend {
   gap: 1rem;
   margin-bottom: 0.5rem;
   font-size: 0.95rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .summary-row.total {
   font-size: 1.2rem;
   font-weight: 800;
-  color: var(--dark);
-  border-top: 2px solid var(--border);
+  color: var(--fn-heading);
+  border-top: 2px solid var(--fn-border);
   padding-top: 0.75rem;
   margin-top: 0.75rem;
 }
@@ -183,16 +184,16 @@ legend {
   gap: 1rem;
   cursor: pointer;
   padding: 1rem;
-  border: 2px solid var(--border);
+  border: 2px solid var(--fn-border);
   border-radius: 0.8rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
   transition: all 0.25s ease;
 }
 
 .radio-label:hover,
 .radio-label.selected {
   border-color: var(--primary);
-  background: #fff7ed;
+  background: var(--fn-surface-2);
 }
 
 .radio-label input[type="radio"] {
@@ -215,17 +216,17 @@ legend {
   align-items: center;
   gap: 0.4rem;
   font-weight: 800;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .radio-text small {
   font-size: 0.85rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
   line-height: 1.35;
 }
 
 .form-notice {
-  background: var(--light);
+  background: var(--fn-surface-2);
   border-left: 4px solid var(--info);
   padding: 1rem;
   border-radius: 0.65rem;
@@ -235,7 +236,7 @@ legend {
 
 .form-notice p {
   margin: 0;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .form-notice.warning {
@@ -264,8 +265,8 @@ legend {
 
 .address-mode-tabs button {
   border: 1px solid var(--border);
-  background: #fff;
-  color: var(--text);
+  background: var(--fn-surface);
+  color: var(--fn-text);
   padding: 0.75rem 1rem;
   border-radius: 999px;
   font-weight: 800;
@@ -295,7 +296,7 @@ legend {
   border: 1px solid var(--border);
   border-radius: 0.9rem;
   padding: 1rem;
-  background: #fff;
+  background: var(--fn-surface);
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s, transform 0.2s;
 }
@@ -303,7 +304,7 @@ legend {
 .saved-address-card:hover,
 .saved-address-card.selected {
   border-color: var(--primary);
-  background: #fff7ed;
+  background: var(--fn-surface-2);
   transform: translateY(-1px);
 }
 
@@ -330,18 +331,18 @@ legend {
 
 .saved-address-card p {
   margin: 0.25rem 0;
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 0.9rem;
   line-height: 1.35;
 }
 
 .landmark-line {
-  color: var(--text) !important;
+  color: var(--fn-text) !important;
 }
 
 .google-address-placeholder small {
   display: block;
-  color: var(--text-light);
+  color: var(--fn-muted);
   margin-top: 0.35rem;
   line-height: 1.35;
 }
@@ -350,11 +351,11 @@ legend {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  background: var(--light);
-  border: 1px solid var(--border);
+  background: var(--fn-surface-2);
+  border: 1px solid var(--fn-border);
   border-radius: 0.75rem;
   padding: 0.8rem;
-  color: var(--text);
+  color: var(--fn-text);
   font-weight: 700;
 }
 

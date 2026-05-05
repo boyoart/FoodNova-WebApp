@@ -2,6 +2,7 @@
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
+  color: var(--fn-text);
 }
 
 .products-header {
@@ -10,21 +11,21 @@
 
 .products-header h1 {
   margin-bottom: 1.5rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .search-form {
   display: flex;
   gap: 1rem;
-  background: white;
+  background: var(--fn-surface);
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
   align-items: center;
 }
 
 .search-form svg {
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .search-form input {
@@ -57,7 +58,7 @@
   display: flex;
   gap: 1rem;
   margin-bottom: 2rem;
-  border-bottom: 2px solid var(--border);
+  border-bottom: 2px solid var(--fn-border);
 }
 
 .tab {
@@ -65,7 +66,7 @@
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
-  color: var(--text-light);
+  color: var(--fn-muted);
   cursor: pointer;
   font-weight: 600;
   transition: all 0.2s;
@@ -83,10 +84,11 @@
 }
 
 .product-card {
-  background: white;
+  background: var(--fn-surface);
   border-radius: 0.75rem;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
+  color: var(--fn-text);
   transition: all 0.3s;
   display: flex;
   flex-direction: column;
@@ -102,7 +104,7 @@
   width: 100%;
   padding-bottom: 100%;
   overflow: hidden;
-  background: var(--light);
+  background: var(--fn-surface-2);
 }
 
 .product-image img {
@@ -138,19 +140,19 @@
 .product-info h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .description {
   font-size: 0.85rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
   margin-bottom: 0.5rem;
   flex: 1;
 }
 
 .category {
   display: inline-block;
-  background-color: var(--light);
+  background-color: var(--fn-surface-2);
   color: var(--primary);
   padding: 0.25rem 0.75rem;
   border-radius: 0.25rem;
@@ -206,14 +208,15 @@
 }
 
 .btn-add:disabled {
-  background-color: #ccc;
+  background-color: var(--fn-border);
+  color: var(--fn-muted);
   cursor: not-allowed;
 }
 
 .loading, .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 @media (max-width: 768px) {

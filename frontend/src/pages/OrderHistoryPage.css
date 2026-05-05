@@ -3,20 +3,21 @@
   margin: 0 auto;
   padding: 2rem 1rem;
   min-height: 60vh;
+  color: var(--fn-text);
 }
 
 .order-history-page h1 {
   margin-bottom: 2rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .not-logged-in,
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
   border-radius: 0.75rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .empty-state {
@@ -33,7 +34,7 @@
 .loading {
   text-align: center;
   padding: 2rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .orders-list {
@@ -43,8 +44,8 @@
 }
 
 .order-card {
-  background: white;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 0.75rem;
   overflow: hidden;
   transition: all 0.3s;
@@ -61,19 +62,19 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--light);
+  border-bottom: 1px solid var(--fn-border);
+  background: var(--fn-surface-2);
 }
 
 .order-header h3 {
   margin: 0;
-  color: var(--dark);
+  color: var(--fn-heading);
   font-size: 1.1rem;
 }
 
 .order-date {
   margin: 0;
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 0.85rem;
 }
 
@@ -103,13 +104,13 @@
 }
 
 .status-default {
-  background-color: var(--light);
-  color: var(--text-light);
+  background-color: var(--fn-surface-2);
+  color: var(--fn-muted);
 }
 
 .order-items {
   padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--fn-border);
 }
 
 .order-item {
@@ -133,24 +134,24 @@
   margin-bottom: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .order-address {
   margin: 0;
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 0.9rem;
 }
 
 .order-delivery-info {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--fn-border);
 }
 
 .delivery-method {
   margin: 0 0 0.5rem 0;
-  color: var(--text);
+  color: var(--fn-text);
   font-size: 0.95rem;
 }
 
@@ -190,7 +191,8 @@
 .modal-content {
   position: relative;
   z-index: 2;
-  background: white;
+  background: var(--fn-surface);
+  color: var(--fn-text);
   border-radius: 0.75rem;
   max-width: 760px;
   width: min(94vw, 760px);
@@ -210,8 +212,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--light);
+  border-bottom: 1px solid var(--fn-border);
+  background: var(--fn-surface-2);
   position: sticky;
   top: 0;
   z-index: 5;
@@ -220,7 +222,7 @@
 
 .modal-header h2 {
   margin: 0;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .close-btn {
@@ -228,7 +230,7 @@
   border: none;
   font-size: 2rem;
   cursor: pointer;
-  color: var(--text-light);
+  color: var(--fn-muted);
   padding: 0;
   width: 2rem;
   height: 2rem;
@@ -246,7 +248,7 @@
 .order-code-section {
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
   border-radius: 0.5rem;
   text-align: center;
 }
@@ -263,7 +265,7 @@
 
 .order-items-section h4 {
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .order-items-list {
@@ -276,13 +278,13 @@
   gap: 1rem;
   margin-bottom: 0.5rem;
   padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--fn-border);
 }
 
 .order-total-detail {
   text-align: right;
   font-size: 1.1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .payment-section,
@@ -293,16 +295,16 @@
 .payment-section h4,
 .delivery-section h4 {
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .payment-details p {
   margin: 0.5rem 0;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .bank-info {
-  background: var(--light);
+  background: var(--fn-surface-2);
   padding: 1rem;
   border-radius: 0.5rem;
   margin-top: 1rem;
@@ -315,13 +317,13 @@
 }
 
 .receipt-upload-section {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--fn-border);
   padding-top: 1.5rem;
 }
 
 .receipt-upload-section h4 {
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .receipt-status {
@@ -338,7 +340,7 @@
 .order-identity-section {
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
   border-radius: 0.5rem;
 }
 
@@ -351,7 +353,7 @@
 
 .order-meta p {
   margin: 0.5rem 0;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .status-section {
@@ -360,7 +362,7 @@
 
 .status-section h4 {
   margin-bottom: 0.75rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .status-badge {
@@ -468,9 +470,9 @@
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  background: var(--border);
-  border: 3px solid white;
-  box-shadow: 0 0 0 2px var(--border);
+  background: var(--fn-border);
+  border: 3px solid var(--fn-surface);
+  box-shadow: 0 0 0 2px var(--fn-border);
 }
 
 .timeline-step.completed .timeline-dot {
@@ -484,7 +486,7 @@
 }
 
 .timeline-step.pending .timeline-label {
-  color: var(--text-light);
+  color: var(--fn-muted);
 }
 
 .timeline-label {
@@ -495,13 +497,13 @@
 .payment-instruction-section {
   margin-bottom: 1.5rem;
   padding: 1rem;
-  background: var(--light);
+  background: var(--fn-surface-2);
   border-radius: 0.5rem;
 }
 
 .payment-instruction-section h4 {
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .payment-message {
@@ -531,19 +533,20 @@
 }
 
 .payment-pending .bank-info {
-  background: white;
+  background: var(--fn-surface);
   padding: 1rem;
   border-radius: 0.5rem;
   margin-top: 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
 }
 
 .payment-pending input[type="file"] {
   width: 100%;
   padding: 0.75rem;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--fn-border);
   border-radius: 0.5rem;
-  background: white;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
 }
 
 .payment-pending .btn,
@@ -559,22 +562,22 @@
 
 .delivery-info-section h4 {
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .delivery-details p {
   margin: 0.5rem 0;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .items-total-section {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--fn-border);
   padding-top: 1.5rem;
 }
 
 .items-total-section h4 {
   margin-bottom: 1rem;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .delivery-confirmation-section {
@@ -587,7 +590,7 @@
 
 .delivery-confirmation-section h4 {
   margin: 0 0 1rem 0;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .confirmation-instruction {
@@ -595,7 +598,7 @@
   border-left: 4px solid var(--success);
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
-  color: var(--text);
+  color: var(--fn-text);
   margin: 0 0 1rem 0;
 }
 
@@ -609,13 +612,13 @@
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
-  color: var(--dark);
+  color: var(--fn-heading);
 }
 
 .delivery-confirmation-section input {
   width: 100%;
   padding: 0.75rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--fn-border);
   border-radius: 0.5rem;
   font-size: 1rem;
   text-align: center;
@@ -625,7 +628,7 @@
 
 .code-format-hint {
   font-size: 0.85rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
   margin-top: 0.25rem;
   margin-bottom: 0;
 }

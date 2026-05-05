@@ -1,6 +1,6 @@
 .footer {
   background-color: var(--fn-footer-bg);
-  color: #fff;
+  color: var(--fn-footer-text);
   padding: 3rem 1rem 1rem;
   margin-top: 4rem;
   border-top: 1px solid var(--fn-border);
@@ -25,7 +25,7 @@
 }
 
 .footer-section p {
-  color: #ccc;
+  color: #d1d5db;
   margin-bottom: 1rem;
   line-height: 1.6;
 }
@@ -39,7 +39,7 @@
 }
 
 .footer-section a {
-  color: #ccc;
+  color: var(--fn-footer-text);
   text-decoration: none;
   display: flex;
   align-items: center;

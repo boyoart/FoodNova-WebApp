@@ -4,6 +4,7 @@
   justify-content: center;
   min-height: 60vh;
   padding: 2rem 1rem;
+  color: var(--fn-text);
 }
 
 .auth-container {
@@ -12,8 +13,8 @@
 }
 
 .auth-card {
-  background: white;
-  border: 1px solid var(--border);
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
   border-radius: 1rem;
   padding: 2rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -21,13 +22,13 @@
 
 .auth-card h1 {
   margin-bottom: 0.5rem;
-  color: var(--dark);
+  color: var(--fn-heading);
   text-align: center;
 }
 
 .auth-subtitle {
   text-align: center;
-  color: var(--text-light);
+  color: var(--fn-muted);
   margin-bottom: 1.5rem;
 }
 
@@ -41,7 +42,7 @@
   gap: 0.5rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: var(--text);
+  color: var(--fn-text);
 }
 
 .form-group input {
@@ -57,7 +58,7 @@
 .auth-footer {
   text-align: center;
   margin-top: 1.5rem;
-  color: var(--text-light);
+  color: var(--fn-muted);
   font-size: 0.95rem;
 }
 
