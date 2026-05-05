@@ -448,6 +448,7 @@ This project is built for FoodNova. All rights reserved.
 - Configure CDN for static assets
 - Implement image optimization for product photos
 - Deployment heartbeat: 2026-05-05 stock/order modal refresh
+- Deployment heartbeat: 2026-05-05 Vercel root-directory settings refresh
 
 ---
 
