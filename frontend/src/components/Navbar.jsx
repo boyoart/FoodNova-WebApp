@@ -1,110 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Menu, X, ShoppingCart, LogOut, LogIn, Home, User } from 'lucide-react'
+import { Menu, X, ShoppingCart, LogOut, LogIn, Home, User, Bell } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
+import { notificationsAPI, profileAPI } from '../services/api'
 import './Navbar.css'
-
-export default function Navbar() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { user, admin, isAuthenticated, isAdmin, logout } = useAuthStore()
-  const { getTotalItems } = useCartStore()
-
-  const navigate = useNavigate()
-
-  const handleLogout = () => {
-    logout()
-    navigate('/')
-    setMobileMenuOpen(false)
-  }
-
-  return (
-    <nav className="navbar">
-      <div className="navbar-container">
-        <Link to="/" className="navbar-logo">
-          <img src="/logo.png" alt="FoodNova" className="logo-image" />
-          FoodNova
-        </Link>
-
-        <button
-          className="menu-toggle"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-
-        <ul className={`nav-menu ${mobileMenuOpen ? 'active' : ''}`}>
-          <li className="nav-item">
-            <Link to="/" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
-              <Home size={18} />
-              <span>Home</span>
-            </Link>
-          </li>
-
-          <li className="nav-item">
-            <Link to="/products" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
-              <span>Products</span>
-            </Link>
-          </li>
-
-          {isAuthenticated && !isAdmin && (
-            <>
-              <li className="nav-item">
-                <Link to="/orders" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
-                  <span>Orders</span>
-                </Link>
-              </li>
-              <li className="nav-item">
-                <span className="nav-text">Hi, {user?.name || 'User'}</span>
-              </li>
-            </>
-          )}
-
-          {isAdmin && (
-            <>
-              <li className="nav-item">
-                <Link to="/admin/dashboard" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
-                  <span>Dashboard</span>
-                </Link>
-              </li>
-              <li className="nav-item">
-                <span className="nav-text">Admin</span>
-              </li>
-            </>
-          )}
-
-          <li className="nav-item">
-            <Link to="/cart" className="nav-link cart-link" onClick={() => setMobileMenuOpen(false)}>
-              <ShoppingCart size={20} />
-              {getTotalItems() > 0 && <span className="cart-badge">{getTotalItems()}</span>}
-            </Link>
-          </li>
-
-          {isAuthenticated || isAdmin ? (
-            <li className="nav-item">
-              <button className="nav-link logout-btn" onClick={handleLogout}>
-                <LogOut size={18} />
-                <span>Logout</span>
-              </button>
-            </li>
-          ) : (
-            <>
-              <li className="nav-item">
-                <Link to="/login" className="nav-link" onClick={() => setMobileMenuOpen(false)}>
-                  <LogIn size={18} />
-                  <span>Login</span>
-                </Link>
-              </li>
-              <li className="nav-item">
-                <Link to="/register" className="nav-link register-btn" onClick={() => setMobileMenuOpen(false)}>
-                  <User size={18} />
-                  <span>Register</span>
-                </Link>
-              </li>
-            </>
-          )}
-        </ul>
-      </div>
-    </nav>
-  )
+export default function Navbar(){const [mobileMenuOpen,setMobileMenuOpen]=useState(false);const [notifications,setNotifications]=useState([]);const [unreadCount,setUnreadCount]=useState(0);const [open,setOpen]=useState(false);const [profile,setProfile]=useState(null);const { user, admin, isAuthenticated, isAdmin, logout } = useAuthStore();const { getTotalItems } = useCartStore();const navigate=useNavigate();
+useEffect(()=>{if(isAuthenticated&&!isAdmin){const load=async()=>{try{const [n,c,p]=await Promise.all([notificationsAPI.getAll(),notificationsAPI.getUnreadCount(),profileAPI.getProfile()]);setNotifications(n.notifications||n.data||[]);setUnreadCount(c.count||0);setProfile(p.profile||p.data?.profile||null)}catch{}};load();const i=setInterval(load,30000);return ()=>clearInterval(i)}},[isAuthenticated,isAdmin])
+const initials=(profile?.full_name||user?.name||'U').split(' ').map(v=>v[0]).join('').slice(0,2).toUpperCase();
+return <nav className='navbar'><div className='navbar-container'><Link to='/' className='navbar-logo'><img src='/logo.png' alt='FoodNova' className='logo-image'/>FoodNova</Link><button className='menu-toggle' onClick={()=>setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen?<X size={24}/>:<Menu size={24}/>}</button><ul className={`nav-menu ${mobileMenuOpen?'active':''}`}><li className='nav-item'><Link to='/' className='nav-link'><Home size={18}/><span>Home</span></Link></li><li className='nav-item'><Link to='/products' className='nav-link'><span>Products</span></Link></li>{isAuthenticated&&!isAdmin&&<><li className='nav-item'><Link to='/orders' className='nav-link'><span>Orders</span></Link></li><li className='nav-item'><Link to='/profile' className='nav-link'><span>Profile</span></Link></li><li className='nav-item nav-bell'><button className='nav-link bell-btn' onClick={()=>setOpen(!open)}><Bell size={18}/>{unreadCount>0&&<span className='notif-badge'>{unreadCount}</span>}</button>{open&&<div className='notif-dropdown'><button onClick={async()=>{await notificationsAPI.markAllRead();setUnreadCount(0)}}>Mark all as read</button>{notifications.length?notifications.slice(0,8).map(n=><div key={n.id} className={`notif-item ${n.is_read?'':'unread'}`}><strong>{n.title}</strong><p>{n.message}</p></div>):<p>No notifications yet</p>}</div>}</li><li className='nav-item'><span className='nav-avatar'>{profile?.avatar_url?<img src={profile.avatar_url} alt='avatar'/>:initials}</span><span className='nav-text'>Hi, {profile?.full_name||user?.name||'User'}</span></li></>}</ul></div></nav>
 }

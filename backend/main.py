@@ -29,6 +29,7 @@ PRODUCTS: List[dict] = []
 PACKS: List[dict] = []
 USER_PROFILES: Dict[str, dict] = {}
 USER_ADDRESSES: Dict[str, List[dict]] = {}
+ORDER_NOTIFICATIONS: Dict[str, List[dict]] = {}
 
 ADMIN_EMAIL = "admin@foodnova.com"
 ADMIN_PASSWORD = "Admin123!"
@@ -168,6 +169,7 @@ class OrderPayload(BaseModel):
     pickup_note: Optional[str] = ""
     delivery_address_id: Optional[int] = None
     delivery_address_snapshot: Optional[dict] = None
+    delivery_notes: Optional[str] = ""
 
 
 class ProfileUpdatePayload(BaseModel):
@@ -238,6 +240,26 @@ def auth_response(message: str, user: dict, token: str) -> dict:
         },
     }
 
+
+
+
+def _create_notification(order: dict, notif_type: str, title: str, message: str):
+    email = order.get("customer_email") or order.get("user_email")
+    if not email:
+        return
+    notifications = ORDER_NOTIFICATIONS.setdefault(email, [])
+    notifications.append({
+        "id": len(notifications) + 1,
+        "order_id": order.get("id"),
+        "order_code": order.get("order_code"),
+        "user_email": email,
+        "customer_email": email,
+        "title": title,
+        "message": message,
+        "type": notif_type,
+        "is_read": False,
+        "created_at": datetime.utcnow().isoformat(),
+    })
 
 def normalize_order_items(items: list) -> list:
     normalized = []
@@ -381,6 +403,7 @@ def register(payload: RegisterPayload):
 
     USER_PROFILES[email] = profile
     USER_ADDRESSES[email] = []
+    ORDER_NOTIFICATIONS[email] = []
 
     return auth_response("Registration successful", user, token)
 
@@ -437,6 +460,7 @@ def get_profile(request: Request):
         }
         USER_PROFILES[email] = profile
         USER_ADDRESSES[email] = []
+    ORDER_NOTIFICATIONS[email] = []
 
     addresses = USER_ADDRESSES.get(email, [])
 
@@ -575,6 +599,51 @@ def set_default_address(address_id: int, request: Request):
     return {"success": True, "default_address_id": address_id, "data": {"default_address_id": address_id}}
 
 
+
+
+@app.get("/notifications")
+def get_notifications(request: Request):
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    email = user.get("email")
+    items = sorted(ORDER_NOTIFICATIONS.get(email, []), key=lambda x: x.get("created_at", ""), reverse=True)
+    return {"success": True, "notifications": items, "data": items}
+
+
+@app.get("/notifications/unread-count")
+def unread_count(request: Request):
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    email = user.get("email")
+    count = len([n for n in ORDER_NOTIFICATIONS.get(email, []) if not n.get("is_read")])
+    return {"count": count}
+
+
+@app.patch("/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int, request: Request):
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    email = user.get("email")
+    for n in ORDER_NOTIFICATIONS.get(email, []):
+        if n.get("id") == notification_id:
+            n["is_read"] = True
+            return {"success": True, "notification": n, "data": n}
+    raise HTTPException(status_code=404, detail="Notification not found")
+
+
+@app.patch("/notifications/read-all")
+def mark_all_notifications_read(request: Request):
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    email = user.get("email")
+    for n in ORDER_NOTIFICATIONS.get(email, []):
+        n["is_read"] = True
+    return {"success": True}
+
 @app.post("/orders")
 def create_order(payload: OrderPayload, request: Request):
     normalized_items = normalize_order_items(payload.items or [])
@@ -600,6 +669,7 @@ def create_order(payload: OrderPayload, request: Request):
         "payment_method": payload.payment_method or "bank_transfer",
         "delivery_method": payload.delivery_method or "delivery",
         "pickup_note": payload.pickup_note or "",
+        "delivery_notes": payload.delivery_notes or "",
         "status": "pending_payment",
         "payment_status": "pending_payment",
         "order_status": "order_placed",
@@ -687,7 +757,27 @@ def update_order(order_id: int, payload: dict):
                     order["delivery_code"] = "{:06d}".format(random.randint(0, 999999))
                     order["delivery_code_created_at"] = datetime.utcnow().isoformat()
             
+            old_payment = order.get("payment_status")
+            old_order = order.get("order_status")
+            old_fulfillment = order.get("fulfillment_status")
             order.update(payload)
+
+            if order.get("payment_status") != old_payment:
+                status = order.get("payment_status")
+                if status == "payment_confirmed":
+                    _create_notification(order, "payment_update", "Payment Confirmed", f"Your payment for order {order.get('order_code')} has been confirmed.")
+                elif status == "payment_rejected":
+                    _create_notification(order, "payment_update", "Payment Rejected", f"Your payment for order {order.get('order_code')} was rejected. Please upload a clearer receipt or contact support.")
+
+            if order.get("order_status") != old_order or order.get("fulfillment_status") != old_fulfillment:
+                status = order.get("order_status") or order.get("fulfillment_status")
+                if status == "processing":
+                    _create_notification(order, "order_update", "Order Processing", f"Your order {order.get('order_code')} is now being processed.")
+                elif status == "out_for_delivery":
+                    _create_notification(order, "delivery_update", "Out for Delivery", f"Your order {order.get('order_code')} is out for delivery. Please keep your delivery confirmation code ready.")
+                elif status == "delivered":
+                    _create_notification(order, "delivery_update", "Order Delivered", f"Your order {order.get('order_code')} has been marked as delivered.")
+
             return {
                 "success": True,
                 "message": "Order updated successfully",

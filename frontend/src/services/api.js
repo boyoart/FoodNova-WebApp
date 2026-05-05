@@ -78,6 +78,11 @@ export const ordersAPI = {
     return response.data;
   },
 
+  refreshOrder: async (id) => {
+    const response = await api.get(`/orders/${id}`);
+    return response.data;
+  },
+
   uploadReceipt: async (orderId, fileOrFormData) => {
     const formData = fileOrFormData instanceof FormData
       ? fileOrFormData
@@ -317,3 +322,21 @@ export const getMyOrders = async () => ordersAPI.getMine();
 export const uploadReceipt = async (orderId, formData) => ordersAPI.uploadReceipt(orderId, formData);
 
 export default api;
+
+
+export const profileAPI = {
+  getProfile: async () => (await api.get('/profile')).data,
+  updateProfile: async (payload) => (await api.patch('/profile', payload)).data,
+  getAddresses: async () => (await api.get('/profile/addresses')).data,
+  createAddress: async (payload) => (await api.post('/profile/addresses', payload)).data,
+  updateAddress: async (id, payload) => (await api.patch(`/profile/addresses/${id}`, payload)).data,
+  deleteAddress: async (id) => (await api.delete(`/profile/addresses/${id}`)).data,
+  setDefaultAddress: async (id) => (await api.patch(`/profile/addresses/${id}/default`)).data,
+}
+
+export const notificationsAPI = {
+  getAll: async () => (await api.get('/notifications')).data,
+  getUnreadCount: async () => (await api.get('/notifications/unread-count')).data,
+  markRead: async (id) => (await api.patch(`/notifications/${id}/read`)).data,
+  markAllRead: async () => (await api.patch('/notifications/read-all')).data,
+}

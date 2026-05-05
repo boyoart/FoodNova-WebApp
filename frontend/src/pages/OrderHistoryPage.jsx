@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { ordersAPI } from '../services/api'
+import { ordersAPI, notificationsAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import { Package, Clock, CheckCircle, AlertCircle } from 'lucide-react'
+import { Package, Clock, CheckCircle, AlertCircle, RotateCw } from 'lucide-react'
 import './OrderHistoryPage.css'
 
 export default function OrderHistoryPage() {
@@ -14,6 +14,7 @@ export default function OrderHistoryPage() {
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
   const [deliveryCode, setDeliveryCode] = useState('')
   const [confirmingDelivery, setConfirmingDelivery] = useState(false)
+  const [refreshingOrder, setRefreshingOrder] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -112,6 +113,26 @@ export default function OrderHistoryPage() {
     setSelectedOrder(null)
     setReceiptFile(null)
     setDeliveryCode('')
+  }
+
+
+  const handleRefreshOrder = async () => {
+    if (!selectedOrder?.id) return
+    try {
+      setRefreshingOrder(true)
+      const res = await ordersAPI.getById(selectedOrder.id)
+      const fresh = res?.order || res?.data || res
+      if (fresh?.id) {
+        setSelectedOrder(fresh)
+        setOrders((prev) => prev.map((o) => String(o.id) === String(fresh.id) ? fresh : o))
+      }
+      await notificationsAPI.getUnreadCount().catch(()=>null)
+      toast.success('Order details refreshed')
+    } catch (e) {
+      toast.error('Failed to refresh order details')
+    } finally {
+      setRefreshingOrder(false)
+    }
   }
 
   const handleDeliveryConfirmation = async (e) => {
@@ -316,7 +337,7 @@ export default function OrderHistoryPage() {
           <div className="modal-content">
             <div className="modal-header">
               <h2>Order Details</h2>
-              <button className="close-btn" onClick={handleCloseOrder}>×</button>
+              <div style={{display:"flex",gap:"0.5rem",alignItems:"center"}}><button className="btn-view" onClick={handleRefreshOrder} disabled={refreshingOrder}><RotateCw size={14}/> {refreshingOrder ? "Refreshing..." : "Refresh"}</button><button className="close-btn" onClick={handleCloseOrder}>×</button></div>
             </div>
 
             <div className="order-detail-content">
