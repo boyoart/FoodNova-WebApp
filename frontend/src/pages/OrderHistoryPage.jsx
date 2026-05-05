@@ -13,6 +13,8 @@ export default function OrderHistoryPage() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [receiptFile, setReceiptFile] = useState(null)
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
+  const [deliveryCode, setDeliveryCode] = useState('')
+  const [confirmingDelivery, setConfirmingDelivery] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -85,6 +87,31 @@ export default function OrderHistoryPage() {
   const handleCloseOrder = () => {
     setSelectedOrder(null)
     setReceiptFile(null)
+    setDeliveryCode('')
+  }
+
+  const handleDeliveryConfirmation = async (e) => {
+    e.preventDefault()
+
+    if (!deliveryCode.trim()) {
+      toast.error('Please enter the delivery confirmation code')
+      return
+    }
+
+    try {
+      setConfirmingDelivery(true)
+      await ordersAPI.confirmDelivery(selectedOrder.id, deliveryCode)
+      toast.success('Delivery confirmed successfully!')
+      // Refresh orders to update status
+      await fetchOrders()
+      setSelectedOrder(null)
+      setDeliveryCode('')
+    } catch (error) {
+      console.error('Delivery confirmation error:', error)
+      toast.error(error.response?.data?.detail || error.message || 'Failed to confirm delivery')
+    } finally {
+      setConfirmingDelivery(false)
+    }
   }
 
   const handleFileChange = (e) => {
@@ -431,6 +458,42 @@ export default function OrderHistoryPage() {
                   <p>✓ You selected pickup. We will contact you when your order is ready for pickup.</p>
                 )}
               </div>
+
+              {/* Delivery Confirmation */}
+              {selectedOrder.delivery_method === 'delivery' && (selectedOrder.order_status === 'out_for_delivery' || selectedOrder.fulfillment_status === 'out_for_delivery') && !selectedOrder.delivery_confirmed_at && (
+                <div className="delivery-confirmation-section">
+                  <h4>Confirm Delivery</h4>
+                  <p className="confirmation-instruction">
+                    ✓ Your order is out for delivery! Enter the confirmation code provided by the rider to confirm delivery.
+                  </p>
+                  <form onSubmit={handleDeliveryConfirmation}>
+                    <div className="form-group">
+                      <label>Delivery Confirmation Code</label>
+                      <input
+                        type="text"
+                        value={deliveryCode}
+                        onChange={(e) => setDeliveryCode(e.target.value.toUpperCase())}
+                        placeholder="Enter 6-digit code"
+                        maxLength="6"
+                        inputMode="numeric"
+                        required
+                        disabled={confirmingDelivery}
+                      />
+                      <p className="code-format-hint">6-digit numeric code</p>
+                    </div>
+                    <button type="submit" className="btn btn-primary" disabled={confirmingDelivery}>
+                      {confirmingDelivery ? 'Confirming...' : 'Confirm Delivery'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Delivery Confirmed Status */}
+              {selectedOrder.delivery_confirmed_at && (
+                <div className="delivery-confirmed-banner">
+                  <p>✓ Delivery confirmed on {new Date(selectedOrder.delivery_confirmed_at).toLocaleString()}</p>
+                </div>
+              )}
 
               {/* Items and Total */}
               <div className="items-total-section">

@@ -5,11 +5,29 @@ import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
+const PAYMENT_STATUS_OPTIONS = [
+  { value: 'pending_payment', label: 'Pending Payment' },
+  { value: 'receipt_submitted', label: 'Receipt Submitted' },
+  { value: 'payment_confirmed', label: 'Payment Confirmed' },
+  { value: 'payment_rejected', label: 'Payment Rejected' },
+]
+
+const ORDER_STATUS_OPTIONS = [
+  { value: 'order_placed', label: 'Order Placed' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'ready_for_pickup', label: 'Ready for Pickup' },
+  { value: 'picked_up', label: 'Picked Up' },
+  { value: 'out_for_delivery', label: 'Out for Delivery' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'cancelled', label: 'Cancelled' },
+]
+
 export default function AdminOrders() {
   const { isAdmin } = useAuthStore()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [selectedOrder, setSelectedOrder] = useState(null)
 
   useEffect(() => {
     if (isAdmin) {
@@ -17,12 +35,20 @@ export default function AdminOrders() {
     }
   }, [isAdmin, filter])
 
+  const normalizeOrderResponse = (res) => {
+    if (Array.isArray(res)) return res
+    if (Array.isArray(res?.data)) return res.data
+    if (Array.isArray(res?.orders)) return res.orders
+    if (Array.isArray(res?.data?.orders)) return res.data.orders
+    return []
+  }
+
   const fetchOrders = async () => {
     try {
       setLoading(true)
       const params = filter !== 'all' ? { status: filter } : {}
       const res = await adminAPI.getOrders(params)
-      setOrders(res.data || [])
+      setOrders(normalizeOrderResponse(res))
     } catch (error) {
       toast.error('Failed to load orders')
       console.error(error)
@@ -31,14 +57,37 @@ export default function AdminOrders() {
     }
   }
 
-  const handleStatusUpdate = async (orderId, newStatus) => {
+  const handlePaymentStatusUpdate = async (orderId, newStatus) => {
     try {
-      await adminAPI.updateOrderStatus(orderId, { status: newStatus })
-      toast.success('Order status updated')
+      await adminAPI.updatePaymentStatus(orderId, { payment_status: newStatus })
+      toast.success('Payment status updated')
       fetchOrders()
     } catch (error) {
-      toast.error('Failed to update order')
+      toast.error('Failed to update payment status')
     }
+  }
+
+  const handleOrderStatusUpdate = async (orderId, newStatus) => {
+    try {
+      await adminAPI.updateFulfillmentStatus(orderId, { order_status: newStatus, fulfillment_status: newStatus })
+      toast.success('Order status updated')
+      // Refresh the selected order details
+      if (selectedOrder?.id === orderId) {
+        const updated = orders.find(o => o.id === orderId)
+        if (updated) setSelectedOrder(updated)
+      }
+      fetchOrders()
+    } catch (error) {
+      toast.error('Failed to update order status')
+    }
+  }
+
+  const handleViewOrder = (order) => {
+    setSelectedOrder(order)
+  }
+
+  const handleCloseOrder = () => {
+    setSelectedOrder(null)
   }
 
   if (!isAdmin) {
@@ -50,13 +99,23 @@ export default function AdminOrders() {
       <h1>Order Management</h1>
 
       <div className="filter-tabs">
-        {['all', 'pending_payment', 'processing', 'completed'].map(status => (
+        {[
+          'all',
+          'pending_payment',
+          'receipt_submitted',
+          'payment_confirmed',
+          'order_placed',
+          'processing',
+          'ready_for_pickup',
+          'out_for_delivery',
+          'delivered',
+        ].map(status => (
           <button
             key={status}
             className={`tab ${filter === status ? 'active' : ''}`}
             onClick={() => setFilter(status)}
           >
-            {status.replace('_', ' ').toUpperCase()}
+            {status.replace(/_/g, ' ').toUpperCase()}
           </button>
         ))}
       </div>
@@ -70,37 +129,260 @@ export default function AdminOrders() {
           <table>
             <thead>
               <tr>
-                <th>Order ID</th>
+                <th>Order Code</th>
                 <th>Customer</th>
+                <th>Phone</th>
+                <th>Method</th>
                 <th>Amount</th>
+                <th>Payment</th>
                 <th>Status</th>
+                <th>Code</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => (
-                <tr key={order.id}>
-                  <td>#{order.id}</td>
-                  <td>{order.customer_name}</td>
-                  <td>{formatPrice(order.total_amount)}</td>
-                  <td>
-                    <select
-                      value={order.status}
-                      onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                      className="status-select"
-                    >
-                      <option value="pending_payment">Pending Payment</option>
-                      <option value="processing">Processing</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  </td>
-                  <td>
-                    <button className="btn-view">View Details</button>
-                  </td>
-                </tr>
-              ))}
+              {orders.map(order => {
+                const paymentStatus = order.payment_status || order.status || 'pending_payment'
+                const orderStatus = order.order_status || order.fulfillment_status || order.status || 'order_placed'
+                const deliveryCode = order.delivery_code
+
+                return (
+                  <tr key={order.id}>
+                    <td>{order.order_code || `#${order.id}`}</td>
+                    <td>{order.customer_name || 'Unknown'}</td>
+                    <td>{order.phone || order.customer_phone || 'N/A'}</td>
+                    <td>{order.delivery_method === 'pickup' ? '🏪' : '🚗'}</td>
+                    <td>{formatPrice(order.total_amount || 0)}</td>
+                    <td>
+                      <select
+                        value={paymentStatus}
+                        onChange={(e) => handlePaymentStatusUpdate(order.id, e.target.value)}
+                        className="status-select"
+                      >
+                        {PAYMENT_STATUS_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        value={orderStatus}
+                        onChange={(e) => handleOrderStatusUpdate(order.id, e.target.value)}
+                        className="status-select"
+                      >
+                        {ORDER_STATUS_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      {deliveryCode ? (
+                        <span className="delivery-code-badge">{deliveryCode}</span>
+                      ) : order.delivery_method === 'delivery' && orderStatus === 'out_for_delivery' ? (
+                        <span className="code-generating">Generating...</span>
+                      ) : (
+                        <span className="code-none">-</span>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        className="btn-view"
+                        onClick={() => handleViewOrder(order)}
+                      >
+                        Details
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {selectedOrder && (
+        <div className="order-detail-modal">
+          <div className="modal-overlay" onClick={handleCloseOrder}></div>
+          <div className="modal-content order-details-modal">
+            <div className="modal-header">
+              <h2>Order Details</h2>
+              <button className="close-btn" onClick={handleCloseOrder}>×</button>
+            </div>
+
+            <div className="order-detail-content">
+              {/* Order Information */}
+              <div className="admin-order-section">
+                <h4>📦 Order Information</h4>
+                <div className="info-grid">
+                  <div className="info-item">
+                    <strong>Order Code:</strong>
+                    <span>{selectedOrder.order_code || `#${selectedOrder.id}`}</span>
+                  </div>
+                  <div className="info-item">
+                    <strong>Customer:</strong>
+                    <span>{selectedOrder.customer_name || 'Unknown'}</span>
+                  </div>
+                  <div className="info-item">
+                    <strong>Email:</strong>
+                    <span>{selectedOrder.customer_email || 'N/A'}</span>
+                  </div>
+                  <div className="info-item">
+                    <strong>Phone:</strong>
+                    <span>{selectedOrder.phone || selectedOrder.customer_phone || 'N/A'}</span>
+                  </div>
+                  <div className="info-item">
+                    <strong>Method:</strong>
+                    <span>{selectedOrder.delivery_method === 'pickup' ? '🏪 Pickup' : '🚗 Delivery'}</span>
+                  </div>
+                  <div className="info-item">
+                    <strong>Created:</strong>
+                    <span>{selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString() : 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Information */}
+              {selectedOrder.delivery_method === 'delivery' && (
+                <div className="admin-order-section">
+                  <h4>📍 Delivery Information</h4>
+                  <div className="info-grid">
+                    <div className="info-item full-width">
+                      <strong>Address:</strong>
+                      <span>{selectedOrder.delivery_address || 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Pickup Information */}
+              {selectedOrder.delivery_method === 'pickup' && selectedOrder.pickup_note && (
+                <div className="admin-order-section">
+                  <h4>🏪 Pickup Note</h4>
+                  <p>{selectedOrder.pickup_note}</p>
+                </div>
+              )}
+
+              {/* Items */}
+              <div className="admin-order-section">
+                <h4>📋 Items Ordered</h4>
+                <table className="items-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedOrder.items || []).map((item, idx) => (
+                      <tr key={idx}>
+                        <td>{item.product_name || item.name || 'Unknown'}</td>
+                        <td>{item.quantity || item.qty || 1}</td>
+                        <td>{formatPrice(item.price || item.unit_price || 0)}</td>
+                        <td>{formatPrice((item.price || item.unit_price || 0) * (item.quantity || item.qty || 1))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="order-total">
+                  <strong>Total Amount: {formatPrice(selectedOrder.total_amount || 0)}</strong>
+                </div>
+              </div>
+
+              {/* Receipt Information */}
+              {selectedOrder.receipt && (
+                <div className="admin-order-section">
+                  <h4>🧾 Receipt Information</h4>
+                  <div className="info-grid">
+                    <div className="info-item">
+                      <strong>Filename:</strong>
+                      <span>{selectedOrder.receipt.filename || 'N/A'}</span>
+                    </div>
+                    <div className="info-item">
+                      <strong>Status:</strong>
+                      <span>{selectedOrder.receipt.status || 'N/A'}</span>
+                    </div>
+                    <div className="info-item">
+                      <strong>Uploaded:</strong>
+                      <span>{selectedOrder.receipt.uploaded_at ? new Date(selectedOrder.receipt.uploaded_at).toLocaleString() : 'N/A'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Status */}
+              <div className="admin-order-section">
+                <h4>💳 Payment Status Management</h4>
+                <div className="status-control-group">
+                  <label>Payment Status:</label>
+                  <select
+                    value={selectedOrder.payment_status || selectedOrder.status || 'pending_payment'}
+                    onChange={(e) => handlePaymentStatusUpdate(selectedOrder.id, e.target.value)}
+                    className="status-select"
+                  >
+                    {PAYMENT_STATUS_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Order Status */}
+              <div className="admin-order-section">
+                <h4>📦 Order Status Management</h4>
+                <div className="status-control-group">
+                  <label>Order Status:</label>
+                  <select
+                    value={selectedOrder.order_status || selectedOrder.fulfillment_status || selectedOrder.status || 'order_placed'}
+                    onChange={(e) => handleOrderStatusUpdate(selectedOrder.id, e.target.value)}
+                    className="status-select"
+                  >
+                    {ORDER_STATUS_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Delivery Code */}
+              {selectedOrder.delivery_method === 'delivery' && (selectedOrder.order_status === 'out_for_delivery' || selectedOrder.fulfillment_status === 'out_for_delivery') && (
+                <div className="admin-order-section">
+                  <h4>🔐 Delivery Confirmation Code</h4>
+                  {selectedOrder.delivery_code ? (
+                    <>
+                      <div className="delivery-code-display">
+                        <div className="delivery-code-box">
+                          {selectedOrder.delivery_code}
+                        </div>
+                      </div>
+                      <p className="delivery-code-info">
+                        ✓ Code generated on {selectedOrder.delivery_code_created_at ? new Date(selectedOrder.delivery_code_created_at).toLocaleString() : 'N/A'}
+                      </p>
+                      <p className="delivery-code-instruction">
+                        📌 Instructions: Give this code to the dispatcher/rider. The customer will enter it in the app to confirm delivery.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="delivery-code-note">Code will be generated when order is marked "Out for Delivery"</p>
+                  )}
+                  {selectedOrder.delivery_confirmed_at && (
+                    <div className="delivery-confirmed-section">
+                      <p className="confirmed-message">✓ Delivery confirmed by customer on {new Date(selectedOrder.delivery_confirmed_at).toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

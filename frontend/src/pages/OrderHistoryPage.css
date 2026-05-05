@@ -562,3 +562,71 @@
   margin-bottom: 1rem;
   color: var(--dark);
 }
+
+/* Delivery Confirmation Section */
+.delivery-confirmation-section {
+  background: linear-gradient(135deg, rgba(6, 168, 125, 0.05), rgba(76, 175, 80, 0.05));
+  border: 1px solid rgba(6, 168, 125, 0.3);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.delivery-confirmation-section h4 {
+  margin: 0 0 1rem 0;
+  color: var(--dark);
+}
+
+.confirmation-instruction {
+  background: rgba(6, 168, 125, 0.1);
+  border-left: 4px solid var(--success);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  color: var(--text);
+  margin-bottom: 1rem;
+  margin: 0 0 1rem 0;
+}
+
+.delivery-confirmation-section .form-group {
+  margin-bottom: 1rem;
+}
+
+.delivery-confirmation-section label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: var(--dark);
+}
+
+.delivery-confirmation-section input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  text-align: center;
+  letter-spacing: 0.2rem;
+  font-weight: 700;
+}
+
+.code-format-hint {
+  font-size: 0.85rem;
+  color: var(--text-light);
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+.delivery-confirmed-banner {
+  background: rgba(6, 168, 125, 0.1);
+  border: 1px solid rgba(6, 168, 125, 0.3);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.delivery-confirmed-banner p {
+  margin: 0;
+  color: var(--success);
+  font-weight: 600;
+}

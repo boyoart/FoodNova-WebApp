@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import uuid4
+import random
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -67,6 +68,10 @@ class OrderPayload(BaseModel):
     customer_email: Optional[str] = ""
     customer_phone: Optional[str] = ""
     payment_method: Optional[str] = "bank_transfer"
+    delivery_method: Optional[str] = "delivery"
+    pickup_note: Optional[str] = ""
+    delivery_method: Optional[str] = "delivery"
+    pickup_note: Optional[str] = ""
 
 
 def public_user(user: dict) -> dict:
@@ -341,7 +346,15 @@ def create_order(payload: OrderPayload):
         "customer_name": payload.customer_name or "FoodNova Customer",
         "customer_email": payload.customer_email or "",
         "payment_method": payload.payment_method or "bank_transfer",
+        "delivery_method": payload.delivery_method or "delivery",
+        "pickup_note": payload.pickup_note or "",
         "status": "pending_payment",
+        "payment_status": "pending_payment",
+        "order_status": "order_placed",
+        "fulfillment_status": "order_placed",
+        "delivery_code": None,
+        "delivery_code_created_at": None,
+        "delivery_confirmed_at": None,
         "created_at": datetime.utcnow().isoformat(),
         "receipt": None,
     }
@@ -385,6 +398,7 @@ async def upload_receipt(order_id: int, file: UploadFile = File(...)):
                 "uploaded_at": datetime.utcnow().isoformat(),
             }
             order["status"] = "receipt_submitted"
+            order["payment_status"] = "receipt_submitted"
 
             return {
                 "success": True,
@@ -414,10 +428,46 @@ def admin_get_order(order_id: int):
 def update_order(order_id: int, payload: dict):
     for order in ORDERS:
         if order["id"] == order_id:
+            # Handle delivery code generation when status changes to out_for_delivery
+            new_status = payload.get("status") or payload.get("order_status") or payload.get("fulfillment_status")
+            if new_status == "out_for_delivery" and order.get("delivery_method") == "delivery":
+                if not order.get("delivery_code"):
+                    order["delivery_code"] = "{:06d}".format(random.randint(0, 999999))
+                    order["delivery_code_created_at"] = datetime.utcnow().isoformat()
+            
             order.update(payload)
             return {
                 "success": True,
                 "message": "Order updated successfully",
+                "order": order,
+                "data": order,
+            }
+
+    raise HTTPException(status_code=404, detail="Order not found")
+
+
+@app.post("/orders/{order_id}/confirm-delivery")
+def confirm_delivery(order_id: int, payload: dict):
+    for order in ORDERS:
+        if order["id"] == order_id:
+            delivery_code = str(payload.get("delivery_code", "")).strip()
+            stored_code = str(order.get("delivery_code", "")).strip()
+            
+            if not stored_code:
+                raise HTTPException(status_code=400, detail="No delivery code generated for this order")
+            
+            if delivery_code != stored_code:
+                raise HTTPException(status_code=400, detail="Invalid delivery confirmation code")
+            
+            # Mark order as delivered
+            order["status"] = "delivered"
+            order["order_status"] = "delivered"
+            order["fulfillment_status"] = "delivered"
+            order["delivery_confirmed_at"] = datetime.utcnow().isoformat()
+            
+            return {
+                "success": True,
+                "message": "Delivery confirmed successfully",
                 "order": order,
                 "data": order,
             }

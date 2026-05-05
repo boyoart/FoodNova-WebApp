@@ -123,8 +123,12 @@ export const ordersAPI = {
 export const adminAPI = {
   getOrders: async (params = {}) => {
     const response = await api.get("/admin/orders", { params });
+<<<<<<< HEAD
     const orders = normalizeList(response.data, ["orders"]);
     return { data: orders, raw: response.data };
+=======
+    return response.data;
+>>>>>>> 89e45b6 (Fix admin order management and delivery code workflow)
   },
 
   getOrder: async (id) => {
@@ -137,29 +141,56 @@ export const adminAPI = {
     return response.data;
   },
 
+<<<<<<< HEAD
   updateOrderStatus: async (id, payload = {}) => {
     const status = payload.status || payload.order_status || payload.fulfillment_status;
     const response = await api.patch(`/admin/orders/${id}`, {
       ...payload,
       ...(status ? { status, order_status: status, fulfillment_status: status } : {}),
+=======
+  updateOrderStatus: async (id, payload) => {
+    const status = payload.status;
+    const response = await api.patch(`/admin/orders/${id}`, {
+      ...payload,
+      status,
+      order_status: status,
+      fulfillment_status: status,
+>>>>>>> 89e45b6 (Fix admin order management and delivery code workflow)
     });
     return response.data;
   },
 
+<<<<<<< HEAD
   updatePaymentStatus: async (id, payload = {}) => {
     const paymentStatus = payload.payment_status || payload.status;
     const response = await api.patch(`/admin/orders/${id}`, {
       ...payload,
       ...(paymentStatus ? { payment_status: paymentStatus, status: paymentStatus } : {}),
+=======
+  updatePaymentStatus: async (id, payload) => {
+    const response = await api.patch(`/admin/orders/${id}`, {
+      ...payload,
+      payment_status: payload.payment_status || payload.status,
+      status: payload.status || payload.payment_status,
+>>>>>>> 89e45b6 (Fix admin order management and delivery code workflow)
     });
     return response.data;
   },
 
+<<<<<<< HEAD
   updateFulfillmentStatus: async (id, payload = {}) => {
     const status = payload.fulfillment_status || payload.order_status || payload.status;
     const response = await api.patch(`/admin/orders/${id}`, {
       ...payload,
       ...(status ? { fulfillment_status: status, order_status: status, status } : {}),
+=======
+  updateFulfillmentStatus: async (id, payload) => {
+    const response = await api.patch(`/admin/orders/${id}`, {
+      ...payload,
+      order_status: payload.order_status || payload.status,
+      fulfillment_status: payload.fulfillment_status || payload.status,
+      status: payload.status || payload.order_status || payload.fulfillment_status,
+>>>>>>> 89e45b6 (Fix admin order management and delivery code workflow)
     });
     return response.data;
   },
