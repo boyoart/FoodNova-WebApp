@@ -3,7 +3,7 @@ from typing import Dict, List, Optional
 from uuid import uuid4
 import random
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 
@@ -27,6 +27,8 @@ TOKENS: Dict[str, str] = {}
 ORDERS: List[dict] = []
 PRODUCTS: List[dict] = []
 PACKS: List[dict] = []
+USER_PROFILES: Dict[str, dict] = {}
+USER_ADDRESSES: Dict[str, List[dict]] = {}
 
 ADMIN_EMAIL = "admin@foodnova.com"
 ADMIN_PASSWORD = "Admin123!"
@@ -164,6 +166,33 @@ class OrderPayload(BaseModel):
     pickup_note: Optional[str] = ""
     delivery_method: Optional[str] = "delivery"
     pickup_note: Optional[str] = ""
+    delivery_address_id: Optional[int] = None
+    delivery_address_snapshot: Optional[dict] = None
+
+
+class ProfileUpdatePayload(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    avatar_url: Optional[str] = ""
+
+
+class AddressPayload(BaseModel):
+    label: Optional[str] = ""
+    recipient_name: Optional[str] = ""
+    phone: Optional[str] = ""
+    address_line: Optional[str] = ""
+    street: Optional[str] = ""
+    area: Optional[str] = ""
+    city: Optional[str] = ""
+    lga: Optional[str] = ""
+    state: Optional[str] = ""
+    country: Optional[str] = "Nigeria"
+    landmark: Optional[str] = ""
+    postal_code: Optional[str] = ""
+    google_place_id: Optional[str] = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    is_default: Optional[bool] = False
 
 
 def public_user(user: dict) -> dict:
@@ -177,6 +206,16 @@ def public_user(user: dict) -> dict:
         "phone": user.get("phone", ""),
         "role": user.get("role", "customer"),
     }
+
+
+def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
+    if not authorization:
+        return None
+    token = authorization.replace("Bearer ", "").strip()
+    email = TOKENS.get(token)
+    if not email:
+        return None
+    return USERS.get(email)
 
 
 def auth_response(message: str, user: dict, token: str) -> dict:
@@ -328,6 +367,21 @@ def register(payload: RegisterPayload):
     token = f"token-{uuid4()}"
     TOKENS[token] = email
 
+    # Create user profile
+    profile = {
+        "user_id": user["id"],
+        "full_name": full_name,
+        "email": email,
+        "phone": user.get("phone", ""),
+        "avatar_url": "",
+        "default_address_id": None,
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+
+    USER_PROFILES[email] = profile
+    USER_ADDRESSES[email] = []
+
     return auth_response("Registration successful", user, token)
 
 
@@ -360,9 +414,176 @@ def me():
     return {"success": True, "message": "Temporary auth active"}
 
 
+@app.get("/profile")
+def get_profile(request: Request):
+    auth = request.headers.get("authorization")
+    user = _get_user_from_token(auth)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    email = user.get("email")
+    profile = USER_PROFILES.get(email)
+    if not profile:
+        # create a default profile if missing
+        profile = {
+            "user_id": user["id"],
+            "full_name": user.get("full_name") or user.get("name"),
+            "email": email,
+            "phone": user.get("phone", ""),
+            "avatar_url": "",
+            "default_address_id": None,
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        USER_PROFILES[email] = profile
+        USER_ADDRESSES[email] = []
+
+    addresses = USER_ADDRESSES.get(email, [])
+
+    return {"success": True, "profile": profile, "addresses": addresses, "data": {"profile": profile, "addresses": addresses}}
+
+
+@app.patch("/profile")
+def update_profile(request: Request, payload: ProfileUpdatePayload):
+    auth = request.headers.get("authorization")
+    user = _get_user_from_token(auth)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    email = user.get("email")
+    profile = USER_PROFILES.get(email, {})
+    if payload.full_name:
+        profile["full_name"] = payload.full_name
+    if payload.phone is not None:
+        profile["phone"] = payload.phone
+    if payload.avatar_url is not None:
+        profile["avatar_url"] = payload.avatar_url
+
+    profile["updated_at"] = datetime.utcnow().isoformat()
+    USER_PROFILES[email] = profile
+
+    return {"success": True, "profile": profile, "data": profile}
+
+
+@app.get("/profile/addresses")
+def get_addresses(request: Request):
+    auth = request.headers.get("authorization")
+    user = _get_user_from_token(auth)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    email = user.get("email")
+    addresses = USER_ADDRESSES.get(email, [])
+    return {"success": True, "addresses": addresses, "data": addresses}
+
+
+@app.post("/profile/addresses")
+def create_address(request: Request, payload: AddressPayload):
+    auth = request.headers.get("authorization")
+    user = _get_user_from_token(auth)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    email = user.get("email")
+    addresses = USER_ADDRESSES.setdefault(email, [])
+    max_id = max([a.get("id", 0) for a in addresses], default=0)
+    new_id = max_id + 1
+
+    addr = payload.dict()
+    addr.update({
+        "id": new_id,
+        "user_id": user["id"],
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+    })
+
+    # handle default
+    if addr.get("is_default"):
+        for a in addresses:
+            a["is_default"] = False
+        USER_PROFILES[email]["default_address_id"] = new_id
+
+    addresses.append(addr)
+    USER_ADDRESSES[email] = addresses
+
+    return {"success": True, "address": addr, "data": addr}
+
+
+@app.patch("/profile/addresses/{address_id}")
+def update_address(address_id: int, request: Request, payload: AddressPayload):
+    auth = request.headers.get("authorization")
+    user = _get_user_from_token(auth)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    email = user.get("email")
+    addresses = USER_ADDRESSES.get(email, [])
+    for i, a in enumerate(addresses):
+        if a.get("id") == address_id:
+            updated = {**a, **{k: v for k, v in payload.dict().items() if v is not None}}
+            updated["updated_at"] = datetime.utcnow().isoformat()
+            addresses[i] = updated
+            USER_ADDRESSES[email] = addresses
+            return {"success": True, "address": updated, "data": updated}
+
+    raise HTTPException(status_code=404, detail="Address not found")
+
+
+@app.delete("/profile/addresses/{address_id}")
+def delete_address(address_id: int, request: Request):
+    auth = request.headers.get("authorization")
+    user = _get_user_from_token(auth)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    email = user.get("email")
+    addresses = USER_ADDRESSES.get(email, [])
+    for i, a in enumerate(addresses):
+        if a.get("id") == address_id:
+            removed = addresses.pop(i)
+            USER_ADDRESSES[email] = addresses
+            # clear default if needed
+            if USER_PROFILES.get(email, {}).get("default_address_id") == address_id:
+                USER_PROFILES[email]["default_address_id"] = None
+            return {"success": True, "address": removed, "data": removed}
+
+    raise HTTPException(status_code=404, detail="Address not found")
+
+
+@app.patch("/profile/addresses/{address_id}/default")
+def set_default_address(address_id: int, request: Request):
+    auth = request.headers.get("authorization")
+    user = _get_user_from_token(auth)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    email = user.get("email")
+    addresses = USER_ADDRESSES.get(email, [])
+    found = False
+    for a in addresses:
+        if a.get("id") == address_id:
+            a["is_default"] = True
+            USER_PROFILES[email]["default_address_id"] = address_id
+            found = True
+        else:
+            a["is_default"] = False
+
+    if not found:
+        raise HTTPException(status_code=404, detail="Address not found")
+
+    USER_ADDRESSES[email] = addresses
+    return {"success": True, "default_address_id": address_id, "data": {"default_address_id": address_id}}
+
+
 @app.post("/orders")
-def create_order(payload: OrderPayload):
+def create_order(payload: OrderPayload, request: Request):
     normalized_items = normalize_order_items(payload.items or [])
+    # Attempt to enrich with user/profile data when available
+    auth = request.headers.get("authorization")
+    current_user = _get_user_from_token(auth)
+    customer_name = payload.customer_name or (current_user.get("full_name") if current_user else "FoodNova Customer")
+    customer_email = payload.customer_email or (current_user.get("email") if current_user else "")
+    customer_phone = payload.customer_phone or (current_user.get("phone") if current_user else "")
 
     order = {
         "id": len(ORDERS) + 1,
@@ -370,9 +591,12 @@ def create_order(payload: OrderPayload):
         "items": normalized_items,
         "total_amount": payload.total_amount or payload.total or sum(item["line_total"] for item in normalized_items),
         "delivery_address": payload.delivery_address or payload.address or "",
-        "phone": payload.phone or payload.customer_phone or "",
-        "customer_name": payload.customer_name or "FoodNova Customer",
-        "customer_email": payload.customer_email or "",
+        "delivery_address_id": payload.delivery_address_id if getattr(payload, 'delivery_address_id', None) else None,
+        "delivery_address_snapshot": payload.delivery_address_snapshot or None,
+        "phone": payload.phone or customer_phone or "",
+        "customer_name": customer_name,
+        "customer_email": customer_email or "",
+        "customer_phone": customer_phone or "",
         "payment_method": payload.payment_method or "bank_transfer",
         "delivery_method": payload.delivery_method or "delivery",
         "pickup_note": payload.pickup_note or "",
