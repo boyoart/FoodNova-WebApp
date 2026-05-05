@@ -35,6 +35,86 @@ const normalizeList = (body, keys = []) => {
   return [];
 };
 
+const getStoredUserEmail = () => {
+  try {
+    const user = JSON.parse(localStorage.getItem("user") || "null");
+    return user?.email || "guest";
+  } catch {
+    return "guest";
+  }
+};
+
+const localAddressKey = () => `foodnova_saved_addresses_${getStoredUserEmail()}`;
+
+const getLocalAddresses = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(localAddressKey()) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+};
+
+const setLocalAddresses = (addresses) => {
+  localStorage.setItem(localAddressKey(), JSON.stringify(Array.isArray(addresses) ? addresses : []));
+};
+
+const mergeAddresses = (remoteAddresses = []) => {
+  const remote = Array.isArray(remoteAddresses) ? remoteAddresses : [];
+  const local = getLocalAddresses();
+  const seen = new Set(remote.map((address) => String(address.id)));
+  const mergedLocal = local.filter((address) => !seen.has(String(address.id)));
+  return [...remote, ...mergedLocal];
+};
+
+const createLocalAddress = (payload) => {
+  const addresses = getLocalAddresses();
+  const newAddress = {
+    ...payload,
+    id: payload.id || `local-${Date.now()}`,
+    country: payload.country || "Nigeria",
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const shouldBeDefault = Boolean(payload.is_default) || addresses.length === 0;
+  const nextAddresses = shouldBeDefault
+    ? addresses.map((address) => ({ ...address, is_default: false }))
+    : addresses;
+
+  newAddress.is_default = shouldBeDefault;
+  nextAddresses.push(newAddress);
+  setLocalAddresses(nextAddresses);
+  return newAddress;
+};
+
+const updateLocalAddress = (id, payload) => {
+  const addresses = getLocalAddresses();
+  const next = addresses.map((address) =>
+    String(address.id) === String(id)
+      ? { ...address, ...payload, updated_at: new Date().toISOString() }
+      : address
+  );
+  setLocalAddresses(next);
+  return next.find((address) => String(address.id) === String(id));
+};
+
+const deleteLocalAddress = (id) => {
+  const addresses = getLocalAddresses();
+  const removed = addresses.find((address) => String(address.id) === String(id));
+  setLocalAddresses(addresses.filter((address) => String(address.id) !== String(id)));
+  return removed;
+};
+
+const setLocalDefaultAddress = (id) => {
+  const addresses = getLocalAddresses().map((address) => ({
+    ...address,
+    is_default: String(address.id) === String(id),
+  }));
+  setLocalAddresses(addresses);
+  return addresses.find((address) => String(address.id) === String(id));
+};
+
 export const productsAPI = {
   getAll: async () => await api.get("/products"),
   getById: async (id) => await api.get(`/products/${id}`),
@@ -323,15 +403,89 @@ export const uploadReceipt = async (orderId, formData) => ordersAPI.uploadReceip
 
 export default api;
 
-
 export const profileAPI = {
-  getProfile: async () => (await api.get('/profile')).data,
-  updateProfile: async (payload) => (await api.patch('/profile', payload)).data,
-  getAddresses: async () => (await api.get('/profile/addresses')).data,
-  createAddress: async (payload) => (await api.post('/profile/addresses', payload)).data,
-  updateAddress: async (id, payload) => (await api.patch(`/profile/addresses/${id}`, payload)).data,
-  deleteAddress: async (id) => (await api.delete(`/profile/addresses/${id}`)).data,
-  setDefaultAddress: async (id) => (await api.patch(`/profile/addresses/${id}/default`)).data,
+  getProfile: async () => {
+    try {
+      const body = (await api.get('/profile')).data;
+      const profile = body.profile || body.data?.profile || body || {};
+      const remoteAddresses = body.addresses || body.data?.addresses || [];
+      const addresses = mergeAddresses(remoteAddresses);
+      return { ...body, profile, addresses, data: { ...(body.data || {}), profile, addresses } };
+    } catch (error) {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const profile = {
+        full_name: user.full_name || user.fullName || user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        avatar_url: user.avatar_url || '',
+      };
+      const addresses = getLocalAddresses();
+      return { success: true, profile, addresses, data: { profile, addresses }, local_fallback: true };
+    }
+  },
+  updateProfile: async (payload) => {
+    try {
+      return (await api.patch('/profile', payload)).data;
+    } catch (error) {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const nextUser = { ...user, ...payload, name: payload.full_name || user.name, full_name: payload.full_name || user.full_name };
+      localStorage.setItem('user', JSON.stringify(nextUser));
+      return { success: true, profile: nextUser, data: nextUser, local_fallback: true };
+    }
+  },
+  getAddresses: async () => {
+    try {
+      const body = (await api.get('/profile/addresses')).data;
+      const remoteAddresses = body.addresses || body.data || [];
+      const addresses = mergeAddresses(remoteAddresses);
+      return { ...body, addresses, data: addresses };
+    } catch (error) {
+      const addresses = getLocalAddresses();
+      return { success: true, addresses, data: addresses, local_fallback: true };
+    }
+  },
+  createAddress: async (payload) => {
+    try {
+      const body = (await api.post('/profile/addresses', payload)).data;
+      const savedAddress = body.address || body.data || body;
+      if (savedAddress?.id) {
+        const local = getLocalAddresses().filter((address) => String(address.id) !== String(savedAddress.id));
+        setLocalAddresses(local);
+      }
+      return body;
+    } catch (error) {
+      const address = createLocalAddress(payload);
+      return { success: true, address, data: address, local_fallback: true };
+    }
+  },
+  updateAddress: async (id, payload) => {
+    try {
+      return (await api.patch(`/profile/addresses/${id}`, payload)).data;
+    } catch (error) {
+      const address = updateLocalAddress(id, payload);
+      return { success: true, address, data: address, local_fallback: true };
+    }
+  },
+  deleteAddress: async (id) => {
+    try {
+      const body = (await api.delete(`/profile/addresses/${id}`)).data;
+      deleteLocalAddress(id);
+      return body;
+    } catch (error) {
+      const address = deleteLocalAddress(id);
+      return { success: true, address, data: address, local_fallback: true };
+    }
+  },
+  setDefaultAddress: async (id) => {
+    try {
+      const body = (await api.patch(`/profile/addresses/${id}/default`)).data;
+      setLocalDefaultAddress(id);
+      return body;
+    } catch (error) {
+      const address = setLocalDefaultAddress(id);
+      return { success: true, address, data: address, local_fallback: true };
+    }
+  },
 }
 
 export const notificationsAPI = {
