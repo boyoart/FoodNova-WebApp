@@ -447,6 +447,7 @@ This project is built for FoodNova. All rights reserved.
 - Set up automated backups for PostgreSQL
 - Configure CDN for static assets
 - Implement image optimization for product photos
+- Deployment heartbeat: 2026-05-05 stock/order modal refresh
 
 ---
 
