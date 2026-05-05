@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, Home, LogIn, LogOut, Menu, Package, RefreshCw, ShoppingCart, User, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
@@ -24,6 +24,23 @@ const normalizeOrders = (body) => {
   if (Array.isArray(body?.orders)) return body.orders
   return []
 }
+
+const getOutForDeliveryMessage = (orderCode) =>
+  `Your order ${orderCode} is out for delivery. The dispatch rider will provide the delivery confirmation code when they arrive. Enter it in the app only after you have received your order.`
+
+const sanitizeBackendNotifications = (items = []) =>
+  items
+    .filter((item) => String(item.title || '').toLowerCase() !== 'delivery code generated')
+    .map((item) => {
+      const title = String(item.title || '').toLowerCase()
+      if (title === 'out for delivery') {
+        return {
+          ...item,
+          message: getOutForDeliveryMessage(item.order_code || 'your order'),
+        }
+      }
+      return item
+    })
 
 const createDerivedNotificationsFromOrders = (orders = []) => {
   const readKeys = new Set(getLocalReadKeys())
@@ -67,10 +84,7 @@ const createDerivedNotificationsFromOrders = (orders = []) => {
       push('ready-for-pickup', 'Ready for Pickup', `Your order ${orderCode} is ready for pickup.`, 'delivery')
     }
     if (orderStatus === 'out_for_delivery') {
-      push('out-for-delivery', 'Out for Delivery', `Your order ${orderCode} is out for delivery. Please keep your delivery confirmation code ready.`, 'delivery')
-    }
-    if (order.delivery_code) {
-      push('delivery-code', 'Delivery Code Generated', `Your delivery confirmation code has been generated for order ${orderCode}. Share it only after receiving your order.`, 'delivery')
+      push('out-for-delivery', 'Out for Delivery', getOutForDeliveryMessage(orderCode), 'delivery')
     }
     if (orderStatus === 'delivered') {
       push('delivered', 'Order Delivered', `Your order ${orderCode} has been marked as delivered.`, 'delivery')
@@ -87,7 +101,7 @@ const mergeNotifications = (backendItems = [], derivedItems = []) => {
   const seen = new Set()
   const combined = []
 
-  ;[...backendItems, ...derivedItems].forEach((item) => {
+  ;[...sanitizeBackendNotifications(backendItems), ...derivedItems].forEach((item) => {
     const key = item.local_key || `${item.order_id || 'general'}-${item.title}-${item.message}`
     if (seen.has(key)) return
     seen.add(key)
@@ -104,6 +118,7 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [profile, setProfile] = useState(null)
   const [refreshingNotifications, setRefreshingNotifications] = useState(false)
+  const notificationRef = useRef(null)
 
   const { user, admin, isAuthenticated, isAdmin, logout } = useAuthStore()
   const { getTotalItems } = useCartStore()
@@ -180,6 +195,24 @@ export default function Navbar() {
     return () => clearInterval(interval)
   }, [isAuthenticated, isAdmin])
 
+  useEffect(() => {
+    if (!notificationsOpen) return undefined
+
+    const handleClickOutside = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setNotificationsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside)
+    }
+  }, [notificationsOpen])
+
   const handleLogout = () => {
     logout()
     navigate('/')
@@ -211,6 +244,7 @@ export default function Navbar() {
       setUnreadCount((current) => Math.max(0, current - (notification.is_read ? 0 : 1)))
 
       if (notification.order_id) {
+        setNotificationsOpen(false)
         navigate('/orders')
       }
     } catch (error) {
@@ -243,7 +277,7 @@ export default function Navbar() {
             <>
               <li className="nav-item"><Link to="/orders" className="nav-link"><span>Orders</span></Link></li>
               <li className="nav-item"><Link to="/profile" className="nav-link"><User size={18} /><span>Profile</span></Link></li>
-              <li className="nav-item nav-bell">
+              <li className="nav-item nav-bell" ref={notificationRef}>
                 <button type="button" className="nav-link bell-btn" onClick={toggleNotifications} aria-label="Notifications">
                   <Bell size={18} />
                   {unreadCount > 0 && <span className="notif-badge">{unreadCount}</span>}
