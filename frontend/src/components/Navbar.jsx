@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Home, Inbox, LogIn, LogOut, Menu, Package, RefreshCw, ShoppingCart, User, X } from 'lucide-react'
+import { Bell, Home, Inbox, LogIn, LogOut, Menu, Package, RefreshCw, ShoppingCart, User, Users, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI } from '../services/api'
@@ -236,6 +236,7 @@ export default function Navbar() {
               <li className="nav-item"><Link to="/admin/stock" className="nav-link">Stock</Link></li>
               <li className="nav-item"><Link to="/admin/payments" className="nav-link">Payments</Link></li>
               <li className="nav-item"><Link to="/admin/broadcasts" className="nav-link">Broadcasts</Link></li>
+              <li className="nav-item"><Link to="/admin/customers" className="nav-link"><Users size={18} /> Customers</Link></li>
             </>
           )}
 
