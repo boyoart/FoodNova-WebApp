@@ -41,6 +41,9 @@ function App() {
               <Route path="/orders" element={<OrderHistoryPage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/inbox" element={<InboxPage />} />
+              <Route path="/inbox/*" element={<InboxPage />} />
+              <Route path="/notifications" element={<InboxPage />} />
+              <Route path="/customer/inbox" element={<InboxPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
