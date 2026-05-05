@@ -25,68 +25,37 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/* =========================
-   PRODUCTS API
-   Returns full Axios response because ProductsPage uses response.data
-========================= */
+const normalizeList = (body, keys = []) => {
+  if (Array.isArray(body)) return body;
+  for (const key of keys) {
+    if (Array.isArray(body?.[key])) return body[key];
+  }
+  if (Array.isArray(body?.data)) return body.data;
+  if (Array.isArray(body?.items)) return body.items;
+  return [];
+};
+
 export const productsAPI = {
-  getAll: async () => {
-    return await api.get("/products");
-  },
-
-  getById: async (id) => {
-    return await api.get(`/products/${id}`);
-  },
+  getAll: async () => await api.get("/products"),
+  getById: async (id) => await api.get(`/products/${id}`),
 };
 
-/* =========================
-   PACKS API
-   Returns full Axios response because ProductsPage uses response.data
-========================= */
 export const packsAPI = {
-  getAll: async () => {
-    return await api.get("/packs");
-  },
-
-  getById: async (id) => {
-    return await api.get(`/packs/${id}`);
-  },
+  getAll: async () => await api.get("/packs"),
+  getById: async (id) => await api.get(`/packs/${id}`),
 };
 
-/* =========================
-   CATEGORIES API
-========================= */
 export const categoriesAPI = {
-  getAll: async () => {
-    return await api.get("/categories");
-  },
+  getAll: async () => await api.get("/categories"),
 };
 
-/* =========================
-   AUTH API
-   Returns full Axios response because Login/Register pages use res.data
-========================= */
 export const authAPI = {
-  login: async (payload) => {
-    return await api.post("/auth/login", payload);
-  },
-
-  adminLogin: async (payload) => {
-    return await api.post("/auth/login", payload);
-  },
-
-  register: async (payload) => {
-    return await api.post("/auth/register", payload);
-  },
-
-  me: async () => {
-    return await api.get("/auth/me");
-  },
+  login: async (payload) => await api.post("/auth/login", payload),
+  adminLogin: async (payload) => await api.post("/auth/login", payload),
+  register: async (payload) => await api.post("/auth/register", payload),
+  me: async () => await api.get("/auth/me"),
 };
 
-/* =========================
-   ORDERS API
-========================= */
 export const ordersAPI = {
   create: async (payload) => {
     const response = await api.post("/orders", payload);
@@ -98,11 +67,9 @@ export const ordersAPI = {
     return response.data;
   },
 
-  // OrderHistoryPage uses this method and expects { data: [...] }
   getCustomerOrders: async () => {
     const response = await api.get("/orders/my");
-    const body = response.data;
-    const orders = Array.isArray(body) ? body : body?.orders || body?.data || [];
+    const orders = normalizeList(response.data, ["orders"]);
     return { data: orders };
   },
 
@@ -127,10 +94,6 @@ export const ordersAPI = {
       headers.Authorization = `Bearer ${token}`;
     }
 
-    // IMPORTANT: use fetch instead of the axios instance here.
-    // The axios instance has JSON defaults, and manually setting
-    // multipart/form-data causes FastAPI to throw: Missing boundary in multipart.
-    // fetch lets the browser set Content-Type with the required boundary.
     const response = await fetch(`${API_BASE_URL}/orders/${orderId}/receipt`, {
       method: "POST",
       headers,
@@ -141,25 +104,27 @@ export const ordersAPI = {
 
     if (!response.ok) {
       throw {
-        response: {
-          status: response.status,
-          data,
-        },
+        response: { status: response.status, data },
         message: data?.detail || "Receipt upload failed",
       };
     }
 
     return data;
   },
+
+  confirmDelivery: async (orderId, code) => {
+    const response = await api.post(`/orders/${orderId}/confirm-delivery`, {
+      delivery_code: code,
+    });
+    return response.data;
+  },
 };
 
-/* =========================
-   ADMIN API
-========================= */
 export const adminAPI = {
-  getOrders: async () => {
-    const response = await api.get("/admin/orders");
-    return response.data;
+  getOrders: async (params = {}) => {
+    const response = await api.get("/admin/orders", { params });
+    const orders = normalizeList(response.data, ["orders"]);
+    return { data: orders, raw: response.data };
   },
 
   getOrder: async (id) => {
@@ -172,9 +137,43 @@ export const adminAPI = {
     return response.data;
   },
 
+  updateOrderStatus: async (id, payload = {}) => {
+    const status = payload.status || payload.order_status || payload.fulfillment_status;
+    const response = await api.patch(`/admin/orders/${id}`, {
+      ...payload,
+      ...(status ? { status, order_status: status, fulfillment_status: status } : {}),
+    });
+    return response.data;
+  },
+
+  updatePaymentStatus: async (id, payload = {}) => {
+    const paymentStatus = payload.payment_status || payload.status;
+    const response = await api.patch(`/admin/orders/${id}`, {
+      ...payload,
+      ...(paymentStatus ? { payment_status: paymentStatus, status: paymentStatus } : {}),
+    });
+    return response.data;
+  },
+
+  updateFulfillmentStatus: async (id, payload = {}) => {
+    const status = payload.fulfillment_status || payload.order_status || payload.status;
+    const response = await api.patch(`/admin/orders/${id}`, {
+      ...payload,
+      ...(status ? { fulfillment_status: status, order_status: status, status } : {}),
+    });
+    return response.data;
+  },
+
   getProducts: async () => {
     const response = await api.get("/admin/products");
-    return response.data;
+    const products = normalizeList(response.data, ["products"]);
+    return { data: products, raw: response.data };
+  },
+
+  getStock: async () => {
+    const response = await api.get("/admin/products");
+    const products = normalizeList(response.data, ["products"]);
+    return { data: products, raw: response.data };
   },
 
   createProduct: async (payload) => {
@@ -186,11 +185,82 @@ export const adminAPI = {
     const response = await api.patch(`/admin/products/${id}`, payload);
     return response.data;
   },
+
+  updateStock: async (id, payload) => {
+    const response = await api.patch(`/admin/products/${id}`, payload);
+    return response.data;
+  },
+
+  getDashboardStats: async () => {
+    const fallback = {
+      total_orders: 0,
+      total_revenue: 0,
+      total_products: 0,
+      pending_payments: 0,
+      receipt_submitted: 0,
+      delivered_orders: 0,
+    };
+
+    try {
+      const [ordersRes, productsRes] = await Promise.allSettled([
+        api.get("/admin/orders"),
+        api.get("/admin/products"),
+      ]);
+
+      const orders = ordersRes.status === "fulfilled"
+        ? normalizeList(ordersRes.value.data, ["orders"])
+        : [];
+      const products = productsRes.status === "fulfilled"
+        ? normalizeList(productsRes.value.data, ["products"])
+        : [];
+
+      const getPaymentStatus = (order) => String(order.payment_status || order.status || "").toLowerCase();
+      const getOrderStatus = (order) => String(order.order_status || order.fulfillment_status || order.status || "").toLowerCase();
+
+      return {
+        data: {
+          total_orders: orders.length,
+          total_revenue: orders.reduce((sum, order) => sum + Number(order.total_amount || order.total || 0), 0),
+          total_products: products.length,
+          pending_payments: orders.filter((order) => getPaymentStatus(order) === "pending_payment").length,
+          receipt_submitted: orders.filter((order) => getPaymentStatus(order) === "receipt_submitted").length,
+          delivered_orders: orders.filter((order) => getOrderStatus(order) === "delivered").length,
+        },
+      };
+    } catch (error) {
+      console.warn("Failed to calculate dashboard stats. Using fallback.", error);
+      return { data: fallback };
+    }
+  },
+
+  getPendingPayments: async () => {
+    const response = await api.get("/admin/orders");
+    const orders = normalizeList(response.data, ["orders"]);
+    return {
+      data: orders.filter((order) =>
+        String(order.payment_status || order.status || "").toLowerCase() === "receipt_submitted"
+      ),
+    };
+  },
+
+  approvePayment: async (id) => {
+    const response = await api.patch(`/admin/orders/${id}`, {
+      status: "payment_confirmed",
+      payment_status: "payment_confirmed",
+    });
+    return response.data;
+  },
+
+  rejectPayment: async (id, payload = {}) => {
+    const response = await api.patch(`/admin/orders/${id}`, {
+      ...payload,
+      status: "payment_rejected",
+      payment_status: "payment_rejected",
+    });
+    return response.data;
+  },
 };
 
-/* =========================
-   BACKWARD-COMPATIBLE HELPERS
-========================= */
 export const getProducts = async () => {
   const response = await productsAPI.getAll();
   return response.data;
@@ -218,7 +288,6 @@ export const registerUser = async (payload) => {
 
 export const createOrder = async (payload) => ordersAPI.create(payload);
 export const getMyOrders = async () => ordersAPI.getMine();
-export const uploadReceipt = async (orderId, formData) =>
-  ordersAPI.uploadReceipt(orderId, formData);
+export const uploadReceipt = async (orderId, formData) => ordersAPI.uploadReceipt(orderId, formData);
 
 export default api;
