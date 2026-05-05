@@ -168,37 +168,22 @@
   font-weight: 500;
 }
 
-@media (max-width: 768px) {
-  .order-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .order-status {
-    align-self: flex-start;
-  }
-}
-
 /* Order Detail Modal */
 .order-detail-modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  padding: 1.5rem 1rem;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed;
+  inset: 0;
   background: rgba(0, 0, 0, 0.5);
 }
 
@@ -206,12 +191,14 @@
   position: relative;
   background: white;
   border-radius: 0.75rem;
-  max-width: 600px;
-  max-height: 90vh;
+  max-width: 760px;
+  width: min(94vw, 760px);
+  max-height: calc(100vh - 3rem);
   overflow-y: auto;
-  width: 90%;
-  margin: 2rem;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 auto;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  overscroll-behavior: contain;
 }
 
 .modal-header {
@@ -221,6 +208,9 @@
   padding: 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--light);
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .modal-header h2 {
@@ -244,6 +234,7 @@
 
 .order-detail-content {
   padding: 1.5rem;
+  padding-bottom: 3rem;
 }
 
 .order-code-section {
@@ -276,6 +267,7 @@
 .order-item-detail {
   display: flex;
   justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 0.5rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border);
@@ -337,7 +329,6 @@
   margin-top: 0.25rem;
 }
 
-/* New Order Detail Sections */
 .order-identity-section {
   margin-bottom: 1.5rem;
   padding: 1rem;
@@ -375,29 +366,32 @@
   text-align: center;
 }
 
-/* Payment Status Colors */
-.payment-status.pending-payment {
+.payment-status.pending-payment,
+.payment-status.pending_payment {
   background-color: rgba(247, 127, 0, 0.1);
   color: var(--warning);
 }
 
-.payment-status.receipt-submitted {
+.payment-status.receipt-submitted,
+.payment-status.receipt_submitted {
   background-color: rgba(0, 78, 137, 0.1);
   color: var(--secondary);
 }
 
-.payment-status.payment-confirmed {
+.payment-status.payment-confirmed,
+.payment-status.payment_confirmed {
   background-color: rgba(6, 168, 125, 0.1);
   color: var(--success);
 }
 
-.payment-status.payment-rejected {
+.payment-status.payment-rejected,
+.payment-status.payment_rejected {
   background-color: rgba(244, 67, 54, 0.1);
   color: #f44336;
 }
 
-/* Order Status Colors */
-.order-status.order-placed {
+.order-status.order-placed,
+.order-status.order_placed {
   background-color: rgba(247, 127, 0, 0.1);
   color: var(--warning);
 }
@@ -408,12 +402,15 @@
 }
 
 .order-status.ready-for-pickup,
-.order-status.out-for-delivery {
+.order-status.ready_for_pickup,
+.order-status.out-for-delivery,
+.order-status.out_for_delivery {
   background-color: rgba(63, 81, 181, 0.1);
   color: #3f51b5;
 }
 
 .order-status.picked-up,
+.order-status.picked_up,
 .order-status.delivered {
   background-color: rgba(6, 168, 125, 0.1);
   color: var(--success);
@@ -424,7 +421,6 @@
   color: #f44336;
 }
 
-/* Timeline */
 .timeline-section {
   margin-bottom: 1.5rem;
 }
@@ -490,7 +486,6 @@
   display: block;
 }
 
-/* Payment Instruction Section */
 .payment-instruction-section {
   margin-bottom: 1.5rem;
   padding: 1rem;
@@ -537,7 +532,21 @@
   border: 1px solid var(--border);
 }
 
-/* Delivery Info Section */
+.payment-pending input[type="file"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.payment-pending .btn,
+.delivery-confirmation-section .btn {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 0.5rem;
+}
+
 .delivery-info-section {
   margin-bottom: 1.5rem;
 }
@@ -552,7 +561,6 @@
   color: var(--text);
 }
 
-/* Items Total Section */
 .items-total-section {
   border-top: 1px solid var(--border);
   padding-top: 1.5rem;
@@ -563,7 +571,6 @@
   color: var(--dark);
 }
 
-/* Delivery Confirmation Section */
 .delivery-confirmation-section {
   background: linear-gradient(135deg, rgba(6, 168, 125, 0.05), rgba(76, 175, 80, 0.05));
   border: 1px solid rgba(6, 168, 125, 0.3);
@@ -583,15 +590,16 @@
   padding: 0.75rem 1rem;
   border-radius: 0.5rem;
   color: var(--text);
-  margin-bottom: 1rem;
   margin: 0 0 1rem 0;
 }
 
-.delivery-confirmation-section .form-group {
+.delivery-confirmation-section .form-group,
+.payment-pending .form-group {
   margin-bottom: 1rem;
 }
 
-.delivery-confirmation-section label {
+.delivery-confirmation-section label,
+.payment-pending label {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
@@ -629,4 +637,36 @@
   margin: 0;
   color: var(--success);
   font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .order-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .order-status {
+    align-self: flex-start;
+  }
+
+  .order-detail-modal {
+    padding: 0.75rem;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-height: calc(100vh - 1.5rem);
+  }
+
+  .modal-header,
+  .order-detail-content {
+    padding: 1rem;
+  }
+
+  .order-item-detail {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
 }
