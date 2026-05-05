@@ -126,7 +126,12 @@ export default function OrderHistoryPage() {
         setSelectedOrder(fresh)
         setOrders((prev) => prev.map((o) => String(o.id) === String(fresh.id) ? fresh : o))
       }
-      await notificationsAPI.getUnreadCount().catch(()=>null)
+      // Refresh notifications too
+      try {
+        await notificationsAPI.getAll().catch(()=>null)
+      } catch (e) {
+        // Silently fail if notifications can't be refreshed
+      }
       toast.success('Order details refreshed')
     } catch (e) {
       toast.error('Failed to refresh order details')
@@ -421,6 +426,15 @@ export default function OrderHistoryPage() {
                   <p>✓ You selected pickup. We will contact you when your order is ready for pickup.</p>
                 )}
               </div>
+
+              {(selectedOrder.service_note || selectedOrder.admin_note) && (
+                <div className="service-update-section" style={{ backgroundColor: '#E3F2FD', padding: '12px', borderRadius: '8px', marginBottom: '16px', borderLeft: '4px solid #2196F3' }}>
+                  <h4 style={{ marginTop: '0' }}>📢 FoodNova Service Update</h4>
+                  <p style={{ margin: '8px 0', color: '#333' }}>
+                    {selectedOrder.service_note || selectedOrder.admin_note}
+                  </p>
+                </div>
+              )}
 
               {selectedOrder.delivery_method === 'delivery' && normalizeOrderStatusValue(selectedOrder) === 'out_for_delivery' && !selectedOrder.delivery_confirmed_at && (
                 <div className="delivery-confirmation-section">

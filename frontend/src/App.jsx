@@ -14,6 +14,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminOrders from './pages/AdminOrders'
 import AdminStock from './pages/AdminStock'
 import AdminPayments from './pages/AdminPayments'
+import AdminBroadcasts from './pages/AdminBroadcasts'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
 import ContactPage from './pages/ContactPage'
@@ -41,6 +42,7 @@ function App() {
             <Route path="/admin/orders" element={<AdminOrders />} />
             <Route path="/admin/stock" element={<AdminStock />} />
             <Route path="/admin/payments" element={<AdminPayments />} />
+            <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsPage />} />
             <Route path="/contact" element={<ContactPage />} />

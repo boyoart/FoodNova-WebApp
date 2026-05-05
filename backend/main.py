@@ -30,6 +30,7 @@ PACKS: List[dict] = []
 USER_PROFILES: Dict[str, dict] = {}
 USER_ADDRESSES: Dict[str, List[dict]] = {}
 ORDER_NOTIFICATIONS: Dict[str, List[dict]] = {}
+BROADCAST_MESSAGES: List[dict] = []
 
 ADMIN_EMAIL = "admin@foodnova.com"
 ADMIN_PASSWORD = "Admin123!"
@@ -243,23 +244,80 @@ def auth_response(message: str, user: dict, token: str) -> dict:
 
 
 
-def _create_notification(order: dict, notif_type: str, title: str, message: str):
-    email = order.get("customer_email") or order.get("user_email")
+def _get_next_notification_id(email: str) -> int:
+    """Get next notification ID for a user."""
+    existing = ORDER_NOTIFICATIONS.get(email, [])
+    if not existing:
+        return 1
+    return max([n.get("id", 0) for n in existing], default=0) + 1
+
+
+def _create_user_notification(email: str, title: str, message: str, notif_type: str = "service", 
+                              category: str = "service", order: dict = None) -> dict:
+    """Create a general user notification."""
     if not email:
-        return
+        return None
+    
     notifications = ORDER_NOTIFICATIONS.setdefault(email, [])
-    notifications.append({
-        "id": len(notifications) + 1,
-        "order_id": order.get("id"),
-        "order_code": order.get("order_code"),
+    notif = {
+        "id": _get_next_notification_id(email),
+        "order_id": order.get("id") if order else None,
+        "order_code": order.get("order_code") if order else None,
         "user_email": email,
         "customer_email": email,
         "title": title,
         "message": message,
         "type": notif_type,
+        "category": category,
         "is_read": False,
         "created_at": datetime.utcnow().isoformat(),
-    })
+    }
+    notifications.append(notif)
+    ORDER_NOTIFICATIONS[email] = notifications
+    return notif
+
+
+def _create_order_notification(order: dict, title: str, message: str, notif_type: str = "order_update", 
+                              category: str = "order") -> dict:
+    """Create an order-related notification."""
+    email = order.get("customer_email") or order.get("user_email")
+    if not email:
+        return None
+    return _create_user_notification(email, title, message, notif_type, category, order)
+
+
+def _create_broadcast_notification(title: str, message: str, notif_type: str = "broadcast", 
+                                   audience: str = "all") -> int:
+    """Create broadcast notification for all customers."""
+    recipient_count = 0
+    
+    # Get all customer emails
+    customer_emails = set()
+    
+    # From USERS
+    for email, user in USERS.items():
+        if user.get("role") == "customer":
+            customer_emails.add(email)
+    
+    # From ORDERS
+    for order in ORDERS:
+        if order.get("customer_email"):
+            customer_emails.add(order.get("customer_email"))
+    
+    # Push notification to all customers
+    for email in customer_emails:
+        try:
+            _create_user_notification(email, title, message, notif_type, "broadcast", None)
+            recipient_count += 1
+        except:
+            pass
+    
+    return recipient_count
+
+
+def _create_notification(order: dict, notif_type: str, title: str, message: str):
+    """Legacy notification creation - delegates to new system."""
+    return _create_order_notification(order, title, message, notif_type, "order")
 
 def normalize_order_items(items: list) -> list:
     normalized = []
@@ -460,7 +518,6 @@ def get_profile(request: Request):
         }
         USER_PROFILES[email] = profile
         USER_ADDRESSES[email] = []
-    ORDER_NOTIFICATIONS[email] = []
 
     addresses = USER_ADDRESSES.get(email, [])
 
@@ -721,6 +778,15 @@ async def upload_receipt(order_id: int, file: UploadFile = File(...)):
             }
             order["status"] = "receipt_submitted"
             order["payment_status"] = "receipt_submitted"
+            
+            # Create notification for customer
+            _create_order_notification(
+                order, 
+                "Receipt Received", 
+                f"Your payment receipt for order {order.get('order_code')} has been received and is awaiting approval.",
+                "payment_update",
+                "payment"
+            )
 
             return {
                 "success": True,
@@ -750,6 +816,17 @@ def admin_get_order(order_id: int):
 def update_order(order_id: int, payload: dict):
     for order in ORDERS:
         if order["id"] == order_id:
+            # Store old values for comparison
+            old_payment_status = order.get("payment_status")
+            old_order_status = order.get("order_status")
+            old_fulfillment_status = order.get("fulfillment_status")
+            old_delivery_code = order.get("delivery_code")
+            old_delivery_method = order.get("delivery_method")
+            old_admin_note = order.get("admin_note")
+            old_service_note = order.get("service_note")
+            old_delivery_notes = order.get("delivery_notes")
+            old_delivery_address = order.get("delivery_address")
+            
             # Handle delivery code generation when status changes to out_for_delivery
             new_status = payload.get("status") or payload.get("order_status") or payload.get("fulfillment_status")
             if new_status == "out_for_delivery" and order.get("delivery_method") == "delivery":
@@ -757,26 +834,68 @@ def update_order(order_id: int, payload: dict):
                     order["delivery_code"] = "{:06d}".format(random.randint(0, 999999))
                     order["delivery_code_created_at"] = datetime.utcnow().isoformat()
             
-            old_payment = order.get("payment_status")
-            old_order = order.get("order_status")
-            old_fulfillment = order.get("fulfillment_status")
+            # Update order with new payload
             order.update(payload)
-
-            if order.get("payment_status") != old_payment:
-                status = order.get("payment_status")
-                if status == "payment_confirmed":
-                    _create_notification(order, "payment_update", "Payment Confirmed", f"Your payment for order {order.get('order_code')} has been confirmed.")
-                elif status == "payment_rejected":
-                    _create_notification(order, "payment_update", "Payment Rejected", f"Your payment for order {order.get('order_code')} was rejected. Please upload a clearer receipt or contact support.")
-
-            if order.get("order_status") != old_order or order.get("fulfillment_status") != old_fulfillment:
-                status = order.get("order_status") or order.get("fulfillment_status")
-                if status == "processing":
-                    _create_notification(order, "order_update", "Order Processing", f"Your order {order.get('order_code')} is now being processed.")
-                elif status == "out_for_delivery":
-                    _create_notification(order, "delivery_update", "Out for Delivery", f"Your order {order.get('order_code')} is out for delivery. Please keep your delivery confirmation code ready.")
-                elif status == "delivered":
-                    _create_notification(order, "delivery_update", "Order Delivered", f"Your order {order.get('order_code')} has been marked as delivered.")
+            
+            # Create notifications for meaningful changes
+            email = order.get("customer_email") or order.get("user_email")
+            
+            if email:
+                # Payment status changes
+                new_payment_status = order.get("payment_status")
+                if new_payment_status != old_payment_status:
+                    if new_payment_status == "receipt_submitted":
+                        _create_order_notification(order, "Receipt Submitted", 
+                            f"Your receipt for order {order.get('order_code')} has been submitted and is awaiting review.",
+                            "payment_update", "payment")
+                    elif new_payment_status == "payment_confirmed":
+                        _create_order_notification(order, "Payment Confirmed",
+                            f"Your payment for order {order.get('order_code')} has been confirmed.",
+                            "payment_update", "payment")
+                    elif new_payment_status == "payment_rejected":
+                        _create_order_notification(order, "Payment Rejected",
+                            f"Your payment for order {order.get('order_code')} was rejected. Please upload a clearer receipt or contact support.",
+                            "payment_update", "payment")
+                
+                # Order status changes
+                new_order_status = order.get("order_status")
+                if new_order_status != old_order_status:
+                    if new_order_status == "processing":
+                        _create_order_notification(order, "Order Processing",
+                            f"Your order {order.get('order_code')} is now being processed.",
+                            "order_update", "order")
+                    elif new_order_status == "ready_for_pickup":
+                        _create_order_notification(order, "Ready for Pickup",
+                            f"Your order {order.get('order_code')} is ready for pickup.",
+                            "order_update", "order")
+                    elif new_order_status == "out_for_delivery":
+                        _create_order_notification(order, "Out for Delivery",
+                            f"Your order {order.get('order_code')} is out for delivery. Please keep your delivery confirmation code ready.",
+                            "delivery_update", "delivery")
+                    elif new_order_status == "delivered":
+                        _create_order_notification(order, "Order Delivered",
+                            f"Your order {order.get('order_code')} has been marked as delivered.",
+                            "delivery_update", "delivery")
+                
+                # Delivery code generation notification
+                if order.get("delivery_code") and not old_delivery_code:
+                    _create_order_notification(order, "Delivery Code Generated",
+                        f"Your delivery confirmation code has been generated for order {order.get('order_code')}. Share it only after receiving your order.",
+                        "delivery_update", "delivery")
+                
+                # Service note added
+                new_service_note = order.get("service_note")
+                if new_service_note and new_service_note != old_service_note:
+                    _create_order_notification(order, "FoodNova Service Update",
+                        f"Your order {order.get('order_code')} update: {new_service_note}",
+                        "service_update", "service")
+                
+                # Admin note added (also create notification)
+                new_admin_note = order.get("admin_note")
+                if new_admin_note and new_admin_note != old_admin_note:
+                    _create_order_notification(order, "FoodNova Service Update",
+                        f"Your order {order.get('order_code')} update: {new_admin_note}",
+                        "service_update", "service")
 
             return {
                 "success": True,
@@ -955,3 +1074,128 @@ def admin_delete_pack(pack_id: int):
             }
 
     raise HTTPException(status_code=404, detail="Pack not found")
+
+
+# ============================================
+# BROADCAST ENDPOINTS
+# ============================================
+
+@app.post("/admin/broadcasts")
+def create_broadcast(payload: dict, request: Request):
+    """Create and send a broadcast message to all customers."""
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    title = payload.get("title", "")
+    message = payload.get("message", "")
+    notif_type = payload.get("type", "broadcast")
+    audience = payload.get("audience", "all")
+    
+    if not title or not message:
+        raise HTTPException(status_code=400, detail="Title and message are required")
+    
+    # Generate broadcast ID
+    max_id = max([b.get("id", 0) for b in BROADCAST_MESSAGES], default=0)
+    broadcast_id = max_id + 1
+    
+    # Create broadcast record
+    broadcast = {
+        "id": broadcast_id,
+        "title": title,
+        "message": message,
+        "type": notif_type,
+        "audience": audience,
+        "created_by": user.get("email"),
+        "created_at": datetime.utcnow().isoformat(),
+        "is_active": True,
+    }
+    
+    BROADCAST_MESSAGES.append(broadcast)
+    
+    # Send notifications to all customers
+    recipient_count = _create_broadcast_notification(title, message, notif_type, audience)
+    
+    return {
+        "success": True,
+        "message": "Broadcast sent successfully",
+        "broadcast": broadcast,
+        "recipient_count": recipient_count,
+        "data": {
+            "broadcast": broadcast,
+            "recipient_count": recipient_count,
+        }
+    }
+
+
+@app.get("/admin/broadcasts")
+def get_broadcasts(request: Request):
+    """Get all broadcast messages."""
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Sort by created_at descending (newest first)
+    sorted_broadcasts = sorted(BROADCAST_MESSAGES, key=lambda x: x.get("created_at", ""), reverse=True)
+    
+    return {
+        "success": True,
+        "broadcasts": sorted_broadcasts,
+        "data": sorted_broadcasts,
+    }
+
+
+@app.patch("/admin/broadcasts/{broadcast_id}")
+def update_broadcast(broadcast_id: int, payload: dict, request: Request):
+    """Update a broadcast message."""
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    for i, broadcast in enumerate(BROADCAST_MESSAGES):
+        if broadcast["id"] == broadcast_id:
+            # Update allowed fields
+            if "title" in payload:
+                broadcast["title"] = payload["title"]
+            if "message" in payload:
+                broadcast["message"] = payload["message"]
+            if "type" in payload:
+                broadcast["type"] = payload["type"]
+            if "is_active" in payload:
+                broadcast["is_active"] = payload["is_active"]
+            
+            broadcast["updated_at"] = datetime.utcnow().isoformat()
+            BROADCAST_MESSAGES[i] = broadcast
+            
+            return {
+                "success": True,
+                "message": "Broadcast updated successfully",
+                "broadcast": broadcast,
+                "data": broadcast,
+            }
+    
+    raise HTTPException(status_code=404, detail="Broadcast not found")
+
+
+@app.delete("/admin/broadcasts/{broadcast_id}")
+def delete_broadcast(broadcast_id: int, request: Request):
+    """Delete or mark a broadcast as inactive."""
+    user = _get_user_from_token(request.headers.get("authorization"))
+    if not user or user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    for i, broadcast in enumerate(BROADCAST_MESSAGES):
+        if broadcast["id"] == broadcast_id:
+            # Mark as inactive instead of deleting
+            broadcast["is_active"] = False
+            broadcast["deleted_at"] = datetime.utcnow().isoformat()
+            BROADCAST_MESSAGES[i] = broadcast
+            
+            return {
+                "success": True,
+                "message": "Broadcast deleted successfully",
+                "broadcast": broadcast,
+                "data": broadcast,
+            }
+    
+    raise HTTPException(status_code=404, detail="Broadcast not found")

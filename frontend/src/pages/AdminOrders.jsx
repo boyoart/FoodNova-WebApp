@@ -28,6 +28,8 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [serviceNote, setServiceNote] = useState('')
+  const [sendingServiceNote, setSendingServiceNote] = useState(false)
 
   useEffect(() => {
     if (isAdmin) {
@@ -82,12 +84,39 @@ export default function AdminOrders() {
     }
   }
 
+  const handleSendServiceNote = async () => {
+    if (!serviceNote.trim()) {
+      toast.error('Please enter a service note')
+      return
+    }
+
+    try {
+      setSendingServiceNote(true)
+      await adminAPI.updateOrder(selectedOrder.id, {
+        service_note: serviceNote,
+      })
+      toast.success('Service update sent to customer')
+      setServiceNote('')
+      await fetchOrders()
+      // Refresh selected order
+      const updated = orders.find(o => o.id === selectedOrder.id)
+      if (updated) setSelectedOrder(updated)
+    } catch (error) {
+      toast.error('Failed to send service note')
+      console.error(error)
+    } finally {
+      setSendingServiceNote(false)
+    }
+  }
+
   const handleViewOrder = (order) => {
     setSelectedOrder(order)
+    setServiceNote(order.service_note || '')
   }
 
   const handleCloseOrder = () => {
     setSelectedOrder(null)
+    setServiceNote('')
   }
 
   if (!isAdmin) {
@@ -381,6 +410,43 @@ export default function AdminOrders() {
                   )}
                 </div>
               )}
+
+              {/* Service Update Note */}
+              <div className="admin-order-section">
+                <h4>📢 Admin Service Note</h4>
+                <textarea
+                  value={serviceNote}
+                  onChange={(e) => setServiceNote(e.target.value)}
+                  placeholder="Enter service update to notify customer (e.g., 'Delay due to traffic' or 'Rider on the way')"
+                  className="service-note-textarea"
+                  rows="4"
+                />
+                <button
+                  onClick={handleSendServiceNote}
+                  disabled={sendingServiceNote}
+                  className="btn-send-note"
+                  style={{
+                    marginTop: '10px',
+                    padding: '10px 16px',
+                    backgroundColor: '#FF9800',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: sendingServiceNote ? 'not-allowed' : 'pointer',
+                    opacity: sendingServiceNote ? 0.6 : 1,
+                  }}
+                >
+                  {sendingServiceNote ? 'Sending...' : 'Send Service Update'}
+                </button>
+                {selectedOrder.service_note && (
+                  <div style={{ marginTop: '12px', padding: '10px', backgroundColor: '#f0f0f0', borderRadius: '6px' }}>
+                    <p style={{ margin: '0 0 4px 0', fontSize: '12px', color: '#666' }}>
+                      <strong>Last Update:</strong>
+                    </p>
+                    <p style={{ margin: '0', color: '#333' }}>{selectedOrder.service_note}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

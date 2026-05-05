@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import { BarChart3, Package, ShoppingBag, DollarSign } from 'lucide-react'
+import { BarChart3, Package, ShoppingBag, DollarSign, Bell } from 'lucide-react'
 import './AdminDashboard.css'
 
 export default function AdminDashboard() {
@@ -88,6 +88,7 @@ export default function AdminDashboard() {
         <a href="/admin/orders" className="nav-link">📦 Manage Orders</a>
         <a href="/admin/stock" className="nav-link">📋 Stock Management</a>
         <a href="/admin/payments" className="nav-link">💳 Payment Approvals</a>
+        <a href="/admin/broadcasts" className="nav-link">📢 Broadcast Message</a>
       </div>
     </div>
   )

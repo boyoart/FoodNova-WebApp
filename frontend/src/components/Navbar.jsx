@@ -183,6 +183,9 @@ export default function Navbar() {
               <li className="nav-item">
                 <Link to="/admin/payments" className="nav-link">Payments</Link>
               </li>
+              <li className="nav-item">
+                <Link to="/admin/broadcasts" className="nav-link">Broadcasts</Link>
+              </li>
             </>
           )}
 
