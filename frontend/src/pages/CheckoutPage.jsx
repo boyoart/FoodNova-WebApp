@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
 import { ordersAPI, profileAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import { Home, MapPin, Mail, Phone, Plus, Truck } from 'lucide-react'
+import { Home, MapPin, Mail, Phone, Truck } from 'lucide-react'
+import AddressAutocomplete from '../components/AddressAutocomplete'
 import './CheckoutPage.css'
 
 const emptyAddress = {
@@ -17,6 +18,7 @@ const emptyAddress = {
   city: '',
   lga: '',
   street: '',
+  area: '',
   address_line: '',
   landmark: '',
   postal_code: '',
@@ -30,6 +32,7 @@ const formatFullAddress = (address = {}) =>
   [
     address.address_line,
     address.street,
+    address.area,
     address.city,
     address.lga,
     address.state,
@@ -50,7 +53,6 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState('')
   const [saveNewAddress, setSaveNewAddress] = useState(true)
   const [makeDefaultAddress, setMakeDefaultAddress] = useState(false)
-  const hasGoogleKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY)
 
   const [formData, setFormData] = useState({
     name: user?.name || user?.full_name || user?.fullName || '',
@@ -105,6 +107,15 @@ export default function CheckoutPage() {
 
     loadProfileAndAddresses()
   }, [isAuthenticated])
+
+  const handleAutocompleteSelect = useCallback((addressPayload) => {
+    setManualAddress((current) => ({
+      ...current,
+      ...addressPayload,
+      country: addressPayload.country || current.country || 'Nigeria',
+    }))
+    toast.success('Address details filled. Please review before placing order.')
+  }, [])
 
   const selectedAddress = useMemo(
     () => savedAddresses.find((address) => String(address.id) === String(selectedAddressId)),
@@ -379,20 +390,10 @@ export default function CheckoutPage() {
                 ) : (
                   <div className="manual-address-section">
                     <div className="form-notice">
-                      <p>{hasGoogleKey ? 'You can use address autocomplete if configured, or enter the address manually below.' : 'Manual Nigerian address entry is active. Complete the fields below.'}</p>
+                      <p>Search with Google autocomplete or enter the Nigerian delivery address manually below.</p>
                     </div>
 
-                    {hasGoogleKey && (
-                      <div className="form-group google-address-placeholder">
-                        <label>Search Address with Google</label>
-                        <input
-                          type="text"
-                          placeholder="Start typing your address..."
-                          disabled
-                        />
-                        <small>Google Places integration is prepared by API key. Manual entry remains required until autocomplete binding is completed.</small>
-                      </div>
-                    )}
+                    <AddressAutocomplete onSelect={handleAutocompleteSelect} />
 
                     <div className="form-row">
                       <div className="form-group">
