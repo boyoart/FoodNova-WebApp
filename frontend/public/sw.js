@@ -1,66 +1,23 @@
-const CACHE_NAME = 'foodnova-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json'
-];
+// FoodNova service worker kill switch.
+// The previous service worker cached old Vercel build assets and could cause blank pages.
+// This file clears old caches and unregisters itself.
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
-  );
-});
-
-self.addEventListener('fetch', (event) => {
-  const { request } = event;
-  
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  if (request.url.includes('/api/')) {
-    event.respondWith(
-      fetch(request).catch(() => {
-        return new Response('Offline - API unavailable', {
-          status: 503,
-          statusText: 'Service Unavailable'
-        });
-      })
-    );
-    return;
-  }
-
-  event.respondWith(
-    caches.match(request).then((response) => {
-      if (response) {
-        return response;
-      }
-      return fetch(request).then((response) => {
-        if (!response || response.status !== 200 || response.type === 'error') {
-          return response;
-        }
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(request, responseToCache);
-        });
-        return response;
-      });
-    })
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys()
+      .then((cacheNames) => Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => {
+        clients.forEach((client) => client.navigate(client.url));
+      })
   );
+});
+
+self.addEventListener('fetch', () => {
+  // Do not intercept any network requests.
 });
