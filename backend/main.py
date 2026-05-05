@@ -25,6 +25,8 @@ app.add_middleware(
 USERS: Dict[str, dict] = {}
 TOKENS: Dict[str, str] = {}
 ORDERS: List[dict] = []
+PRODUCTS: List[dict] = []
+PACKS: List[dict] = []
 
 ADMIN_EMAIL = "admin@foodnova.com"
 ADMIN_PASSWORD = "Admin123!"
@@ -39,6 +41,96 @@ USERS[ADMIN_EMAIL] = {
     "password": ADMIN_PASSWORD,
     "role": "admin",
 }
+
+# Initialize products
+PRODUCTS.extend([
+    {
+        "id": 1,
+        "name": "Rice 5kg",
+        "price": 8500,
+        "stock_qty": 100,
+        "stock": 100,
+        "category": "Rice",
+        "category_name": "Rice",
+        "image_url": "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800",
+        "is_active": True,
+    },
+    {
+        "id": 2,
+        "name": "Palm Oil 1L",
+        "price": 2500,
+        "stock_qty": 100,
+        "stock": 100,
+        "category": "Oil",
+        "category_name": "Oil",
+        "image_url": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=800",
+        "is_active": True,
+    },
+    {
+        "id": 3,
+        "name": "Indomie Pack",
+        "price": 1500,
+        "stock_qty": 200,
+        "stock": 200,
+        "category": "Pasta & Noodles",
+        "category_name": "Pasta & Noodles",
+        "image_url": "https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?w=800",
+        "is_active": True,
+    },
+    {
+        "id": 4,
+        "name": "Beans 3kg",
+        "price": 6000,
+        "stock_qty": 150,
+        "stock": 150,
+        "category": "Beans",
+        "category_name": "Beans",
+        "image_url": "https://images.unsplash.com/photo-1551468747-954d2a9b6b6b?w=800",
+        "is_active": True,
+    },
+    {
+        "id": 5,
+        "name": "Garri 2kg",
+        "price": 3000,
+        "stock_qty": 80,
+        "stock": 80,
+        "category": "Garri",
+        "category_name": "Garri",
+        "image_url": "https://images.unsplash.com/photo-1574484284002-952d92456975?w=800",
+        "is_active": True,
+    },
+])
+
+# Initialize packs
+PACKS.extend([
+    {
+        "id": 1,
+        "name": "Starter Pack",
+        "description": "Weekly Survival Pack for singles, students, and light household needs.",
+        "price": 12000,
+        "is_active": True,
+        "items": ["Rice", "Palm Oil", "Noodles"],
+        "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
+    },
+    {
+        "id": 2,
+        "name": "Family Pack",
+        "description": "Monthly Core Pack for family foodstuff restocking.",
+        "price": 25000,
+        "is_active": True,
+        "items": ["Rice", "Beans", "Garri", "Oil"],
+        "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
+    },
+    {
+        "id": 3,
+        "name": "Premium Pack",
+        "description": "Hustler Bulk Pack for larger homes, vendors, and bulk buyers.",
+        "price": 75000,
+        "is_active": True,
+        "items": ["Rice", "Beans", "Garri", "Oil", "Noodles", "Spices"],
+        "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
+    },
+])
 
 
 class RegisterPayload(BaseModel):
@@ -159,64 +251,18 @@ def list_categories():
 
 
 @app.get("/products")
-def list_products():
-    return [
-        {
-            "id": 1,
-            "name": "Rice 5kg",
-            "price": 8500,
-            "stock_qty": 100,
-            "stock": 100,
-            "category": "Rice",
-            "category_name": "Rice",
-            "image_url": "https://images.unsplash.com/photo-1586201375761-83865001e31c?w=800",
-            "is_active": True,
-        },
-        {
-            "id": 2,
-            "name": "Palm Oil 1L",
-            "price": 2500,
-            "stock_qty": 100,
-            "stock": 100,
-            "category": "Oil",
-            "category_name": "Oil",
-            "image_url": "https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=800",
-            "is_active": True,
-        },
-        {
-            "id": 3,
-            "name": "Indomie Pack",
-            "price": 1500,
-            "stock_qty": 200,
-            "stock": 200,
-            "category": "Pasta & Noodles",
-            "category_name": "Pasta & Noodles",
-            "image_url": "https://images.unsplash.com/photo-1612929633738-8fe44f7ec841?w=800",
-            "is_active": True,
-        },
-        {
-            "id": 4,
-            "name": "Beans 3kg",
-            "price": 6000,
-            "stock_qty": 100,
-            "stock": 100,
-            "category": "Beans",
-            "category_name": "Beans",
-            "image_url": "https://images.unsplash.com/photo-1515543904379-3d757afe72e4?w=800",
-            "is_active": True,
-        },
-        {
-            "id": 5,
-            "name": "Garri 5kg",
-            "price": 4500,
-            "stock_qty": 100,
-            "stock": 100,
-            "category": "Garri",
-            "category_name": "Garri",
-            "image_url": "https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=800",
-            "is_active": True,
-        },
+def list_products(search: Optional[str] = None):
+    if not search:
+        return PRODUCTS
+
+    search_lower = search.lower()
+    filtered = [
+        product for product in PRODUCTS
+        if search_lower in product.get("name", "").lower()
+        or search_lower in product.get("category", "").lower()
+        or search_lower in product.get("category_name", "").lower()
     ]
+    return filtered
 
 
 @app.get("/products/{product_id}")
@@ -229,36 +275,18 @@ def get_product(product_id: int):
 
 
 @app.get("/packs")
-def list_packs():
-    return [
-        {
-            "id": 1,
-            "name": "Starter Pack",
-            "description": "Weekly Survival Pack for singles, students, and light household needs.",
-            "price": 12000,
-            "is_active": True,
-            "items": ["Rice", "Palm Oil", "Noodles"],
-            "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
-        },
-        {
-            "id": 2,
-            "name": "Family Pack",
-            "description": "Monthly Core Pack for family foodstuff restocking.",
-            "price": 25000,
-            "is_active": True,
-            "items": ["Rice", "Beans", "Garri", "Oil"],
-            "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
-        },
-        {
-            "id": 3,
-            "name": "Premium Pack",
-            "description": "Hustler Bulk Pack for larger homes, vendors, and bulk buyers.",
-            "price": 75000,
-            "is_active": True,
-            "items": ["Rice", "Beans", "Garri", "Oil", "Noodles", "Spices"],
-            "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
-        },
+def list_packs(search: Optional[str] = None):
+    if not search:
+        return PACKS
+
+    search_lower = search.lower()
+    filtered = [
+        pack for pack in PACKS
+        if search_lower in pack.get("name", "").lower()
+        or search_lower in pack.get("description", "").lower()
+        or any(search_lower in str(item).lower() for item in pack.get("items", []))
     ]
+    return filtered
 
 
 @app.get("/packs/{pack_id}")
@@ -483,20 +511,133 @@ def admin_products():
 
 @app.post("/admin/products")
 def admin_create_product(payload: dict):
+    # Generate new ID
+    max_id = max([p["id"] for p in PRODUCTS], default=0)
+    new_id = max_id + 1
+
+    # Create new product
+    new_product = {
+        "id": new_id,
+        "name": payload.get("name", ""),
+        "price": int(payload.get("price", 0)),
+        "stock_qty": int(payload.get("stock_qty", 0)),
+        "stock": int(payload.get("stock_qty", 0)),
+        "category": payload.get("category", ""),
+        "category_name": payload.get("category", ""),
+        "image_url": payload.get("image_url", ""),
+        "is_active": payload.get("is_active", True),
+    }
+
+    PRODUCTS.append(new_product)
+
     return {
         "success": True,
-        "message": "Temporary product creation endpoint active",
-        "product": payload,
-        "data": payload,
+        "message": "Product created successfully",
+        "product": new_product,
+        "data": new_product,
     }
 
 
 @app.patch("/admin/products/{product_id}")
 def admin_update_product(product_id: int, payload: dict):
-    updated_product = {"id": product_id, **payload}
+    for i, product in enumerate(PRODUCTS):
+        if product["id"] == product_id:
+            # Update product
+            updated_product = {**product, **payload}
+            # Ensure stock fields are consistent
+            if "stock_qty" in payload:
+                updated_product["stock"] = int(payload["stock_qty"])
+            elif "stock" in payload:
+                updated_product["stock_qty"] = int(payload["stock"])
+
+            PRODUCTS[i] = updated_product
+
+            return {
+                "success": True,
+                "message": "Product updated successfully",
+                "product": updated_product,
+                "data": updated_product,
+            }
+
+    raise HTTPException(status_code=404, detail="Product not found")
+
+
+@app.delete("/admin/products/{product_id}")
+def admin_delete_product(product_id: int):
+    for i, product in enumerate(PRODUCTS):
+        if product["id"] == product_id:
+            deleted_product = PRODUCTS.pop(i)
+            return {
+                "success": True,
+                "message": "Product deleted successfully",
+                "product": deleted_product,
+                "data": deleted_product,
+            }
+
+    raise HTTPException(status_code=404, detail="Product not found")
+
+
+@app.get("/admin/packs")
+def admin_packs():
+    packs = list_packs()
+    return {"success": True, "packs": packs, "data": packs}
+
+
+@app.post("/admin/packs")
+def admin_create_pack(payload: dict):
+    # Generate new ID
+    max_id = max([p["id"] for p in PACKS], default=0)
+    new_id = max_id + 1
+
+    # Create new pack
+    new_pack = {
+        "id": new_id,
+        "name": payload.get("name", ""),
+        "description": payload.get("description", ""),
+        "price": int(payload.get("price", 0)),
+        "is_active": payload.get("is_active", True),
+        "items": payload.get("items", []),
+        "image_url": payload.get("image_url", ""),
+    }
+
+    PACKS.append(new_pack)
+
     return {
         "success": True,
-        "message": "Temporary product update endpoint active",
-        "product": updated_product,
-        "data": updated_product,
+        "message": "Pack created successfully",
+        "pack": new_pack,
+        "data": new_pack,
     }
+
+
+@app.patch("/admin/packs/{pack_id}")
+def admin_update_pack(pack_id: int, payload: dict):
+    for i, pack in enumerate(PACKS):
+        if pack["id"] == pack_id:
+            # Update pack
+            updated_pack = {**pack, **payload}
+            PACKS[i] = updated_pack
+
+            return {
+                "success": True,
+                "message": "Pack updated successfully",
+                "pack": updated_pack,
+                "data": updated_pack,
+            }
+
+    raise HTTPException(status_code=404, detail="Pack not found")
+
+
+@app.delete("/admin/packs/{pack_id}")
+def admin_delete_pack(pack_id: int):
+    for i, pack in enumerate(PACKS):
+        if pack["id"] == pack_id:
+            deleted_pack = PACKS.pop(i)
+            return {
+                "success": True,
+                "message": "Pack deleted successfully",
+                "pack": deleted_pack,
+                "data": deleted_pack,
+            }
+
+    raise HTTPException(status_code=404, detail="Pack not found")

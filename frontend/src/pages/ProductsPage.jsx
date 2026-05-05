@@ -126,6 +126,15 @@ export default function ProductsPage() {
                 <h3>{item.name}</h3>
                 <p className="description">{item.description}</p>
                 {item.category && <span className="category">{item.category}</span>}
+                {activeTab === 'products' && (
+                  <div className="stock-info">
+                    {item.stock > 0 ? (
+                      <span className="in-stock">{item.stock} in stock</span>
+                    ) : (
+                      <span className="out-of-stock-text">Out of stock</span>
+                    )}
+                  </div>
+                )}
                 <div className="product-footer">
                   <span className="price">{formatPrice(item.price)}</span>
                   <button
@@ -133,7 +142,7 @@ export default function ProductsPage() {
                     onClick={() => handleAddToCart(item)}
                     disabled={item.stock <= 0}
                   >
-                    Add to Cart
+                    {item.stock <= 0 ? 'Out of Stock' : 'Add to Cart'}
                   </button>
                 </div>
               </div>
