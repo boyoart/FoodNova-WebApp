@@ -1,115 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Home, LogIn, LogOut, Menu, Package, RefreshCw, ShoppingCart, User, X } from 'lucide-react'
+import { Bell, Home, Inbox, LogIn, LogOut, Menu, Package, RefreshCw, ShoppingCart, User, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI } from '../services/api'
+import {
+  createBroadcastNotifications,
+  createDerivedNotificationsFromOrders,
+  getNotificationKey,
+  getReadKeys,
+  markLocalNotificationRead,
+  mergeNotifications,
+  normalizeOrders,
+  setReadKeys,
+} from '../utils/notifications'
 import './Navbar.css'
-
-const getLocalReadKeys = () => {
-  try {
-    return JSON.parse(localStorage.getItem('foodnova_read_notification_keys') || '[]')
-  } catch {
-    return []
-  }
-}
-
-const setLocalReadKeys = (keys) => {
-  localStorage.setItem('foodnova_read_notification_keys', JSON.stringify([...new Set(keys)]))
-}
-
-const normalizeOrders = (body) => {
-  if (Array.isArray(body)) return body
-  if (Array.isArray(body?.data)) return body.data
-  if (Array.isArray(body?.orders)) return body.orders
-  return []
-}
-
-const getOutForDeliveryMessage = (orderCode) =>
-  `Your order ${orderCode} is out for delivery. The dispatch rider will provide the delivery confirmation code when they arrive. Enter it in the app only after you have received your order.`
-
-const sanitizeBackendNotifications = (items = []) =>
-  items
-    .filter((item) => String(item.title || '').toLowerCase() !== 'delivery code generated')
-    .map((item) => {
-      const title = String(item.title || '').toLowerCase()
-      if (title === 'out for delivery') {
-        return {
-          ...item,
-          message: getOutForDeliveryMessage(item.order_code || 'your order'),
-        }
-      }
-      return item
-    })
-
-const createDerivedNotificationsFromOrders = (orders = []) => {
-  const readKeys = new Set(getLocalReadKeys())
-  const derived = []
-
-  orders.forEach((order) => {
-    const orderCode = order.order_code || `FN-${String(order.id || '').padStart(5, '0')}`
-    const paymentStatus = String(order.payment_status || '').toLowerCase()
-    const orderStatus = String(order.order_status || order.fulfillment_status || '').toLowerCase()
-    const serviceNote = order.service_note || order.admin_note
-
-    const push = (keySuffix, title, message, category = 'order') => {
-      const key = `order-${order.id}-${keySuffix}`
-      derived.push({
-        id: key,
-        local_key: key,
-        order_id: order.id,
-        order_code: orderCode,
-        title,
-        message,
-        category,
-        type: 'derived_order_update',
-        is_read: readKeys.has(key),
-        created_at: order.updated_at || order.created_at || new Date().toISOString(),
-      })
-    }
-
-    if (paymentStatus === 'receipt_submitted') {
-      push('receipt-submitted', 'Receipt Submitted', `Your receipt for order ${orderCode} has been submitted and is awaiting review.`, 'payment')
-    }
-    if (paymentStatus === 'payment_confirmed') {
-      push('payment-confirmed', 'Payment Confirmed', `Your payment for order ${orderCode} has been confirmed.`, 'payment')
-    }
-    if (paymentStatus === 'payment_rejected') {
-      push('payment-rejected', 'Payment Rejected', `Your payment for order ${orderCode} was rejected. Please upload a clearer receipt or contact support.`, 'payment')
-    }
-    if (orderStatus === 'processing') {
-      push('processing', 'Order Processing', `Your order ${orderCode} is now being processed.`, 'order')
-    }
-    if (orderStatus === 'ready_for_pickup') {
-      push('ready-for-pickup', 'Ready for Pickup', `Your order ${orderCode} is ready for pickup.`, 'delivery')
-    }
-    if (orderStatus === 'out_for_delivery') {
-      push('out-for-delivery', 'Out for Delivery', getOutForDeliveryMessage(orderCode), 'delivery')
-    }
-    if (orderStatus === 'delivered') {
-      push('delivered', 'Order Delivered', `Your order ${orderCode} has been marked as delivered.`, 'delivery')
-    }
-    if (serviceNote) {
-      push(`service-${String(serviceNote).slice(0, 30)}`, 'FoodNova Service Update', `Your order ${orderCode} update: ${serviceNote}`, 'service')
-    }
-  })
-
-  return derived
-}
-
-const mergeNotifications = (backendItems = [], derivedItems = []) => {
-  const seen = new Set()
-  const combined = []
-
-  ;[...sanitizeBackendNotifications(backendItems), ...derivedItems].forEach((item) => {
-    const key = item.local_key || `${item.order_id || 'general'}-${item.title}-${item.message}`
-    if (seen.has(key)) return
-    seen.add(key)
-    combined.push(item)
-  })
-
-  return combined.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-}
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -156,10 +61,11 @@ export default function Navbar() {
 
       const orders = ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : []
       const derivedNotifications = createDerivedNotificationsFromOrders(orders)
-      const merged = mergeNotifications(backendNotifications, derivedNotifications)
+      const broadcastNotifications = createBroadcastNotifications()
+      const merged = mergeNotifications(backendNotifications, derivedNotifications, broadcastNotifications)
       setNotifications(merged)
 
-      if (countRes.status === 'fulfilled' && backendNotifications.length && !derivedNotifications.length) {
+      if (countRes.status === 'fulfilled' && backendNotifications.length && !derivedNotifications.length && !broadcastNotifications.length) {
         const body = countRes.value || {}
         setUnreadCount(Number(body.count || body.data?.count || 0))
       } else {
@@ -192,7 +98,12 @@ export default function Navbar() {
 
     loadCustomerHeaderData()
     const interval = setInterval(loadCustomerHeaderData, 30000)
-    return () => clearInterval(interval)
+    const handleNotificationUpdate = () => loadCustomerHeaderData()
+    window.addEventListener('foodnova-notifications-updated', handleNotificationUpdate)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('foodnova-notifications-updated', handleNotificationUpdate)
+    }
   }, [isAuthenticated, isAdmin])
 
   useEffect(() => {
@@ -221,8 +132,8 @@ export default function Navbar() {
   const handleMarkAllRead = async () => {
     try {
       await notificationsAPI.markAllRead().catch(() => null)
-      const localKeys = notifications.map((item) => item.local_key).filter(Boolean)
-      setLocalReadKeys([...getLocalReadKeys(), ...localKeys])
+      const keys = notifications.map((item) => getNotificationKey(item)).filter(Boolean)
+      setReadKeys([...getReadKeys(), ...keys])
       setNotifications((current) => current.map((item) => ({ ...item, is_read: true })))
       setUnreadCount(0)
     } catch (error) {
@@ -232,21 +143,19 @@ export default function Navbar() {
 
   const handleNotificationClick = async (notification) => {
     try {
-      if (notification.local_key) {
-        setLocalReadKeys([...getLocalReadKeys(), notification.local_key])
-      } else if (notification.id) {
+      markLocalNotificationRead(notification)
+      if (notification.id && !String(notification.id).startsWith('order-') && !String(notification.id).startsWith('broadcast-') && !String(notification.id).startsWith('local-')) {
         await notificationsAPI.markRead(notification.id).catch(() => null)
       }
 
       setNotifications((current) => current.map((item) => (
-        item.id === notification.id ? { ...item, is_read: true } : item
+        getNotificationKey(item) === getNotificationKey(notification) ? { ...item, is_read: true } : item
       )))
       setUnreadCount((current) => Math.max(0, current - (notification.is_read ? 0 : 1)))
 
-      if (notification.order_id) {
-        setNotificationsOpen(false)
-        navigate('/orders')
-      }
+      setNotificationsOpen(false)
+      if (notification.order_id) navigate('/orders')
+      else navigate('/inbox')
     } catch (error) {
       console.warn('Failed to open notification', error)
     }
@@ -277,6 +186,7 @@ export default function Navbar() {
             <>
               <li className="nav-item"><Link to="/orders" className="nav-link"><span>Orders</span></Link></li>
               <li className="nav-item"><Link to="/profile" className="nav-link"><User size={18} /><span>Profile</span></Link></li>
+              <li className="nav-item"><Link to="/inbox" className="nav-link"><Inbox size={18} /><span>Inbox</span></Link></li>
               <li className="nav-item nav-bell" ref={notificationRef}>
                 <button type="button" className="nav-link bell-btn" onClick={toggleNotifications} aria-label="Notifications">
                   <Bell size={18} />
@@ -297,7 +207,7 @@ export default function Navbar() {
                       notifications.slice(0, 10).map((notification) => (
                         <button
                           type="button"
-                          key={notification.id || notification.local_key}
+                          key={getNotificationKey(notification)}
                           className={`notif-item notif-button ${notification.is_read ? '' : 'unread'}`}
                           onClick={() => handleNotificationClick(notification)}
                         >
@@ -312,6 +222,7 @@ export default function Navbar() {
                     ) : (
                       <p className="notif-empty">No notifications yet</p>
                     )}
+                    <button type="button" className="notif-view-all" onClick={() => { setNotificationsOpen(false); navigate('/inbox') }}>Open Inbox</button>
                   </div>
                 )}
               </li>
