@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from uuid import uuid4
+import io
 import json
 import os
 import random
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,14 +35,38 @@ try:
 except Exception:
     pwd_context = None
 
+try:
+    import cloudinary
+    import cloudinary.uploader
+except Exception:
+    cloudinary = None
+
 app = FastAPI(title="FoodNova API")
 UPLOAD_DIR = "uploads"
 AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
 PRODUCT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "products")
 PACK_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "packs")
+RECEIPT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "receipts")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
 os.makedirs(PACK_UPLOAD_DIR, exist_ok=True)
+os.makedirs(RECEIPT_UPLOAD_DIR, exist_ok=True)
+
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
+CLOUDINARY_ENABLED = bool(CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET and cloudinary)
+
+if CLOUDINARY_ENABLED:
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+elif any([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
+    print("Cloudinary is not fully configured. Falling back to local uploads.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -657,31 +683,96 @@ def json_dump(value):
     return json.dumps(value)
 
 
-async def save_uploaded_image(file: UploadFile, folder: str, prefix: str) -> str:
-    allowed_types = {
-        "image/jpeg": ".jpg",
-        "image/jpg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp",
-    }
-    if not file:
-        return ""
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPG, PNG, or WEBP images are allowed")
+IMAGE_CONTENT_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
 
-    contents = await file.read()
-    max_size = 5 * 1024 * 1024
-    if len(contents) > max_size:
-        raise HTTPException(status_code=400, detail="Image must be 5MB or smaller")
+RECEIPT_CONTENT_TYPES = {
+    **IMAGE_CONTENT_TYPES,
+    "application/pdf": ".pdf",
+}
 
+
+def _safe_upload_extension(file: UploadFile, allowed_types: dict) -> str:
+    if file.content_type in allowed_types:
+        return allowed_types[file.content_type]
+    original_ext = Path(file.filename or "").suffix.lower()
+    return original_ext if original_ext else ".bin"
+
+
+def _save_upload_locally(contents: bytes, file: UploadFile, folder: str, prefix: str, allowed_types: dict) -> str:
     os.makedirs(folder, exist_ok=True)
-    ext = allowed_types[file.content_type]
+    ext = _safe_upload_extension(file, allowed_types)
     filename = f"{prefix}-{uuid4().hex}{ext}"
     file_path = os.path.join(folder, filename)
-    with open(file_path, "wb") as image_file:
-        image_file.write(contents)
+    with open(file_path, "wb") as upload_file:
+        upload_file.write(contents)
     public_folder = os.path.relpath(folder, UPLOAD_DIR).replace("\\", "/")
     return f"/uploads/{public_folder}/{filename}"
+
+
+async def upload_to_cloudinary(
+    file: UploadFile,
+    folder: str,
+    allowed_types: Optional[dict] = None,
+    max_size_mb: int = 5,
+) -> dict:
+    allowed_types = allowed_types or IMAGE_CONTENT_TYPES
+    if not file:
+        return {"url": "", "filename": ""}
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+
+    contents = await file.read()
+    max_size = max_size_mb * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(status_code=400, detail=f"File must be {max_size_mb}MB or smaller")
+
+    filename = file.filename or f"foodnova-upload-{uuid4().hex}{_safe_upload_extension(file, allowed_types)}"
+    local_folder = folder.replace("foodnova/", "", 1)
+    local_path = os.path.join(UPLOAD_DIR, local_folder)
+    prefix = folder.strip("/").split("/")[-1].rstrip("s") or "upload"
+
+    if CLOUDINARY_ENABLED:
+        try:
+            upload_stream = io.BytesIO(contents)
+            upload_stream.name = filename
+            result = cloudinary.uploader.upload(
+                upload_stream,
+                folder=folder,
+                resource_type="auto",
+                public_id=f"{prefix}-{uuid4().hex}",
+                overwrite=False,
+            )
+            uploaded_url = result.get("secure_url") or result.get("url")
+            if uploaded_url:
+                return {"url": uploaded_url, "filename": filename}
+        except Exception as error:
+            print("CLOUDINARY UPLOAD ERROR:", repr(error))
+
+    return {"url": _save_upload_locally(contents, file, local_path, prefix, allowed_types), "filename": filename}
+
+
+async def save_uploaded_image(file: UploadFile, folder: str, prefix: str) -> str:
+    folder_map = {
+        AVATAR_UPLOAD_DIR: "foodnova/avatars",
+        PRODUCT_UPLOAD_DIR: "foodnova/products",
+        PACK_UPLOAD_DIR: "foodnova/packs",
+    }
+    result = await upload_to_cloudinary(file, folder_map.get(folder, f"foodnova/{prefix}s"), IMAGE_CONTENT_TYPES, 5)
+    return result.get("url", "")
+
+
+async def save_uploaded_receipt(file: UploadFile) -> dict:
+    result = await upload_to_cloudinary(file, "foodnova/receipts", RECEIPT_CONTENT_TYPES, 10)
+    return {
+        "url": result.get("url", ""),
+        "filename": result.get("filename") or (file.filename if file else ""),
+        "uploaded_at": datetime.utcnow().isoformat(),
+    }
 
 
 def db_user_to_dict(user: DBUser) -> dict:
@@ -1763,11 +1854,8 @@ async def upload_receipt(order_id: int, file: UploadFile = File(...)):
     try:
         order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
         if order:
-            receipt = {
-                "filename": file.filename,
-                "status": "submitted",
-                "uploaded_at": datetime.utcnow().isoformat(),
-            }
+            receipt = await save_uploaded_receipt(file)
+            receipt["status"] = "submitted"
             order.receipt = json_dump(receipt)
             order.status = "receipt_submitted"
             order.payment_status = "receipt_submitted"
