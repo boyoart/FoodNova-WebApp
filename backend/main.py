@@ -1656,43 +1656,66 @@ def admin_delete_pack(pack_id: int, request: Request):
 @app.get("/admin/customers")
 def admin_customers(request: Request):
     require_admin(request)
+
     db = SessionLocal()
     try:
-        customers = []
-        users = db.query(DBUser).filter(DBUser.role == "customer").order_by(DBUser.created_at.desc(), DBUser.id.desc()).all()
-        for user in users:
-            profile = ensure_profile(db, user)
-            default_address = None
-            if profile.default_address_id:
-                default_address = db.query(DBAddress).filter(
-                    DBAddress.id == profile.default_address_id,
-                    DBAddress.user_id == user.id,
-                ).first()
-            if not default_address:
-                default_address = db.query(DBAddress).filter(DBAddress.user_id == user.id, DBAddress.is_default.is_(True)).first()
-            if not default_address:
-                default_address = db.query(DBAddress).filter(DBAddress.user_id == user.id).order_by(DBAddress.created_at.desc()).first()
+        customers = db.query(DBUser).filter(DBUser.role == "customer").all()
+        result = []
 
-            orders = db.query(DBOrder).filter(DBOrder.customer_email == user.email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
+        for customer in customers:
+            profile = db.query(DBProfile).filter(DBProfile.user_id == customer.id).first()
+            addresses = db.query(DBAddress).filter(DBAddress.user_id == customer.id).all()
+            default_address = None
+
+            if profile and profile.default_address_id:
+                default_address = (
+                    db.query(DBAddress)
+                    .filter(
+                        DBAddress.id == profile.default_address_id,
+                        DBAddress.user_id == customer.id,
+                    )
+                    .first()
+                )
+
+            if not default_address and addresses:
+                default_address = next((a for a in addresses if a.is_default), addresses[0])
+
+            orders = (
+                db.query(DBOrder)
+                .filter(DBOrder.customer_email == customer.email)
+                .order_by(DBOrder.created_at.desc())
+                .all()
+            )
+
             total_spent = sum(float(order.total_amount or 0) for order in orders)
             last_order = orders[0] if orders else None
+
             address_data = address_to_dict(default_address) if default_address else None
-            customers.append({
-                "id": user.id,
-                "full_name": user.full_name,
-                "name": user.full_name,
-                "email": user.email,
-                "phone": user.phone or profile.phone or "",
+
+            result.append({
+                "id": customer.id,
+                "full_name": customer.full_name or "Customer",
+                "name": customer.full_name or "Customer",
+                "email": customer.email,
+                "phone": customer.phone or (profile.phone if profile else "") or "",
                 "address": address_data,
-                "default_address": address_data,
+                "delivery_address": address_data,
+                "addresses": [address_to_dict(address) for address in addresses],
                 "orders_count": len(orders),
                 "total_orders": len(orders),
                 "total_spent": total_spent,
                 "revenue": total_spent,
-                "last_order_at": iso(last_order.created_at) if last_order else "",
+                "last_order_at": iso(last_order.created_at) if last_order else None,
                 "last_order_code": last_order.order_code if last_order else "",
+                "created_at": iso(customer.created_at),
+                "updated_at": iso(customer.updated_at),
             })
-        return {"success": True, "customers": customers, "data": customers}
+
+        return {
+            "success": True,
+            "customers": result,
+            "data": result,
+        }
     finally:
         db.close()
 

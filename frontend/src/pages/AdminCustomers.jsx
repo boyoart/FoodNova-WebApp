@@ -63,32 +63,41 @@ export default function AdminCustomers() {
   const [query, setQuery] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [source, setSource] = useState('orders')
+  const [loadError, setLoadError] = useState('')
 
   const loadCustomers = async () => {
     try {
       setLoading(true)
+      setLoadError('')
 
       if (adminAPI.getCustomers) {
         try {
           const res = await adminAPI.getCustomers()
           const directCustomers = normalizeList(res)
-          if (directCustomers.length) {
-            setCustomers(directCustomers)
-            setSource('customers endpoint')
-            return
-          }
+          setCustomers(directCustomers)
+          setSource('customers endpoint')
+          return
         } catch (error) {
           console.warn('Direct customers endpoint unavailable. Deriving customers from orders.', error)
+          setLoadError('Customer endpoint unavailable. Showing customers derived from orders.')
         }
       }
 
-      const ordersRes = await adminAPI.getOrders()
-      const orders = normalizeList(ordersRes)
-      setCustomers(buildCustomersFromOrders(orders))
-      setSource('orders')
+      try {
+        const ordersRes = await adminAPI.getOrders()
+        const orders = normalizeList(ordersRes)
+        setCustomers(buildCustomersFromOrders(orders))
+        setSource('orders fallback')
+      } catch (ordersError) {
+        console.error(ordersError)
+        setCustomers([])
+        setSource('unavailable')
+        setLoadError('Unable to load customers. Check backend logs or admin session.')
+      }
     } catch (error) {
       console.error(error)
-      toast.error('Failed to load customers')
+      setLoadError('Unable to load customers. Check backend logs or admin session.')
+      toast.error('Unable to load customers. Check backend logs or admin session.')
     } finally {
       setLoading(false)
     }
@@ -128,9 +137,12 @@ export default function AdminCustomers() {
         <div className="customers-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search customers by name, email, phone, address..." /></div>
         <small>Data source: {source}</small>
       </div>
+      {loadError && <div className="customers-empty">{loadError}</div>}
 
       {loading ? (
         <div className="customers-empty">Loading customers...</div>
+      ) : loadError && source === 'unavailable' ? (
+        null
       ) : filteredCustomers.length === 0 ? (
         <div className="customers-empty">No customers found.</div>
       ) : (
