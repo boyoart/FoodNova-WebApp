@@ -2,10 +2,12 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from uuid import uuid4
 import json
+import os
 import random
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
 
 from database import Base, SessionLocal, engine
@@ -28,6 +30,9 @@ except Exception:
     pwd_context = None
 
 app = FastAPI(title="FoodNova API")
+UPLOAD_DIR = "uploads"
+AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
+os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,6 +46,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+if not any(getattr(route, "path", None) == "/uploads" for route in app.routes):
+    app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 USERS: Dict[str, dict] = {}
 TOKENS: Dict[str, str] = {}
@@ -934,6 +942,57 @@ def update_profile(request: Request, payload: ProfileUpdatePayload):
         db.refresh(profile)
         profile_data = profile_to_dict(profile, db_user)
         return {"success": True, "profile": profile_data, "data": profile_data}
+    finally:
+        db.close()
+
+
+@app.post("/profile/avatar")
+async def upload_profile_avatar(request: Request, file: UploadFile = File(...)):
+    user = require_user(request)
+    allowed_types = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+    }
+
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, or WEBP images are allowed")
+
+    contents = await file.read()
+    max_size = 5 * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(status_code=400, detail="Avatar image must be 5MB or smaller")
+
+    ext = allowed_types[file.content_type]
+    filename = f"avatar-{user.get('id')}-{uuid4().hex}{ext}"
+    os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
+    file_path = os.path.join(AVATAR_UPLOAD_DIR, filename)
+
+    with open(file_path, "wb") as avatar_file:
+        avatar_file.write(contents)
+
+    avatar_url = f"/uploads/avatars/{filename}"
+    db = SessionLocal()
+    try:
+        db_user = get_db_user_by_email(db, user.get("email"))
+        if not db_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        profile = ensure_profile(db, db_user)
+        profile.avatar_url = avatar_url
+        profile.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(profile)
+        profile_data = profile_to_dict(profile, db_user)
+        return {
+            "success": True,
+            "avatar_url": avatar_url,
+            "profile": profile_data,
+            "data": {
+                "avatar_url": avatar_url,
+                "profile": profile_data,
+            },
+        }
     finally:
         db.close()
 

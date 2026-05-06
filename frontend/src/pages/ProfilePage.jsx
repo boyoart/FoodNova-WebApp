@@ -42,12 +42,19 @@ export default function ProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false)
   const [changingPassword, setChangingPassword] = useState(false)
   const [savingAddress, setSavingAddress] = useState(false)
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [avatarPreview, setAvatarPreview] = useState('')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const hasGoogleKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY)
 
   useEffect(() => {
     loadProfile()
   }, [])
+
+  useEffect(() => () => {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview)
+  }, [avatarPreview])
 
   const loadProfile = async () => {
     try {
@@ -89,6 +96,55 @@ export default function ProfilePage() {
       console.error(error)
     } finally {
       setSavingProfile(false)
+    }
+  }
+
+  const handleAvatarFileChange = (event) => {
+    const file = event.target.files?.[0]
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview)
+    setAvatarFile(null)
+    setAvatarPreview('')
+
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Avatar image must be 5MB or smaller')
+      event.target.value = ''
+      return
+    }
+
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  const uploadAvatar = async () => {
+    if (!avatarFile) {
+      toast.error('Please choose an avatar image first')
+      return
+    }
+
+    try {
+      setUploadingAvatar(true)
+      const res = await profileAPI.uploadAvatar(avatarFile)
+      const avatarUrl = res.avatar_url || res.data?.avatar_url || res.profile?.avatar_url || res.data?.profile?.avatar_url
+      if (!avatarUrl) throw new Error('Avatar URL missing from response')
+      const nextProfile = { ...profile, avatar_url: avatarUrl }
+      setProfile(nextProfile)
+      setAvatarFile(null)
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview)
+      setAvatarPreview('')
+      toast.success('Avatar uploaded')
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to upload avatar')
+      console.error(error)
+    } finally {
+      setUploadingAvatar(false)
     }
   }
 
@@ -251,6 +307,33 @@ export default function ProfilePage() {
                   placeholder="https://example.com/photo.jpg"
                 />
               </label>
+
+              <div className="avatar-upload-box">
+                <div className="avatar-preview-card">
+                  <div className="avatar-preview-image">
+                    {avatarPreview || profile.avatar_url ? (
+                      <img src={avatarPreview || profile.avatar_url} alt="Avatar preview" />
+                    ) : (
+                      <span className="avatar-preview-placeholder">{getInitials(profile.full_name)}</span>
+                    )}
+                  </div>
+                  <div>
+                    <strong>Upload Avatar Picture</strong>
+                    <p>Select a JPG, PNG, or WEBP image up to 5MB.</p>
+                  </div>
+                </div>
+
+                <label className="avatar-file-input">
+                  <span>Choose image</span>
+                  <input type="file" accept="image/*" onChange={handleAvatarFileChange} />
+                </label>
+
+                <div className="avatar-upload-actions">
+                  <button type="button" className="primary-action" onClick={uploadAvatar} disabled={!avatarFile || uploadingAvatar}>
+                    {uploadingAvatar ? 'Uploading...' : 'Upload Avatar'}
+                  </button>
+                </div>
+              </div>
 
               <button type="submit" className="primary-action" disabled={savingProfile}>
                 <Save size={18} /> {savingProfile ? 'Saving...' : 'Save Profile'}

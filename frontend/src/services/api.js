@@ -296,6 +296,14 @@ export const profileAPI = {
     try { return (await api.patch('/profile', payload)).data; }
     catch (error) { const user = JSON.parse(localStorage.getItem('user') || '{}'); const nextUser = { ...user, ...payload, name: payload.full_name || user.name, full_name: payload.full_name || user.full_name }; localStorage.setItem('user', JSON.stringify(nextUser)); return { success: true, profile: nextUser, data: nextUser, local_fallback: true }; }
   },
+  uploadAvatar: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await api.post("/profile/avatar", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
   getAddresses: async () => {
     try { const body = (await api.get('/profile/addresses')).data; const remoteAddresses = body.addresses || body.data || []; const addresses = mergeAddresses(remoteAddresses); return { ...body, addresses, data: addresses }; }
     catch (error) { const addresses = getLocalAddresses(); return { success: true, addresses, data: addresses, local_fallback: true }; }
