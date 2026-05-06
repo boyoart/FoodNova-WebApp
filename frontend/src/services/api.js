@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL =
+export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "https://foodnova-webapp.onrender.com";
 
 const api = axios.create({
@@ -56,6 +56,16 @@ const toStockFormData = (payload = {}) => {
 };
 
 const multipartConfig = { headers: { "Content-Type": "multipart/form-data" } };
+
+export const resolveMediaUrl = (url) => {
+  if (!url) return "";
+  const value = String(url).trim();
+  if (!value) return "";
+  if (/^(https?:|data:|blob:)/i.test(value)) return value;
+  if (value.startsWith("/uploads")) return `${API_BASE_URL}${value}`;
+  if (value.startsWith("uploads/")) return `${API_BASE_URL}/${value}`;
+  return value;
+};
 
 const getStoredUserEmail = () => {
   try {

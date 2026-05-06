@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Bell, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, ShoppingCart, Sun, User, Users, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
-import { notificationsAPI, ordersAPI, profileAPI } from '../services/api'
+import { notificationsAPI, ordersAPI, profileAPI, resolveMediaUrl } from '../services/api'
 import {
   createBroadcastNotifications,
   createDerivedNotificationsFromOrders,
@@ -38,6 +38,7 @@ export default function Navbar() {
   const totalCartItems = getTotalItems()
   const activeUser = isAdmin ? admin : user
   const displayName = profile?.full_name || activeUser?.full_name || activeUser?.fullName || activeUser?.name || activeUser?.email || 'User'
+  const avatarUrl = resolveMediaUrl(profile?.avatar_url || activeUser?.avatar_url || '')
   const initials = displayName
     .split(' ')
     .filter(Boolean)
@@ -137,10 +138,13 @@ export default function Navbar() {
     loadCustomerHeaderData()
     const interval = setInterval(loadCustomerHeaderData, 30000)
     const handleNotificationUpdate = () => loadCustomerHeaderData()
+    const handleProfileUpdate = () => loadCustomerHeaderData()
     window.addEventListener('foodnova-notifications-updated', handleNotificationUpdate)
+    window.addEventListener('foodnova-profile-updated', handleProfileUpdate)
     return () => {
       clearInterval(interval)
       window.removeEventListener('foodnova-notifications-updated', handleNotificationUpdate)
+      window.removeEventListener('foodnova-profile-updated', handleProfileUpdate)
     }
   }, [isAuthenticated, isAdmin])
 
@@ -332,14 +336,14 @@ export default function Navbar() {
             <>
               <li className="nav-item nav-user-menu" ref={avatarRef}>
                 <button type="button" className="nav-user-card" onClick={toggleAvatarMenu} aria-haspopup="menu" aria-expanded={avatarOpen}>
-                  <span className="nav-avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt="Avatar" /> : initials}</span>
+                  <span className="nav-avatar">{avatarUrl ? <img src={avatarUrl} alt="Avatar" /> : initials}</span>
                   <span className="nav-text">Hi, {displayName}</span>
                 </button>
 
                 {avatarOpen && (
                   <div className="avatar-dropdown" role="menu">
                     <div className="avatar-dropdown-header">
-                      <span className="nav-avatar dropdown-avatar">{profile?.avatar_url ? <img src={profile.avatar_url} alt="Avatar" /> : initials}</span>
+                      <span className="nav-avatar dropdown-avatar">{avatarUrl ? <img src={avatarUrl} alt="Avatar" /> : initials}</span>
                       <div>
                         <strong>{displayName}</strong>
                         <small>{activeUser?.email || (isAdmin ? 'FoodNova admin' : 'FoodNova customer')}</small>

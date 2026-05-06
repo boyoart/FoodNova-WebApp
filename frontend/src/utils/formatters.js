@@ -1,3 +1,5 @@
+import { resolveMediaUrl } from '../services/api'
+
 /**
  * Utility functions for FoodNova frontend
  */
@@ -25,10 +27,10 @@ export const getImageUrl = (item) => {
   if (!item) return '/placeholder.png'
   
   // Try image_url first (backend image field)
-  if (item.image_url) return item.image_url
+  if (item.image_url) return resolveMediaUrl(item.image_url)
   
   // Fallback to image field
-  if (item.image) return item.image
+  if (item.image) return resolveMediaUrl(item.image)
   
   // Fallback to placeholder
   return '/placeholder.png'

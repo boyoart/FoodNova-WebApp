@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { adminAPI } from '../services/api'
+import { adminAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
@@ -146,82 +146,94 @@ export default function AdminStock() {
   }
 
   const renderImageUpload = (label) => {
-    const preview = formData.image_preview || formData.image_url
+    const preview = formData.image_preview || resolveMediaUrl(formData.image_url)
     return (
-      <div className="form-group full-width stock-image-field">
-        <label>{label}</label>
-        <div className="stock-image-upload">
+      <section className="stock-image-upload">
+        <div>
+          <div className="stock-image-upload-title">{label}</div>
+          <p className="stock-image-upload-help">JPG, PNG or WEBP up to 5MB. Existing images stay unchanged unless you upload a new one.</p>
+        </div>
+        <div className="stock-image-upload-row">
           <div className="stock-image-preview">
             {preview ? <img src={preview} alt="Stock item preview" /> : <span>No image selected</span>}
           </div>
-          <div className="stock-image-copy">
-            <strong>{preview ? 'Image ready' : 'Upload a clean item image'}</strong>
-            <p>Choose a JPG, PNG, or WEBP image up to 5MB. Existing images stay unchanged unless you upload a new one.</p>
-            <div className="stock-image-actions">
-              <label className="stock-file-button">
-                {preview ? 'Change Image' : 'Choose Image'}
-                <input type="file" accept="image/*" onChange={handleImageChange} />
-              </label>
-              {formData.image_file && (
-                <button type="button" className="stock-remove-image" onClick={removeSelectedImage}>Remove</button>
-              )}
-            </div>
+          <div className="stock-image-actions">
+            <label className="stock-file-button">
+              Choose Image
+              <input type="file" accept="image/*" onChange={handleImageChange} />
+            </label>
+            {formData.image_file && (
+              <button type="button" className="stock-remove-image" onClick={removeSelectedImage}>Remove selected image</button>
+            )}
           </div>
         </div>
+      </section>
+    )
+  }
+
+  const renderStockThumb = (item) => {
+    const imageUrl = resolveMediaUrl(item.image_url || item.image)
+    return (
+      <div className="stock-table-thumb">
+        {imageUrl ? <img src={imageUrl} alt={item.name || 'Stock item'} /> : <span>No image</span>}
       </div>
     )
   }
 
   const renderProductForm = () => (
-    <div className="form-grid stock-modal-grid">
-      <div className="form-group">
+    <>
+    <div className="stock-form-grid">
+      <div className="stock-form-field">
         <label>Product Name</label>
         <input value={formData.name || ''} onChange={(event) => setFormData({ ...formData, name: event.target.value })} required />
       </div>
-      <div className="form-group">
+      <div className="stock-form-field">
         <label>Price (₦)</label>
         <input type="number" min="0" value={formData.price || ''} onChange={(event) => setFormData({ ...formData, price: Number(event.target.value) || 0 })} required />
       </div>
-      <div className="form-group">
+      <div className="stock-form-field">
         <label>Stock Quantity</label>
         <input type="number" min="0" value={formData.stock_qty ?? formData.stock ?? ''} onChange={(event) => setFormData({ ...formData, stock_qty: Number(event.target.value) || 0, stock: Number(event.target.value) || 0 })} required />
       </div>
-      <div className="form-group">
+      <div className="stock-form-field">
         <label>Category</label>
         <input value={formData.category || ''} onChange={(event) => setFormData({ ...formData, category: event.target.value, category_name: event.target.value })} />
       </div>
-      {renderImageUpload('Product Image Upload')}
-      <label className="stock-toggle full-width">
+      <label className="stock-toggle">
         <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
         <span>Active product</span>
       </label>
     </div>
+    {renderImageUpload('Product Image')}
+    </>
   )
 
   const renderPackForm = () => (
-    <div className="form-grid stock-modal-grid">
-      <div className="form-group">
+    <>
+    <div className="stock-form-grid">
+      <div className="stock-form-field">
         <label>Pack Name</label>
         <input value={formData.name || ''} onChange={(event) => setFormData({ ...formData, name: event.target.value })} required />
       </div>
-      <div className="form-group">
+      <div className="stock-form-field">
         <label>Price (₦)</label>
         <input type="number" min="0" value={formData.price || ''} onChange={(event) => setFormData({ ...formData, price: Number(event.target.value) || 0 })} required />
       </div>
-      <div className="form-group full-width">
+      <div className="stock-form-field stock-form-field-wide">
         <label>Description</label>
         <textarea value={formData.description || ''} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows="3" />
       </div>
-      <div className="form-group full-width">
+      <div className="stock-form-field stock-form-field-wide">
         <label>Items (comma-separated)</label>
         <input value={Array.isArray(formData.items) ? formData.items.join(', ') : formData.items || ''} onChange={(event) => setFormData({ ...formData, items: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Rice, Beans, Oil" />
       </div>
-      {renderImageUpload('Pack Image Upload')}
-      <label className="stock-toggle full-width">
+      <label className="stock-toggle">
         <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
         <span>Active pack</span>
       </label>
     </div>
+    {renderImageUpload('Pack Image')}
+    </>
   )
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied.</p></div>
@@ -253,6 +265,7 @@ export default function AdminStock() {
             <thead>
               <tr>
                 <th>ID</th>
+                <th>Image</th>
                 <th>Name</th>
                 {isProduct ? <><th>Category</th><th>Stock</th></> : <><th>Description</th><th>Items</th></>}
                 <th>Price</th>
@@ -264,6 +277,7 @@ export default function AdminStock() {
               {items.map((item) => (
                 <tr key={item.id}>
                   <td>{item.id}</td>
+                  <td>{renderStockThumb(item)}</td>
                   <td>{item.name}</td>
                   {isProduct ? (
                     <>
@@ -292,23 +306,23 @@ export default function AdminStock() {
       )}
 
       {showModal && (
-        <div className="modal-overlay stock-modal-overlay">
-          <form className="modal stock-modal" onSubmit={handleSubmit}>
-            <div className="modal-header stock-modal-header">
+        <div className="stock-modal-backdrop">
+          <div className="stock-modal">
+            <div className="stock-modal-header">
               <div>
                 <h2>{modalTitle}</h2>
                 <p>Fill in {isProduct ? 'product' : 'pack'} details below</p>
               </div>
-              <button type="button" className="modal-close" onClick={closeModal}>×</button>
+              <button type="button" className="stock-modal-close" onClick={closeModal}>×</button>
             </div>
-            <div className="modal-body stock-modal-body">
+            <form className="stock-modal-form" onSubmit={handleSubmit}>
               {isProduct ? renderProductForm() : renderPackForm()}
-            </div>
-            <div className="modal-footer stock-modal-footer">
-              <button type="button" className="btn-cancel" onClick={closeModal}>Cancel</button>
-              <button type="submit" className="btn-primary">{editingId ? `Update ${isProduct ? 'Product' : 'Pack'}` : `Save ${isProduct ? 'Product' : 'Pack'}`}</button>
-            </div>
-          </form>
+              <div className="stock-modal-footer">
+                <button type="button" className="stock-secondary-button" onClick={closeModal}>Cancel</button>
+                <button type="submit" className="stock-primary-button">{editingId ? `Update ${isProduct ? 'Product' : 'Pack'}` : `Save ${isProduct ? 'Product' : 'Pack'}`}</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

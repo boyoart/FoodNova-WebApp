@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ShoppingCart, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
+import { resolveMediaUrl } from '../services/api'
 import './FloatingCartButton.css'
 
 const hiddenRoutes = ['/cart', '/checkout', '/login', '/register', '/admin/login']
@@ -70,10 +71,11 @@ export default function FloatingCartButton() {
                 const quantity = Number(item.quantity || item.qty || 1)
                 const price = Number(item.price || item.unit_price || 0)
                 const name = item.name || item.product_name || 'FoodNova item'
+                const imageUrl = resolveMediaUrl(item.image_url || item.image)
 
                 return (
                   <article className="mini-cart-item" key={item.id || name}>
-                    {item.image_url && <img src={item.image_url} alt={name} />}
+                    {imageUrl && <img src={imageUrl} alt={name} />}
                     <div>
                       <h3>{name}</h3>
                       <p>{quantity} × {formatCurrency(price)}</p>

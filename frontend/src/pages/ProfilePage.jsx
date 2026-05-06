@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Home, KeyRound, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
-import { authAPI, profileAPI } from '../services/api'
+import { authAPI, profileAPI, resolveMediaUrl } from '../services/api'
 import './ProfilePage.css'
 
 const emptyAddress = {
@@ -136,9 +136,16 @@ export default function ProfilePage() {
       if (!avatarUrl) throw new Error('Avatar URL missing from response')
       const nextProfile = { ...profile, avatar_url: avatarUrl }
       setProfile(nextProfile)
+      try {
+        const storedUser = JSON.parse(localStorage.getItem('user') || '{}')
+        localStorage.setItem('user', JSON.stringify({ ...storedUser, avatar_url: avatarUrl }))
+      } catch {
+        // ignore local profile cache update failures
+      }
       setAvatarFile(null)
       if (avatarPreview) URL.revokeObjectURL(avatarPreview)
       setAvatarPreview('')
+      window.dispatchEvent(new Event('foodnova-profile-updated'))
       toast.success('Avatar uploaded')
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to upload avatar')
@@ -259,7 +266,7 @@ export default function ProfilePage() {
     <div className="profile-page">
       <div className="profile-hero">
         <div className="profile-avatar-large">
-          {profile.avatar_url ? <img src={profile.avatar_url} alt="Profile avatar" /> : getInitials(profile.full_name)}
+          {profile.avatar_url ? <img src={resolveMediaUrl(profile.avatar_url)} alt="Profile avatar" /> : getInitials(profile.full_name)}
         </div>
         <div className="profile-hero-text">
           <p className="eyebrow">FoodNova customer profile</p>
@@ -312,7 +319,7 @@ export default function ProfilePage() {
                 <div className="avatar-preview-card">
                   <div className="avatar-preview-image">
                     {avatarPreview || profile.avatar_url ? (
-                      <img src={avatarPreview || profile.avatar_url} alt="Avatar preview" />
+                      <img src={avatarPreview || resolveMediaUrl(profile.avatar_url)} alt="Avatar preview" />
                     ) : (
                       <span className="avatar-preview-placeholder">{getInitials(profile.full_name)}</span>
                     )}
