@@ -37,8 +37,10 @@ export default function Navbar() {
 
   const totalCartItems = getTotalItems()
   const activeUser = isAdmin ? admin : user
-  const displayName = profile?.full_name || activeUser?.full_name || activeUser?.fullName || activeUser?.name || activeUser?.email || 'User'
-  const avatarUrl = resolveMediaUrl(profile?.avatar_url || activeUser?.avatar_url || '')
+  const adminDisplayName = admin?.full_name || admin?.fullName || admin?.name || admin?.email || 'Admin'
+  const customerDisplayName = profile?.full_name || user?.full_name || user?.fullName || user?.name || user?.email || 'User'
+  const displayName = isAdmin ? adminDisplayName : customerDisplayName
+  const avatarUrl = resolveMediaUrl(isAdmin ? (admin?.avatar_url || '') : (profile?.avatar_url || user?.avatar_url || ''))
   const initials = displayName
     .split(' ')
     .filter(Boolean)
@@ -171,8 +173,9 @@ export default function Navbar() {
   }, [notificationsOpen, avatarOpen])
 
   const handleLogout = () => {
+    const wasAdmin = isAdmin
     logout()
-    navigate('/')
+    navigate(wasAdmin ? '/admin/login' : '/')
   }
 
   const handleMarkAllRead = async () => {
@@ -237,6 +240,7 @@ export default function Navbar() {
     { to: '/admin/payments', label: 'Payments' },
     { to: '/admin/broadcasts', label: 'Broadcasts' },
     { to: '/admin/customers', label: 'Customers' },
+    { to: '/admin/audit-logs', label: 'Activity Logs' },
   ]
 
   const avatarMenuLinks = isAdmin ? adminMenuLinks : customerMenuLinks
@@ -325,6 +329,7 @@ export default function Navbar() {
               <li className="nav-item"><Link to="/admin/payments" className={navLinkClass('/admin/payments')}>Payments</Link></li>
               <li className="nav-item"><Link to="/admin/broadcasts" className={navLinkClass('/admin/broadcasts')}>Broadcasts</Link></li>
               <li className="nav-item"><Link to="/admin/customers" className={navLinkClass('/admin/customers')}><Users size={18} /> Customers</Link></li>
+              <li className="nav-item"><Link to="/admin/audit-logs" className={navLinkClass('/admin/audit-logs')}>Logs</Link></li>
             </>
           )}
 

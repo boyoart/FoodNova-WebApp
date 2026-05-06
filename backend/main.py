@@ -14,6 +14,7 @@ from sqlalchemy import inspect, text
 from database import Base, SessionLocal, engine
 from models import (
     Address as DBAddress,
+    AdminAuditLog as DBAdminAuditLog,
     Broadcast as DBBroadcast,
     Notification as DBNotification,
     Order as DBOrder,
@@ -301,6 +302,37 @@ def require_admin(request: Request):
     return user
 
 
+def create_admin_audit_log(
+    request: Optional[Request],
+    admin: dict,
+    action: str,
+    entity_type: str = "",
+    entity_id: str = "",
+    description: str = "",
+    metadata: dict = None,
+):
+    db = SessionLocal()
+    try:
+        log = DBAdminAuditLog(
+            admin_id=admin.get("id"),
+            admin_name=admin.get("full_name") or admin.get("fullName") or admin.get("name") or "Admin",
+            admin_email=admin.get("email") or "",
+            action=action,
+            entity_type=entity_type,
+            entity_id=str(entity_id or ""),
+            description=description,
+            metadata_json=json.dumps(metadata or {}),
+            ip_address=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", "") if request else "",
+        )
+        db.add(log)
+        db.commit()
+    except Exception as error:
+        print("AUDIT LOG ERROR:", repr(error))
+    finally:
+        db.close()
+
+
 def _password_matches(plain_password: str, stored_password: str) -> bool:
     if not stored_password:
         return False
@@ -326,7 +358,7 @@ def _hash_new_password(password: str) -> str:
 
 def auth_response(message: str, user: dict, token: str) -> dict:
     user_data = public_user(user)
-    return {
+    response = {
         "success": True,
         "message": message,
         "access_token": token,
@@ -343,6 +375,10 @@ def auth_response(message: str, user: dict, token: str) -> dict:
             "user": user_data,
         },
     }
+    if user_data.get("role") == "admin":
+        response["admin"] = user_data
+        response["data"]["admin"] = user_data
+    return response
 
 
 
@@ -680,6 +716,23 @@ def broadcast_to_dict(broadcast: DBBroadcast) -> dict:
     }
 
 
+def audit_log_to_dict(log: DBAdminAuditLog) -> dict:
+    return {
+        "id": log.id,
+        "admin_id": log.admin_id,
+        "admin_name": log.admin_name or "Admin",
+        "admin_email": log.admin_email or "",
+        "action": log.action,
+        "entity_type": log.entity_type or "",
+        "entity_id": log.entity_id or "",
+        "description": log.description or "",
+        "metadata": json_load(log.metadata_json, {}),
+        "ip_address": log.ip_address or "",
+        "user_agent": log.user_agent or "",
+        "created_at": iso(log.created_at),
+    }
+
+
 def get_db_user_by_email(db, email: str):
     return db.query(DBUser).filter(DBUser.email == str(email).strip().lower()).first()
 
@@ -823,6 +876,9 @@ def seed_database():
                 role="admin",
             )
             db.add(admin)
+        elif not admin.full_name or admin.full_name == "FoodNova User":
+            admin.full_name = "FoodNova Admin"
+            admin.updated_at = datetime.utcnow()
 
         if db.query(DBProduct).count() == 0:
             for product in PRODUCTS:
@@ -1023,7 +1079,7 @@ def register(payload: RegisterPayload):
 
 
 @app.post("/auth/login")
-def login(payload: LoginPayload):
+def login(payload: LoginPayload, request: Request):
     email = payload.email.lower().strip()
     db = SessionLocal()
     try:
@@ -1036,7 +1092,17 @@ def login(payload: LoginPayload):
         token = f"token-{uuid4()}"
         TOKENS[token] = email
 
-        return auth_response("Login successful", db_user_to_dict(user), token)
+        user_data = db_user_to_dict(user)
+        if user_data.get("role") == "admin":
+            create_admin_audit_log(
+                request,
+                user_data,
+                "admin_login",
+                "admin",
+                user_data.get("id"),
+                "Admin logged in",
+            )
+        return auth_response("Login successful", user_data, token)
     finally:
         db.close()
 
@@ -1047,8 +1113,8 @@ def register_fallback(payload: RegisterPayload):
 
 
 @app.post("/login")
-def login_fallback(payload: LoginPayload):
-    return login(payload)
+def login_fallback(payload: LoginPayload, request: Request):
+    return login(payload, request)
 
 
 @app.post("/auth/change-password")
@@ -1564,7 +1630,7 @@ def admin_get_order(order_id: int, request: Request):
 
 @app.patch("/admin/orders/{order_id}")
 def update_order(order_id: int, payload: dict, request: Request):
-    require_admin(request)
+    admin = require_admin(request)
     db = SessionLocal()
     try:
         order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
@@ -1578,10 +1644,12 @@ def update_order(order_id: int, payload: dict, request: Request):
         old_admin_note = order.admin_note
         old_service_note = order.service_note
 
+        generated_delivery_code = False
         new_status = payload.get("status") or payload.get("order_status") or payload.get("fulfillment_status")
         if new_status == "out_for_delivery" and order.delivery_method == "delivery" and not order.delivery_code:
             order.delivery_code = "{:06d}".format(random.randint(0, 999999))
             order.delivery_code_created_at = datetime.utcnow()
+            generated_delivery_code = True
 
         allowed_fields = {
             "customer_name", "customer_email", "customer_phone", "delivery_address", "delivery_address_id",
@@ -1661,6 +1729,35 @@ def update_order(order_id: int, payload: dict, request: Request):
                     f"Your order {order_code} update: {order.admin_note}",
                     "service_update", "service")
 
+        changed_fields = {}
+        for field, old_value, new_value in [
+            ("status", old_status, order.status),
+            ("payment_status", old_payment_status, order.payment_status),
+            ("order_status", old_order_status, order.order_status),
+            ("fulfillment_status", old_fulfillment_status, order.fulfillment_status),
+            ("admin_note", old_admin_note, order.admin_note),
+            ("service_note", old_service_note, order.service_note),
+        ]:
+            if old_value != new_value:
+                changed_fields[field] = {"old": old_value, "new": new_value}
+
+        if changed_fields:
+            create_admin_audit_log(
+                request,
+                admin,
+                "order_updated",
+                "order",
+                order.id,
+                f"Admin updated order {order.order_code}",
+                {"order_code": order.order_code, "changes": changed_fields},
+            )
+        if order.payment_status != old_payment_status and order.payment_status == "payment_confirmed":
+            create_admin_audit_log(request, admin, "payment_confirmed", "order", order.id, f"Admin confirmed payment for order {order.order_code}", {"order_code": order.order_code})
+        if order.payment_status != old_payment_status and order.payment_status == "payment_rejected":
+            create_admin_audit_log(request, admin, "payment_rejected", "order", order.id, f"Admin rejected payment for order {order.order_code}", {"order_code": order.order_code})
+        if generated_delivery_code:
+            create_admin_audit_log(request, admin, "delivery_code_generated", "order", order.id, f"Admin generated delivery code for order {order.order_code}", {"order_code": order.order_code})
+
         return {
             "success": True,
             "message": "Order updated successfully",
@@ -1724,7 +1821,7 @@ async def admin_create_product(
     description: str = Form(""),
     image: Optional[UploadFile] = File(None),
 ):
-    require_admin(request)
+    admin = require_admin(request)
     image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product") if image else ""
     db = SessionLocal()
     try:
@@ -1743,6 +1840,7 @@ async def admin_create_product(
         db.commit()
         db.refresh(product)
         data = product_to_dict(product)
+        create_admin_audit_log(request, admin, "product_created", "product", product.id, f"Admin created product {product.name}", {"product": data})
         return {
             "success": True,
             "message": "Product created successfully",
@@ -1766,11 +1864,12 @@ async def admin_update_product(
     description: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
-    require_admin(request)
+    admin = require_admin(request)
     db = SessionLocal()
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
         if product:
+            old_data = product_to_dict(product)
             if name is not None:
                 product.name = name
             if category is not None:
@@ -1791,6 +1890,7 @@ async def admin_update_product(
             db.commit()
             db.refresh(product)
             data = product_to_dict(product)
+            create_admin_audit_log(request, admin, "product_updated", "product", product.id, f"Admin updated product {product.name}", {"before": old_data, "after": data})
             return {
                 "success": True,
                 "message": "Product updated successfully",
@@ -1805,7 +1905,7 @@ async def admin_update_product(
 
 @app.delete("/admin/products/{product_id}")
 def admin_delete_product(product_id: int, request: Request):
-    require_admin(request)
+    admin = require_admin(request)
     db = SessionLocal()
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
@@ -1813,6 +1913,7 @@ def admin_delete_product(product_id: int, request: Request):
             data = product_to_dict(product)
             db.delete(product)
             db.commit()
+            create_admin_audit_log(request, admin, "product_deleted", "product", product_id, f"Admin deleted product {data.get('name')}", {"product": data})
             return {
                 "success": True,
                 "message": "Product deleted successfully",
@@ -1843,7 +1944,7 @@ async def admin_create_pack(
     active: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
-    require_admin(request)
+    admin = require_admin(request)
     image_url = await save_uploaded_image(image, PACK_UPLOAD_DIR, "pack") if image else ""
     parsed_items = json_load(items, None)
     if parsed_items is None:
@@ -1862,6 +1963,7 @@ async def admin_create_pack(
         db.commit()
         db.refresh(pack)
         data = pack_to_dict(pack)
+        create_admin_audit_log(request, admin, "pack_created", "pack", pack.id, f"Admin created pack {pack.name}", {"pack": data})
         return {
             "success": True,
             "message": "Pack created successfully",
@@ -1884,11 +1986,12 @@ async def admin_update_pack(
     active: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
-    require_admin(request)
+    admin = require_admin(request)
     db = SessionLocal()
     try:
         pack = db.query(DBPack).filter(DBPack.id == pack_id).first()
         if pack:
+            old_data = pack_to_dict(pack)
             if name is not None:
                 pack.name = name
             if description is not None:
@@ -1908,6 +2011,7 @@ async def admin_update_pack(
             db.commit()
             db.refresh(pack)
             data = pack_to_dict(pack)
+            create_admin_audit_log(request, admin, "pack_updated", "pack", pack.id, f"Admin updated pack {pack.name}", {"before": old_data, "after": data})
             return {
                 "success": True,
                 "message": "Pack updated successfully",
@@ -1922,7 +2026,7 @@ async def admin_update_pack(
 
 @app.delete("/admin/packs/{pack_id}")
 def admin_delete_pack(pack_id: int, request: Request):
-    require_admin(request)
+    admin = require_admin(request)
     db = SessionLocal()
     try:
         pack = db.query(DBPack).filter(DBPack.id == pack_id).first()
@@ -1930,6 +2034,7 @@ def admin_delete_pack(pack_id: int, request: Request):
             data = pack_to_dict(pack)
             db.delete(pack)
             db.commit()
+            create_admin_audit_log(request, admin, "pack_deleted", "pack", pack_id, f"Admin deleted pack {data.get('name')}", {"pack": data})
             return {
                 "success": True,
                 "message": "Pack deleted successfully",
@@ -2050,6 +2155,15 @@ def create_broadcast(payload: BroadcastPayload, request: Request):
         db.commit()
         db.refresh(broadcast)
         broadcast_data = broadcast_to_dict(broadcast)
+        create_admin_audit_log(
+            request,
+            user,
+            "broadcast_sent",
+            "broadcast",
+            broadcast.id,
+            f"Admin sent broadcast {title}",
+            {"broadcast": broadcast_data, "recipient_count": recipient_count},
+        )
     finally:
         db.close()
     
@@ -2084,15 +2198,48 @@ def get_broadcasts(request: Request):
         db.close()
 
 
+@app.get("/admin/audit-logs")
+def get_admin_audit_logs(
+    request: Request,
+    limit: int = 100,
+    action: Optional[str] = None,
+    entity_type: Optional[str] = None,
+    admin_email: Optional[str] = None,
+):
+    require_admin(request)
+    db = SessionLocal()
+    try:
+        query = db.query(DBAdminAuditLog)
+        if action:
+            query = query.filter(DBAdminAuditLog.action == action)
+        if entity_type:
+            query = query.filter(DBAdminAuditLog.entity_type == entity_type)
+        if admin_email:
+            query = query.filter(DBAdminAuditLog.admin_email == admin_email.strip().lower())
+
+        safe_limit = max(1, min(int(limit or 100), 500))
+        logs = [
+            audit_log_to_dict(log)
+            for log in query.order_by(DBAdminAuditLog.created_at.desc(), DBAdminAuditLog.id.desc()).limit(safe_limit).all()
+        ]
+        return {"success": True, "logs": logs, "data": logs}
+    except Exception as error:
+        print("AUDIT LOGS LOAD ERROR:", repr(error))
+        return {"success": True, "logs": [], "data": []}
+    finally:
+        db.close()
+
+
 @app.patch("/admin/broadcasts/{broadcast_id}")
 def update_broadcast(broadcast_id: int, payload: BroadcastUpdatePayload, request: Request):
     """Update a broadcast message."""
-    require_admin(request)
+    admin = require_admin(request)
     updates = payload.dict(exclude_unset=True)
     db = SessionLocal()
     try:
         broadcast = db.query(DBBroadcast).filter(DBBroadcast.id == broadcast_id).first()
         if broadcast:
+            old_data = broadcast_to_dict(broadcast)
             for field in ["title", "message", "type", "is_active", "audience"]:
                 if field in updates and updates[field] is not None:
                     value = updates[field]
@@ -2114,6 +2261,7 @@ def update_broadcast(broadcast_id: int, payload: BroadcastUpdatePayload, request
             db.commit()
             db.refresh(broadcast)
             data = broadcast_to_dict(broadcast)
+            create_admin_audit_log(request, admin, "broadcast_updated", "broadcast", broadcast.id, f"Admin updated broadcast {broadcast.title}", {"before": old_data, "after": data})
             return {
                 "success": True,
                 "message": "Broadcast updated successfully",
@@ -2129,7 +2277,7 @@ def update_broadcast(broadcast_id: int, payload: BroadcastUpdatePayload, request
 @app.delete("/admin/broadcasts/{broadcast_id}")
 def delete_broadcast(broadcast_id: int, request: Request):
     """Delete a broadcast record without removing customer notification history."""
-    require_admin(request)
+    admin = require_admin(request)
     db = SessionLocal()
     try:
         broadcast = db.query(DBBroadcast).filter(DBBroadcast.id == broadcast_id).first()
@@ -2137,6 +2285,7 @@ def delete_broadcast(broadcast_id: int, request: Request):
             data = broadcast_to_dict(broadcast)
             db.delete(broadcast)
             db.commit()
+            create_admin_audit_log(request, admin, "broadcast_deleted", "broadcast", broadcast_id, f"Admin deleted broadcast {data.get('title')}", {"broadcast": data})
             return {
                 "success": True,
                 "message": "Broadcast deleted successfully",

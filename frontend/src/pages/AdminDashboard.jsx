@@ -55,6 +55,7 @@ export default function AdminDashboard() {
         <a href="/admin/payments" className="nav-link">💳 Payment Approvals</a>
         <a href="/admin/broadcasts" className="nav-link">📢 Broadcast Message</a>
         <a href="/admin/customers" className="nav-link">👥 Customers Data</a>
+        <a href="/admin/audit-logs" className="nav-link">Admin Activity Logs</a>
       </div>
     </div>
   )

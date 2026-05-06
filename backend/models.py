@@ -189,6 +189,23 @@ class Broadcast(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AdminAuditLog(Base):
+    __tablename__ = "admin_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    admin_id = Column(Integer, nullable=True)
+    admin_name = Column(String(150), default="")
+    admin_email = Column(String(150), index=True, default="")
+    action = Column(String(120), index=True, nullable=False)
+    entity_type = Column(String(80), index=True, default="")
+    entity_id = Column(String(80), index=True, default="")
+    description = Column(Text, default="")
+    metadata_json = Column(Text, nullable=True)
+    ip_address = Column(String(80), default="")
+    user_agent = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class OrderStatus(str, enum.Enum):
     pending_payment = "pending_payment"
     receipt_submitted = "receipt_submitted"

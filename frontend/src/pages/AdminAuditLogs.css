@@ -1,0 +1,151 @@
+.audit-page {
+  color: var(--fn-text);
+}
+
+.audit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.audit-header h1 {
+  margin: 0;
+  color: var(--fn-heading);
+}
+
+.audit-header p {
+  margin: 0.35rem 0 0;
+  color: var(--fn-muted);
+}
+
+.audit-refresh {
+  min-height: 44px;
+  border: 1px solid var(--fn-primary);
+  border-radius: 12px;
+  background: var(--fn-primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.audit-refresh:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.audit-filters {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.audit-search {
+  min-height: 44px;
+  flex: 1 1 260px;
+  border: 1px solid var(--fn-border);
+  border-radius: 12px;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.85rem;
+}
+
+.audit-search input,
+.audit-filters select {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fn-input-text);
+  font: inherit;
+}
+
+.audit-search input {
+  width: 100%;
+}
+
+.audit-filters select {
+  min-height: 44px;
+  min-width: 180px;
+  border: 1px solid var(--fn-border);
+  border-radius: 12px;
+  background: var(--fn-input-bg);
+  padding: 0 0.85rem;
+}
+
+.audit-table-wrap {
+  overflow-x: auto;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
+  border-radius: 16px;
+  box-shadow: var(--fn-shadow);
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 860px;
+}
+
+.audit-table th,
+.audit-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--fn-border);
+  color: var(--fn-text);
+  vertical-align: top;
+}
+
+.audit-table th {
+  background: var(--fn-surface-2);
+  color: var(--fn-heading);
+  text-align: left;
+  font-weight: 900;
+}
+
+.audit-table strong,
+.audit-table small {
+  display: block;
+}
+
+.audit-table small {
+  margin-top: 0.2rem;
+  color: var(--fn-muted);
+}
+
+.audit-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fn-primary) 12%, transparent);
+  color: var(--fn-primary);
+  padding: 0 0.75rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.audit-empty {
+  text-align: center;
+  color: var(--fn-muted);
+  padding: 2rem;
+}
+
+@media (max-width: 700px) {
+  .audit-header {
+    flex-direction: column;
+  }
+
+  .audit-refresh,
+  .audit-filters select {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -25,7 +25,13 @@ export default function AdminLoginPage() {
     try {
       setLoading(true)
       const res = await authAPI.adminLogin(formData)
-      adminLogin(res.data.admin, res.data.access_token)
+      const body = res.data || {}
+      const adminUser = body.admin || body.data?.admin || body.user || body.data?.user
+      const token = body.access_token || body.accessToken || body.token || body.data?.access_token || body.data?.token
+      if (!adminUser || adminUser.role !== 'admin' || !token) {
+        throw new Error('Admin login response was incomplete')
+      }
+      adminLogin(adminUser, token)
       toast.success('Admin login successful!')
       navigate('/admin/dashboard')
     } catch (error) {

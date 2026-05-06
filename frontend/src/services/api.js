@@ -368,6 +368,11 @@ export const adminAPI = {
     const broadcasts = normalizeList(response.data, ["broadcasts"]);
     return { data: broadcasts, raw: response.data };
   },
+  getAuditLogs: async (params = {}) => {
+    const response = await api.get("/admin/audit-logs", { params });
+    const logs = normalizeList(response.data, ["logs"]);
+    return { data: logs, raw: response.data };
+  },
   createBroadcast: async (payload) => (await api.post("/admin/broadcasts", payload)).data,
   updateBroadcast: async (id, payload) => (await api.patch(`/admin/broadcasts/${id}`, payload)).data,
   deleteBroadcast: async (id) => (await api.delete(`/admin/broadcasts/${id}`)).data,
