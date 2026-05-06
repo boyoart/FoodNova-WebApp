@@ -48,7 +48,12 @@ export default function AdminDashboard() {
   if (loading) {
     return <div className="admin-page"><div className="loading">Loading dashboard...</div></div>
   }
-  const can = (permission) => admin?.admin_role === 'super_admin' || admin?.permissions?.includes(permission)
+  const adminPermissions = Array.isArray(admin?.permissions) ? admin.permissions : []
+  const isSuperAdminDisplay = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || adminPermissions.length === 0))
+  const can = (permission) => {
+    if (isSuperAdminDisplay) return true
+    return adminPermissions.includes(permission)
+  }
   const visibleTools = adminTools.filter((tool) => can(tool.permission))
 
   return (
@@ -68,18 +73,22 @@ export default function AdminDashboard() {
           <h2>Admin Tools</h2>
           <p>Quick access to FoodNova management workflows.</p>
         </div>
-        <div className="admin-tools-grid">
-          {visibleTools.map((tool) => (
-            <Link key={tool.path} to={tool.path} className="admin-tool-card">
-              <div className="admin-tool-icon"><tool.icon size={22} /></div>
-              <div className="admin-tool-content">
-                <h3>{tool.title}</h3>
-                <p>{tool.description}</p>
-              </div>
-              <span className="admin-tool-arrow">→</span>
-            </Link>
-          ))}
-        </div>
+        {visibleTools.length ? (
+          <div className="admin-tools-grid">
+            {visibleTools.map((tool) => (
+              <Link key={tool.path} to={tool.path} className="admin-tool-card">
+                <div className="admin-tool-icon"><tool.icon size={22} /></div>
+                <div className="admin-tool-content">
+                  <h3>{tool.title}</h3>
+                  <p>{tool.description}</p>
+                </div>
+                <span className="admin-tool-arrow">→</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="admin-tools-empty">No admin tools available for your role.</div>
+        )}
       </section>
     </div>
   )

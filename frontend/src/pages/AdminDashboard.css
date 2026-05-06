@@ -26,6 +26,7 @@
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
   align-items: stretch;
+  margin-top: 1.2rem;
 }
 
 .admin-tool-card {
@@ -43,12 +44,13 @@
   text-decoration: none;
   overflow: hidden;
   box-shadow: var(--fn-shadow);
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .admin-tool-card:hover {
   transform: translateY(-2px);
   border-color: var(--fn-primary);
+  background: var(--fn-surface-2);
 }
 
 .admin-tool-icon {
@@ -92,6 +94,16 @@
   font-size: 1.25rem;
   font-weight: 900;
   line-height: 1;
+}
+
+.admin-tools-empty {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  background: var(--fn-surface);
+  color: var(--fn-muted);
+  font-weight: 800;
 }
 
 @media (min-width: 1180px) {

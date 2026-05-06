@@ -248,7 +248,13 @@ export default function Navbar() {
     { to: '/cart', label: 'Cart' },
   ]
 
-  const canAdmin = (permission) => admin?.admin_role === 'super_admin' || admin?.permissions?.includes(permission)
+  const adminPermissions = Array.isArray(admin?.permissions) ? admin.permissions : []
+  const isSuperAdminDisplay = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || adminPermissions.length === 0))
+  const canAdmin = (permission) => {
+    if (!isAdmin) return false
+    if (isSuperAdminDisplay) return true
+    return adminPermissions.includes(permission)
+  }
 
   const adminMenuLinks = [
     { to: '/admin/orders', label: 'Manage Orders', show: canAdmin('orders:view') },
@@ -349,11 +355,15 @@ export default function Navbar() {
                 </button>
                 {adminMenuOpen && (
                   <div className="admin-menu-dropdown" role="menu">
-                    {adminMenuLinks.map((link) => (
-                      <Link key={link.to} to={link.to} className={isActivePath(link.to) ? 'active' : ''} role="menuitem">
-                        {link.label}
-                      </Link>
-                    ))}
+                    {adminMenuLinks.length ? (
+                      adminMenuLinks.map((link) => (
+                        <Link key={link.to} to={link.to} className={isActivePath(link.to) ? 'active' : ''} role="menuitem">
+                          {link.label}
+                        </Link>
+                      ))
+                    ) : (
+                      <span className="admin-menu-empty">No admin tools available</span>
+                    )}
                   </div>
                 )}
               </li>
