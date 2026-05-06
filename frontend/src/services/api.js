@@ -317,14 +317,17 @@ export const adminAPI = {
   updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toStockFormData(payload), multipartConfig)).data,
   deletePack: async (id) => (await api.delete(`/admin/packs/${id}`)).data,
   getDashboardStats: async () => {
-    const fallback = { total_orders: 0, total_revenue: 0, total_products: 0, pending_payments: 0, receipt_submitted: 0, delivered_orders: 0 };
+    const fallback = { total_orders: 0, total_revenue: 0, total_products: 0, pending_payments: 0, receipt_submitted: 0, delivered_orders: 0, low_stock_products: 0, out_of_stock_products: 0 };
     try {
       const [ordersRes, productsRes] = await Promise.allSettled([api.get("/admin/orders"), api.get("/admin/products")]);
       const orders = ordersRes.status === "fulfilled" ? normalizeList(ordersRes.value.data, ["orders"]) : [];
       const products = productsRes.status === "fulfilled" ? normalizeList(productsRes.value.data, ["products"]) : [];
       const getPaymentStatus = (order) => String(order.payment_status || order.status || "").toLowerCase();
       const getOrderStatus = (order) => String(order.order_status || order.fulfillment_status || order.status || "").toLowerCase();
-      return { data: { total_orders: orders.length, total_revenue: orders.reduce((sum, order) => sum + Number(order.total_amount || order.total || 0), 0), total_products: products.length, pending_payments: orders.filter((order) => getPaymentStatus(order) === "pending_payment").length, receipt_submitted: orders.filter((order) => getPaymentStatus(order) === "receipt_submitted").length, delivered_orders: orders.filter((order) => getOrderStatus(order) === "delivered").length } };
+      const getStock = (product) => Number(product.stock_qty ?? product.stock ?? 0);
+      const isLowStock = (product) => product.low_stock === true || (getStock(product) > 0 && getStock(product) <= Number(product.low_stock_threshold || 5));
+      const isOutOfStock = (product) => product.is_out_of_stock === true || getStock(product) <= 0;
+      return { data: { total_orders: orders.length, total_revenue: orders.reduce((sum, order) => sum + Number(order.total_amount || order.total || 0), 0), total_products: products.length, pending_payments: orders.filter((order) => getPaymentStatus(order) === "pending_payment").length, receipt_submitted: orders.filter((order) => getPaymentStatus(order) === "receipt_submitted").length, delivered_orders: orders.filter((order) => getOrderStatus(order) === "delivered").length, low_stock_products: products.filter(isLowStock).length, out_of_stock_products: products.filter(isOutOfStock).length } };
     } catch (error) {
       console.warn("Failed to calculate dashboard stats. Using fallback.", error);
       return { data: fallback };

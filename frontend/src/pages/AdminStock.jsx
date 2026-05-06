@@ -18,6 +18,7 @@ export default function AdminStock() {
   const [formData, setFormData] = useState(emptyProduct)
   const [showModal, setShowModal] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [stockFilter, setStockFilter] = useState('all')
   const isProduct = activeTab === 'products'
 
   useEffect(() => {
@@ -180,6 +181,21 @@ export default function AdminStock() {
     )
   }
 
+  const getStockState = (item) => {
+    const stock = Number(item.stock_qty ?? item.stock ?? 0)
+    if (item.is_out_of_stock || stock <= 0) return 'out'
+    if (item.low_stock || stock <= Number(item.low_stock_threshold || 5)) return 'low'
+    return 'ok'
+  }
+
+  const renderStockStatus = (item) => {
+    if (!isProduct) return <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
+    const state = getStockState(item)
+    if (state === 'out') return <span className="stock-badge out">Out of Stock</span>
+    if (state === 'low') return <span className="stock-badge low">Low Stock</span>
+    return <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
+  }
+
   const renderProductForm = () => (
     <>
     <div className="stock-form-grid">
@@ -238,7 +254,11 @@ export default function AdminStock() {
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied.</p></div>
 
-  const items = isProduct ? products : packs
+  const lowStockProducts = products.filter((item) => getStockState(item) === 'low')
+  const outOfStockProducts = products.filter((item) => getStockState(item) === 'out')
+  const items = isProduct
+    ? products.filter((item) => stockFilter === 'low' ? getStockState(item) === 'low' : stockFilter === 'out' ? getStockState(item) === 'out' : true)
+    : packs
   const modalTitle = editingId
     ? `Edit ${isProduct ? 'Product' : 'Pack'}`
     : `Add New ${isProduct ? 'Product' : 'Pack'}`
@@ -251,9 +271,17 @@ export default function AdminStock() {
       </div>
 
       <div className="tabs">
-        <button className={`tab ${isProduct ? 'active' : ''}`} onClick={() => setActiveTab('products')}>Products ({products.length})</button>
+        <button className={`tab ${isProduct ? 'active' : ''}`} onClick={() => { setActiveTab('products'); setStockFilter('all') }}>Products ({products.length})</button>
         <button className={`tab ${!isProduct ? 'active' : ''}`} onClick={() => setActiveTab('packs')}>Packs ({packs.length})</button>
       </div>
+
+      {isProduct && (
+        <div className="stock-filter-tabs">
+          <button className={stockFilter === 'all' ? 'active' : ''} onClick={() => setStockFilter('all')}>All ({products.length})</button>
+          <button className={stockFilter === 'low' ? 'active' : ''} onClick={() => setStockFilter('low')}>Low Stock ({lowStockProducts.length})</button>
+          <button className={stockFilter === 'out' ? 'active' : ''} onClick={() => setStockFilter('out')}>Out of Stock ({outOfStockProducts.length})</button>
+        </div>
+      )}
 
       {loading ? (
         <div className="loading">Loading...</div>
@@ -275,7 +303,7 @@ export default function AdminStock() {
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id}>
+                <tr key={item.id} className={isProduct ? `stock-row-${getStockState(item)}` : ''}>
                   <td>{item.id}</td>
                   <td>{renderStockThumb(item)}</td>
                   <td>{item.name}</td>
@@ -291,7 +319,7 @@ export default function AdminStock() {
                     </>
                   )}
                   <td>{formatPrice(item.price)}</td>
-                  <td><span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span></td>
+                  <td>{renderStockStatus(item)}</td>
                   <td>
                     <div className="action-buttons">
                       <button className="btn-edit" onClick={() => handleEdit(item)}>Edit</button>

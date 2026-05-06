@@ -58,6 +58,7 @@ export default function AdminDashboard() {
         <div className="stat-card"><DollarSign size={32} /><div><p className="stat-label">Revenue</p><p className="stat-value">{formatPrice(stats?.total_revenue || 0)}</p></div></div>
         <div className="stat-card"><Package size={32} /><div><p className="stat-label">Total Products</p><p className="stat-value">{stats?.total_products || 0}</p></div></div>
         <div className="stat-card"><BarChart3 size={32} /><div><p className="stat-label">Pending Payments</p><p className="stat-value">{stats?.pending_payments || 0}</p></div></div>
+        <div className="stat-card"><Package size={32} /><div><p className="stat-label">Inventory Alerts</p><p className="stat-value">{stats?.low_stock_products || 0} low, {stats?.out_of_stock_products || 0} out</p></div></div>
       </div>
 
       <section className="admin-tools-section">

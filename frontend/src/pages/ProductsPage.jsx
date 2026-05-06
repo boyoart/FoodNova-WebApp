@@ -12,16 +12,16 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('products')
   const [loading, setLoading] = useState(true)
-  const { addItem } = useCartStore()
+  const { items: cartItems, addItem } = useCartStore()
 
   useEffect(() => {
     fetchProducts()
   }, [])
 
-  const normalizeStoreItem = (item) => {
+  const normalizeStoreItem = (item, itemType = activeTab === 'packs' ? 'pack' : 'product') => {
     const name = item?.name || item?.product_name || 'FoodNova Item'
     const price = Number(item?.price || item?.unit_price || 0)
-    const stock = Number(item?.stock || item?.stock_qty || 999)
+    const stock = Number(item?.stock_qty ?? item?.stock ?? 999)
 
     return {
       ...item,
@@ -32,6 +32,11 @@ export default function ProductsPage() {
       unit_price: price,
       stock,
       stock_qty: stock,
+      is_out_of_stock: item?.is_out_of_stock === true || stock <= 0,
+      low_stock: item?.low_stock === true || (stock > 0 && stock <= Number(item?.low_stock_threshold || 5)),
+      low_stock_threshold: item?.low_stock_threshold || 5,
+      item_type: item?.item_type || item?.type || itemType,
+      type: item?.type || item?.item_type || itemType,
       quantity: item?.quantity || item?.qty || 1,
       qty: item?.quantity || item?.qty || 1,
       image: item?.image || item?.image_url || '/placeholder.png',
@@ -51,8 +56,8 @@ export default function ProductsPage() {
       const productData = Array.isArray(productsRes.data) ? productsRes.data : []
       const packData = Array.isArray(packsRes.data) ? packsRes.data : []
 
-      setProducts(productData.map(normalizeStoreItem))
-      setPacks(packData.map(normalizeStoreItem))
+      setProducts(productData.map((item) => normalizeStoreItem(item, 'product')))
+      setPacks(packData.map((item) => normalizeStoreItem(item, 'pack')))
     } catch (error) {
       toast.error('Failed to load products')
       console.error(error)
@@ -62,7 +67,19 @@ export default function ProductsPage() {
   }
 
   const handleAddToCart = (item) => {
-    addItem(normalizeStoreItem(item))
+    const normalized = normalizeStoreItem(item, activeTab === 'packs' ? 'pack' : 'product')
+    if (normalized.is_out_of_stock) {
+      toast.error('This item is out of stock')
+      return
+    }
+    if (normalized.type !== 'pack') {
+      const existingQty = cartItems.find((cartItem) => cartItem.id === normalized.id && cartItem.type !== 'pack')?.quantity || 0
+      if (existingQty + 1 > normalized.stock_qty) {
+        toast.error(`Only ${normalized.stock_qty} left in stock`)
+        return
+      }
+    }
+    addItem(normalized)
     toast.success('Added to cart!')
   }
 
@@ -120,7 +137,8 @@ export default function ProductsPage() {
                   alt={item.name}
                   onError={handleImageError}
                 />
-                {item.stock <= 0 && <div className="out-of-stock">Out of Stock</div>}
+                {activeTab === 'products' && item.is_out_of_stock && <div className="out-of-stock">Out of Stock</div>}
+                {activeTab === 'products' && item.low_stock && !item.is_out_of_stock && <div className="low-stock-badge">Only {item.stock_qty} left</div>}
               </div>
               <div className="product-info">
                 <h3>{item.name}</h3>
@@ -128,10 +146,12 @@ export default function ProductsPage() {
                 {item.category && <span className="category">{item.category}</span>}
                 {activeTab === 'products' && (
                   <div className="stock-info">
-                    {item.stock > 0 ? (
-                      <span className="in-stock">{item.stock} in stock</span>
-                    ) : (
+                    {item.is_out_of_stock ? (
                       <span className="out-of-stock-text">Out of stock</span>
+                    ) : item.low_stock ? (
+                      <span className="low-stock-text">Only {item.stock_qty} left</span>
+                    ) : (
+                      <span className="in-stock">{item.stock_qty} in stock</span>
                     )}
                   </div>
                 )}
@@ -140,9 +160,9 @@ export default function ProductsPage() {
                   <button
                     className="btn-add"
                     onClick={() => handleAddToCart(item)}
-                    disabled={item.stock <= 0}
+                    disabled={activeTab === 'products' && item.is_out_of_stock}
                   >
-                    {item.stock <= 0 ? 'Out of Stock' : 'Add to Cart'}
+                    {activeTab === 'products' && item.is_out_of_stock ? 'Out of Stock' : 'Add to Cart'}
                   </button>
                 </div>
               </div>

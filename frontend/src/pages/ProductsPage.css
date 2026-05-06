@@ -130,6 +130,19 @@
   font-weight: 700;
 }
 
+.low-stock-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: var(--fn-accent, #FFD23F);
+  color: #103820;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  box-shadow: var(--fn-shadow);
+}
+
 .product-info {
   padding: 1rem;
   flex: 1;
@@ -175,6 +188,12 @@
   color: #ef4444;
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+.low-stock-text {
+  color: #ca8a04;
+  font-size: 0.8rem;
+  font-weight: 700;
 }
 
 .product-footer {

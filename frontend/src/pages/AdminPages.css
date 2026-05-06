@@ -1266,6 +1266,57 @@ tbody tr:hover {
   display: block;
 }
 
+.stock-filter-tabs {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 1rem;
+}
+
+.stock-filter-tabs button {
+  border: 1px solid var(--fn-border);
+  border-radius: 999px;
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  padding: 0.55rem 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.stock-filter-tabs button.active {
+  background: var(--fn-primary);
+  border-color: var(--fn-primary);
+  color: #fff;
+}
+
+.stock-row-low td {
+  background: color-mix(in srgb, var(--fn-accent, #FFD23F) 12%, transparent);
+}
+
+.stock-row-out td {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.stock-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.32rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.stock-badge.low {
+  background: var(--fn-accent, #FFD23F);
+  color: #103820;
+}
+
+.stock-badge.out {
+  background: rgba(239, 68, 68, 0.16);
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
 .theme-dark .stock-modal,
 .theme-dark .stock-modal-close,
 .theme-dark .stock-image-preview,

@@ -17,13 +17,20 @@ export const useCartStore = create((set, get) => ({
 
   addItem: (product) => {
     const items = get().items
-    const existingItem = items.find(item => item.id === product.id)
+    const productType = product.type || product.item_type || 'product'
+    const existingItem = items.find(item => item.id === product.id && (item.type || item.item_type || 'product') === productType)
+    const requestedQty = Number(product.quantity || 1)
+    const availableStock = Number(product.stock_qty ?? product.stock ?? 999)
+
+    if (productType !== 'pack' && availableStock <= 0) {
+      return
+    }
 
     let newItems
     if (existingItem) {
       newItems = items.map(item =>
-        item.id === product.id
-          ? { ...item, quantity: item.quantity + (product.quantity || 1) }
+        item.id === product.id && (item.type || item.item_type || 'product') === productType
+          ? { ...item, quantity: Math.min(Number(item.quantity || 1) + requestedQty, availableStock) }
           : item
       )
     } else {

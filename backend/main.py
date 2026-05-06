@@ -7,6 +7,7 @@ import random
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
@@ -57,6 +58,15 @@ app.add_middleware(
 
 if not any(getattr(route, "path", None) == "/uploads" for route in app.routes):
     app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+
+@app.exception_handler(HTTPException)
+async def foodnova_http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "detail": exc.detail},
+        headers=exc.headers,
+    )
 
 USERS: Dict[str, dict] = {}
 TOKENS: Dict[str, str] = {}
@@ -547,6 +557,7 @@ def normalize_order_items(items: list) -> list:
         normalized.append({
             "id": item.get("id") or item.get("product_id"),
             "product_id": item.get("product_id") or item.get("id"),
+            "item_type": item.get("item_type") or item.get("type") or ("pack" if item.get("items") else "product"),
             "name": name,
             "product_name": name,
             "price": price,
@@ -557,6 +568,72 @@ def normalize_order_items(items: list) -> list:
         })
 
     return normalized
+
+
+def find_order_product_for_stock(db, item: dict) -> Optional[DBProduct]:
+    if str(item.get("item_type") or "").lower() == "pack":
+        return None
+
+    product = None
+    product_id = item.get("product_id")
+    if product_id:
+        try:
+            product = db.query(DBProduct).filter(DBProduct.id == int(product_id)).first()
+        except Exception:
+            product = None
+
+    if not product:
+        item_name = str(item.get("name") or item.get("product_name") or "").strip().lower()
+        if item_name:
+            product = db.query(DBProduct).filter(DBProduct.name.ilike(item_name)).first()
+
+    return product
+
+
+def validate_and_deduct_inventory(db, items: list) -> list:
+    deductions = []
+    requested_by_product = {}
+
+    for item in items:
+        product = find_order_product_for_stock(db, item)
+        if not product:
+            continue
+        quantity = int(item.get("quantity") or item.get("qty") or 1)
+        if quantity <= 0:
+            continue
+        current = requested_by_product.get(product.id, {"product": product, "quantity": 0})
+        current["quantity"] += quantity
+        requested_by_product[product.id] = current
+
+    for entry in requested_by_product.values():
+        product = entry["product"]
+        requested = entry["quantity"]
+        available = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
+        if available < requested:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for {product.name}. Available: {available}, requested: {requested}",
+            )
+
+    for entry in requested_by_product.values():
+        product = entry["product"]
+        requested = entry["quantity"]
+        available = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
+        next_stock = max(0, available - requested)
+        product.stock_qty = next_stock
+        product.stock = next_stock
+        product.updated_at = datetime.utcnow()
+        deductions.append({
+            "product_id": product.id,
+            "name": product.name,
+            "quantity": requested,
+            "previous_stock": available,
+            "new_stock": next_stock,
+            "low_stock": 0 < next_stock <= 5,
+            "out_of_stock": next_stock <= 0,
+        })
+
+    return deductions
 
 
 def iso(value):
@@ -641,18 +718,24 @@ def admin_user_to_dict(user: DBUser) -> dict:
 
 
 def product_to_dict(product: DBProduct) -> dict:
+    stock_qty = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
+    low_stock_threshold = 5
     return {
         "id": product.id,
         "name": product.name,
         "price": product.price or 0,
-        "stock_qty": product.stock_qty or 0,
-        "stock": product.stock if product.stock is not None else (product.stock_qty or 0),
+        "stock_qty": stock_qty,
+        "stock": product.stock if product.stock is not None else stock_qty,
         "category": product.category or "",
         "category_name": product.category_name or product.category or "",
         "image_url": product.image_url or "",
         "description": product.description or "",
         "is_active": bool(product.is_active),
         "active": bool(product.is_active),
+        "is_out_of_stock": stock_qty <= 0,
+        "low_stock": 0 < stock_qty <= low_stock_threshold,
+        "low_stock_threshold": low_stock_threshold,
+        "status": "active" if product.is_active else "inactive",
         "created_at": iso(product.created_at),
         "updated_at": iso(product.updated_at),
     }
@@ -1559,6 +1642,7 @@ def create_order(payload: OrderPayload, request: Request):
 
     db = SessionLocal()
     try:
+        inventory_deductions = validate_and_deduct_inventory(db, normalized_items)
         next_id = (db.query(DBOrder).order_by(DBOrder.id.desc()).first().id + 1) if db.query(DBOrder).first() else 1
         order = DBOrder(
             order_code=f"FN-{next_id:05d}",
@@ -1580,8 +1664,7 @@ def create_order(payload: OrderPayload, request: Request):
             fulfillment_status="order_placed",
         )
         db.add(order)
-        db.commit()
-        db.refresh(order)
+        db.flush()
 
         for item in normalized_items:
             db.add(DBOrderItem(
@@ -1598,6 +1681,17 @@ def create_order(payload: OrderPayload, request: Request):
         db.commit()
         db.refresh(order)
         order_data = order_to_dict(order)
+        if inventory_deductions:
+            print(f"INVENTORY DEDUCTED for {order.order_code}: {inventory_deductions}")
+            create_admin_audit_log(
+                request,
+                {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.ng"},
+                "inventory_deducted",
+                "order",
+                order.id,
+                f"Inventory deducted for order {order.order_code}",
+                {"order_code": order.order_code, "deductions": inventory_deductions},
+            )
     finally:
         db.close()
 
