@@ -179,7 +179,7 @@ export const categoriesAPI = {
 
 export const authAPI = {
   login: async (payload) => await api.post("/auth/login", payload),
-  adminLogin: async (payload) => await api.post("/auth/login", payload),
+  adminLogin: async (payload) => await api.post("/auth/admin/login", payload),
   register: async (payload) => await api.post("/auth/register", payload),
   me: async () => await api.get("/auth/me"),
   changePassword: async (payload) => {
@@ -373,6 +373,15 @@ export const adminAPI = {
     const logs = normalizeList(response.data, ["logs"]);
     return { data: logs, raw: response.data };
   },
+  getAdminUsers: async () => {
+    const response = await api.get("/admin/users");
+    const admins = normalizeList(response.data, ["admins", "users"]);
+    return { data: admins, raw: response.data };
+  },
+  createAdminUser: async (payload) => (await api.post("/admin/users", payload)).data,
+  updateAdminUser: async (id, payload) => (await api.patch(`/admin/users/${id}`, payload)).data,
+  resetAdminPassword: async (id, payload) => (await api.patch(`/admin/users/${id}/password`, payload)).data,
+  deactivateAdminUser: async (id) => (await api.delete(`/admin/users/${id}`)).data,
   createBroadcast: async (payload) => (await api.post("/admin/broadcasts", payload)).data,
   updateBroadcast: async (id, payload) => (await api.patch(`/admin/broadcasts/${id}`, payload)).data,
   deleteBroadcast: async (id) => (await api.delete(`/admin/broadcasts/${id}`)).data,

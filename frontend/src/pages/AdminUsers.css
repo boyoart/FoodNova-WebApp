@@ -1,0 +1,219 @@
+.admin-users-page {
+  color: var(--fn-text);
+}
+
+.admin-users-header,
+.admin-users-actions,
+.admin-user-row-actions,
+.admin-user-modal-header,
+.admin-user-modal-footer {
+  display: flex;
+  gap: 0.85rem;
+}
+
+.admin-users-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.admin-users-header h1,
+.admin-user-modal-header h2 {
+  margin: 0;
+  color: var(--fn-heading);
+}
+
+.admin-users-header p,
+.admin-user-modal-header p {
+  margin: 0.35rem 0 0;
+  color: var(--fn-muted);
+}
+
+.admin-users-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-users-primary,
+.admin-users-secondary,
+.admin-user-row-actions button {
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--fn-border);
+  padding: 0 0.95rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.admin-users-primary {
+  background: var(--fn-primary);
+  border-color: var(--fn-primary);
+  color: #fff;
+}
+
+.admin-users-secondary,
+.admin-user-row-actions button {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+}
+
+.admin-user-row-actions button.danger {
+  color: #b91c1c;
+}
+
+.admin-user-row-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-users-table-wrap {
+  overflow-x: auto;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
+  border-radius: 16px;
+  box-shadow: var(--fn-shadow);
+}
+
+.admin-users-table {
+  min-width: 880px;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-users-table th,
+.admin-users-table td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--fn-border);
+  color: var(--fn-text);
+  text-align: left;
+}
+
+.admin-users-table th {
+  background: var(--fn-surface-2);
+  color: var(--fn-heading);
+}
+
+.admin-user-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 0.75rem;
+  font-weight: 900;
+}
+
+.admin-user-status.active {
+  background: color-mix(in srgb, var(--fn-primary) 14%, transparent);
+  color: var(--fn-primary);
+}
+
+.admin-user-status.inactive {
+  background: rgba(185, 28, 28, 0.12);
+  color: #b91c1c;
+}
+
+.admin-users-empty {
+  text-align: center;
+  color: var(--fn-muted);
+  padding: 2rem;
+}
+
+.admin-user-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.admin-user-modal {
+  width: min(620px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 22px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+}
+
+.admin-user-modal-header {
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.4rem 1.6rem;
+  border-bottom: 1px solid var(--fn-border);
+  background: var(--fn-surface-2);
+}
+
+.admin-user-modal-header button {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  cursor: pointer;
+}
+
+.admin-user-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.5rem 1.6rem;
+}
+
+.admin-user-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--fn-heading);
+  font-weight: 900;
+}
+
+.admin-user-form input {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--fn-border);
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  padding: 0 0.85rem;
+}
+
+.admin-user-check,
+.admin-user-modal-footer {
+  grid-column: 1 / -1;
+}
+
+.admin-user-check {
+  flex-direction: row !important;
+  align-items: center;
+}
+
+.admin-user-modal-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--fn-border);
+  padding-top: 1rem;
+}
+
+@media (max-width: 700px) {
+  .admin-users-header,
+  .admin-users-actions,
+  .admin-user-row-actions,
+  .admin-user-modal-footer {
+    flex-direction: column;
+  }
+
+  .admin-users-primary,
+  .admin-users-secondary,
+  .admin-user-row-actions button {
+    width: 100%;
+  }
+
+  .admin-user-form {
+    grid-template-columns: 1fr;
+  }
+}

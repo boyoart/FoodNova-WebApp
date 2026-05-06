@@ -19,6 +19,7 @@ import AdminPayments from './pages/AdminPayments'
 import AdminBroadcasts from './pages/AdminBroadcasts'
 import AdminCustomers from './pages/AdminCustomers'
 import AdminAuditLogs from './pages/AdminAuditLogs'
+import AdminUsers from './pages/AdminUsers'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
 import ContactPage from './pages/ContactPage'
@@ -55,6 +56,7 @@ function App() {
               <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
               <Route path="/admin/customers" element={<AdminCustomers />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+              <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/contact" element={<ContactPage />} />

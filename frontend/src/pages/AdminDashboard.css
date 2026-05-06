@@ -1,0 +1,56 @@
+.admin-page {
+  color: var(--fn-text);
+}
+
+.admin-tools-section {
+  margin-top: 2rem;
+}
+
+.admin-tools-heading h2 {
+  margin: 0;
+  color: var(--fn-heading);
+}
+
+.admin-tools-heading p {
+  margin: 0.35rem 0 0;
+  color: var(--fn-muted);
+}
+
+.dashboard-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.dashboard-nav .nav-link {
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+  text-decoration: none;
+  color: var(--fn-text);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: var(--fn-shadow);
+}
+
+.dashboard-nav .nav-link:hover {
+  transform: translateY(-2px);
+  border-color: var(--fn-primary);
+}
+
+.dashboard-nav .nav-link strong,
+.dashboard-nav .nav-link span {
+  display: block;
+}
+
+.dashboard-nav .nav-link strong {
+  color: var(--fn-heading);
+  margin-bottom: 0.45rem;
+}
+
+.dashboard-nav .nav-link span {
+  color: var(--fn-muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}

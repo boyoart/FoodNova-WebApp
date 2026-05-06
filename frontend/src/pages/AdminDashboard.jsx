@@ -6,6 +6,16 @@ import toast from 'react-hot-toast'
 import { BarChart3, Package, ShoppingBag, DollarSign } from 'lucide-react'
 import './AdminDashboard.css'
 
+const adminTools = [
+  { href: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.' },
+  { href: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.' },
+  { href: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.' },
+  { href: '/admin/broadcasts', title: 'Broadcasts', description: 'Send announcements to customers.' },
+  { href: '/admin/customers', title: 'Customers', description: 'View customer data and order history.' },
+  { href: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system activity.' },
+  { href: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.' },
+]
+
 export default function AdminDashboard() {
   const { isAdmin } = useAuthStore()
   const [stats, setStats] = useState(null)
@@ -49,13 +59,19 @@ export default function AdminDashboard() {
         <div className="stat-card"><BarChart3 size={32} /><div><p className="stat-label">Pending Payments</p><p className="stat-value">{stats?.pending_payments || 0}</p></div></div>
       </div>
 
-      <div className="dashboard-nav">
-        <a href="/admin/orders" className="nav-link">📦 Manage Orders</a>
-        <a href="/admin/stock" className="nav-link">📋 Stock Management</a>
-        <a href="/admin/payments" className="nav-link">💳 Payment Approvals</a>
-        <a href="/admin/broadcasts" className="nav-link">📢 Broadcast Message</a>
-        <a href="/admin/customers" className="nav-link">👥 Customers Data</a>
-        <a href="/admin/audit-logs" className="nav-link">Admin Activity Logs</a>
+      <div className="admin-tools-section">
+        <div className="admin-tools-heading">
+          <h2>Admin Tools</h2>
+          <p>Quick access to FoodNova management workflows.</p>
+        </div>
+        <div className="dashboard-nav">
+          {adminTools.map((tool) => (
+            <a href={tool.href} className="nav-link" key={tool.href}>
+              <strong>{tool.title}</strong>
+              <span>{tool.description}</span>
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   )

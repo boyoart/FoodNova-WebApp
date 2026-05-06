@@ -23,12 +23,14 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [profile, setProfile] = useState(null)
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false)
   const [refreshingNotifications, setRefreshingNotifications] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('foodnova_theme') || 'light')
   const [logoSrc, setLogoSrc] = useState('/foodnova-logo.png')
   const [logoFailed, setLogoFailed] = useState(false)
   const notificationRef = useRef(null)
   const avatarRef = useRef(null)
+  const adminMenuRef = useRef(null)
 
   const { user, admin, isAuthenticated, isAdmin, logout } = useAuthStore()
   const { getTotalItems } = useCartStore()
@@ -127,6 +129,7 @@ export default function Navbar() {
     setMobileMenuOpen(false)
     setNotificationsOpen(false)
     setAvatarOpen(false)
+    setAdminMenuOpen(false)
   }, [location.pathname])
 
   useEffect(() => {
@@ -151,7 +154,7 @@ export default function Navbar() {
   }, [isAuthenticated, isAdmin])
 
   useEffect(() => {
-    if (!notificationsOpen && !avatarOpen) return undefined
+    if (!notificationsOpen && !avatarOpen && !adminMenuOpen) return undefined
 
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
@@ -160,6 +163,10 @@ export default function Navbar() {
 
       if (avatarRef.current && !avatarRef.current.contains(event.target)) {
         setAvatarOpen(false)
+      }
+
+      if (adminMenuRef.current && !adminMenuRef.current.contains(event.target)) {
+        setAdminMenuOpen(false)
       }
     }
 
@@ -170,7 +177,7 @@ export default function Navbar() {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('touchstart', handleClickOutside)
     }
-  }, [notificationsOpen, avatarOpen])
+  }, [notificationsOpen, avatarOpen, adminMenuOpen])
 
   const handleLogout = () => {
     const wasAdmin = isAdmin
@@ -213,12 +220,20 @@ export default function Navbar() {
   const toggleNotifications = () => {
     setNotificationsOpen((value) => !value)
     setAvatarOpen(false)
+    setAdminMenuOpen(false)
     if (!notificationsOpen) loadCustomerHeaderData()
   }
 
   const toggleAvatarMenu = () => {
     setAvatarOpen((value) => !value)
     setNotificationsOpen(false)
+    setAdminMenuOpen(false)
+  }
+
+  const toggleAdminMenu = () => {
+    setAdminMenuOpen((value) => !value)
+    setNotificationsOpen(false)
+    setAvatarOpen(false)
   }
 
   const handleDropdownLogout = () => {
@@ -234,16 +249,17 @@ export default function Navbar() {
   ]
 
   const adminMenuLinks = [
-    { to: '/admin/dashboard', label: 'Dashboard' },
-    { to: '/admin/orders', label: 'Orders' },
-    { to: '/admin/stock', label: 'Stock' },
-    { to: '/admin/payments', label: 'Payments' },
+    { to: '/admin/orders', label: 'Manage Orders' },
+    { to: '/admin/stock', label: 'Stock Management' },
+    { to: '/admin/payments', label: 'Payment Approvals' },
     { to: '/admin/broadcasts', label: 'Broadcasts' },
     { to: '/admin/customers', label: 'Customers' },
     { to: '/admin/audit-logs', label: 'Activity Logs' },
+    { to: '/admin/users', label: 'Admin Users' },
   ]
 
-  const avatarMenuLinks = isAdmin ? adminMenuLinks : customerMenuLinks
+  const avatarMenuLinks = isAdmin ? [{ to: '/admin/dashboard', label: 'Dashboard' }, ...adminMenuLinks] : customerMenuLinks
+  const isAdminMenuActive = adminMenuLinks.some((link) => isActivePath(link.to))
 
   const themeToggle = (
     <button
@@ -324,12 +340,21 @@ export default function Navbar() {
           {isAdmin && (
             <>
               <li className="nav-item"><Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>Dashboard</Link></li>
-              <li className="nav-item"><Link to="/admin/orders" className={navLinkClass('/admin/orders')}>Orders</Link></li>
-              <li className="nav-item"><Link to="/admin/stock" className={navLinkClass('/admin/stock')}>Stock</Link></li>
-              <li className="nav-item"><Link to="/admin/payments" className={navLinkClass('/admin/payments')}>Payments</Link></li>
-              <li className="nav-item"><Link to="/admin/broadcasts" className={navLinkClass('/admin/broadcasts')}>Broadcasts</Link></li>
-              <li className="nav-item"><Link to="/admin/customers" className={navLinkClass('/admin/customers')}><Users size={18} /> Customers</Link></li>
-              <li className="nav-item"><Link to="/admin/audit-logs" className={navLinkClass('/admin/audit-logs')}>Logs</Link></li>
+              <li className="nav-item admin-menu" ref={adminMenuRef}>
+                <button type="button" className={`nav-link admin-menu-button ${isAdminMenuActive ? 'active' : ''}`} onClick={toggleAdminMenu} aria-haspopup="menu" aria-expanded={adminMenuOpen}>
+                  <Users size={18} />
+                  <span>Admin Menu</span>
+                </button>
+                {adminMenuOpen && (
+                  <div className="admin-menu-dropdown" role="menu">
+                    {adminMenuLinks.map((link) => (
+                      <Link key={link.to} to={link.to} className={isActivePath(link.to) ? 'active' : ''} role="menuitem">
+                        {link.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </li>
             </>
           )}
 

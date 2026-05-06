@@ -260,6 +260,26 @@ class NotificationUpdatePayload(BaseModel):
     is_read: Optional[bool] = None
 
 
+class AdminUserPayload(BaseModel):
+    full_name: str
+    email: EmailStr
+    phone: Optional[str] = ""
+    password: str
+    confirm_password: Optional[str] = None
+    is_active: Optional[bool] = True
+
+
+class AdminUserUpdatePayload(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AdminPasswordResetPayload(BaseModel):
+    new_password: str
+    confirm_password: Optional[str] = None
+
+
 def public_user(user: dict) -> dict:
     full_name = user.get("full_name") or user.get("fullName") or user.get("name") or "FoodNova User"
     return {
@@ -270,6 +290,7 @@ def public_user(user: dict) -> dict:
         "email": user["email"],
         "phone": user.get("phone", ""),
         "role": user.get("role", "customer"),
+        "is_active": user.get("is_active", True),
     }
 
 
@@ -558,6 +579,23 @@ def db_user_to_dict(user: DBUser) -> dict:
         "phone": user.phone or "",
         "password": user.password,
         "role": user.role or "customer",
+        "is_active": bool(getattr(user, "is_active", True)),
+        "created_at": iso(user.created_at),
+        "updated_at": iso(user.updated_at),
+    }
+
+
+def admin_user_to_dict(user: DBUser) -> dict:
+    full_name = user.full_name or "Admin"
+    return {
+        "id": user.id,
+        "full_name": full_name,
+        "fullName": full_name,
+        "name": full_name,
+        "email": user.email,
+        "phone": user.phone or "",
+        "role": "admin",
+        "is_active": bool(getattr(user, "is_active", True)),
         "created_at": iso(user.created_at),
         "updated_at": iso(user.updated_at),
     }
@@ -762,6 +800,7 @@ def ensure_database_compatibility():
             "phone": "VARCHAR(50) DEFAULT ''",
             "password": "VARCHAR(255) DEFAULT ''",
             "role": "VARCHAR(30) DEFAULT 'customer'",
+            "is_active": "BOOLEAN DEFAULT TRUE",
             "updated_at": "TIMESTAMP",
         },
         "products": {
@@ -834,6 +873,7 @@ def ensure_database_compatibility():
             else:
                 connection.execute(text("UPDATE users SET password = COALESCE(NULLIF(password, ''), '') WHERE password IS NULL OR password = ''"))
             connection.execute(text("UPDATE users SET role = COALESCE(NULLIF(role, ''), 'customer') WHERE role IS NULL OR role = ''"))
+            connection.execute(text("UPDATE users SET is_active = TRUE WHERE is_active IS NULL"))
         if "products" in existing_tables:
             connection.execute(text("UPDATE products SET stock_qty = COALESCE(stock_qty, stock, 0), stock = COALESCE(stock, stock_qty, 0)"))
             connection.execute(text("UPDATE products SET category_name = COALESCE(NULLIF(category_name, ''), category, '') WHERE category_name IS NULL OR category_name = ''"))
@@ -874,11 +914,14 @@ def seed_database():
                 phone="",
                 password=ADMIN_PASSWORD,
                 role="admin",
+                is_active=True,
             )
             db.add(admin)
         elif not admin.full_name or admin.full_name == "FoodNova User":
             admin.full_name = "FoodNova Admin"
             admin.updated_at = datetime.utcnow()
+        else:
+            admin.is_active = True
 
         if db.query(DBProduct).count() == 0:
             for product in PRODUCTS:
@@ -1087,6 +1130,8 @@ def login(payload: LoginPayload, request: Request):
 
         if not user or not _password_matches(payload.password, user.password):
             raise HTTPException(status_code=401, detail="Invalid email or password")
+        if (user.role or "customer") == "admin":
+            raise HTTPException(status_code=403, detail="Please use the admin login page")
 
         ensure_profile(db, user)
         token = f"token-{uuid4()}"
@@ -1103,6 +1148,26 @@ def login(payload: LoginPayload, request: Request):
                 "Admin logged in",
             )
         return auth_response("Login successful", user_data, token)
+    finally:
+        db.close()
+
+
+@app.post("/auth/admin/login")
+def admin_login(payload: LoginPayload, request: Request):
+    email = payload.email.lower().strip()
+    db = SessionLocal()
+    try:
+        user = get_db_user_by_email(db, email)
+        if not user or (user.role or "") != "admin" or not _password_matches(payload.password, user.password):
+            raise HTTPException(status_code=401, detail="Invalid admin email or password")
+        if not getattr(user, "is_active", True):
+            raise HTTPException(status_code=403, detail="Admin account is inactive")
+
+        token = f"token-{uuid4()}"
+        TOKENS[token] = email
+        user_data = db_user_to_dict(user)
+        create_admin_audit_log(request, user_data, "admin_login", "admin", user.id, "Admin logged in")
+        return auth_response("Admin login successful", user_data, token)
     finally:
         db.close()
 
@@ -2113,6 +2178,133 @@ def admin_customers(request: Request):
     except Exception as error:
         print("ADMIN CUSTOMERS LOAD ERROR:", repr(error))
         return {"success": True, "customers": [], "data": []}
+    finally:
+        db.close()
+
+
+@app.get("/admin/users")
+def get_admin_users(request: Request):
+    require_admin(request)
+    db = SessionLocal()
+    try:
+        admins = [admin_user_to_dict(user) for user in db.query(DBUser).filter(DBUser.role == "admin").order_by(DBUser.created_at.desc(), DBUser.id.desc()).all()]
+        return {"success": True, "admins": admins, "data": admins}
+    finally:
+        db.close()
+
+
+@app.post("/admin/users")
+def create_admin_user(payload: AdminUserPayload, request: Request):
+    admin = require_admin(request)
+    full_name = (payload.full_name or "").strip()
+    email = payload.email.lower().strip()
+    password = payload.password or ""
+    if not full_name:
+        raise HTTPException(status_code=400, detail="Full name is required")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if payload.confirm_password is not None and payload.confirm_password != password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    db = SessionLocal()
+    try:
+        if get_db_user_by_email(db, email):
+            raise HTTPException(status_code=400, detail="Email already exists")
+        new_admin = DBUser(
+            full_name=full_name,
+            email=email,
+            phone=payload.phone or "",
+            password=_hash_password(password),
+            role="admin",
+            is_active=payload.is_active is not False,
+        )
+        db.add(new_admin)
+        db.commit()
+        db.refresh(new_admin)
+        data = admin_user_to_dict(new_admin)
+        create_admin_audit_log(
+            request,
+            admin,
+            "admin_user_created",
+            "admin_user",
+            new_admin.id,
+            f"{admin.get('full_name') or admin.get('email')} created admin user {new_admin.email}",
+            {"admin_email": new_admin.email},
+        )
+        return {"success": True, "message": "Admin user created successfully", "admin": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/users/{admin_id}")
+def update_admin_user(admin_id: int, payload: AdminUserUpdatePayload, request: Request):
+    admin = require_admin(request)
+    db = SessionLocal()
+    try:
+        target = db.query(DBUser).filter(DBUser.id == admin_id, DBUser.role == "admin").first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        old_data = admin_user_to_dict(target)
+        if payload.full_name is not None:
+            if not payload.full_name.strip():
+                raise HTTPException(status_code=400, detail="Full name is required")
+            target.full_name = payload.full_name.strip()
+        if payload.phone is not None:
+            target.phone = payload.phone
+        if payload.is_active is not None:
+            if admin_id == admin.get("id") and payload.is_active is False:
+                raise HTTPException(status_code=400, detail="You cannot deactivate your own admin account")
+            target.is_active = bool(payload.is_active)
+        target.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(target)
+        data = admin_user_to_dict(target)
+        create_admin_audit_log(request, admin, "admin_user_updated", "admin_user", target.id, f"{admin.get('full_name') or admin.get('email')} updated admin user {target.email}", {"before": old_data, "after": data})
+        return {"success": True, "message": "Admin user updated successfully", "admin": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/users/{admin_id}/password")
+def reset_admin_password(admin_id: int, payload: AdminPasswordResetPayload, request: Request):
+    admin = require_admin(request)
+    password = payload.new_password or ""
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    if payload.confirm_password is not None and payload.confirm_password != password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+
+    db = SessionLocal()
+    try:
+        target = db.query(DBUser).filter(DBUser.id == admin_id, DBUser.role == "admin").first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        target.password = _hash_password(password)
+        target.updated_at = datetime.utcnow()
+        db.commit()
+        data = admin_user_to_dict(target)
+        create_admin_audit_log(request, admin, "admin_password_reset", "admin_user", target.id, f"{admin.get('full_name') or admin.get('email')} reset password for admin user {target.email}", {"admin_email": target.email})
+        return {"success": True, "message": "Admin password reset successfully", "admin": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.delete("/admin/users/{admin_id}")
+def deactivate_admin_user(admin_id: int, request: Request):
+    admin = require_admin(request)
+    if admin_id == admin.get("id"):
+        raise HTTPException(status_code=400, detail="You cannot deactivate your own admin account")
+    db = SessionLocal()
+    try:
+        target = db.query(DBUser).filter(DBUser.id == admin_id, DBUser.role == "admin").first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Admin user not found")
+        target.is_active = False
+        target.updated_at = datetime.utcnow()
+        db.commit()
+        data = admin_user_to_dict(target)
+        create_admin_audit_log(request, admin, "admin_user_deactivated", "admin_user", target.id, f"{admin.get('full_name') or admin.get('email')} deactivated admin user {target.email}", {"admin_email": target.email})
+        return {"success": True, "message": "Admin user deactivated successfully", "admin": data, "data": data}
     finally:
         db.close()
 

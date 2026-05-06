@@ -16,6 +16,7 @@ class User(Base):
     phone = Column(String(50), default="")
     password = Column(String(255), nullable=False)
     role = Column(String(30), default="customer", index=True)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
