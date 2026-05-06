@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from uuid import uuid4
 import json
@@ -8,6 +8,7 @@ import random
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import inspect, text
 
@@ -69,6 +70,12 @@ BROADCAST_MESSAGES: List[dict] = []
 
 ADMIN_EMAIL = "admin@foodnova.com"
 ADMIN_PASSWORD = "Admin123!"
+JWT_SECRET = os.environ.get("JWT_SECRET") or "foodnova-dev-secret-change-me"
+JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
+JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "10080"))
+
+if not os.environ.get("JWT_SECRET"):
+    print("WARNING: JWT_SECRET is not set. Using development secret.")
 
 USERS[ADMIN_EMAIL] = {
     "id": 1,
@@ -294,16 +301,48 @@ def public_user(user: dict) -> dict:
     }
 
 
+def create_access_token(user) -> str:
+    email = getattr(user, "email", None) if not isinstance(user, dict) else user.get("email")
+    user_id = getattr(user, "id", None) if not isinstance(user, dict) else user.get("id")
+    role = getattr(user, "role", None) if not isinstance(user, dict) else user.get("role")
+    full_name = (
+        getattr(user, "full_name", None)
+        if not isinstance(user, dict)
+        else user.get("full_name") or user.get("fullName") or user.get("name")
+    )
+    expiry = datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
+    payload = {
+        "sub": email,
+        "user_id": user_id,
+        "role": role or "customer",
+        "name": full_name or "",
+        "exp": expiry,
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def decode_access_token(token: str) -> Optional[dict]:
+    try:
+        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except JWTError:
+        return None
+
+
 def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
     if not authorization:
         return None
     token = authorization.replace("Bearer ", "").strip()
-    email = TOKENS.get(token)
+    payload = decode_access_token(token)
+    email = payload.get("sub") if payload else None
     if not email:
         return None
     db = SessionLocal()
     try:
         user = get_db_user_by_email(db, email)
+        if not user:
+            return None
+        if (user.role or "") == "admin" and not getattr(user, "is_active", True):
+            return None
         return db_user_to_dict(user) if user else None
     finally:
         db.close()
@@ -979,6 +1018,7 @@ def debug_db():
     try:
         return {
             "success": True,
+            "auth_mode": "jwt",
             "database_url_prefix": engine.url.get_backend_name(),
             "users_count": db.query(DBUser).count(),
             "products_count": db.query(DBProduct).count(),
@@ -990,6 +1030,7 @@ def debug_db():
     except Exception as error:
         return {
             "success": False,
+            "auth_mode": "jwt",
             "database_url_prefix": engine.url.get_backend_name(),
             "error": repr(error),
         }
@@ -1113,8 +1154,7 @@ def register(payload: RegisterPayload):
         ))
         db.commit()
 
-        token = f"token-{uuid4()}"
-        TOKENS[token] = email
+        token = create_access_token(user)
 
         return auth_response("Registration successful", db_user_to_dict(user), token)
     finally:
@@ -1134,8 +1174,7 @@ def login(payload: LoginPayload, request: Request):
             raise HTTPException(status_code=403, detail="Please use the admin login page")
 
         ensure_profile(db, user)
-        token = f"token-{uuid4()}"
-        TOKENS[token] = email
+        token = create_access_token(user)
 
         user_data = db_user_to_dict(user)
         if user_data.get("role") == "admin":
@@ -1163,8 +1202,7 @@ def admin_login(payload: LoginPayload, request: Request):
         if not getattr(user, "is_active", True):
             raise HTTPException(status_code=403, detail="Admin account is inactive")
 
-        token = f"token-{uuid4()}"
-        TOKENS[token] = email
+        token = create_access_token(user)
         user_data = db_user_to_dict(user)
         create_admin_audit_log(request, user_data, "admin_login", "admin", user.id, "Admin logged in")
         return auth_response("Admin login successful", user_data, token)

@@ -10,13 +10,16 @@ const api = axios.create({
   },
 });
 
-const getAuthToken = () =>
-  localStorage.getItem("admin_token") ||
-  localStorage.getItem("foodnova_token") ||
-  localStorage.getItem("token");
+const getTokenForRequest = (url = "") => {
+  const path = String(url || "");
+  if (path.startsWith("/admin")) {
+    return localStorage.getItem("admin_token") || localStorage.getItem("token");
+  }
+  return localStorage.getItem("token") || localStorage.getItem("foodnova_token");
+};
 
 api.interceptors.request.use((config) => {
-  const token = getAuthToken();
+  const token = getTokenForRequest(config.url);
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -24,6 +27,16 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      console.warn("FoodNova API session expired or unauthorized", error.config?.url);
+    }
+    return Promise.reject(error);
+  }
+);
 
 const normalizeList = (body, keys = []) => {
   if (Array.isArray(body)) return body;
@@ -228,7 +241,7 @@ export const ordersAPI = {
     const formData = fileOrFormData instanceof FormData ? fileOrFormData : new FormData();
     if (!(fileOrFormData instanceof FormData)) formData.append("file", fileOrFormData);
     const headers = {};
-    const token = getAuthToken();
+    const token = getTokenForRequest(`/orders/${orderId}/receipt`);
     if (token) headers.Authorization = `Bearer ${token}`;
     const response = await fetch(`${API_BASE_URL}/orders/${orderId}/receipt`, { method: "POST", headers, body: formData });
     const data = await response.json().catch(() => ({}));

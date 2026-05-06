@@ -148,7 +148,7 @@ export default function ProfilePage() {
       window.dispatchEvent(new Event('foodnova-profile-updated'))
       toast.success('Avatar uploaded')
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to upload avatar')
+      toast.error(error.response?.status === 401 ? 'Session expired. Please log in again.' : (error.response?.data?.detail || 'Failed to upload avatar'))
       console.error(error)
     } finally {
       setUploadingAvatar(false)
