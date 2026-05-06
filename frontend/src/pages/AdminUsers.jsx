@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { RefreshCw, ShieldPlus, X } from 'lucide-react'
+import { RefreshCw, Search, ShieldPlus, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import './AdminUsers.css'
@@ -54,6 +54,18 @@ const PERMISSION_OPTIONS = [
   ['admins:manage', 'Admin Users Manage'],
 ]
 
+const PERMISSION_GROUPS = [
+  { title: 'Dashboard', items: [['dashboard:view', 'View dashboard']] },
+  { title: 'Orders', items: [['orders:view', 'View orders'], ['orders:update', 'Update orders'], ['orders:delivery', 'Manage delivery']] },
+  { title: 'Payments', items: [['payments:view', 'View payments'], ['payments:approve', 'Approve payments']] },
+  { title: 'Stock', items: [['stock:view', 'View stock'], ['stock:manage', 'Manage stock']] },
+  { title: 'Broadcasts', items: [['broadcasts:view', 'View broadcasts'], ['broadcasts:send', 'Send broadcasts']] },
+  { title: 'Customers', items: [['customers:view', 'View customers']] },
+  { title: 'Admins', items: [['admins:view', 'View admin users'], ['admins:manage', 'Manage admin users']] },
+  { title: 'Audit Logs', items: [['audit:view', 'View audit logs']] },
+]
+
+const ALL_PERMISSIONS = PERMISSION_OPTIONS.map(([value]) => value)
 const roleLabel = (value) => ROLE_OPTIONS.find(([role]) => role === value)?.[1] || 'Custom'
 
 const formatDate = (value) => {
@@ -69,6 +81,8 @@ export default function AdminUsers() {
   const [modalMode, setModalMode] = useState('')
   const [selectedAdmin, setSelectedAdmin] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [permissionSearch, setPermissionSearch] = useState('')
 
   const loadAdmins = async () => {
     try {
@@ -94,7 +108,8 @@ export default function AdminUsers() {
 
   const openCreate = () => {
     setSelectedAdmin(null)
-    setForm(emptyForm)
+    setForm({ ...emptyForm, permissions: ROLE_PERMISSIONS.viewer })
+    setPermissionSearch('')
     setModalMode('create')
   }
 
@@ -111,12 +126,14 @@ export default function AdminUsers() {
       permissions: item.permissions || ROLE_PERMISSIONS[adminRole] || [],
       is_active: item.is_active !== false,
     })
+    setPermissionSearch('')
     setModalMode('edit')
   }
 
   const openPassword = (item) => {
     setSelectedAdmin(item)
     setForm({ ...emptyForm, email: item.email || '', full_name: item.full_name || item.name || '' })
+    setPermissionSearch('')
     setModalMode('password')
   }
 
@@ -124,15 +141,25 @@ export default function AdminUsers() {
     setModalMode('')
     setSelectedAdmin(null)
     setForm(emptyForm)
+    setPermissionSearch('')
   }
 
   const submitForm = async (event) => {
     event.preventDefault()
+    if (modalMode === 'create' && (!form.full_name.trim() || !form.email.trim() || form.password.length < 6 || form.password !== form.confirm_password)) {
+      toast.error('Please complete all required fields and confirm passwords match')
+      return
+    }
+    if (modalMode === 'password' && (form.password.length < 6 || form.password !== form.confirm_password)) {
+      toast.error('Password must be at least 6 characters and match confirmation')
+      return
+    }
     try {
+      setSaving(true)
       if (modalMode === 'create') {
         await adminAPI.createAdminUser({
           ...form,
-          permissions: form.admin_role === 'custom' ? form.permissions : ROLE_PERMISSIONS[form.admin_role],
+          permissions: form.permissions,
         })
         toast.success('Admin user created')
       } else if (modalMode === 'edit') {
@@ -140,7 +167,7 @@ export default function AdminUsers() {
           full_name: form.full_name,
           phone: form.phone,
           admin_role: form.admin_role,
-          permissions: form.admin_role === 'custom' ? form.permissions : ROLE_PERMISSIONS[form.admin_role],
+          permissions: form.permissions,
           is_active: form.is_active,
         })
         toast.success('Admin user updated')
@@ -155,6 +182,8 @@ export default function AdminUsers() {
       loadAdmins()
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Admin user action failed')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -175,7 +204,33 @@ export default function AdminUsers() {
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
   const canManageAdmins = admin?.admin_role === 'super_admin' || admin?.permissions?.includes('admins:manage')
-  const activePermissions = form.admin_role === 'custom' ? form.permissions : (ROLE_PERMISSIONS[form.admin_role] || [])
+  const activePermissions = form.permissions || []
+  const isCreateMode = modalMode === 'create'
+  const isPasswordMode = modalMode === 'password'
+  const modalTitle = isCreateMode ? 'Create Admin User' : modalMode === 'edit' ? 'Edit Admin User' : 'Reset Admin Password'
+  const modalSubtitle = isCreateMode ? 'Add a new admin and assign permissions' : selectedAdmin?.email || 'Update admin account access.'
+  const formInvalid = isPasswordMode
+    ? form.password.length < 6 || form.password !== form.confirm_password
+    : !form.full_name.trim() || !form.email.trim() || (isCreateMode && (form.password.length < 6 || form.password !== form.confirm_password))
+  const setRolePreset = (role) => {
+    setForm({ ...form, admin_role: role, permissions: ROLE_PERMISSIONS[role] || form.permissions })
+  }
+  const useRoleDefaults = () => setForm({ ...form, permissions: ROLE_PERMISSIONS[form.admin_role] || [] })
+  const togglePermission = (permission) => {
+    setForm({
+      ...form,
+      permissions: activePermissions.includes(permission)
+        ? activePermissions.filter((item) => item !== permission)
+        : [...new Set([...activePermissions, permission])],
+    })
+  }
+  const searchTerm = permissionSearch.trim().toLowerCase()
+  const filteredGroups = PERMISSION_GROUPS
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(([value, label]) => !searchTerm || group.title.toLowerCase().includes(searchTerm) || value.toLowerCase().includes(searchTerm) || label.toLowerCase().includes(searchTerm)),
+    }))
+    .filter((group) => group.items.length)
 
   return (
     <div className="admin-page admin-users-page">
@@ -241,57 +296,82 @@ export default function AdminUsers() {
           <div className="admin-user-modal">
             <div className="admin-user-modal-header">
               <div>
-                <h2>{modalMode === 'create' ? 'Create Admin User' : modalMode === 'edit' ? 'Edit Admin User' : 'Reset Admin Password'}</h2>
-                <p>{selectedAdmin?.email || 'Set up a separate admin login account.'}</p>
+                <h2>{modalTitle}</h2>
+                <p>{modalSubtitle}</p>
               </div>
               <button type="button" onClick={closeModal} aria-label="Close"><X size={20} /></button>
             </div>
             <form onSubmit={submitForm} className="admin-user-form">
-              {modalMode !== 'password' && (
-                <>
-                  <label>Full Name<input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} required /></label>
-                  <label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required disabled={modalMode === 'edit'} /></label>
-                  <label>Phone<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
-                  <label>Admin Role<select value={form.admin_role} onChange={(event) => setForm({ ...form, admin_role: event.target.value, permissions: ROLE_PERMISSIONS[event.target.value] || form.permissions })}>{ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                  {modalMode === 'create' && (
-                    <>
-                      <label>Password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required minLength="6" /></label>
-                      <label>Confirm Password<input type="password" value={form.confirm_password} onChange={(event) => setForm({ ...form, confirm_password: event.target.value })} required minLength="6" /></label>
-                    </>
-                  )}
-                  <div className="admin-user-permissions">
-                    <strong>{form.admin_role === 'custom' ? 'Custom Permissions' : 'Permission Preview'}</strong>
-                    <div className="admin-user-permission-grid">
-                      {PERMISSION_OPTIONS.map(([value, label]) => (
-                        <label key={value} className="admin-user-check">
-                          <input
-                            type="checkbox"
-                            checked={activePermissions.includes(value)}
-                            disabled={form.admin_role !== 'custom'}
-                            onChange={(event) => setForm({
-                              ...form,
-                              permissions: event.target.checked
-                                ? [...new Set([...form.permissions, value])]
-                                : form.permissions.filter((permission) => permission !== value),
-                            })}
-                          />
-                          {label}
-                        </label>
-                      ))}
+              <div className="admin-user-modal-body">
+                {modalMode !== 'password' && (
+                  <div className="admin-form-grid">
+                    <div className="admin-form-column">
+                      <section className="admin-form-card">
+                        <h3>Basic Information</h3>
+                        <label>Full Name<input placeholder="FoodNova Admin" value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} required /></label>
+                        <label>Email<input type="email" placeholder="admin@foodnova.ng" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required disabled={modalMode === 'edit'} /></label>
+                        <label>Phone<input placeholder="+2348000000000" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+                      </section>
+
+                      {modalMode === 'create' && (
+                        <section className="admin-form-card">
+                          <h3>Security</h3>
+                          <label>Password<input type="password" placeholder="Minimum 6 characters" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required minLength="6" /></label>
+                          <label>Confirm Password<input type="password" placeholder="Re-enter password" value={form.confirm_password} onChange={(event) => setForm({ ...form, confirm_password: event.target.value })} required minLength="6" /></label>
+                          {form.password && form.confirm_password && form.password !== form.confirm_password && <p className="admin-inline-error">Passwords do not match.</p>}
+                        </section>
+                      )}
+                    </div>
+
+                    <div className="admin-form-column">
+                      <section className="admin-form-card">
+                        <h3>Role</h3>
+                        <label>Admin Role<select value={form.admin_role} onChange={(event) => setRolePreset(event.target.value)}>{ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                        <label className="admin-user-toggle"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /> <span>Active admin account</span></label>
+                      </section>
+
+                      <section className="admin-form-card permissions-section">
+                        <div className="permissions-heading">
+                          <div>
+                            <h3>Permissions</h3>
+                            <p>{activePermissions.length} selected</p>
+                          </div>
+                          <div className="permission-actions">
+                            <button type="button" onClick={() => setForm({ ...form, permissions: ALL_PERMISSIONS })}>Select all</button>
+                            <button type="button" onClick={() => setForm({ ...form, permissions: [] })}>Clear all</button>
+                            <button type="button" onClick={useRoleDefaults}>Use role defaults</button>
+                          </div>
+                        </div>
+                        <label className="permission-search"><Search size={16} /><input value={permissionSearch} onChange={(event) => setPermissionSearch(event.target.value)} placeholder="Search permissions" /></label>
+                        <div className="permissions-list">
+                          {filteredGroups.map((group) => (
+                            <section key={group.title} className="permissions-group">
+                              <h4>{group.title}</h4>
+                              {group.items.map(([value, label]) => (
+                                <label key={value} className="permission-row">
+                                  <input type="checkbox" checked={activePermissions.includes(value)} onChange={() => togglePermission(value)} />
+                                  <span>{label}</span>
+                                </label>
+                              ))}
+                            </section>
+                          ))}
+                        </div>
+                      </section>
                     </div>
                   </div>
-                  <label className="admin-user-check"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /> Active admin account</label>
-                </>
-              )}
-              {modalMode === 'password' && (
-                <>
-                  <label>New Password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required minLength="6" /></label>
-                  <label>Confirm Password<input type="password" value={form.confirm_password} onChange={(event) => setForm({ ...form, confirm_password: event.target.value })} required minLength="6" /></label>
-                </>
-              )}
+                )}
+                {modalMode === 'password' && (
+                  <div className="admin-form-card admin-password-card">
+                    <h3>Security</h3>
+                    <label>New Password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required minLength="6" /></label>
+                    <label>Confirm Password<input type="password" value={form.confirm_password} onChange={(event) => setForm({ ...form, confirm_password: event.target.value })} required minLength="6" /></label>
+                    {form.password && form.confirm_password && form.password !== form.confirm_password && <p className="admin-inline-error">Passwords do not match.</p>}
+                  </div>
+                )}
+              </div>
               <div className="admin-user-modal-footer">
                 <button type="button" className="admin-users-secondary" onClick={closeModal}>Cancel</button>
-                <button type="submit" className="admin-users-primary">{modalMode === 'password' ? 'Reset Password' : 'Save Admin'}</button>
+                <button type="submit" className="admin-users-primary" disabled={saving || formInvalid}>{saving ? 'Saving...' : modalMode === 'password' ? 'Reset Password' : modalMode === 'create' ? 'Create Admin' : 'Save Admin'}</button>
               </div>
             </form>
           </div>
