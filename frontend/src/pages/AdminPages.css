@@ -1289,6 +1289,20 @@ tbody tr:hover {
   color: #fff;
 }
 
+.modal-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.invoice-link-button {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
 .stock-row-low td {
   background: color-mix(in srgb, var(--fn-accent, #FFD23F) 12%, transparent);
 }

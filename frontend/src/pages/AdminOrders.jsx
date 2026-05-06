@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
@@ -247,7 +248,10 @@ export default function AdminOrders() {
           <div className="modal-content order-details-modal">
             <div className="modal-header">
               <h2>Order Details</h2>
-              <button className="close-btn" onClick={handleCloseOrder}>×</button>
+              <div className="modal-header-actions">
+                <Link className="btn-view invoice-link-button" to={`/admin/orders/${selectedOrder.id}/invoice`} state={{ order: selectedOrder }}>View Invoice</Link>
+                <button className="close-btn" onClick={handleCloseOrder}>×</button>
+              </div>
             </div>
 
             <div className="order-detail-content">

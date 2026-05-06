@@ -26,6 +26,7 @@ import ContactPage from './pages/ContactPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
 import InboxPage from './pages/InboxPage'
+import InvoicePage from './pages/InvoicePage'
 import './modal-scroll-fix.css'
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/orders" element={<OrderHistoryPage />} />
+              <Route path="/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/inbox" element={<InboxPage />} />
               <Route path="/inbox/*" element={<InboxPage />} />
@@ -51,6 +53,7 @@ function App() {
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
+              <Route path="/admin/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/admin/stock" element={<AdminStock />} />
               <Route path="/admin/payments" element={<AdminPayments />} />
               <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />

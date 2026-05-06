@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { ordersAPI, notificationsAPI } from '../services/api'
 import toast from 'react-hot-toast'
@@ -352,7 +353,11 @@ export default function OrderHistoryPage() {
           <div className="modal-content">
             <div className="modal-header">
               <h2>Order Details</h2>
-              <div style={{display:"flex",gap:"0.5rem",alignItems:"center"}}><button className="btn-view" onClick={handleRefreshOrder} disabled={refreshingOrder}><RotateCw size={14}/> {refreshingOrder ? "Refreshing..." : "Refresh"}</button><button className="close-btn" onClick={handleCloseOrder}>×</button></div>
+              <div className="modal-header-actions">
+                <Link className="btn-view invoice-link-button" to={`/orders/${selectedOrder.id}/invoice`} state={{ order: selectedOrder }}>View Invoice</Link>
+                <button className="btn-view" onClick={handleRefreshOrder} disabled={refreshingOrder}><RotateCw size={14}/> {refreshingOrder ? "Refreshing..." : "Refresh"}</button>
+                <button className="close-btn" onClick={handleCloseOrder}>×</button>
+              </div>
             </div>
 
             <div className="order-detail-content">
