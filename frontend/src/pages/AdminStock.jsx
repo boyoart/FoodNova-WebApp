@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
+
+const emptyProduct = { name: '', price: '', stock_qty: '', category: '', is_active: true, image_url: '' }
+const emptyPack = { name: '', price: '', description: '', items: [], is_active: true, image_url: '' }
 
 export default function AdminStock() {
   const { isAdmin } = useAuthStore()
@@ -12,23 +15,18 @@ export default function AdminStock() {
   const [packs, setPacks] = useState([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
-  const [editData, setEditData] = useState({})
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [createData, setCreateData] = useState({})
+  const [formData, setFormData] = useState(emptyProduct)
+  const [showModal, setShowModal] = useState(false)
+  const isProduct = activeTab === 'products'
 
   useEffect(() => {
-    if (isAdmin) {
-      fetchData()
-    }
+    if (isAdmin) fetchData()
   }, [isAdmin])
 
   const fetchData = async () => {
     try {
       setLoading(true)
-      const [productsRes, packsRes] = await Promise.all([
-        adminAPI.getProducts(),
-        adminAPI.getPacks()
-      ])
+      const [productsRes, packsRes] = await Promise.all([adminAPI.getProducts(), adminAPI.getPacks()])
       setProducts(productsRes.data || [])
       setPacks(packsRes.data || [])
     } catch (error) {
@@ -39,38 +37,36 @@ export default function AdminStock() {
     }
   }
 
-  const handleEdit = (item) => {
-    setEditingId(item.id)
-    setEditData({ ...item })
+  const clearPreview = (data = formData) => {
+    if (data.image_preview) URL.revokeObjectURL(data.image_preview)
   }
 
-  const handleCancelEdit = () => {
+  const openCreateModal = () => {
+    clearPreview()
     setEditingId(null)
-    setEditData({})
+    setFormData(isProduct ? emptyProduct : emptyPack)
+    setShowModal(true)
   }
 
-  const handleSaveEdit = async () => {
-    try {
-      if (activeTab === 'products') {
-        await adminAPI.updateProduct(editingId, editData)
-        toast.success('Product updated successfully')
-      } else {
-        await adminAPI.updatePack(editingId, editData)
-        toast.success('Pack updated successfully')
-      }
-      setEditingId(null)
-      setEditData({})
-      fetchData()
-    } catch (error) {
-      toast.error('Failed to update item')
-    }
+  const handleEdit = (item) => {
+    clearPreview()
+    setEditingId(item.id)
+    setFormData({ ...(isProduct ? emptyProduct : emptyPack), ...item })
+    setShowModal(true)
+  }
+
+  const closeModal = () => {
+    clearPreview()
+    setEditingId(null)
+    setFormData(isProduct ? emptyProduct : emptyPack)
+    setShowModal(false)
   }
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this item?')) return
 
     try {
-      if (activeTab === 'products') {
+      if (isProduct) {
         await adminAPI.deleteProduct(id)
         toast.success('Product deleted successfully')
       } else {
@@ -83,178 +79,162 @@ export default function AdminStock() {
     }
   }
 
-  const handleCreate = async () => {
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0]
+    clearPreview()
+
+    if (!file) {
+      setFormData((current) => ({ ...current, image_file: null, image_preview: '' }))
+      return
+    }
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file')
+      event.target.value = ''
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be 5MB or smaller')
+      event.target.value = ''
+      return
+    }
+
+    setFormData((current) => ({ ...current, image_file: file, image_preview: URL.createObjectURL(file) }))
+  }
+
+  const removeSelectedImage = () => {
+    clearPreview()
+    setFormData((current) => ({
+      ...current,
+      image_file: null,
+      image_preview: '',
+      image_url: current.id ? current.image_url : '',
+    }))
+  }
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
     try {
-      if (activeTab === 'products') {
-        await adminAPI.createProduct(createData)
-        toast.success('Product created successfully')
+      if (isProduct) {
+        if (editingId) {
+          await adminAPI.updateProduct(editingId, formData)
+          toast.success('Product updated successfully')
+        } else {
+          await adminAPI.createProduct(formData)
+          toast.success('Product created successfully')
+        }
+      } else if (editingId) {
+        await adminAPI.updatePack(editingId, formData)
+        toast.success('Pack updated successfully')
       } else {
-        await adminAPI.createPack(createData)
+        await adminAPI.createPack(formData)
         toast.success('Pack created successfully')
       }
-      setShowCreateModal(false)
-      setCreateData({})
+      closeModal()
       fetchData()
     } catch (error) {
-      toast.error('Failed to create item')
+      toast.error(error.response?.data?.detail || `Failed to ${editingId ? 'update' : 'create'} item`)
+      console.error(error)
     }
   }
 
-  const handleCreateModalClose = () => {
-    setShowCreateModal(false)
-    setCreateData({})
+  const renderImageUpload = (label) => {
+    const preview = formData.image_preview || formData.image_url
+    return (
+      <div className="form-group full-width stock-image-field">
+        <label>{label}</label>
+        <div className="stock-image-upload">
+          <div className="stock-image-preview">
+            {preview ? <img src={preview} alt="Stock item preview" /> : <span>No image selected</span>}
+          </div>
+          <div className="stock-image-copy">
+            <strong>{preview ? 'Image ready' : 'Upload a clean item image'}</strong>
+            <p>Choose a JPG, PNG, or WEBP image up to 5MB. Existing images stay unchanged unless you upload a new one.</p>
+            <div className="stock-image-actions">
+              <label className="stock-file-button">
+                {preview ? 'Change Image' : 'Choose Image'}
+                <input type="file" accept="image/*" onChange={handleImageChange} />
+              </label>
+              {formData.image_file && (
+                <button type="button" className="stock-remove-image" onClick={removeSelectedImage}>Remove</button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
-  const renderProductForm = (data, setData, isCreate = false) => (
-    <div className="form-grid">
+  const renderProductForm = () => (
+    <div className="form-grid stock-modal-grid">
       <div className="form-group">
-        <label>Name</label>
-        <input
-          type="text"
-          value={data.name || ''}
-          onChange={(e) => setData({ ...data, name: e.target.value })}
-          required
-        />
+        <label>Product Name</label>
+        <input value={formData.name || ''} onChange={(event) => setFormData({ ...formData, name: event.target.value })} required />
       </div>
       <div className="form-group">
         <label>Price (₦)</label>
-        <input
-          type="number"
-          value={data.price || ''}
-          onChange={(e) => setData({ ...data, price: parseInt(e.target.value) || 0 })}
-          min="0"
-          required
-        />
+        <input type="number" min="0" value={formData.price || ''} onChange={(event) => setFormData({ ...formData, price: Number(event.target.value) || 0 })} required />
       </div>
       <div className="form-group">
         <label>Stock Quantity</label>
-        <input
-          type="number"
-          value={data.stock_qty || data.stock || ''}
-          onChange={(e) => setData({ ...data, stock_qty: parseInt(e.target.value) || 0, stock: parseInt(e.target.value) || 0 })}
-          min="0"
-          required
-        />
+        <input type="number" min="0" value={formData.stock_qty ?? formData.stock ?? ''} onChange={(event) => setFormData({ ...formData, stock_qty: Number(event.target.value) || 0, stock: Number(event.target.value) || 0 })} required />
       </div>
       <div className="form-group">
         <label>Category</label>
-        <input
-          type="text"
-          value={data.category || ''}
-          onChange={(e) => setData({ ...data, category: e.target.value, category_name: e.target.value })}
-        />
+        <input value={formData.category || ''} onChange={(event) => setFormData({ ...formData, category: event.target.value, category_name: event.target.value })} />
       </div>
-      <div className="form-group full-width">
-        <label>Image URL</label>
-        <input
-          type="url"
-          value={data.image_url || ''}
-          onChange={(e) => setData({ ...data, image_url: e.target.value })}
-        />
-      </div>
-      <div className="form-group">
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={data.is_active !== false}
-            onChange={(e) => setData({ ...data, is_active: e.target.checked })}
-          />
-          Active
-        </label>
-      </div>
+      {renderImageUpload('Product Image Upload')}
+      <label className="stock-toggle full-width">
+        <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
+        <span>Active product</span>
+      </label>
     </div>
   )
 
-  const renderPackForm = (data, setData, isCreate = false) => (
-    <div className="form-grid">
+  const renderPackForm = () => (
+    <div className="form-grid stock-modal-grid">
       <div className="form-group">
-        <label>Name</label>
-        <input
-          type="text"
-          value={data.name || ''}
-          onChange={(e) => setData({ ...data, name: e.target.value })}
-          required
-        />
+        <label>Pack Name</label>
+        <input value={formData.name || ''} onChange={(event) => setFormData({ ...formData, name: event.target.value })} required />
       </div>
       <div className="form-group">
         <label>Price (₦)</label>
-        <input
-          type="number"
-          value={data.price || ''}
-          onChange={(e) => setData({ ...data, price: parseInt(e.target.value) || 0 })}
-          min="0"
-          required
-        />
+        <input type="number" min="0" value={formData.price || ''} onChange={(event) => setFormData({ ...formData, price: Number(event.target.value) || 0 })} required />
       </div>
       <div className="form-group full-width">
         <label>Description</label>
-        <textarea
-          value={data.description || ''}
-          onChange={(e) => setData({ ...data, description: e.target.value })}
-          rows="3"
-        />
+        <textarea value={formData.description || ''} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows="3" />
       </div>
       <div className="form-group full-width">
         <label>Items (comma-separated)</label>
-        <input
-          type="text"
-          value={Array.isArray(data.items) ? data.items.join(', ') : data.items || ''}
-          onChange={(e) => setData({ ...data, items: e.target.value.split(',').map(item => item.trim()) })}
-          placeholder="Rice, Beans, Oil"
-        />
+        <input value={Array.isArray(formData.items) ? formData.items.join(', ') : formData.items || ''} onChange={(event) => setFormData({ ...formData, items: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Rice, Beans, Oil" />
       </div>
-      <div className="form-group full-width">
-        <label>Image URL</label>
-        <input
-          type="url"
-          value={data.image_url || ''}
-          onChange={(e) => setData({ ...data, image_url: e.target.value })}
-        />
-      </div>
-      <div className="form-group">
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={data.is_active !== false}
-            onChange={(e) => setData({ ...data, is_active: e.target.checked })}
-          />
-          Active
-        </label>
-      </div>
+      {renderImageUpload('Pack Image Upload')}
+      <label className="stock-toggle full-width">
+        <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
+        <span>Active pack</span>
+      </label>
     </div>
   )
 
-  if (!isAdmin) {
-    return <div className="admin-page"><p>Access denied.</p></div>
-  }
+  if (!isAdmin) return <div className="admin-page"><p>Access denied.</p></div>
 
-  const items = activeTab === 'products' ? products : packs
+  const items = isProduct ? products : packs
+  const modalTitle = editingId
+    ? `Edit ${isProduct ? 'Product' : 'Pack'}`
+    : `Add New ${isProduct ? 'Product' : 'Pack'}`
 
   return (
     <div className="admin-page">
       <div className="admin-header">
         <h1>Stock Management</h1>
-        <button
-          className="btn-primary"
-          onClick={() => setShowCreateModal(true)}
-        >
-          Add {activeTab === 'products' ? 'Product' : 'Pack'}
-        </button>
+        <button className="btn-primary" onClick={openCreateModal}>Add {isProduct ? 'Product' : 'Pack'}</button>
       </div>
 
       <div className="tabs">
-        <button
-          className={`tab ${activeTab === 'products' ? 'active' : ''}`}
-          onClick={() => setActiveTab('products')}
-        >
-          Products ({products.length})
-        </button>
-        <button
-          className={`tab ${activeTab === 'packs' ? 'active' : ''}`}
-          onClick={() => setActiveTab('packs')}
-        >
-          Packs ({packs.length})
-        </button>
+        <button className={`tab ${isProduct ? 'active' : ''}`} onClick={() => setActiveTab('products')}>Products ({products.length})</button>
+        <button className={`tab ${!isProduct ? 'active' : ''}`} onClick={() => setActiveTab('packs')}>Packs ({packs.length})</button>
       </div>
 
       {loading ? (
@@ -266,126 +246,35 @@ export default function AdminStock() {
               <tr>
                 <th>ID</th>
                 <th>Name</th>
-                {activeTab === 'products' ? (
-                  <>
-                    <th>Category</th>
-                    <th>Stock</th>
-                  </>
-                ) : (
-                  <>
-                    <th>Description</th>
-                    <th>Items</th>
-                  </>
-                )}
+                {isProduct ? <><th>Category</th><th>Stock</th></> : <><th>Description</th><th>Items</th></>}
                 <th>Price</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map(item => (
+              {items.map((item) => (
                 <tr key={item.id}>
                   <td>{item.id}</td>
-                  <td>
-                    {editingId === item.id ? (
-                      <input
-                        type="text"
-                        value={editData.name || ''}
-                        onChange={(e) => setEditData({ ...editData, name: e.target.value })}
-                      />
-                    ) : (
-                      item.name
-                    )}
-                  </td>
-                  {activeTab === 'products' ? (
+                  <td>{item.name}</td>
+                  {isProduct ? (
                     <>
-                      <td>
-                        {editingId === item.id ? (
-                          <input
-                            type="text"
-                            value={editData.category || ''}
-                            onChange={(e) => setEditData({ ...editData, category: e.target.value, category_name: e.target.value })}
-                          />
-                        ) : (
-                          item.category
-                        )}
-                      </td>
-                      <td>
-                        {editingId === item.id ? (
-                          <input
-                            type="number"
-                            value={editData.stock_qty || editData.stock || ''}
-                            onChange={(e) => setEditData({ ...editData, stock_qty: parseInt(e.target.value) || 0, stock: parseInt(e.target.value) || 0 })}
-                            min="0"
-                          />
-                        ) : (
-                          item.stock || item.stock_qty
-                        )}
-                      </td>
+                      <td>{item.category}</td>
+                      <td>{item.stock ?? item.stock_qty}</td>
                     </>
                   ) : (
                     <>
-                      <td>
-                        {editingId === item.id ? (
-                          <textarea
-                            value={editData.description || ''}
-                            onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-                            rows="2"
-                          />
-                        ) : (
-                          item.description?.substring(0, 50) + (item.description?.length > 50 ? '...' : '')
-                        )}
-                      </td>
-                      <td>
-                        {editingId === item.id ? (
-                          <input
-                            type="text"
-                            value={Array.isArray(editData.items) ? editData.items.join(', ') : editData.items || ''}
-                            onChange={(e) => setEditData({ ...editData, items: e.target.value.split(',').map(item => item.trim()) })}
-                          />
-                        ) : (
-                          Array.isArray(item.items) ? item.items.join(', ') : item.items
-                        )}
-                      </td>
+                      <td>{item.description?.substring(0, 50)}{item.description?.length > 50 ? '...' : ''}</td>
+                      <td>{Array.isArray(item.items) ? item.items.join(', ') : item.items}</td>
                     </>
                   )}
+                  <td>{formatPrice(item.price)}</td>
+                  <td><span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span></td>
                   <td>
-                    {editingId === item.id ? (
-                      <input
-                        type="number"
-                        value={editData.price || ''}
-                        onChange={(e) => setEditData({ ...editData, price: parseInt(e.target.value) || 0 })}
-                        min="0"
-                      />
-                    ) : (
-                      formatPrice(item.price)
-                    )}
-                  </td>
-                  <td>
-                    <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>
-                      {item.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td>
-                    {editingId === item.id ? (
-                      <div className="action-buttons">
-                        <button className="btn-save" onClick={handleSaveEdit}>
-                          Save
-                        </button>
-                        <button className="btn-cancel" onClick={handleCancelEdit}>
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="action-buttons">
-                        <button className="btn-edit" onClick={() => handleEdit(item)}>
-                          Edit
-                        </button>
-                        <button className="btn-delete" onClick={() => handleDelete(item.id)}>
-                          Delete
-                        </button>
-                      </div>
-                    )}
+                    <div className="action-buttons">
+                      <button className="btn-edit" onClick={() => handleEdit(item)}>Edit</button>
+                      <button className="btn-delete" onClick={() => handleDelete(item.id)}>Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -394,28 +283,24 @@ export default function AdminStock() {
         </div>
       )}
 
-      {showCreateModal && (
-        <div className="modal-overlay">
-          <div className="modal">
-            <div className="modal-header">
-              <h2>Add New {activeTab === 'products' ? 'Product' : 'Pack'}</h2>
-              <button className="modal-close" onClick={handleCreateModalClose}>×</button>
+      {showModal && (
+        <div className="modal-overlay stock-modal-overlay">
+          <form className="modal stock-modal" onSubmit={handleSubmit}>
+            <div className="modal-header stock-modal-header">
+              <div>
+                <h2>{modalTitle}</h2>
+                <p>Fill in {isProduct ? 'product' : 'pack'} details below</p>
+              </div>
+              <button type="button" className="modal-close" onClick={closeModal}>×</button>
             </div>
-            <div className="modal-body">
-              {activeTab === 'products'
-                ? renderProductForm(createData, setCreateData, true)
-                : renderPackForm(createData, setCreateData, true)
-              }
+            <div className="modal-body stock-modal-body">
+              {isProduct ? renderProductForm() : renderPackForm()}
             </div>
-            <div className="modal-footer">
-              <button className="btn-cancel" onClick={handleCreateModalClose}>
-                Cancel
-              </button>
-              <button className="btn-primary" onClick={handleCreate}>
-                Create {activeTab === 'products' ? 'Product' : 'Pack'}
-              </button>
+            <div className="modal-footer stock-modal-footer">
+              <button type="button" className="btn-cancel" onClick={closeModal}>Cancel</button>
+              <button type="submit" className="btn-primary">{editingId ? `Update ${isProduct ? 'Product' : 'Pack'}` : `Save ${isProduct ? 'Product' : 'Pack'}`}</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
     </div>

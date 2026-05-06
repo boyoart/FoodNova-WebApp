@@ -35,6 +35,24 @@ const normalizeList = (body, keys = []) => {
   return [];
 };
 
+const toStockFormData = (payload = {}) => {
+  const formData = new FormData();
+  const entries = {
+    name: payload.name || "",
+    price: payload.price || 0,
+    stock_qty: payload.stock_qty ?? payload.stock ?? 0,
+    category: payload.category || payload.category_name || "",
+    description: payload.description || "",
+    is_active: payload.is_active !== false,
+  };
+  Object.entries(entries).forEach(([key, value]) => formData.append(key, value));
+  if (payload.items !== undefined) formData.append("items", Array.isArray(payload.items) ? JSON.stringify(payload.items) : payload.items || "[]");
+  if (payload.image_file) formData.append("image", payload.image_file);
+  return formData;
+};
+
+const multipartConfig = { headers: { "Content-Type": "multipart/form-data" } };
+
 const getStoredUserEmail = () => {
   try {
     const user = JSON.parse(localStorage.getItem("user") || "null");
@@ -218,17 +236,17 @@ export const adminAPI = {
     const products = normalizeList(response.data, ["products"]);
     return { data: products, raw: response.data };
   },
-  createProduct: async (payload) => (await api.post("/admin/products", payload)).data,
-  updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, payload)).data,
-  updateStock: async (id, payload) => (await api.patch(`/admin/products/${id}`, payload)).data,
+  createProduct: async (payload) => (await api.post("/admin/products", toStockFormData(payload), multipartConfig)).data,
+  updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
+  updateStock: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   deleteProduct: async (id) => (await api.delete(`/admin/products/${id}`)).data,
   getPacks: async () => {
     const response = await api.get("/admin/packs");
     const packs = normalizeList(response.data, ["packs"]);
     return { data: packs, raw: response.data };
   },
-  createPack: async (payload) => (await api.post("/admin/packs", payload)).data,
-  updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, payload)).data,
+  createPack: async (payload) => (await api.post("/admin/packs", toStockFormData(payload), multipartConfig)).data,
+  updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toStockFormData(payload), multipartConfig)).data,
   deletePack: async (id) => (await api.delete(`/admin/packs/${id}`)).data,
   getDashboardStats: async () => {
     const fallback = { total_orders: 0, total_revenue: 0, total_products: 0, pending_payments: 0, receipt_submitted: 0, delivered_orders: 0 };

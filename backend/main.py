@@ -5,7 +5,7 @@ import json
 import os
 import random
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
@@ -32,7 +32,11 @@ except Exception:
 app = FastAPI(title="FoodNova API")
 UPLOAD_DIR = "uploads"
 AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
+PRODUCT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "products")
+PACK_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "packs")
 os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
+os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
+os.makedirs(PACK_UPLOAD_DIR, exist_ok=True)
 
 app.add_middleware(
     CORSMiddleware,
@@ -478,6 +482,33 @@ def json_dump(value):
     return json.dumps(value)
 
 
+async def save_uploaded_image(file: UploadFile, folder: str, prefix: str) -> str:
+    allowed_types = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+    }
+    if not file:
+        return ""
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only JPG, PNG, or WEBP images are allowed")
+
+    contents = await file.read()
+    max_size = 5 * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(status_code=400, detail="Image must be 5MB or smaller")
+
+    os.makedirs(folder, exist_ok=True)
+    ext = allowed_types[file.content_type]
+    filename = f"{prefix}-{uuid4().hex}{ext}"
+    file_path = os.path.join(folder, filename)
+    with open(file_path, "wb") as image_file:
+        image_file.write(contents)
+    public_folder = os.path.relpath(folder, UPLOAD_DIR).replace("\\", "/")
+    return f"/uploads/{public_folder}/{filename}"
+
+
 def db_user_to_dict(user: DBUser) -> dict:
     full_name = user.full_name or "FoodNova User"
     return {
@@ -506,6 +537,7 @@ def product_to_dict(product: DBProduct) -> dict:
         "image_url": product.image_url or "",
         "description": product.description or "",
         "is_active": bool(product.is_active),
+        "active": bool(product.is_active),
         "created_at": iso(product.created_at),
         "updated_at": iso(product.updated_at),
     }
@@ -521,6 +553,7 @@ def pack_to_dict(pack: DBPack) -> dict:
         "items": json_load(pack.items, []),
         "image_url": pack.image_url or "",
         "created_at": iso(pack.created_at),
+        "active": bool(pack.is_active),
         "updated_at": iso(pack.updated_at),
     }
 
@@ -949,30 +982,7 @@ def update_profile(request: Request, payload: ProfileUpdatePayload):
 @app.post("/profile/avatar")
 async def upload_profile_avatar(request: Request, file: UploadFile = File(...)):
     user = require_user(request)
-    allowed_types = {
-        "image/jpeg": ".jpg",
-        "image/jpg": ".jpg",
-        "image/png": ".png",
-        "image/webp": ".webp",
-    }
-
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPG, PNG, or WEBP images are allowed")
-
-    contents = await file.read()
-    max_size = 5 * 1024 * 1024
-    if len(contents) > max_size:
-        raise HTTPException(status_code=400, detail="Avatar image must be 5MB or smaller")
-
-    ext = allowed_types[file.content_type]
-    filename = f"avatar-{user.get('id')}-{uuid4().hex}{ext}"
-    os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
-    file_path = os.path.join(AVATAR_UPLOAD_DIR, filename)
-
-    with open(file_path, "wb") as avatar_file:
-        avatar_file.write(contents)
-
-    avatar_url = f"/uploads/avatars/{filename}"
+    avatar_url = await save_uploaded_image(file, AVATAR_UPLOAD_DIR, f"avatar-{user.get('id')}")
     db = SessionLocal()
     try:
         db_user = get_db_user_by_email(db, user.get("email"))
@@ -1540,21 +1550,31 @@ def admin_products(request: Request):
 
 
 @app.post("/admin/products")
-def admin_create_product(payload: dict, request: Request):
+async def admin_create_product(
+    request: Request,
+    name: str = Form(""),
+    price: float = Form(0),
+    stock_qty: int = Form(0),
+    category: str = Form(""),
+    is_active: bool = Form(True),
+    active: Optional[bool] = Form(None),
+    description: str = Form(""),
+    image: Optional[UploadFile] = File(None),
+):
     require_admin(request)
-    stock_qty = int(payload.get("stock_qty", payload.get("stock", 0)) or 0)
+    image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product") if image else ""
     db = SessionLocal()
     try:
         product = DBProduct(
-            name=payload.get("name", ""),
-            price=float(payload.get("price", 0) or 0),
+            name=name,
+            price=float(price or 0),
             stock_qty=stock_qty,
-            stock=int(payload.get("stock", stock_qty) or 0),
-            category=payload.get("category", ""),
-            category_name=payload.get("category_name", payload.get("category", "")),
-            image_url=payload.get("image_url", ""),
-            description=payload.get("description", ""),
-            is_active=payload.get("is_active", True),
+            stock=stock_qty,
+            category=category,
+            category_name=category,
+            image_url=image_url,
+            description=description,
+            is_active=is_active if active is None else active,
         )
         db.add(product)
         db.commit()
@@ -1571,23 +1591,39 @@ def admin_create_product(payload: dict, request: Request):
 
 
 @app.patch("/admin/products/{product_id}")
-def admin_update_product(product_id: int, payload: dict, request: Request):
+async def admin_update_product(
+    product_id: int,
+    request: Request,
+    name: Optional[str] = Form(None),
+    price: Optional[float] = Form(None),
+    stock_qty: Optional[int] = Form(None),
+    category: Optional[str] = Form(None),
+    is_active: Optional[bool] = Form(None),
+    active: Optional[bool] = Form(None),
+    description: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+):
     require_admin(request)
     db = SessionLocal()
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
         if product:
-            for key in ["name", "category", "category_name", "image_url", "description", "is_active"]:
-                if key in payload:
-                    setattr(product, key, payload[key])
-            if "price" in payload:
-                product.price = float(payload["price"] or 0)
-            if "stock_qty" in payload:
-                product.stock_qty = int(payload["stock_qty"] or 0)
-                product.stock = int(payload["stock_qty"] or 0)
-            elif "stock" in payload:
-                product.stock = int(payload["stock"] or 0)
-                product.stock_qty = int(payload["stock"] or 0)
+            if name is not None:
+                product.name = name
+            if category is not None:
+                product.category = category
+                product.category_name = category
+            if description is not None:
+                product.description = description
+            if price is not None:
+                product.price = float(price or 0)
+            if stock_qty is not None:
+                product.stock_qty = int(stock_qty or 0)
+                product.stock = int(stock_qty or 0)
+            if is_active is not None or active is not None:
+                product.is_active = is_active if active is None else active
+            if image:
+                product.image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product")
             product.updated_at = datetime.utcnow()
             db.commit()
             db.refresh(product)
@@ -1634,17 +1670,30 @@ def admin_packs(request: Request):
 
 
 @app.post("/admin/packs")
-def admin_create_pack(payload: dict, request: Request):
+async def admin_create_pack(
+    request: Request,
+    name: str = Form(""),
+    price: float = Form(0),
+    description: str = Form(""),
+    items: str = Form("[]"),
+    is_active: bool = Form(True),
+    active: Optional[bool] = Form(None),
+    image: Optional[UploadFile] = File(None),
+):
     require_admin(request)
+    image_url = await save_uploaded_image(image, PACK_UPLOAD_DIR, "pack") if image else ""
+    parsed_items = json_load(items, None)
+    if parsed_items is None:
+        parsed_items = [item.strip() for item in str(items).split(",") if item.strip()]
     db = SessionLocal()
     try:
         pack = DBPack(
-            name=payload.get("name", ""),
-            description=payload.get("description", ""),
-            price=float(payload.get("price", 0) or 0),
-            is_active=payload.get("is_active", True),
-            items=json_dump(payload.get("items", [])),
-            image_url=payload.get("image_url", ""),
+            name=name,
+            description=description,
+            price=float(price or 0),
+            is_active=is_active if active is None else active,
+            items=json_dump(parsed_items),
+            image_url=image_url,
         )
         db.add(pack)
         db.commit()
@@ -1661,19 +1710,37 @@ def admin_create_pack(payload: dict, request: Request):
 
 
 @app.patch("/admin/packs/{pack_id}")
-def admin_update_pack(pack_id: int, payload: dict, request: Request):
+async def admin_update_pack(
+    pack_id: int,
+    request: Request,
+    name: Optional[str] = Form(None),
+    price: Optional[float] = Form(None),
+    description: Optional[str] = Form(None),
+    items: Optional[str] = Form(None),
+    is_active: Optional[bool] = Form(None),
+    active: Optional[bool] = Form(None),
+    image: Optional[UploadFile] = File(None),
+):
     require_admin(request)
     db = SessionLocal()
     try:
         pack = db.query(DBPack).filter(DBPack.id == pack_id).first()
         if pack:
-            for key in ["name", "description", "image_url", "is_active"]:
-                if key in payload:
-                    setattr(pack, key, payload[key])
-            if "price" in payload:
-                pack.price = float(payload["price"] or 0)
-            if "items" in payload:
-                pack.items = json_dump(payload["items"])
+            if name is not None:
+                pack.name = name
+            if description is not None:
+                pack.description = description
+            if price is not None:
+                pack.price = float(price or 0)
+            if items is not None:
+                parsed_items = json_load(items, None)
+                if parsed_items is None:
+                    parsed_items = [item.strip() for item in str(items).split(",") if item.strip()]
+                pack.items = json_dump(parsed_items)
+            if is_active is not None or active is not None:
+                pack.is_active = is_active if active is None else active
+            if image:
+                pack.image_url = await save_uploaded_image(image, PACK_UPLOAD_DIR, "pack")
             pack.updated_at = datetime.utcnow()
             db.commit()
             db.refresh(pack)
