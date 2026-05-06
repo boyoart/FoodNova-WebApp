@@ -249,6 +249,11 @@ export const adminAPI = {
     const orders = normalizeList(response.data, ["orders"]);
     return { data: orders.filter((order) => String(order.payment_status || order.status || "").toLowerCase() === "receipt_submitted") };
   },
+  getCustomers: async () => {
+    const response = await api.get("/admin/customers");
+    const customers = normalizeList(response.data, ["customers", "users"]);
+    return { data: customers, raw: response.data };
+  },
   approvePayment: async (id) => (await api.patch(`/admin/orders/${id}`, { status: "payment_confirmed", payment_status: "payment_confirmed" })).data,
   rejectPayment: async (id, payload = {}) => (await api.patch(`/admin/orders/${id}`, { ...payload, status: "payment_rejected", payment_status: "payment_rejected" })).data,
   getBroadcasts: async () => {
