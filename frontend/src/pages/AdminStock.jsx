@@ -17,6 +17,7 @@ export default function AdminStock() {
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyProduct)
   const [showModal, setShowModal] = useState(false)
+  const [loadError, setLoadError] = useState('')
   const isProduct = activeTab === 'products'
 
   useEffect(() => {
@@ -26,11 +27,16 @@ export default function AdminStock() {
   const fetchData = async () => {
     try {
       setLoading(true)
+      setLoadError('')
       const [productsRes, packsRes] = await Promise.all([adminAPI.getProducts(), adminAPI.getPacks()])
       setProducts(productsRes.data || [])
       setPacks(packsRes.data || [])
     } catch (error) {
-      toast.error('Failed to load data')
+      const message = [401, 403].includes(error?.response?.status)
+        ? 'Session expired. Please log in again.'
+        : 'Failed to load data. Please log out and log back in. If this continues, check backend deployment logs.'
+      setLoadError(message)
+      toast.error(message)
       console.error(error)
     } finally {
       setLoading(false)
@@ -239,6 +245,8 @@ export default function AdminStock() {
 
       {loading ? (
         <div className="loading">Loading...</div>
+      ) : loadError ? (
+        <div className="loading">{loadError}</div>
       ) : (
         <div className="stock-table">
           <table>

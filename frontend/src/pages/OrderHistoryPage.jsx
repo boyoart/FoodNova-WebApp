@@ -15,6 +15,7 @@ export default function OrderHistoryPage() {
   const [deliveryCode, setDeliveryCode] = useState('')
   const [confirmingDelivery, setConfirmingDelivery] = useState(false)
   const [refreshingOrder, setRefreshingOrder] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -64,6 +65,7 @@ export default function OrderHistoryPage() {
   const fetchOrders = async () => {
     try {
       setLoading(true)
+      setLoadError('')
       const res = await ordersAPI.getCustomerOrders()
       const rawOrders = Array.isArray(res?.data) ? res.data : []
 
@@ -79,7 +81,11 @@ export default function OrderHistoryPage() {
       setOrders(uniqueOrders)
       mergeSelectedOrder(uniqueOrders)
     } catch (error) {
-      toast.error('Failed to load orders')
+      const message = error?.response?.status === 401
+        ? 'Session expired. Please log in again.'
+        : 'Failed to load data. Please log out and log back in. If this continues, check backend deployment logs.'
+      setLoadError(message)
+      toast.error(message)
       console.error(error)
     } finally {
       setLoading(false)
@@ -278,6 +284,10 @@ export default function OrderHistoryPage() {
 
   if (loading) {
     return <div className="order-history-page"><div className="loading">Loading orders...</div></div>
+  }
+
+  if (loadError) {
+    return <div className="order-history-page"><div className="empty-state"><AlertCircle size={48} /><p>{loadError}</p></div></div>
   }
 
   if (orders.length === 0) {

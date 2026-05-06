@@ -30,6 +30,7 @@ export default function AdminOrders() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [serviceNote, setServiceNote] = useState('')
   const [sendingServiceNote, setSendingServiceNote] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     if (isAdmin) {
@@ -48,11 +49,16 @@ export default function AdminOrders() {
   const fetchOrders = async () => {
     try {
       setLoading(true)
+      setLoadError('')
       const params = filter !== 'all' ? { status: filter } : {}
       const res = await adminAPI.getOrders(params)
       setOrders(normalizeOrderResponse(res))
     } catch (error) {
-      toast.error('Failed to load orders')
+      const message = [401, 403].includes(error?.response?.status)
+        ? 'Session expired. Please log in again.'
+        : 'Failed to load data. Please log out and log back in. If this continues, check backend deployment logs.'
+      setLoadError(message)
+      toast.error(message)
       console.error(error)
     } finally {
       setLoading(false)
@@ -151,6 +157,8 @@ export default function AdminOrders() {
 
       {loading ? (
         <div className="loading">Loading orders...</div>
+      ) : loadError ? (
+        <div className="empty-state">{loadError}</div>
       ) : orders.length === 0 ? (
         <div className="empty-state">No orders found</div>
       ) : (

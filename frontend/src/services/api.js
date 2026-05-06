@@ -35,6 +35,10 @@ const normalizeList = (body, keys = []) => {
   return [];
 };
 
+const logEndpointError = (endpoint, error) => {
+  console.error(`${endpoint} failed`, error?.response?.status, error?.response?.data || error);
+};
+
 const toStockFormData = (payload = {}) => {
   const formData = new FormData();
   const entries = {
@@ -134,12 +138,28 @@ const setLocalDefaultAddress = (id) => {
 };
 
 export const productsAPI = {
-  getAll: async () => await api.get("/products"),
+  getAll: async () => {
+    try {
+      const response = await api.get("/products");
+      return { data: normalizeList(response.data, ["products"]), raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /products", error);
+      throw error;
+    }
+  },
   getById: async (id) => await api.get(`/products/${id}`),
 };
 
 export const packsAPI = {
-  getAll: async () => await api.get("/packs"),
+  getAll: async () => {
+    try {
+      const response = await api.get("/packs");
+      return { data: normalizeList(response.data, ["packs"]), raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /packs", error);
+      throw error;
+    }
+  },
   getById: async (id) => await api.get(`/packs/${id}`),
 };
 
@@ -183,9 +203,14 @@ export const ordersAPI = {
   },
   getMine: async () => (await api.get("/orders/my")).data,
   getCustomerOrders: async () => {
-    const response = await api.get("/orders/my");
-    const orders = normalizeList(response.data, ["orders"]);
-    return { data: orders };
+    try {
+      const response = await api.get("/orders/my");
+      const orders = normalizeList(response.data, ["orders"]);
+      return { data: orders, raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /orders/my", error);
+      throw error;
+    }
   },
   getById: async (id) => (await api.get(`/orders/${id}`)).data,
   refreshOrder: async (id) => (await api.get(`/orders/${id}`)).data,
@@ -205,9 +230,14 @@ export const ordersAPI = {
 
 export const adminAPI = {
   getOrders: async (params = {}) => {
-    const response = await api.get("/admin/orders", { params });
-    const orders = normalizeList(response.data, ["orders"]);
-    return { data: orders, raw: response.data };
+    try {
+      const response = await api.get("/admin/orders", { params });
+      const orders = normalizeList(response.data, ["orders"]);
+      return { data: orders, raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /admin/orders", error);
+      throw error;
+    }
   },
   getOrder: async (id) => (await api.get(`/admin/orders/${id}`)).data,
   updateOrder: async (id, payload) => (await api.patch(`/admin/orders/${id}`, payload)).data,
@@ -227,23 +257,38 @@ export const adminAPI = {
     return response.data;
   },
   getProducts: async () => {
-    const response = await api.get("/admin/products");
-    const products = normalizeList(response.data, ["products"]);
-    return { data: products, raw: response.data };
+    try {
+      const response = await api.get("/admin/products");
+      const products = normalizeList(response.data, ["products"]);
+      return { data: products, raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /admin/products", error);
+      throw error;
+    }
   },
   getStock: async () => {
-    const response = await api.get("/admin/products");
-    const products = normalizeList(response.data, ["products"]);
-    return { data: products, raw: response.data };
+    try {
+      const response = await api.get("/admin/products");
+      const products = normalizeList(response.data, ["products"]);
+      return { data: products, raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /admin/products", error);
+      throw error;
+    }
   },
   createProduct: async (payload) => (await api.post("/admin/products", toStockFormData(payload), multipartConfig)).data,
   updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   updateStock: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   deleteProduct: async (id) => (await api.delete(`/admin/products/${id}`)).data,
   getPacks: async () => {
-    const response = await api.get("/admin/packs");
-    const packs = normalizeList(response.data, ["packs"]);
-    return { data: packs, raw: response.data };
+    try {
+      const response = await api.get("/admin/packs");
+      const packs = normalizeList(response.data, ["packs"]);
+      return { data: packs, raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /admin/packs", error);
+      throw error;
+    }
   },
   createPack: async (payload) => (await api.post("/admin/packs", toStockFormData(payload), multipartConfig)).data,
   updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toStockFormData(payload), multipartConfig)).data,
@@ -268,9 +313,43 @@ export const adminAPI = {
     return { data: orders.filter((order) => String(order.payment_status || order.status || "").toLowerCase() === "receipt_submitted") };
   },
   getCustomers: async () => {
-    const response = await api.get("/admin/customers");
-    const customers = normalizeList(response.data, ["customers", "users"]);
-    return { data: customers, raw: response.data };
+    try {
+      const response = await api.get("/admin/customers");
+      const customers = normalizeList(response.data, ["customers", "users"]);
+      return { data: customers, raw: response.data };
+    } catch (error) {
+      logEndpointError("GET /admin/customers", error);
+      const ordersResponse = await api.get("/admin/orders");
+      const orders = normalizeList(ordersResponse.data, ["orders"]);
+      const customersByEmail = new Map();
+      orders.forEach((order) => {
+        const email = order.customer_email || order.email || order.user_email || "unknown@customer";
+        const current = customersByEmail.get(email) || {
+          id: email,
+          full_name: order.customer_name || "Customer",
+          name: order.customer_name || "Customer",
+          email,
+          phone: order.customer_phone || order.phone || "",
+          address: order.delivery_address || "",
+          orders_count: 0,
+          total_orders: 0,
+          total_spent: 0,
+          revenue: 0,
+          last_order_at: order.created_at || "",
+          last_order_code: "",
+          orders: [],
+        };
+        current.orders_count += 1;
+        current.total_orders += 1;
+        current.total_spent += Number(order.total_amount || order.total || 0);
+        current.revenue = current.total_spent;
+        current.last_order_at = order.created_at || current.last_order_at;
+        current.last_order_code = order.order_code || current.last_order_code;
+        current.orders.push(order);
+        customersByEmail.set(email, current);
+      });
+      return { data: Array.from(customersByEmail.values()), raw: { local_fallback: true } };
+    }
   },
   approvePayment: async (id) => (await api.patch(`/admin/orders/${id}`, { status: "payment_confirmed", payment_status: "payment_confirmed" })).data,
   rejectPayment: async (id, payload = {}) => (await api.patch(`/admin/orders/${id}`, { ...payload, status: "payment_rejected", payment_status: "payment_rejected" })).data,

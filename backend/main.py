@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import inspect, text
 
 from database import Base, SessionLocal, engine
 from models import (
@@ -45,6 +46,7 @@ app.add_middleware(
         "http://localhost:3000",
         "https://food-nova-web-app.vercel.app",
         "https://foodnova-webapp.vercel.app",
+        *([os.environ.get("FRONTEND_ORIGIN")] if os.environ.get("FRONTEND_ORIGIN") else []),
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -612,10 +614,14 @@ def order_item_to_dict(item: DBOrderItem) -> dict:
 
 
 def order_to_dict(order: DBOrder) -> dict:
+    try:
+        items = [order_item_to_dict(item) for item in (order.items or [])]
+    except Exception:
+        items = []
     return {
         "id": order.id,
         "order_code": order.order_code,
-        "items": [order_item_to_dict(item) for item in order.items],
+        "items": items,
         "total_amount": order.total_amount or 0,
         "delivery_address": order.delivery_address or "",
         "delivery_address_id": order.delivery_address_id,
@@ -689,10 +695,124 @@ def ensure_profile(db, user: DBUser) -> DBProfile:
     return profile
 
 
+def ensure_database_compatibility():
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    table_columns = {
+        table_name: {column["name"]: column for column in inspector.get_columns(table_name)}
+        for table_name in existing_tables
+    }
+
+    column_specs = {
+        "users": {
+            "full_name": "VARCHAR(150) DEFAULT 'FoodNova User'",
+            "phone": "VARCHAR(50) DEFAULT ''",
+            "password": "VARCHAR(255) DEFAULT ''",
+            "role": "VARCHAR(30) DEFAULT 'customer'",
+            "updated_at": "TIMESTAMP",
+        },
+        "products": {
+            "stock_qty": "INTEGER DEFAULT 0",
+            "stock": "INTEGER DEFAULT 0",
+            "category_name": "VARCHAR(100) DEFAULT ''",
+            "image_url": "TEXT DEFAULT ''",
+            "description": "TEXT DEFAULT ''",
+            "is_active": "BOOLEAN DEFAULT TRUE",
+            "updated_at": "TIMESTAMP",
+        },
+        "orders": {
+            "order_code": "VARCHAR(30)",
+            "customer_name": "VARCHAR(150) DEFAULT ''",
+            "customer_email": "VARCHAR(150) DEFAULT ''",
+            "customer_phone": "VARCHAR(50) DEFAULT ''",
+            "delivery_address": "TEXT DEFAULT ''",
+            "delivery_address_id": "INTEGER",
+            "delivery_address_snapshot": "TEXT",
+            "phone": "VARCHAR(50) DEFAULT ''",
+            "payment_method": "VARCHAR(80) DEFAULT 'bank_transfer'",
+            "delivery_method": "VARCHAR(80) DEFAULT 'delivery'",
+            "pickup_note": "TEXT DEFAULT ''",
+            "delivery_notes": "TEXT DEFAULT ''",
+            "total_amount": "FLOAT DEFAULT 0",
+            "payment_status": "VARCHAR(80) DEFAULT 'pending_payment'",
+            "order_status": "VARCHAR(80) DEFAULT 'order_placed'",
+            "fulfillment_status": "VARCHAR(80) DEFAULT 'order_placed'",
+            "delivery_code": "VARCHAR(20)",
+            "delivery_code_created_at": "TIMESTAMP",
+            "delivery_confirmed_at": "TIMESTAMP",
+            "receipt": "TEXT",
+            "admin_note": "TEXT DEFAULT ''",
+            "service_note": "TEXT DEFAULT ''",
+            "updated_at": "TIMESTAMP",
+        },
+        "order_items": {
+            "product_id": "INTEGER",
+            "name": "VARCHAR(150) DEFAULT ''",
+            "product_name": "VARCHAR(150) DEFAULT ''",
+            "price": "FLOAT DEFAULT 0",
+            "unit_price": "FLOAT DEFAULT 0",
+            "quantity": "INTEGER DEFAULT 1",
+            "qty": "INTEGER DEFAULT 1",
+            "line_total": "FLOAT DEFAULT 0",
+        },
+    }
+
+    with engine.begin() as connection:
+        is_postgres = engine.dialect.name.startswith("postgres")
+        for table_name, specs in column_specs.items():
+            if table_name not in existing_tables:
+                continue
+            existing_columns = set(table_columns.get(table_name, {}).keys())
+            for column_name, sql_type in specs.items():
+                if column_name not in existing_columns:
+                    connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {sql_type}"))
+
+        if "users" in existing_tables:
+            if is_postgres:
+                for column_name in ["name", "password_hash"]:
+                    if column_name in table_columns.get("users", {}) and not table_columns["users"][column_name].get("nullable", True):
+                        connection.execute(text(f"ALTER TABLE users ALTER COLUMN {column_name} DROP NOT NULL"))
+            if "name" in table_columns.get("users", {}):
+                connection.execute(text("UPDATE users SET full_name = COALESCE(NULLIF(full_name, ''), name, 'FoodNova User') WHERE full_name IS NULL OR full_name = ''"))
+            else:
+                connection.execute(text("UPDATE users SET full_name = COALESCE(NULLIF(full_name, ''), 'FoodNova User') WHERE full_name IS NULL OR full_name = ''"))
+            if "password_hash" in table_columns.get("users", {}):
+                connection.execute(text("UPDATE users SET password = COALESCE(NULLIF(password, ''), password_hash, '') WHERE password IS NULL OR password = ''"))
+            else:
+                connection.execute(text("UPDATE users SET password = COALESCE(NULLIF(password, ''), '') WHERE password IS NULL OR password = ''"))
+            connection.execute(text("UPDATE users SET role = COALESCE(NULLIF(role, ''), 'customer') WHERE role IS NULL OR role = ''"))
+        if "products" in existing_tables:
+            connection.execute(text("UPDATE products SET stock_qty = COALESCE(stock_qty, stock, 0), stock = COALESCE(stock, stock_qty, 0)"))
+            connection.execute(text("UPDATE products SET category_name = COALESCE(NULLIF(category_name, ''), category, '') WHERE category_name IS NULL OR category_name = ''"))
+            if "image" in table_columns.get("products", {}):
+                connection.execute(text("UPDATE products SET image_url = COALESCE(NULLIF(image_url, ''), image, '') WHERE image_url IS NULL OR image_url = ''"))
+            else:
+                connection.execute(text("UPDATE products SET image_url = COALESCE(NULLIF(image_url, ''), '') WHERE image_url IS NULL OR image_url = ''"))
+        if "orders" in existing_tables:
+            if is_postgres:
+                if "customer_id" in table_columns.get("orders", {}) and not table_columns["orders"]["customer_id"].get("nullable", True):
+                    connection.execute(text("ALTER TABLE orders ALTER COLUMN customer_id DROP NOT NULL"))
+                if "status" in table_columns.get("orders", {}):
+                    connection.execute(text("ALTER TABLE orders ALTER COLUMN status TYPE VARCHAR(80) USING status::text"))
+                connection.execute(text("UPDATE orders SET order_code = COALESCE(NULLIF(order_code, ''), 'FN-' || LPAD(id::text, 5, '0')) WHERE order_code IS NULL OR order_code = ''"))
+            else:
+                connection.execute(text("UPDATE orders SET order_code = COALESCE(NULLIF(order_code, ''), 'FN-' || printf('%05d', id)) WHERE order_code IS NULL OR order_code = ''"))
+            connection.execute(text("UPDATE orders SET payment_status = COALESCE(NULLIF(payment_status, ''), status, 'pending_payment') WHERE payment_status IS NULL OR payment_status = ''"))
+            connection.execute(text("UPDATE orders SET order_status = COALESCE(NULLIF(order_status, ''), 'order_placed') WHERE order_status IS NULL OR order_status = ''"))
+            connection.execute(text("UPDATE orders SET fulfillment_status = COALESCE(NULLIF(fulfillment_status, ''), order_status, 'order_placed') WHERE fulfillment_status IS NULL OR fulfillment_status = ''"))
+        if "order_items" in existing_tables:
+            if is_postgres:
+                if "product_id" in table_columns.get("order_items", {}) and not table_columns["order_items"]["product_id"].get("nullable", True):
+                    connection.execute(text("ALTER TABLE order_items ALTER COLUMN product_id DROP NOT NULL"))
+            connection.execute(text("UPDATE order_items SET name = COALESCE(NULLIF(name, ''), product_name, 'FoodNova Item') WHERE name IS NULL OR name = ''"))
+            connection.execute(text("UPDATE order_items SET unit_price = COALESCE(unit_price, price, 0), qty = COALESCE(qty, quantity, 1), line_total = COALESCE(line_total, price * quantity, 0)"))
+
+
 def seed_database():
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
     try:
+        Base.metadata.create_all(bind=engine)
+        ensure_database_compatibility()
+        db = SessionLocal()
         admin = get_db_user_by_email(db, ADMIN_EMAIL)
         if not admin:
             admin = DBUser(
@@ -729,8 +849,9 @@ def seed_database():
                     is_active=pack.get("is_active", True),
                 ))
         db.commit()
-    finally:
         db.close()
+    except Exception as error:
+        print("DATABASE SEED ERROR:", repr(error))
 
 
 @app.on_event("startup")
@@ -751,6 +872,30 @@ def root_head():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/debug/db")
+def debug_db():
+    db = SessionLocal()
+    try:
+        return {
+            "success": True,
+            "database_url_prefix": engine.url.get_backend_name(),
+            "users_count": db.query(DBUser).count(),
+            "products_count": db.query(DBProduct).count(),
+            "packs_count": db.query(DBPack).count(),
+            "orders_count": db.query(DBOrder).count(),
+            "notifications_count": db.query(DBNotification).count(),
+            "broadcasts_count": db.query(DBBroadcast).count(),
+        }
+    except Exception as error:
+        return {
+            "success": False,
+            "database_url_prefix": engine.url.get_backend_name(),
+            "error": repr(error),
+        }
+    finally:
+        db.close()
 
 
 @app.get("/categories")
@@ -779,6 +924,9 @@ def list_products(search: Optional[str] = None):
             or search_lower in product.get("category", "").lower()
             or search_lower in product.get("category_name", "").lower()
         ]
+    except Exception as error:
+        print("PRODUCTS LOAD ERROR:", repr(error))
+        return []
     finally:
         db.close()
 
@@ -811,6 +959,9 @@ def list_packs(search: Optional[str] = None):
             or search_lower in pack.get("description", "").lower()
             or any(search_lower in str(item).lower() for item in pack.get("items", []))
         ]
+    except Exception as error:
+        print("PACKS LOAD ERROR:", repr(error))
+        return []
     finally:
         db.close()
 
@@ -1125,6 +1276,9 @@ def get_notifications(request: Request):
             .all()
         ]
         return {"success": True, "notifications": items, "data": items}
+    except Exception as error:
+        print("NOTIFICATIONS LOAD ERROR:", repr(error))
+        return {"success": True, "notifications": [], "data": []}
     finally:
         db.close()
 
@@ -1306,6 +1460,9 @@ def my_orders(request: Request):
             for order in db.query(DBOrder).filter(DBOrder.customer_email == email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
         ]
         return {"success": True, "orders": orders, "data": orders}
+    except Exception as error:
+        print("CUSTOMER ORDERS LOAD ERROR:", repr(error))
+        return {"success": True, "orders": [], "data": []}
     finally:
         db.close()
 
@@ -1316,6 +1473,9 @@ def all_orders():
     try:
         orders = [order_to_dict(order) for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
         return {"success": True, "orders": orders, "data": orders}
+    except Exception as error:
+        print("ORDERS LOAD ERROR:", repr(error))
+        return {"success": True, "orders": [], "data": []}
     finally:
         db.close()
 
@@ -1380,6 +1540,9 @@ def admin_orders(request: Request):
     try:
         orders = [order_to_dict(order) for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
         return {"success": True, "orders": orders, "data": orders}
+    except Exception as error:
+        print("ADMIN ORDERS LOAD ERROR:", repr(error))
+        return {"success": True, "orders": [], "data": []}
     finally:
         db.close()
 
@@ -1842,6 +2005,9 @@ def admin_customers(request: Request):
             "customers": result,
             "data": result,
         }
+    except Exception as error:
+        print("ADMIN CUSTOMERS LOAD ERROR:", repr(error))
+        return {"success": True, "customers": [], "data": []}
     finally:
         db.close()
 
@@ -1911,6 +2077,9 @@ def get_broadcasts(request: Request):
             "broadcasts": broadcasts,
             "data": broadcasts,
         }
+    except Exception as error:
+        print("BROADCASTS LOAD ERROR:", repr(error))
+        return {"success": True, "broadcasts": [], "data": []}
     finally:
         db.close()
 
