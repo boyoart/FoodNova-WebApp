@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import { BarChart3, Package, ShoppingBag, DollarSign } from 'lucide-react'
+import { BarChart3, BellRing, ClipboardList, CreditCard, Package, ShieldCheck, ShoppingBag, Users, DollarSign } from 'lucide-react'
 import './AdminDashboard.css'
 
 const adminTools = [
-  { href: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.' },
-  { href: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.' },
-  { href: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.' },
-  { href: '/admin/broadcasts', title: 'Broadcasts', description: 'Send announcements to customers.' },
-  { href: '/admin/customers', title: 'Customers', description: 'View customer data and order history.' },
-  { href: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system activity.' },
-  { href: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.' },
+  { path: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.', icon: ClipboardList },
+  { path: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.', icon: Package },
+  { path: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.', icon: CreditCard },
+  { path: '/admin/broadcasts', title: 'Broadcasts', description: 'Send announcements to customers.', icon: BellRing },
+  { path: '/admin/customers', title: 'Customers', description: 'View customer data and order history.', icon: Users },
+  { path: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system changes.', icon: BarChart3 },
+  { path: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.', icon: ShieldCheck },
 ]
 
 export default function AdminDashboard() {
@@ -59,20 +60,24 @@ export default function AdminDashboard() {
         <div className="stat-card"><BarChart3 size={32} /><div><p className="stat-label">Pending Payments</p><p className="stat-value">{stats?.pending_payments || 0}</p></div></div>
       </div>
 
-      <div className="admin-tools-section">
-        <div className="admin-tools-heading">
+      <section className="admin-tools-section">
+        <div className="admin-section-header">
           <h2>Admin Tools</h2>
           <p>Quick access to FoodNova management workflows.</p>
         </div>
-        <div className="dashboard-nav">
+        <div className="admin-tools-grid">
           {adminTools.map((tool) => (
-            <a href={tool.href} className="nav-link" key={tool.href}>
-              <strong>{tool.title}</strong>
-              <span>{tool.description}</span>
-            </a>
+            <Link key={tool.path} to={tool.path} className="admin-tool-card">
+              <div className="admin-tool-icon"><tool.icon size={22} /></div>
+              <div className="admin-tool-content">
+                <h3>{tool.title}</h3>
+                <p>{tool.description}</p>
+              </div>
+              <span className="admin-tool-arrow">→</span>
+            </Link>
           ))}
         </div>
-      </div>
+      </section>
     </div>
   )
 }

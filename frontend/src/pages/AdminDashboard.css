@@ -6,51 +6,106 @@
   margin-top: 2rem;
 }
 
-.admin-tools-heading h2 {
-  margin: 0;
-  color: var(--fn-heading);
+.admin-section-header {
+  margin-bottom: 1rem;
 }
 
-.admin-tools-heading p {
+.admin-section-header h2 {
+  margin: 0;
+  color: var(--fn-heading);
+  font-size: 1.35rem;
+}
+
+.admin-section-header p {
   margin: 0.35rem 0 0;
   color: var(--fn-muted);
 }
 
-.dashboard-nav {
+.admin-tools-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
-  margin-top: 1rem;
+  align-items: stretch;
 }
 
-.dashboard-nav .nav-link {
-  background: var(--fn-surface);
+.admin-tool-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+  min-height: 132px;
+  padding: 1.1rem;
   border: 1px solid var(--fn-border);
-  border-radius: 16px;
-  padding: 1.25rem;
-  text-decoration: none;
+  border-radius: 1rem;
+  background: var(--fn-surface);
   color: var(--fn-text);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  text-decoration: none;
+  overflow: hidden;
   box-shadow: var(--fn-shadow);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.dashboard-nav .nav-link:hover {
+.admin-tool-card:hover {
   transform: translateY(-2px);
   border-color: var(--fn-primary);
 }
 
-.dashboard-nav .nav-link strong,
-.dashboard-nav .nav-link span {
-  display: block;
+.admin-tool-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--fn-primary) 12%, transparent);
+  color: var(--fn-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
 }
 
-.dashboard-nav .nav-link strong {
+.admin-tool-content {
+  min-width: 0;
+}
+
+.admin-tool-content h3,
+.admin-tool-content p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.admin-tool-content h3 {
   color: var(--fn-heading);
-  margin-bottom: 0.45rem;
+  font-size: 1rem;
+  line-height: 1.25;
+  margin-bottom: 0.3rem;
 }
 
-.dashboard-nav .nav-link span {
+.admin-tool-content p {
   color: var(--fn-muted);
-  font-size: 0.92rem;
   line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.admin-tool-arrow {
+  color: var(--fn-primary);
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+@media (min-width: 1180px) {
+  .admin-tools-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-tools-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-tool-card {
+    min-height: 0;
+  }
 }
