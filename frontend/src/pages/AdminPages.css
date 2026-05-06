@@ -1303,6 +1303,86 @@ tbody tr:hover {
   align-items: center;
 }
 
+.admin-receipt-inline,
+.receipt-preview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  align-items: flex-start;
+  margin-top: 1rem;
+}
+
+.receipt-preview-image {
+  width: min(100%, 420px);
+  max-height: 520px;
+  object-fit: contain;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-surface-2);
+}
+
+.receipt-placeholder {
+  width: 100%;
+  padding: 1rem;
+  border: 1px dashed var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-surface-2);
+  color: var(--fn-text);
+}
+
+.receipt-placeholder h3 {
+  margin: 0 0 0.4rem;
+  color: var(--fn-heading);
+}
+
+.receipt-placeholder p {
+  color: var(--fn-muted);
+}
+
+.admin-receipt-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-receipt-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.admin-receipt-content {
+  position: relative;
+  width: min(720px, 94vw);
+  max-height: 90vh;
+  overflow: auto;
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  box-shadow: var(--fn-shadow);
+}
+
+.admin-receipt-header,
+.admin-receipt-body {
+  padding: 1.25rem;
+}
+
+.admin-receipt-header {
+  border-bottom: 1px solid var(--fn-border);
+}
+
+.receipt-meta-card {
+  padding: 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-surface-2);
+}
+
 .stock-row-low td {
   background: color-mix(in srgb, var(--fn-accent, #FFD23F) 12%, transparent);
 }

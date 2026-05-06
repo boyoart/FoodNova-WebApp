@@ -345,6 +345,12 @@
   font-weight: 600;
 }
 
+.receipt-upload-help {
+  color: var(--fn-muted);
+  font-size: 0.9rem;
+  margin: -0.25rem 0 0.5rem;
+}
+
 .file-selected {
   color: var(--success);
   font-size: 0.9rem;

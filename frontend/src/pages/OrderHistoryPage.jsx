@@ -418,8 +418,9 @@ export default function OrderHistoryPage() {
                       </div>
                       <form onSubmit={handleReceiptUpload}>
                         <div className="form-group">
-                          <label>Upload Payment Receipt (Image or PDF)</label>
-                          <input type="file" accept="image/*,.pdf" onChange={handleFileChange} required />
+                          <label>Upload Payment Receipt</label>
+                          <p className="receipt-upload-help">Upload JPG, PNG, WEBP, or PDF receipt.</p>
+                          <input type="file" accept="image/*,.pdf,application/pdf" onChange={handleFileChange} required />
                           {receiptFile && <p className="file-selected">✓ {receiptFile.name}</p>}
                         </div>
                         <button type="submit" className="btn btn-primary" disabled={uploadingReceipt}>{uploadingReceipt ? 'Uploading...' : 'Upload Receipt'}</button>

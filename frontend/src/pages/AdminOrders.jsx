@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { adminAPI } from '../services/api'
+import { adminAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
@@ -124,6 +124,22 @@ export default function AdminOrders() {
   const handleCloseOrder = () => {
     setSelectedOrder(null)
     setServiceNote('')
+  }
+
+  const getReceiptUrl = (receipt = {}) => resolveMediaUrl(
+    receipt.url || receipt.receipt_url || receipt.data_url || ''
+  )
+
+  const isPdfReceipt = (receipt = {}) => {
+    const mimeType = String(receipt.mime_type || '').toLowerCase()
+    const fileType = String(receipt.file_type || '').toLowerCase()
+    const source = getReceiptUrl(receipt).toLowerCase()
+    return mimeType === 'application/pdf' || fileType === 'pdf' || source.includes('.pdf')
+  }
+
+  const openReceiptUrl = (receipt = {}) => {
+    const receiptUrl = getReceiptUrl(receipt)
+    if (receiptUrl) window.open(receiptUrl, '_blank', 'noopener,noreferrer')
   }
 
   if (!isAdmin) {
@@ -352,7 +368,31 @@ export default function AdminOrders() {
                       <strong>Uploaded:</strong>
                       <span>{selectedOrder.receipt.uploaded_at ? new Date(selectedOrder.receipt.uploaded_at).toLocaleString() : 'N/A'}</span>
                     </div>
+                    {selectedOrder.receipt.mime_type && (
+                      <div className="info-item">
+                        <strong>Type:</strong>
+                        <span>{selectedOrder.receipt.mime_type}</span>
+                      </div>
+                    )}
                   </div>
+                  {getReceiptUrl(selectedOrder.receipt) && (
+                    <div className="admin-receipt-inline">
+                      {!isPdfReceipt(selectedOrder.receipt) && (
+                        <img
+                          src={getReceiptUrl(selectedOrder.receipt)}
+                          alt="Payment receipt"
+                          className="receipt-preview-image"
+                        />
+                      )}
+                      <button
+                        type="button"
+                        className="btn-view-receipt"
+                        onClick={() => openReceiptUrl(selectedOrder.receipt)}
+                      >
+                        {isPdfReceipt(selectedOrder.receipt) ? 'View PDF Receipt' : 'View Receipt'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 

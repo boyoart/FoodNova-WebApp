@@ -719,12 +719,13 @@ async def upload_to_cloudinary(
     folder: str,
     allowed_types: Optional[dict] = None,
     max_size_mb: int = 5,
+    invalid_type_message: str = "Unsupported file type",
 ) -> dict:
     allowed_types = allowed_types or IMAGE_CONTENT_TYPES
     if not file:
         return {"url": "", "filename": ""}
     if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Unsupported file type")
+        raise HTTPException(status_code=400, detail=invalid_type_message)
 
     contents = await file.read()
     max_size = max_size_mb * 1024 * 1024
@@ -766,11 +767,28 @@ async def save_uploaded_image(file: UploadFile, folder: str, prefix: str) -> str
     return result.get("url", "")
 
 
+def _receipt_file_type(mime_type: str) -> str:
+    if mime_type == "application/pdf":
+        return "pdf"
+    if str(mime_type or "").startswith("image/"):
+        return "image"
+    return "file"
+
+
 async def save_uploaded_receipt(file: UploadFile) -> dict:
-    result = await upload_to_cloudinary(file, "foodnova/receipts", RECEIPT_CONTENT_TYPES, 10)
+    result = await upload_to_cloudinary(
+        file,
+        "foodnova/receipts",
+        RECEIPT_CONTENT_TYPES,
+        10,
+        "Only JPG, PNG, WEBP, or PDF receipts are allowed.",
+    )
+    mime_type = file.content_type or ""
     return {
         "url": result.get("url", ""),
         "filename": result.get("filename") or (file.filename if file else ""),
+        "mime_type": mime_type,
+        "file_type": _receipt_file_type(mime_type),
         "uploaded_at": datetime.utcnow().isoformat(),
     }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuthStore } from '../store/authStore'
-import { adminAPI } from '../services/api'
+import { adminAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
@@ -50,6 +50,18 @@ export default function AdminPayments() {
     }
   }
 
+  const isPdfReceipt = (receipt = {}) => {
+    const mimeType = String(receipt.mime_type || '').toLowerCase()
+    const fileType = String(receipt.file_type || '').toLowerCase()
+    const source = String(receipt.source || receipt.url || '').toLowerCase()
+    return mimeType === 'application/pdf' || fileType === 'pdf' || source.includes('.pdf')
+  }
+
+  const openReceiptUrl = (url) => {
+    if (!url) return
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   const openReceipt = (payment) => {
     const receipt = payment.receipt || {}
     const receiptSource =
@@ -61,6 +73,8 @@ export default function AdminPayments() {
       payment.receipt_image ||
       null
 
+    const source = resolveMediaUrl(receiptSource)
+
     setSelectedReceipt({
       orderId: payment.id,
       orderCode: payment.order_code,
@@ -69,8 +83,10 @@ export default function AdminPayments() {
       filename: receipt.filename || payment.receipt_filename || 'Receipt uploaded',
       uploadedAt: receipt.uploaded_at || payment.receipt_uploaded_at,
       status: receipt.status || payment.payment_status || payment.status,
-      source: receiptSource,
-      raw: receipt,
+      mimeType: receipt.mime_type || '',
+      fileType: receipt.file_type || '',
+      source,
+      raw: { ...receipt, source },
     })
   }
 
@@ -159,19 +175,27 @@ export default function AdminPayments() {
               </div>
 
               {selectedReceipt.source ? (
-                selectedReceipt.source.toLowerCase().includes('.pdf') ? (
-                  <iframe
-                    title="Payment receipt"
-                    src={selectedReceipt.source}
-                    className="receipt-frame"
-                  />
-                ) : (
-                  <img
-                    src={selectedReceipt.source}
-                    alt="Payment receipt"
-                    className="receipt-preview-image"
-                  />
-                )
+                <div className="receipt-preview-block">
+                  {isPdfReceipt(selectedReceipt) ? (
+                    <div className="receipt-placeholder">
+                      <h3>PDF receipt uploaded</h3>
+                      <p>{selectedReceipt.filename}</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={selectedReceipt.source}
+                      alt="Payment receipt"
+                      className="receipt-preview-image"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className="btn-view-receipt"
+                    onClick={() => openReceiptUrl(selectedReceipt.source)}
+                  >
+                    {isPdfReceipt(selectedReceipt) ? 'View PDF Receipt' : 'View Receipt'}
+                  </button>
+                </div>
               ) : (
                 <div className="receipt-placeholder">
                   <h3>Receipt submitted</h3>
