@@ -11,8 +11,50 @@ const emptyForm = {
   phone: '',
   password: '',
   confirm_password: '',
+  admin_role: 'viewer',
+  permissions: [],
   is_active: true,
 }
+
+const ROLE_OPTIONS = [
+  ['super_admin', 'Super Admin'],
+  ['orders_manager', 'Orders Manager'],
+  ['stock_manager', 'Stock Manager'],
+  ['payment_manager', 'Payment Manager'],
+  ['broadcast_manager', 'Broadcast Manager'],
+  ['customer_support', 'Customer Support'],
+  ['viewer', 'Viewer'],
+  ['custom', 'Custom'],
+]
+
+const ROLE_PERMISSIONS = {
+  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
+  orders_manager: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'customers:view'],
+  stock_manager: ['dashboard:view', 'stock:view', 'stock:manage'],
+  payment_manager: ['dashboard:view', 'orders:view', 'payments:view', 'payments:approve', 'customers:view'],
+  broadcast_manager: ['dashboard:view', 'broadcasts:view', 'broadcasts:send'],
+  customer_support: ['dashboard:view', 'orders:view', 'orders:update', 'customers:view'],
+  viewer: ['dashboard:view', 'orders:view', 'stock:view', 'customers:view'],
+}
+
+const PERMISSION_OPTIONS = [
+  ['dashboard:view', 'Dashboard View'],
+  ['orders:view', 'Orders View'],
+  ['orders:update', 'Orders Update'],
+  ['orders:delivery', 'Delivery Management'],
+  ['payments:view', 'Payments View'],
+  ['payments:approve', 'Payment Approval'],
+  ['stock:view', 'Stock View'],
+  ['stock:manage', 'Stock Management'],
+  ['broadcasts:view', 'Broadcast View'],
+  ['broadcasts:send', 'Broadcast Send'],
+  ['customers:view', 'Customers View'],
+  ['audit:view', 'Audit Logs View'],
+  ['admins:view', 'Admin Users View'],
+  ['admins:manage', 'Admin Users Manage'],
+]
+
+const roleLabel = (value) => ROLE_OPTIONS.find(([role]) => role === value)?.[1] || 'Custom'
 
 const formatDate = (value) => {
   if (!value) return 'N/A'
@@ -57,6 +99,7 @@ export default function AdminUsers() {
   }
 
   const openEdit = (item) => {
+    const adminRole = item.admin_role || 'viewer'
     setSelectedAdmin(item)
     setForm({
       full_name: item.full_name || item.name || '',
@@ -64,6 +107,8 @@ export default function AdminUsers() {
       phone: item.phone || '',
       password: '',
       confirm_password: '',
+      admin_role: adminRole,
+      permissions: item.permissions || ROLE_PERMISSIONS[adminRole] || [],
       is_active: item.is_active !== false,
     })
     setModalMode('edit')
@@ -85,12 +130,17 @@ export default function AdminUsers() {
     event.preventDefault()
     try {
       if (modalMode === 'create') {
-        await adminAPI.createAdminUser(form)
+        await adminAPI.createAdminUser({
+          ...form,
+          permissions: form.admin_role === 'custom' ? form.permissions : ROLE_PERMISSIONS[form.admin_role],
+        })
         toast.success('Admin user created')
       } else if (modalMode === 'edit') {
         await adminAPI.updateAdminUser(selectedAdmin.id, {
           full_name: form.full_name,
           phone: form.phone,
+          admin_role: form.admin_role,
+          permissions: form.admin_role === 'custom' ? form.permissions : ROLE_PERMISSIONS[form.admin_role],
           is_active: form.is_active,
         })
         toast.success('Admin user updated')
@@ -124,6 +174,8 @@ export default function AdminUsers() {
   }
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
+  const canManageAdmins = admin?.admin_role === 'super_admin' || admin?.permissions?.includes('admins:manage')
+  const activePermissions = form.admin_role === 'custom' ? form.permissions : (ROLE_PERMISSIONS[form.admin_role] || [])
 
   return (
     <div className="admin-page admin-users-page">
@@ -136,11 +188,12 @@ export default function AdminUsers() {
           <button type="button" className="admin-users-secondary" onClick={loadAdmins} disabled={loading}>
             <RefreshCw size={18} /> Refresh
           </button>
-          <button type="button" className="admin-users-primary" onClick={openCreate}>
+          <button type="button" className="admin-users-primary" onClick={openCreate} disabled={!canManageAdmins}>
             <ShieldPlus size={18} /> Create Admin
           </button>
         </div>
       </div>
+      <div className="admin-users-warning">Only Super Admins or admins with Admin Users Manage permission can create or edit admin accounts.</div>
 
       <div className="admin-users-table-wrap">
         <table className="admin-users-table">
@@ -149,6 +202,7 @@ export default function AdminUsers() {
               <th>Name</th>
               <th>Email</th>
               <th>Phone</th>
+              <th>Admin Role</th>
               <th>Status</th>
               <th>Created At</th>
               <th>Actions</th>
@@ -156,26 +210,27 @@ export default function AdminUsers() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan="6" className="admin-users-empty">Loading admin users...</td></tr>
+              <tr><td colSpan="7" className="admin-users-empty">Loading admin users...</td></tr>
             ) : sortedAdmins.length ? (
               sortedAdmins.map((item) => (
                 <tr key={item.id}>
                   <td>{item.full_name || item.name || 'Admin'}</td>
                   <td>{item.email}</td>
                   <td>{item.phone || 'N/A'}</td>
+                  <td>{roleLabel(item.admin_role)}</td>
                   <td><span className={`admin-user-status ${item.is_active === false ? 'inactive' : 'active'}`}>{item.is_active === false ? 'Inactive' : 'Active'}</span></td>
                   <td>{formatDate(item.created_at)}</td>
                   <td>
                     <div className="admin-user-row-actions">
-                      <button type="button" onClick={() => openEdit(item)}>Edit</button>
-                      <button type="button" onClick={() => openPassword(item)}>Reset Password</button>
-                      <button type="button" className="danger" disabled={item.id === currentAdminId || item.is_active === false} onClick={() => deactivateAdmin(item)}>Deactivate</button>
+                      <button type="button" disabled={!canManageAdmins} onClick={() => openEdit(item)}>Edit</button>
+                      <button type="button" disabled={!canManageAdmins} onClick={() => openPassword(item)}>Reset Password</button>
+                      <button type="button" className="danger" disabled={!canManageAdmins || item.id === currentAdminId || item.is_active === false} onClick={() => deactivateAdmin(item)}>Deactivate</button>
                     </div>
                   </td>
                 </tr>
               ))
             ) : (
-              <tr><td colSpan="6" className="admin-users-empty">No admin users found.</td></tr>
+              <tr><td colSpan="7" className="admin-users-empty">No admin users found.</td></tr>
             )}
           </tbody>
         </table>
@@ -197,12 +252,34 @@ export default function AdminUsers() {
                   <label>Full Name<input value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} required /></label>
                   <label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required disabled={modalMode === 'edit'} /></label>
                   <label>Phone<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+                  <label>Admin Role<select value={form.admin_role} onChange={(event) => setForm({ ...form, admin_role: event.target.value, permissions: ROLE_PERMISSIONS[event.target.value] || form.permissions })}>{ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                   {modalMode === 'create' && (
                     <>
                       <label>Password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required minLength="6" /></label>
                       <label>Confirm Password<input type="password" value={form.confirm_password} onChange={(event) => setForm({ ...form, confirm_password: event.target.value })} required minLength="6" /></label>
                     </>
                   )}
+                  <div className="admin-user-permissions">
+                    <strong>{form.admin_role === 'custom' ? 'Custom Permissions' : 'Permission Preview'}</strong>
+                    <div className="admin-user-permission-grid">
+                      {PERMISSION_OPTIONS.map(([value, label]) => (
+                        <label key={value} className="admin-user-check">
+                          <input
+                            type="checkbox"
+                            checked={activePermissions.includes(value)}
+                            disabled={form.admin_role !== 'custom'}
+                            onChange={(event) => setForm({
+                              ...form,
+                              permissions: event.target.checked
+                                ? [...new Set([...form.permissions, value])]
+                                : form.permissions.filter((permission) => permission !== value),
+                            })}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label className="admin-user-check"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /> Active admin account</label>
                 </>
               )}

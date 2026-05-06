@@ -24,6 +24,7 @@ from models import (
     Order as DBOrder,
     OrderItem as DBOrderItem,
     Pack as DBPack,
+    PaymentApprovalLog as DBPaymentApprovalLog,
     Product as DBProduct,
     Profile as DBProfile,
     User as DBUser,
@@ -309,12 +310,16 @@ class AdminUserPayload(BaseModel):
     phone: Optional[str] = ""
     password: str
     confirm_password: Optional[str] = None
+    admin_role: Optional[str] = "viewer"
+    permissions: Optional[list] = None
     is_active: Optional[bool] = True
 
 
 class AdminUserUpdatePayload(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
+    admin_role: Optional[str] = None
+    permissions: Optional[list] = None
     is_active: Optional[bool] = None
 
 
@@ -323,9 +328,81 @@ class AdminPasswordResetPayload(BaseModel):
     confirm_password: Optional[str] = None
 
 
+ADMIN_ROLE_PERMISSIONS = {
+    "super_admin": [
+        "dashboard:view", "orders:view", "orders:update", "orders:delivery",
+        "payments:view", "payments:approve", "stock:view", "stock:manage",
+        "broadcasts:view", "broadcasts:send", "customers:view", "audit:view",
+        "admins:view", "admins:manage",
+    ],
+    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "customers:view"],
+    "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
+    "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "customers:view"],
+    "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send"],
+    "customer_support": ["dashboard:view", "orders:view", "orders:update", "customers:view"],
+    "viewer": ["dashboard:view", "orders:view", "stock:view", "customers:view"],
+}
+
+
+def normalize_admin_role(value: Optional[str]) -> str:
+    role = str(value or "super_admin").strip().lower().replace("-", "_").replace(" ", "_")
+    return role or "super_admin"
+
+
+def get_admin_permissions(admin_user) -> List[str]:
+    role = normalize_admin_role(
+        getattr(admin_user, "admin_role", None) if not isinstance(admin_user, dict) else admin_user.get("admin_role")
+    )
+    raw_permissions = (
+        getattr(admin_user, "permissions_json", None)
+        if not isinstance(admin_user, dict)
+        else admin_user.get("permissions_json") or admin_user.get("permissions")
+    )
+    parsed = json_load(raw_permissions, None) if isinstance(raw_permissions, str) else raw_permissions
+    if isinstance(parsed, list) and parsed:
+        return sorted({str(permission) for permission in parsed if permission})
+    return ADMIN_ROLE_PERMISSIONS.get(role, ADMIN_ROLE_PERMISSIONS["super_admin"] if role == "super_admin" else [])
+
+
+def has_permission(admin_user, permission: str) -> bool:
+    role = normalize_admin_role(
+        getattr(admin_user, "admin_role", None) if not isinstance(admin_user, dict) else admin_user.get("admin_role")
+    )
+    return role == "super_admin" or permission in get_admin_permissions(admin_user)
+
+
+def require_permission(request: Request, permission: str):
+    admin = require_admin(request)
+    if not has_permission(admin, permission):
+        raise HTTPException(status_code=403, detail="You do not have permission to perform this action.")
+    return admin
+
+
+def require_any_permission(request: Request, permissions: List[str]):
+    admin = require_admin(request)
+    if not any(has_permission(admin, permission) for permission in permissions):
+        raise HTTPException(status_code=403, detail="You do not have permission to perform this action.")
+    return admin
+
+
+def validate_assignable_permissions(current_admin: dict, target_role: Optional[str], permissions: Optional[list]) -> tuple[str, List[str]]:
+    admin_role = normalize_admin_role(target_role)
+    selected = permissions if isinstance(permissions, list) and permissions else ADMIN_ROLE_PERMISSIONS.get(admin_role, [])
+    selected = sorted({str(permission) for permission in selected if permission})
+    if not has_permission(current_admin, "admins:manage"):
+        raise HTTPException(status_code=403, detail="You do not have permission to perform this action.")
+    if normalize_admin_role(current_admin.get("admin_role")) != "super_admin":
+        current_permissions = set(get_admin_permissions(current_admin))
+        if any(permission not in current_permissions for permission in selected):
+            raise HTTPException(status_code=403, detail="You cannot grant permissions you do not have.")
+        if admin_role == "super_admin":
+            raise HTTPException(status_code=403, detail="Only Super Admins can create Super Admin accounts.")
+    return admin_role, selected
+
+
 def public_user(user: dict) -> dict:
     full_name = user.get("full_name") or user.get("fullName") or user.get("name") or "FoodNova User"
-    return {
+    data = {
         "id": user["id"],
         "full_name": full_name,
         "fullName": full_name,
@@ -335,12 +412,17 @@ def public_user(user: dict) -> dict:
         "role": user.get("role", "customer"),
         "is_active": user.get("is_active", True),
     }
+    if data["role"] == "admin":
+        data["admin_role"] = normalize_admin_role(user.get("admin_role"))
+        data["permissions"] = get_admin_permissions(user)
+    return data
 
 
 def create_access_token(user) -> str:
     email = getattr(user, "email", None) if not isinstance(user, dict) else user.get("email")
     user_id = getattr(user, "id", None) if not isinstance(user, dict) else user.get("id")
     role = getattr(user, "role", None) if not isinstance(user, dict) else user.get("role")
+    admin_role = getattr(user, "admin_role", None) if not isinstance(user, dict) else user.get("admin_role")
     full_name = (
         getattr(user, "full_name", None)
         if not isinstance(user, dict)
@@ -351,6 +433,8 @@ def create_access_token(user) -> str:
         "sub": email,
         "user_id": user_id,
         "role": role or "customer",
+        "admin_role": normalize_admin_role(admin_role) if (role or "") == "admin" else "",
+        "permissions": get_admin_permissions(user) if (role or "") == "admin" else [],
         "name": full_name or "",
         "exp": expiry,
     }
@@ -804,6 +888,9 @@ def db_user_to_dict(user: DBUser) -> dict:
         "phone": user.phone or "",
         "password": user.password,
         "role": user.role or "customer",
+        "admin_role": normalize_admin_role(getattr(user, "admin_role", None)) if (user.role or "") == "admin" else "",
+        "permissions_json": getattr(user, "permissions_json", None),
+        "permissions": get_admin_permissions(user) if (user.role or "") == "admin" else [],
         "is_active": bool(getattr(user, "is_active", True)),
         "created_at": iso(user.created_at),
         "updated_at": iso(user.updated_at),
@@ -820,6 +907,8 @@ def admin_user_to_dict(user: DBUser) -> dict:
         "email": user.email,
         "phone": user.phone or "",
         "role": "admin",
+        "admin_role": normalize_admin_role(getattr(user, "admin_role", None)),
+        "permissions": get_admin_permissions(user),
         "is_active": bool(getattr(user, "is_active", True)),
         "created_at": iso(user.created_at),
         "updated_at": iso(user.updated_at),
@@ -1002,6 +1091,59 @@ def audit_log_to_dict(log: DBAdminAuditLog) -> dict:
     }
 
 
+def payment_audit_log_to_dict(log: DBPaymentApprovalLog) -> dict:
+    return {
+        "id": log.id,
+        "order_id": log.order_id,
+        "order_code": log.order_code or "",
+        "admin_id": log.admin_id,
+        "admin_name": log.admin_name or "Admin",
+        "admin_email": log.admin_email or "",
+        "action": log.action,
+        "old_payment_status": log.old_payment_status or "",
+        "new_payment_status": log.new_payment_status or "",
+        "receipt_url": log.receipt_url or "",
+        "receipt_filename": log.receipt_filename or "",
+        "note": log.note or "",
+        "rejection_reason": log.rejection_reason or "",
+        "ip_address": log.ip_address or "",
+        "user_agent": log.user_agent or "",
+        "created_at": iso(log.created_at),
+    }
+
+
+def create_payment_approval_log(
+    db,
+    request: Request,
+    admin: dict,
+    order: DBOrder,
+    action: str,
+    old_payment_status: str,
+    new_payment_status: str,
+    note: str = "",
+    rejection_reason: str = "",
+):
+    receipt = json_load(order.receipt, {}) or {}
+    log = DBPaymentApprovalLog(
+        order_id=order.id,
+        order_code=order.order_code or "",
+        admin_id=admin.get("id"),
+        admin_name=admin.get("full_name") or admin.get("fullName") or admin.get("name") or "Admin",
+        admin_email=admin.get("email") or "",
+        action=action,
+        old_payment_status=old_payment_status or "",
+        new_payment_status=new_payment_status or "",
+        receipt_url=receipt.get("url") or receipt.get("receipt_url") or receipt.get("data_url") or "",
+        receipt_filename=receipt.get("filename") or "",
+        note=note or "",
+        rejection_reason=rejection_reason or "",
+        ip_address=request.client.host if request and request.client else "",
+        user_agent=request.headers.get("user-agent", "") if request else "",
+    )
+    db.add(log)
+    return log
+
+
 def get_db_user_by_email(db, email: str):
     return db.query(DBUser).filter(DBUser.email == str(email).strip().lower()).first()
 
@@ -1031,8 +1173,27 @@ def ensure_database_compatibility():
             "phone": "VARCHAR(50) DEFAULT ''",
             "password": "VARCHAR(255) DEFAULT ''",
             "role": "VARCHAR(30) DEFAULT 'customer'",
+            "admin_role": "VARCHAR(80) DEFAULT ''",
+            "permissions_json": "TEXT",
             "is_active": "BOOLEAN DEFAULT TRUE",
             "updated_at": "TIMESTAMP",
+        },
+        "payment_approval_logs": {
+            "order_id": "INTEGER",
+            "order_code": "VARCHAR(30) DEFAULT ''",
+            "admin_id": "INTEGER",
+            "admin_name": "VARCHAR(150) DEFAULT ''",
+            "admin_email": "VARCHAR(150) DEFAULT ''",
+            "action": "VARCHAR(80)",
+            "old_payment_status": "VARCHAR(80) DEFAULT ''",
+            "new_payment_status": "VARCHAR(80) DEFAULT ''",
+            "receipt_url": "TEXT DEFAULT ''",
+            "receipt_filename": "VARCHAR(255) DEFAULT ''",
+            "note": "TEXT DEFAULT ''",
+            "rejection_reason": "TEXT DEFAULT ''",
+            "ip_address": "VARCHAR(80) DEFAULT ''",
+            "user_agent": "TEXT DEFAULT ''",
+            "created_at": "TIMESTAMP",
         },
         "products": {
             "stock_qty": "INTEGER DEFAULT 0",
@@ -1104,6 +1265,7 @@ def ensure_database_compatibility():
             else:
                 connection.execute(text("UPDATE users SET password = COALESCE(NULLIF(password, ''), '') WHERE password IS NULL OR password = ''"))
             connection.execute(text("UPDATE users SET role = COALESCE(NULLIF(role, ''), 'customer') WHERE role IS NULL OR role = ''"))
+            connection.execute(text("UPDATE users SET admin_role = 'super_admin' WHERE role = 'admin' AND (admin_role IS NULL OR admin_role = '')"))
             connection.execute(text("UPDATE users SET is_active = TRUE WHERE is_active IS NULL"))
         if "products" in existing_tables:
             connection.execute(text("UPDATE products SET stock_qty = COALESCE(stock_qty, stock, 0), stock = COALESCE(stock, stock_qty, 0)"))
@@ -1145,6 +1307,8 @@ def seed_database():
                 phone="",
                 password=ADMIN_PASSWORD,
                 role="admin",
+                admin_role="super_admin",
+                permissions_json=json_dump(ADMIN_ROLE_PERMISSIONS["super_admin"]),
                 is_active=True,
             )
             db.add(admin)
@@ -1153,6 +1317,8 @@ def seed_database():
             admin.updated_at = datetime.utcnow()
         else:
             admin.is_active = True
+            admin.admin_role = "super_admin"
+            admin.permissions_json = json_dump(ADMIN_ROLE_PERMISSIONS["super_admin"])
 
         if db.query(DBProduct).count() == 0:
             for product in PRODUCTS:
@@ -1904,7 +2070,7 @@ async def upload_receipt(order_id: int, file: UploadFile = File(...)):
 
 @app.get("/admin/orders")
 def admin_orders(request: Request):
-    require_admin(request)
+    require_permission(request, "orders:view")
     db = SessionLocal()
     try:
         orders = [order_to_dict(order) for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
@@ -1918,7 +2084,7 @@ def admin_orders(request: Request):
 
 @app.get("/admin/orders/{order_id}")
 def admin_get_order(order_id: int, request: Request):
-    require_admin(request)
+    require_permission(request, "orders:view")
     db = SessionLocal()
     try:
         order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
@@ -1933,7 +2099,17 @@ def admin_get_order(order_id: int, request: Request):
 
 @app.patch("/admin/orders/{order_id}")
 def update_order(order_id: int, payload: dict, request: Request):
-    admin = require_admin(request)
+    payment_update_requested = any(key in payload for key in ["payment_status", "status"]) and (
+        payload.get("payment_status") in ["payment_confirmed", "payment_rejected", "receipt_submitted"]
+        or payload.get("status") in ["payment_confirmed", "payment_rejected", "receipt_submitted"]
+    )
+    order_update_requested = any(key in payload for key in ["order_status", "fulfillment_status", "delivery_code", "admin_note", "service_note"])
+    if payment_update_requested:
+        admin = require_permission(request, "payments:approve")
+    elif order_update_requested:
+        admin = require_permission(request, "orders:update")
+    else:
+        admin = require_permission(request, "orders:update")
     db = SessionLocal()
     try:
         order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
@@ -1989,8 +2165,10 @@ def update_order(order_id: int, payload: dict, request: Request):
                         f"Your payment for order {order_code} has been confirmed.",
                         "payment_update", "payment")
                 elif status_value == "payment_rejected":
+                    rejection_reason = payload.get("rejection_reason") or payload.get("reason") or payload.get("admin_note") or ""
+                    reason_text = f" Reason: {rejection_reason}." if rejection_reason else ""
                     _create_order_notification(order_data, "Payment Rejected",
-                        f"Your payment for order {order_code} was rejected. Please upload a clearer receipt or contact support.",
+                        f"Your payment receipt for order {order_code} was rejected.{reason_text} Please upload a clearer receipt or contact support.",
                         "payment_update", "payment")
 
             def notify_order_status(status_value: str):
@@ -2055,9 +2233,17 @@ def update_order(order_id: int, payload: dict, request: Request):
                 {"order_code": order.order_code, "changes": changed_fields},
             )
         if order.payment_status != old_payment_status and order.payment_status == "payment_confirmed":
-            create_admin_audit_log(request, admin, "payment_confirmed", "order", order.id, f"Admin confirmed payment for order {order.order_code}", {"order_code": order.order_code})
+            note = payload.get("note") or payload.get("admin_note") or ""
+            payment_log = create_payment_approval_log(db, request, admin, order, "payment_confirmed", old_payment_status, order.payment_status, note=note)
+            db.commit()
+            db.refresh(payment_log)
+            create_admin_audit_log(request, admin, "payment_confirmed", "order", order.id, f"Admin confirmed payment for order {order.order_code}", {"order_code": order.order_code, "payment_log": payment_audit_log_to_dict(payment_log)})
         if order.payment_status != old_payment_status and order.payment_status == "payment_rejected":
-            create_admin_audit_log(request, admin, "payment_rejected", "order", order.id, f"Admin rejected payment for order {order.order_code}", {"order_code": order.order_code})
+            rejection_reason = payload.get("rejection_reason") or payload.get("reason") or payload.get("admin_note") or ""
+            payment_log = create_payment_approval_log(db, request, admin, order, "payment_rejected", old_payment_status, order.payment_status, rejection_reason=rejection_reason)
+            db.commit()
+            db.refresh(payment_log)
+            create_admin_audit_log(request, admin, "payment_rejected", "order", order.id, f"Admin rejected payment for order {order.order_code}", {"order_code": order.order_code, "payment_log": payment_audit_log_to_dict(payment_log)})
         if generated_delivery_code:
             create_admin_audit_log(request, admin, "delivery_code_generated", "order", order.id, f"Admin generated delivery code for order {order.order_code}", {"order_code": order.order_code})
 
@@ -2107,7 +2293,7 @@ def confirm_delivery(order_id: int, payload: dict):
 
 @app.get("/admin/products")
 def admin_products(request: Request):
-    require_admin(request)
+    require_permission(request, "stock:view")
     products = list_products()
     return {"success": True, "products": products, "data": products}
 
@@ -2124,7 +2310,7 @@ async def admin_create_product(
     description: str = Form(""),
     image: Optional[UploadFile] = File(None),
 ):
-    admin = require_admin(request)
+    admin = require_permission(request, "stock:manage")
     image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product") if image else ""
     db = SessionLocal()
     try:
@@ -2167,7 +2353,7 @@ async def admin_update_product(
     description: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
-    admin = require_admin(request)
+    admin = require_permission(request, "stock:manage")
     db = SessionLocal()
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
@@ -2208,7 +2394,7 @@ async def admin_update_product(
 
 @app.delete("/admin/products/{product_id}")
 def admin_delete_product(product_id: int, request: Request):
-    admin = require_admin(request)
+    admin = require_permission(request, "stock:manage")
     db = SessionLocal()
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
@@ -2231,7 +2417,7 @@ def admin_delete_product(product_id: int, request: Request):
 
 @app.get("/admin/packs")
 def admin_packs(request: Request):
-    require_admin(request)
+    require_permission(request, "stock:view")
     packs = list_packs()
     return {"success": True, "packs": packs, "data": packs}
 
@@ -2247,7 +2433,7 @@ async def admin_create_pack(
     active: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
-    admin = require_admin(request)
+    admin = require_permission(request, "stock:manage")
     image_url = await save_uploaded_image(image, PACK_UPLOAD_DIR, "pack") if image else ""
     parsed_items = json_load(items, None)
     if parsed_items is None:
@@ -2289,7 +2475,7 @@ async def admin_update_pack(
     active: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
-    admin = require_admin(request)
+    admin = require_permission(request, "stock:manage")
     db = SessionLocal()
     try:
         pack = db.query(DBPack).filter(DBPack.id == pack_id).first()
@@ -2329,7 +2515,7 @@ async def admin_update_pack(
 
 @app.delete("/admin/packs/{pack_id}")
 def admin_delete_pack(pack_id: int, request: Request):
-    admin = require_admin(request)
+    admin = require_permission(request, "stock:manage")
     db = SessionLocal()
     try:
         pack = db.query(DBPack).filter(DBPack.id == pack_id).first()
@@ -2352,7 +2538,7 @@ def admin_delete_pack(pack_id: int, request: Request):
 
 @app.get("/admin/customers")
 def admin_customers(request: Request):
-    require_admin(request)
+    require_permission(request, "customers:view")
 
     db = SessionLocal()
     try:
@@ -2420,9 +2606,54 @@ def admin_customers(request: Request):
         db.close()
 
 
+@app.get("/admin/orders/{order_id}/payment-audit")
+def get_order_payment_audit(order_id: int, request: Request):
+    require_any_permission(request, ["payments:view", "payments:approve"])
+    db = SessionLocal()
+    try:
+        logs = [
+            payment_audit_log_to_dict(log)
+            for log in db.query(DBPaymentApprovalLog)
+            .filter(DBPaymentApprovalLog.order_id == order_id)
+            .order_by(DBPaymentApprovalLog.created_at.desc(), DBPaymentApprovalLog.id.desc())
+            .all()
+        ]
+        return {"success": True, "logs": logs, "data": logs}
+    finally:
+        db.close()
+
+
+@app.get("/admin/payment-audit")
+def get_payment_audit_logs(
+    request: Request,
+    order_id: Optional[int] = None,
+    admin_email: Optional[str] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+):
+    require_any_permission(request, ["payments:view", "audit:view"])
+    db = SessionLocal()
+    try:
+        query = db.query(DBPaymentApprovalLog)
+        if order_id:
+            query = query.filter(DBPaymentApprovalLog.order_id == order_id)
+        if admin_email:
+            query = query.filter(DBPaymentApprovalLog.admin_email == admin_email.strip().lower())
+        if action:
+            query = query.filter(DBPaymentApprovalLog.action == action)
+        safe_limit = max(1, min(int(limit or 100), 500))
+        logs = [
+            payment_audit_log_to_dict(log)
+            for log in query.order_by(DBPaymentApprovalLog.created_at.desc(), DBPaymentApprovalLog.id.desc()).limit(safe_limit).all()
+        ]
+        return {"success": True, "logs": logs, "data": logs}
+    finally:
+        db.close()
+
+
 @app.get("/admin/users")
 def get_admin_users(request: Request):
-    require_admin(request)
+    require_permission(request, "admins:view")
     db = SessionLocal()
     try:
         admins = [admin_user_to_dict(user) for user in db.query(DBUser).filter(DBUser.role == "admin").order_by(DBUser.created_at.desc(), DBUser.id.desc()).all()]
@@ -2433,7 +2664,7 @@ def get_admin_users(request: Request):
 
 @app.post("/admin/users")
 def create_admin_user(payload: AdminUserPayload, request: Request):
-    admin = require_admin(request)
+    admin = require_permission(request, "admins:manage")
     full_name = (payload.full_name or "").strip()
     email = payload.email.lower().strip()
     password = payload.password or ""
@@ -2443,6 +2674,7 @@ def create_admin_user(payload: AdminUserPayload, request: Request):
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     if payload.confirm_password is not None and payload.confirm_password != password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
+    admin_role, permissions = validate_assignable_permissions(admin, payload.admin_role, payload.permissions)
 
     db = SessionLocal()
     try:
@@ -2454,6 +2686,8 @@ def create_admin_user(payload: AdminUserPayload, request: Request):
             phone=payload.phone or "",
             password=_hash_password(password),
             role="admin",
+            admin_role=admin_role,
+            permissions_json=json_dump(permissions),
             is_active=payload.is_active is not False,
         )
         db.add(new_admin)
@@ -2467,7 +2701,7 @@ def create_admin_user(payload: AdminUserPayload, request: Request):
             "admin_user",
             new_admin.id,
             f"{admin.get('full_name') or admin.get('email')} created admin user {new_admin.email}",
-            {"admin_email": new_admin.email},
+            {"admin_email": new_admin.email, "admin_role": admin_role, "permissions": permissions},
         )
         return {"success": True, "message": "Admin user created successfully", "admin": data, "data": data}
     finally:
@@ -2476,7 +2710,7 @@ def create_admin_user(payload: AdminUserPayload, request: Request):
 
 @app.patch("/admin/users/{admin_id}")
 def update_admin_user(admin_id: int, payload: AdminUserUpdatePayload, request: Request):
-    admin = require_admin(request)
+    admin = require_permission(request, "admins:manage")
     db = SessionLocal()
     try:
         target = db.query(DBUser).filter(DBUser.id == admin_id, DBUser.role == "admin").first()
@@ -2489,6 +2723,10 @@ def update_admin_user(admin_id: int, payload: AdminUserUpdatePayload, request: R
             target.full_name = payload.full_name.strip()
         if payload.phone is not None:
             target.phone = payload.phone
+        if payload.admin_role is not None or payload.permissions is not None:
+            target_role, target_permissions = validate_assignable_permissions(admin, payload.admin_role or target.admin_role, payload.permissions)
+            target.admin_role = target_role
+            target.permissions_json = json_dump(target_permissions)
         if payload.is_active is not None:
             if admin_id == admin.get("id") and payload.is_active is False:
                 raise HTTPException(status_code=400, detail="You cannot deactivate your own admin account")
@@ -2505,7 +2743,7 @@ def update_admin_user(admin_id: int, payload: AdminUserUpdatePayload, request: R
 
 @app.patch("/admin/users/{admin_id}/password")
 def reset_admin_password(admin_id: int, payload: AdminPasswordResetPayload, request: Request):
-    admin = require_admin(request)
+    admin = require_permission(request, "admins:manage")
     password = payload.new_password or ""
     if len(password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
@@ -2529,7 +2767,7 @@ def reset_admin_password(admin_id: int, payload: AdminPasswordResetPayload, requ
 
 @app.delete("/admin/users/{admin_id}")
 def deactivate_admin_user(admin_id: int, request: Request):
-    admin = require_admin(request)
+    admin = require_permission(request, "admins:manage")
     if admin_id == admin.get("id"):
         raise HTTPException(status_code=400, detail="You cannot deactivate your own admin account")
     db = SessionLocal()
@@ -2554,7 +2792,7 @@ def deactivate_admin_user(admin_id: int, request: Request):
 @app.post("/admin/broadcasts")
 def create_broadcast(payload: BroadcastPayload, request: Request):
     """Create and send a broadcast message to all customers."""
-    user = require_admin(request)
+    user = require_permission(request, "broadcasts:send")
     
     title = payload.title.strip()
     message = payload.message.strip()
@@ -2609,7 +2847,7 @@ def create_broadcast(payload: BroadcastPayload, request: Request):
 @app.get("/admin/broadcasts")
 def get_broadcasts(request: Request):
     """Get all broadcast messages."""
-    require_admin(request)
+    require_permission(request, "broadcasts:view")
     db = SessionLocal()
     try:
         broadcasts = [
@@ -2636,7 +2874,7 @@ def get_admin_audit_logs(
     entity_type: Optional[str] = None,
     admin_email: Optional[str] = None,
 ):
-    require_admin(request)
+    require_permission(request, "audit:view")
     db = SessionLocal()
     try:
         query = db.query(DBAdminAuditLog)
@@ -2663,7 +2901,7 @@ def get_admin_audit_logs(
 @app.patch("/admin/broadcasts/{broadcast_id}")
 def update_broadcast(broadcast_id: int, payload: BroadcastUpdatePayload, request: Request):
     """Update a broadcast message."""
-    admin = require_admin(request)
+    admin = require_permission(request, "broadcasts:send")
     updates = payload.dict(exclude_unset=True)
     db = SessionLocal()
     try:
@@ -2707,7 +2945,7 @@ def update_broadcast(broadcast_id: int, payload: BroadcastUpdatePayload, request
 @app.delete("/admin/broadcasts/{broadcast_id}")
 def delete_broadcast(broadcast_id: int, request: Request):
     """Delete a broadcast record without removing customer notification history."""
-    admin = require_admin(request)
+    admin = require_permission(request, "broadcasts:send")
     db = SessionLocal()
     try:
         broadcast = db.query(DBBroadcast).filter(DBBroadcast.id == broadcast_id).first()

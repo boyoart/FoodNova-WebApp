@@ -29,6 +29,16 @@
   color: var(--fn-muted);
 }
 
+.admin-users-warning {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 12px;
+  background: var(--fn-surface-2);
+  color: var(--fn-muted);
+  font-weight: 700;
+}
+
 .admin-users-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -174,7 +184,8 @@
   font-weight: 900;
 }
 
-.admin-user-form input {
+.admin-user-form input,
+.admin-user-form select {
   min-height: 44px;
   border-radius: 12px;
   border: 1px solid var(--fn-border);
@@ -184,13 +195,34 @@
 }
 
 .admin-user-check,
-.admin-user-modal-footer {
+.admin-user-modal-footer,
+.admin-user-permissions {
   grid-column: 1 / -1;
 }
 
 .admin-user-check {
   flex-direction: row !important;
   align-items: center;
+}
+
+.admin-user-permissions {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 14px;
+  background: var(--fn-surface-2);
+}
+
+.admin-user-permission-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.admin-user-permission-grid .admin-user-check {
+  color: var(--fn-text);
+  font-weight: 700;
 }
 
 .admin-user-modal-footer {

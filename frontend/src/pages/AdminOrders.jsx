@@ -29,6 +29,7 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [paymentAuditLogs, setPaymentAuditLogs] = useState([])
   const [serviceNote, setServiceNote] = useState('')
   const [sendingServiceNote, setSendingServiceNote] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -67,9 +68,19 @@ export default function AdminOrders() {
   }
 
   const handlePaymentStatusUpdate = async (orderId, newStatus) => {
+    let payload = { payment_status: newStatus }
+    if (newStatus === 'payment_rejected') {
+      const reason = window.prompt('Reason for rejection')
+      if (!reason || !reason.trim()) {
+        toast.error('Rejection reason is required')
+        return
+      }
+      payload = { ...payload, reason: reason.trim(), rejection_reason: reason.trim() }
+    }
     try {
-      await adminAPI.updatePaymentStatus(orderId, { payment_status: newStatus })
+      await adminAPI.updatePaymentStatus(orderId, payload)
       toast.success('Payment status updated')
+      if (selectedOrder?.id === orderId) loadPaymentAudit(orderId)
       fetchOrders()
     } catch (error) {
       toast.error('Failed to update payment status')
@@ -119,11 +130,23 @@ export default function AdminOrders() {
   const handleViewOrder = (order) => {
     setSelectedOrder(order)
     setServiceNote(order.service_note || '')
+    loadPaymentAudit(order.id)
   }
 
   const handleCloseOrder = () => {
     setSelectedOrder(null)
     setServiceNote('')
+    setPaymentAuditLogs([])
+  }
+
+  const loadPaymentAudit = async (orderId) => {
+    try {
+      const response = await adminAPI.getOrderPaymentAudit(orderId)
+      setPaymentAuditLogs(response.data || [])
+    } catch (error) {
+      if (![401, 403].includes(error?.response?.status)) console.error(error)
+      setPaymentAuditLogs([])
+    }
   }
 
   const getReceiptUrl = (receipt = {}) => resolveMediaUrl(
@@ -395,6 +418,25 @@ export default function AdminOrders() {
                   )}
                 </div>
               )}
+
+              <div className="admin-order-section">
+                <h4>Payment Approval History</h4>
+                {paymentAuditLogs.length ? (
+                  <div className="payment-audit-list">
+                    {paymentAuditLogs.map((log) => (
+                      <div key={log.id} className="payment-audit-card">
+                        <div><strong>{log.action?.replace(/_/g, ' ')}</strong> by {log.admin_name || log.admin_email || 'Admin'}</div>
+                        <p>{log.old_payment_status || 'N/A'} -&gt; {log.new_payment_status || 'N/A'}</p>
+                        <p>{log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}</p>
+                        {(log.note || log.rejection_reason) && <p>{log.note || log.rejection_reason}</p>}
+                        {log.receipt_url && <button type="button" className="btn-view-receipt" onClick={() => window.open(resolveMediaUrl(log.receipt_url), '_blank', 'noopener,noreferrer')}>View Receipt</button>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="muted">No payment audit records yet.</p>
+                )}
+              </div>
 
               {/* Payment Status */}
               <div className="admin-order-section">

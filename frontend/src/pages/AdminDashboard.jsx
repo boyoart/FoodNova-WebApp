@@ -8,17 +8,17 @@ import { BarChart3, BellRing, ClipboardList, CreditCard, Package, ShieldCheck, S
 import './AdminDashboard.css'
 
 const adminTools = [
-  { path: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.', icon: ClipboardList },
-  { path: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.', icon: Package },
-  { path: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.', icon: CreditCard },
-  { path: '/admin/broadcasts', title: 'Broadcasts', description: 'Send announcements to customers.', icon: BellRing },
-  { path: '/admin/customers', title: 'Customers', description: 'View customer data and order history.', icon: Users },
-  { path: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system changes.', icon: BarChart3 },
-  { path: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.', icon: ShieldCheck },
+  { path: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.', icon: ClipboardList, permission: 'orders:view' },
+  { path: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.', icon: Package, permission: 'stock:view' },
+  { path: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.', icon: CreditCard, permission: 'payments:view' },
+  { path: '/admin/broadcasts', title: 'Broadcasts', description: 'Send announcements to customers.', icon: BellRing, permission: 'broadcasts:view' },
+  { path: '/admin/customers', title: 'Customers', description: 'View customer data and order history.', icon: Users, permission: 'customers:view' },
+  { path: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system changes.', icon: BarChart3, permission: 'audit:view' },
+  { path: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.', icon: ShieldCheck, permission: 'admins:view' },
 ]
 
 export default function AdminDashboard() {
-  const { isAdmin } = useAuthStore()
+  const { isAdmin, admin } = useAuthStore()
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -48,6 +48,8 @@ export default function AdminDashboard() {
   if (loading) {
     return <div className="admin-page"><div className="loading">Loading dashboard...</div></div>
   }
+  const can = (permission) => admin?.admin_role === 'super_admin' || admin?.permissions?.includes(permission)
+  const visibleTools = adminTools.filter((tool) => can(tool.permission))
 
   return (
     <div className="admin-page">
@@ -67,7 +69,7 @@ export default function AdminDashboard() {
           <p>Quick access to FoodNova management workflows.</p>
         </div>
         <div className="admin-tools-grid">
-          {adminTools.map((tool) => (
+          {visibleTools.map((tool) => (
             <Link key={tool.path} to={tool.path} className="admin-tool-card">
               <div className="admin-tool-icon"><tool.icon size={22} /></div>
               <div className="admin-tool-content">

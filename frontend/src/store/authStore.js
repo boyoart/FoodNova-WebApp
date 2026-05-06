@@ -42,4 +42,9 @@ export const useAuthStore = create((set) => ({
     localStorage.setItem('user', JSON.stringify(user))
     set({ user })
   },
+
+  hasAdminPermission: (permission) => {
+    const admin = safeJsonParse('admin', null)
+    return admin?.admin_role === 'super_admin' || admin?.permissions?.includes(permission)
+  },
 }))

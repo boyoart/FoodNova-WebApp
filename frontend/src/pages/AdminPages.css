@@ -1383,6 +1383,50 @@ tbody tr:hover {
   background: var(--fn-surface-2);
 }
 
+.admin-rejection-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  color: var(--fn-heading);
+  font-weight: 800;
+}
+
+.admin-rejection-field textarea {
+  width: 100%;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  padding: 0.85rem;
+  resize: vertical;
+}
+
+.admin-rejection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.payment-audit-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.payment-audit-card {
+  padding: 0.9rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-surface-2);
+  color: var(--fn-text);
+}
+
+.payment-audit-card p {
+  margin: 0.35rem 0;
+  color: var(--fn-muted);
+}
+
 .stock-row-low td {
   background: color-mix(in srgb, var(--fn-accent, #FFD23F) 12%, transparent);
 }

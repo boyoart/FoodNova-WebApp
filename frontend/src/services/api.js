@@ -377,8 +377,16 @@ export const adminAPI = {
       return { data: Array.from(customersByEmail.values()), raw: { local_fallback: true } };
     }
   },
-  approvePayment: async (id) => (await api.patch(`/admin/orders/${id}`, { status: "payment_confirmed", payment_status: "payment_confirmed" })).data,
+  approvePayment: async (id, payload = {}) => (await api.patch(`/admin/orders/${id}`, { ...payload, status: "payment_confirmed", payment_status: "payment_confirmed" })).data,
   rejectPayment: async (id, payload = {}) => (await api.patch(`/admin/orders/${id}`, { ...payload, status: "payment_rejected", payment_status: "payment_rejected" })).data,
+  getOrderPaymentAudit: async (id) => {
+    const response = await api.get(`/admin/orders/${id}/payment-audit`);
+    return { data: normalizeList(response.data, ["logs"]), raw: response.data };
+  },
+  getPaymentAudit: async (params = {}) => {
+    const response = await api.get("/admin/payment-audit", { params });
+    return { data: normalizeList(response.data, ["logs"]), raw: response.data };
+  },
   getBroadcasts: async () => {
     const response = await api.get("/admin/broadcasts");
     const broadcasts = normalizeList(response.data, ["broadcasts"]);

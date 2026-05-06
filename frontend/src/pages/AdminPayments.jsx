@@ -10,6 +10,8 @@ export default function AdminPayments() {
   const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedReceipt, setSelectedReceipt] = useState(null)
+  const [rejectTarget, setRejectTarget] = useState(null)
+  const [rejectionReason, setRejectionReason] = useState('')
 
   useEffect(() => {
     if (isAdmin) {
@@ -32,7 +34,7 @@ export default function AdminPayments() {
 
   const handleApprove = async (orderId) => {
     try {
-      await adminAPI.approvePayment(orderId)
+      await adminAPI.approvePayment(orderId, { note: '' })
       toast.success('Payment approved')
       fetchPayments()
     } catch (error) {
@@ -40,10 +42,26 @@ export default function AdminPayments() {
     }
   }
 
-  const handleReject = async (orderId) => {
+  const openRejectModal = (payment) => {
+    setRejectTarget(payment)
+    setRejectionReason('')
+  }
+
+  const closeRejectModal = () => {
+    setRejectTarget(null)
+    setRejectionReason('')
+  }
+
+  const handleReject = async () => {
+    const reason = rejectionReason.trim()
+    if (!reason) {
+      toast.error('Rejection reason is required')
+      return
+    }
     try {
-      await adminAPI.rejectPayment(orderId, { reason: 'Invalid receipt' })
+      await adminAPI.rejectPayment(rejectTarget.id, { reason, rejection_reason: reason })
       toast.success('Payment rejected')
+      closeRejectModal()
       fetchPayments()
     } catch (error) {
       toast.error('Failed to reject payment')
@@ -142,7 +160,7 @@ export default function AdminPayments() {
                     <button
                       type="button"
                       className="btn-reject"
-                      onClick={() => handleReject(payment.id)}
+                      onClick={() => openRejectModal(payment)}
                     >
                       Reject
                     </button>
@@ -206,6 +224,37 @@ export default function AdminPayments() {
                   </p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectTarget && (
+        <div className="admin-receipt-modal">
+          <div className="admin-receipt-overlay" onClick={closeRejectModal}></div>
+          <div className="admin-receipt-content">
+            <div className="admin-receipt-header">
+              <h2>Reject Payment</h2>
+              <button type="button" className="modal-close" onClick={closeRejectModal}>×</button>
+            </div>
+            <div className="admin-receipt-body">
+              <div className="receipt-meta-card">
+                <p><strong>Order:</strong> #{rejectTarget.order_code || rejectTarget.id}</p>
+                <p><strong>Customer:</strong> {rejectTarget.customer_name || 'Customer'}</p>
+              </div>
+              <label className="admin-rejection-field">
+                Reason for rejection
+                <textarea
+                  value={rejectionReason}
+                  onChange={(event) => setRejectionReason(event.target.value)}
+                  rows={4}
+                  placeholder="Explain what the customer needs to fix."
+                />
+              </label>
+              <div className="admin-rejection-actions">
+                <button type="button" className="btn-cancel" onClick={closeRejectModal}>Cancel</button>
+                <button type="button" className="btn-reject" onClick={handleReject}>Reject Payment</button>
+              </div>
             </div>
           </div>
         </div>

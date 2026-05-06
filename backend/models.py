@@ -16,6 +16,8 @@ class User(Base):
     phone = Column(String(50), default="")
     password = Column(String(255), nullable=False)
     role = Column(String(30), default="customer", index=True)
+    admin_role = Column(String(80), default="")
+    permissions_json = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -202,6 +204,27 @@ class AdminAuditLog(Base):
     entity_id = Column(String(80), index=True, default="")
     description = Column(Text, default="")
     metadata_json = Column(Text, nullable=True)
+    ip_address = Column(String(80), default="")
+    user_agent = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PaymentApprovalLog(Base):
+    __tablename__ = "payment_approval_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, nullable=True, index=True)
+    order_code = Column(String(30), default="", index=True)
+    admin_id = Column(Integer, nullable=True)
+    admin_name = Column(String(150), default="")
+    admin_email = Column(String(150), index=True, default="")
+    action = Column(String(80), index=True, nullable=False)
+    old_payment_status = Column(String(80), default="")
+    new_payment_status = Column(String(80), default="")
+    receipt_url = Column(Text, default="")
+    receipt_filename = Column(String(255), default="")
+    note = Column(Text, default="")
+    rejection_reason = Column(Text, default="")
     ip_address = Column(String(80), default="")
     user_agent = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -248,15 +248,17 @@ export default function Navbar() {
     { to: '/cart', label: 'Cart' },
   ]
 
+  const canAdmin = (permission) => admin?.admin_role === 'super_admin' || admin?.permissions?.includes(permission)
+
   const adminMenuLinks = [
-    { to: '/admin/orders', label: 'Manage Orders' },
-    { to: '/admin/stock', label: 'Stock Management' },
-    { to: '/admin/payments', label: 'Payment Approvals' },
-    { to: '/admin/broadcasts', label: 'Broadcasts' },
-    { to: '/admin/customers', label: 'Customers' },
-    { to: '/admin/audit-logs', label: 'Activity Logs' },
-    { to: '/admin/users', label: 'Admin Users' },
-  ]
+    { to: '/admin/orders', label: 'Manage Orders', show: canAdmin('orders:view') },
+    { to: '/admin/stock', label: 'Stock Management', show: canAdmin('stock:view') },
+    { to: '/admin/payments', label: 'Payment Approvals', show: canAdmin('payments:view') || canAdmin('payments:approve') },
+    { to: '/admin/broadcasts', label: 'Broadcasts', show: canAdmin('broadcasts:view') },
+    { to: '/admin/customers', label: 'Customers', show: canAdmin('customers:view') },
+    { to: '/admin/audit-logs', label: 'Activity Logs', show: canAdmin('audit:view') },
+    { to: '/admin/users', label: 'Admin Users', show: canAdmin('admins:view') || canAdmin('admins:manage') },
+  ].filter((link) => link.show)
 
   const avatarMenuLinks = isAdmin ? [{ to: '/admin/dashboard', label: 'Dashboard' }, ...adminMenuLinks] : customerMenuLinks
   const isAdminMenuActive = adminMenuLinks.some((link) => isActivePath(link.to))
