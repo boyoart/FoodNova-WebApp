@@ -6,7 +6,6 @@ const BUSINESS = {
   tagline: 'Quality Foodstuff. Reliable Supply.',
   email: 'support@foodnova.ng',
   phone: '+2348025801125',
-  instagram: '@foodnovalimited',
   address: '33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria',
 }
 
@@ -74,7 +73,6 @@ export default function OrderInvoice({ order }) {
       <section className="invoice-business-details">
         <p>{BUSINESS.email}</p>
         <p>{BUSINESS.phone}</p>
-        <p>Instagram: {BUSINESS.instagram}</p>
         <p>{BUSINESS.address}</p>
       </section>
 

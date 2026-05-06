@@ -65,6 +65,29 @@
   text-decoration: underline;
 }
 
+.contact-social-section {
+  border-top: 1px solid var(--fn-border);
+  padding-top: 1rem;
+}
+
+.contact-social-section h3 {
+  margin: 0 0 0.75rem;
+  color: var(--fn-heading);
+}
+
+.contact-social-section a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.contact-social-section a:hover {
+  text-decoration: underline;
+}
+
 .contact-form {
   background: var(--fn-surface);
   border: 1px solid var(--fn-border);

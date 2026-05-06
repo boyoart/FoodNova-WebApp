@@ -58,19 +58,19 @@ export default function ContactPage() {
             </div>
 
             <div className="info-item">
-              <Instagram size={32} />
-              <div>
-                <h3>Instagram</h3>
-                <a href="https://www.instagram.com/foodnovalimited">@foodnovalimited</a>
-              </div>
-            </div>
-
-            <div className="info-item">
               <MapPin size={32} />
               <div>
                 <h3>Address</h3>
                 <p>33 Ariyo Akinloye Street<br />Isheri-Bucknor, Lagos, Nigeria</p>
               </div>
+            </div>
+
+            <div className="contact-social-section">
+              <h3>Social</h3>
+              <a href="https://www.instagram.com/foodnovalimited" aria-label="Instagram: @foodnovalimited">
+                <Instagram size={22} />
+                Instagram: @foodnovalimited
+              </a>
             </div>
           </div>
 
