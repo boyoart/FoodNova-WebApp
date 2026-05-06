@@ -28,7 +28,7 @@ export default function Footer() {
               <a href="#" aria-label="Facebook">
                 <Facebook size={20} />
               </a>
-              <a href="#" aria-label="Instagram">
+              <a href="https://www.instagram.com/foodnovalimited" aria-label="Instagram">
                 <Instagram size={20} />
               </a>
               <a href="#" aria-label="Twitter">
@@ -67,10 +67,16 @@ export default function Footer() {
                 </a>
               </li>
               <li>
-                <a href="tel:+2348148242485">
+                <a href="tel:+2348025801125">
                   <Phone size={16} />
-                  +234 814 824 2485
+                  +2348025801125
                 </a>
+              </li>
+              <li>
+                <span>
+                  <Instagram size={16} />
+                  Instagram: @foodnovalimited
+                </span>
               </li>
               <li>
                 <span>

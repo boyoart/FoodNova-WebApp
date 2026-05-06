@@ -60,6 +60,7 @@
 .invoice-info-grid,
 .invoice-items-section,
 .invoice-totals,
+.invoice-payment-details,
 .invoice-footer {
   padding: 1.5rem 2rem;
 }
@@ -128,6 +129,22 @@
   font-size: 1.12rem;
 }
 
+.invoice-payment-details {
+  max-width: 420px;
+  margin-left: auto;
+  border-top: 1px solid var(--fn-border);
+}
+
+.invoice-payment-details h3 {
+  margin: 0 0 0.6rem;
+  color: var(--fn-heading);
+}
+
+.invoice-payment-details p {
+  margin: 0.3rem 0;
+  color: var(--fn-text);
+}
+
 .invoice-footer {
   background: var(--fn-surface-2);
   border-top: 1px solid var(--fn-border);
@@ -149,6 +166,7 @@
   .invoice-info-grid,
   .invoice-items-section,
   .invoice-totals,
+  .invoice-payment-details,
   .invoice-footer,
   .invoice-header {
     padding: 1rem;

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Mail, Phone, MapPin, Send } from 'lucide-react'
+import { Instagram, Mail, Phone, MapPin, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
 import './ContactPage.css'
 
@@ -53,7 +53,15 @@ export default function ContactPage() {
               <Phone size={32} />
               <div>
                 <h3>Phone</h3>
-                <a href="tel:+2348148242485">+234 814 824 2485</a>
+                <a href="tel:+2348025801125">+2348025801125</a>
+              </div>
+            </div>
+
+            <div className="info-item">
+              <Instagram size={32} />
+              <div>
+                <h3>Instagram</h3>
+                <a href="https://www.instagram.com/foodnovalimited">@foodnovalimited</a>
               </div>
             </div>
 

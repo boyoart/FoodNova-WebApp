@@ -5,8 +5,15 @@ const BUSINESS = {
   name: 'FoodNova',
   tagline: 'Quality Foodstuff. Reliable Supply.',
   email: 'support@foodnova.ng',
-  phone: '+234 814 824 2485',
+  phone: '+2348025801125',
+  instagram: '@foodnovalimited',
   address: '33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria',
+}
+
+const PAYMENT = {
+  accountNumber: '6427173992',
+  bank: 'OPay',
+  accountName: 'FOODNOVA LIMITED',
 }
 
 const titleCase = (value) =>
@@ -67,6 +74,7 @@ export default function OrderInvoice({ order }) {
       <section className="invoice-business-details">
         <p>{BUSINESS.email}</p>
         <p>{BUSINESS.phone}</p>
+        <p>Instagram: {BUSINESS.instagram}</p>
         <p>{BUSINESS.address}</p>
       </section>
 
@@ -119,6 +127,13 @@ export default function OrderInvoice({ order }) {
         {deliveryFee > 0 && <div><span>Delivery Fee</span><strong>{formatPrice(deliveryFee)}</strong></div>}
         {discount > 0 && <div><span>Discount</span><strong>-{formatPrice(discount)}</strong></div>}
         <div className="invoice-grand-total"><span>Grand Total</span><strong>{formatPrice(grandTotal)}</strong></div>
+      </section>
+
+      <section className="invoice-payment-details">
+        <h3>Payment Details</h3>
+        <p>Account Number: {PAYMENT.accountNumber}</p>
+        <p>Bank: {PAYMENT.bank}</p>
+        <p>Account Name: {PAYMENT.accountName}</p>
       </section>
 
       <footer className="invoice-footer">

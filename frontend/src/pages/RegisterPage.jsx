@@ -131,7 +131,7 @@ export default function RegisterPage() {
                 value={formData.phone}
                 onChange={handleChange}
                 required
-                placeholder="+1234567890"
+                placeholder="+2348000000000"
               />
             </div>
 

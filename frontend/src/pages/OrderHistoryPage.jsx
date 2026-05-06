@@ -410,9 +410,9 @@ export default function OrderHistoryPage() {
                       <div className="bank-details">
                         <p><strong>Amount to Transfer:</strong> {formatCurrency(getOrderTotal(selectedOrder))}</p>
                         <div className="bank-info">
-                          <p><strong>Bank Name:</strong> Main Bank</p>
-                          <p><strong>Account Name:</strong> FoodNova Inc.</p>
-                          <p><strong>Account Number:</strong> 1234567890</p>
+                          <p><strong>Account Number:</strong> 6427173992</p>
+                          <p><strong>Bank:</strong> OPay</p>
+                          <p><strong>Account Name:</strong> FOODNOVA LIMITED</p>
                           <p><strong>Payment Narration/Reference:</strong> Use your Order Code</p>
                         </div>
                       </div>
