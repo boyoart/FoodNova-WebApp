@@ -318,15 +318,44 @@ export default function OrderHistoryPage() {
     return <div className="order-history-page"><div className="loading">Loading orders...</div></div>
   }
 
+  const getOrderLifecycleStatus = (order) =>
+    String(order?.order_status || order?.fulfillment_status || order?.status || '').toLowerCase()
+
+  const canRequestCancellation = (order) => {
+    const status = getOrderLifecycleStatus(order)
+    const paymentStatus = String(order?.payment_status || '').toLowerCase()
+    const cancellationStatus = String(order?.cancellation_status || '').toLowerCase()
+    const refundStatus = String(order?.refund_status || '').toLowerCase()
+
+    if (['pending', 'approved'].includes(cancellationStatus)) return false
+    if (['pending', 'approved', 'processed'].includes(refundStatus)) return false
+    if (['out_for_delivery', 'delivered', 'cancelled'].includes(status)) return false
+
+    const eligibleStatuses = ['', 'order_placed', 'pending_payment', 'receipt_submitted', 'payment_confirmed', 'confirmed', 'processing']
+    return eligibleStatuses.includes(status) || ['pending_payment', 'receipt_submitted', 'payment_confirmed', 'confirmed'].includes(paymentStatus)
+  }
+
   const getCancellationEligibility = (order) => {
-    const cancellationStatus = order?.cancellation_status || 'none'
-    const refundStatus = order?.refund_status || 'none'
-    const statuses = [order?.status, order?.order_status, order?.fulfillment_status, order?.payment_status].map((value) => String(value || '').toLowerCase())
+    const status = getOrderLifecycleStatus(order)
+    const cancellationStatus = String(order?.cancellation_status || '').toLowerCase()
+    const refundStatus = String(order?.refund_status || '').toLowerCase()
     if (cancellationStatus === 'pending' || refundStatus === 'pending') return { eligible: false, message: 'A cancellation/refund request is already pending for this order.' }
-    if (cancellationStatus === 'approved' || refundStatus === 'processed') return { eligible: false, message: 'Cancellation/refund has already been processed for this order.' }
-    if (statuses.some((status) => ['out_for_delivery', 'delivered', 'cancelled'].includes(status))) return { eligible: false, message: 'Cancellation is no longer available for this order. Please contact FoodNova support.' }
-    if (statuses.some((status) => ['order_placed', 'pending_payment', 'receipt_submitted', 'payment_confirmed', 'confirmed', 'processing'].includes(status))) return { eligible: true, message: '' }
-    return { eligible: false, message: 'Cancellation is no longer available for this order. Please contact FoodNova support.' }
+    if (cancellationStatus === 'approved' || ['approved', 'processed'].includes(refundStatus)) return { eligible: false, message: 'Cancellation/refund has already been processed for this order.' }
+    if (['out_for_delivery', 'delivered', 'cancelled'].includes(status)) return { eligible: false, message: 'Cancellation is no longer available for this order. Please contact FoodNova support.' }
+    return { eligible: canRequestCancellation(order), message: canRequestCancellation(order) ? '' : 'Cancellation is no longer available for this order. Please contact FoodNova support.' }
+  }
+
+  const openCancelRequestModal = (order = selectedOrder) => {
+    if (!order) return
+    setSelectedOrder(order)
+    setCancelRequestType('cancellation')
+    setCancelReason('')
+    setCancelModalOpen(true)
+  }
+
+  const formatRequestStatus = (value) => {
+    const status = String(value || 'none').replace(/_/g, ' ')
+    return status.charAt(0).toUpperCase() + status.slice(1)
   }
 
   const submitCancellationRequest = async (event) => {
@@ -415,6 +444,18 @@ export default function OrderHistoryPage() {
                 )}
                 {order.delivery_method === 'pickup' && <p className="pickup-note">✓ Pickup selected - Contact number: {order.customer_phone || 'Not available'}</p>}
               </div>
+              {canRequestCancellation(order) && (
+                <button
+                  type="button"
+                  className="cancel-request-btn order-card-cancel-btn"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    openCancelRequestModal(order)
+                  }}
+                >
+                  Request Cancellation / Refund
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -427,6 +468,9 @@ export default function OrderHistoryPage() {
             <div className="modal-header">
               <h2>Order Details</h2>
               <div className="modal-header-actions">
+                {cancellationEligibility.eligible && (
+                  <button type="button" className="cancel-request-btn modal-cancel-request-btn" onClick={() => openCancelRequestModal(selectedOrder)}>Request Cancellation / Refund</button>
+                )}
                 <Link className="btn-view invoice-link-button" to={`/orders/${selectedOrder.id}/invoice`} state={{ order: selectedOrder }}>View Invoice</Link>
                 <button type="button" className="btn-view order-whatsapp-btn" onClick={() => handleOrderWhatsAppSupport(selectedOrder)}><MessageCircle size={14}/> Chat About This Order</button>
                 <button className="btn-view" onClick={handleRefreshOrder} disabled={refreshingOrder}><RotateCw size={14}/> {refreshingOrder ? "Refreshing..." : "Refresh"}</button>
@@ -462,15 +506,21 @@ export default function OrderHistoryPage() {
               <div className="cancellation-request-section">
                 <h4>Cancellation / Refund</h4>
                 {(selectedOrder.cancellation_status && selectedOrder.cancellation_status !== 'none') || (selectedOrder.refund_status && selectedOrder.refund_status !== 'none') ? (
-                  <div className="cancellation-status-card">
-                    <p><strong>Cancellation Request:</strong> {selectedOrder.cancellation_status || 'none'}</p>
-                    <p><strong>Refund Status:</strong> {selectedOrder.refund_status || 'none'}</p>
+                  <div className="cancel-status-panel">
+                    <div className="cancel-status-row">
+                      <span>Cancellation Status</span>
+                      <strong className={`cancel-status-badge ${selectedOrder.cancellation_status || 'none'}`}>{formatRequestStatus(selectedOrder.cancellation_status)}</strong>
+                    </div>
+                    <div className="cancel-status-row">
+                      <span>Refund Status</span>
+                      <strong className={`cancel-status-badge ${selectedOrder.refund_status || 'none'}`}>{formatRequestStatus(selectedOrder.refund_status)}</strong>
+                    </div>
                     {selectedOrder.cancellation_reason && <p><strong>Reason:</strong> {selectedOrder.cancellation_reason}</p>}
-                    {selectedOrder.refund_note && <p><strong>Admin Decision:</strong> {selectedOrder.refund_note}</p>}
+                    {selectedOrder.refund_note && <p><strong>Admin Note:</strong> {selectedOrder.refund_note}</p>}
                   </div>
                 ) : null}
                 {cancellationEligibility.eligible ? (
-                  <button type="button" className="btn btn-primary request-cancel-btn" onClick={() => setCancelModalOpen(true)}>Request Cancellation / Refund</button>
+                  <button type="button" className="cancel-request-btn request-cancel-btn" onClick={() => openCancelRequestModal(selectedOrder)}>Request Cancellation / Refund</button>
                 ) : (
                   <p className="cancel-unavailable">{cancellationEligibility.message}</p>
                 )}
@@ -587,9 +637,9 @@ export default function OrderHistoryPage() {
           {cancelModalOpen && (
             <div className="cancel-request-modal">
               <div className="cancel-request-card">
-                <h3>Request Cancellation or Refund</h3>
-                <p>Cancellation requests are reviewed by FoodNova. Refunds are not automatic and depend on payment/order status.</p>
-                <form onSubmit={submitCancellationRequest}>
+                <h3>Request Cancellation / Refund</h3>
+                <p>FoodNova will review your request. Refunds are not automatic and depend on order/payment status.</p>
+                <form className="cancel-request-form" onSubmit={submitCancellationRequest}>
                   <label>
                     Request Type
                     <select value={cancelRequestType} onChange={(event) => setCancelRequestType(event.target.value)}>
@@ -599,7 +649,7 @@ export default function OrderHistoryPage() {
                   </label>
                   <label>
                     Reason
-                    <textarea rows="4" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Please explain why you want to cancel or request a refund" required />
+                    <textarea rows="4" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Please explain why you want to cancel or request a refund." required />
                   </label>
                   <div className="cancel-request-actions">
                     <button type="button" className="btn btn-secondary" onClick={() => setCancelModalOpen(false)}>Close</button>

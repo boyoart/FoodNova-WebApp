@@ -169,6 +169,10 @@
   font-weight: 500;
 }
 
+.order-card-cancel-btn {
+  margin-top: 1rem;
+}
+
 /* Order Detail Modal */
 .order-detail-modal {
   position: fixed;
@@ -628,9 +632,91 @@
   color: var(--fn-text);
 }
 
+.cancel-status-panel {
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.9rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface);
+  margin-bottom: 0.9rem;
+}
+
+.cancel-status-panel p {
+  margin: 0;
+  color: var(--fn-text);
+  line-height: 1.45;
+}
+
+.cancel-status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  color: var(--fn-text);
+}
+
+.cancel-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: var(--fn-surface-2);
+  color: var(--fn-muted);
+  font-size: 0.78rem;
+  text-transform: capitalize;
+}
+
+.cancel-status-badge.pending {
+  background: color-mix(in srgb, var(--fn-accent, #FFD23F) 28%, transparent);
+  color: #103820;
+}
+
+.cancel-status-badge.approved,
+.cancel-status-badge.processed {
+  background: rgba(8, 122, 52, 0.15);
+  color: var(--fn-primary);
+}
+
+.cancel-status-badge.rejected {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
+.cancel-request-btn,
+.request-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--fn-primary) 55%, var(--fn-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fn-primary) 12%, var(--fn-surface));
+  color: var(--fn-primary);
+  padding: 0.62rem 1rem;
+  font-weight: 900;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.cancel-request-btn:hover,
+.request-cancel-btn:hover {
+  transform: translateY(-1px);
+  background: var(--fn-primary);
+  border-color: var(--fn-primary);
+  color: #fff;
+}
+
 .request-cancel-btn {
   width: auto;
   min-height: 42px;
+}
+
+.modal-cancel-request-btn {
+  min-height: 40px;
+  white-space: nowrap;
 }
 
 .cancel-unavailable {
@@ -664,7 +750,8 @@
   color: var(--fn-heading);
 }
 
-.cancel-request-card form {
+.cancel-request-card form,
+.cancel-request-form {
   display: grid;
   gap: 1rem;
 }
@@ -827,6 +914,17 @@
   .modal-header-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .modal-cancel-request-btn,
+  .order-card-cancel-btn {
+    width: 100%;
+  }
+
+  .cancel-status-row,
+  .cancel-request-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .order-item-detail {
