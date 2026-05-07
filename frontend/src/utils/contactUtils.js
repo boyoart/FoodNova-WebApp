@@ -1,11 +1,14 @@
 export const FOODNOVA_WHATSAPP_NUMBER = "2348025801125"
+export const FOODNOVA_DOMAIN = "foodnova.com.ng"
+export const FOODNOVA_WEBSITE = "https://foodnova.com.ng"
 
 export const FOODNOVA_CONTACT = {
-  email: "support@foodnova.ng",
+  email: "support@foodnova.com.ng",
   phone: "+2348025801125",
   address: "33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria",
   instagram: "@foodnovalimited",
   tiktok: "@foodnovalimited",
+  website: FOODNOVA_WEBSITE,
 }
 
 export const FOODNOVA_SOCIAL_LINKS = {

@@ -8,13 +8,14 @@ except Exception:
     resend = None
 
 
-EMAIL_FROM = os.environ.get("EMAIL_FROM", "FoodNova <support@foodnova.ng>")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "FoodNova <support@foodnova.com.ng>")
 EMAIL_ENABLED = os.environ.get("EMAIL_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
-ADMIN_NOTIFICATION_EMAIL = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "support@foodnova.ng")
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://foodnova-webapp.vercel.app").rstrip("/")
+ADMIN_NOTIFICATION_EMAIL = os.environ.get("ADMIN_NOTIFICATION_EMAIL", "support@foodnova.com.ng")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "https://foodnova.com.ng").rstrip("/")
 
-FOODNOVA_EMAIL = "support@foodnova.ng"
+FOODNOVA_EMAIL = "support@foodnova.com.ng"
+FOODNOVA_WEBSITE = "https://foodnova.com.ng"
 FOODNOVA_PHONE = "+2348025801125"
 FOODNOVA_ADDRESS = "33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria"
 FOODNOVA_ACCOUNT_NUMBER = "6427173992"
@@ -116,6 +117,7 @@ def render_order_email_template(order, title, message, cta_text=None, cta_url=No
             {extra_html}
             <div style="margin:20px 0;">{cta_markup}</div>
             <p style="font-size:14px;line-height:1.55;color:#64748b;">
+              Website: {FOODNOVA_WEBSITE}<br>
               For support, contact {FOODNOVA_EMAIL} or {FOODNOVA_PHONE}.
             </p>
             <hr style="border:0;border-top:1px solid #dde8dd;margin:20px 0;">

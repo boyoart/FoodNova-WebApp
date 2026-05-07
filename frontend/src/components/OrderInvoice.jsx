@@ -4,7 +4,8 @@ import './OrderInvoice.css'
 const BUSINESS = {
   name: 'FoodNova',
   tagline: 'Quality Foodstuff. Reliable Supply.',
-  email: 'support@foodnova.ng',
+  website: 'foodnova.com.ng',
+  email: 'support@foodnova.com.ng',
   phone: '+2348025801125',
   address: '33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria',
 }
@@ -71,6 +72,7 @@ export default function OrderInvoice({ order }) {
       </header>
 
       <section className="invoice-business-details">
+        <p>Website: {BUSINESS.website}</p>
         <p>{BUSINESS.email}</p>
         <p>{BUSINESS.phone}</p>
         <p>{BUSINESS.address}</p>

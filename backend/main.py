@@ -79,6 +79,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
+        "https://foodnova.com.ng",
+        "https://www.foodnova.com.ng",
         "https://food-nova-web-app.vercel.app",
         "https://foodnova-webapp.vercel.app",
         *([os.environ.get("FRONTEND_ORIGIN")] if os.environ.get("FRONTEND_ORIGIN") else []),
@@ -1976,7 +1978,7 @@ def create_order(payload: OrderPayload, request: Request):
             print(f"INVENTORY DEDUCTED for {order.order_code}: {inventory_deductions}")
             create_admin_audit_log(
                 request,
-                {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.ng"},
+                {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
                 "inventory_deducted",
                 "order",
                 order.id,

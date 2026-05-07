@@ -309,7 +309,7 @@ export default function AdminUsers() {
                       <section className="admin-form-card">
                         <h3>Basic Information</h3>
                         <label>Full Name<input placeholder="FoodNova Admin" value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} required /></label>
-                        <label>Email<input type="email" placeholder="admin@foodnova.ng" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required disabled={modalMode === 'edit'} /></label>
+                        <label>Email<input type="email" placeholder="admin@foodnova.com.ng" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required disabled={modalMode === 'edit'} /></label>
                         <label>Phone<input placeholder="+2348000000000" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
                       </section>
 
