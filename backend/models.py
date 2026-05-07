@@ -125,6 +125,28 @@ class DeliveryRider(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class CancellationRequest(Base):
+    __tablename__ = "cancellation_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, nullable=False, index=True)
+    order_code = Column(String(30), default="", index=True)
+    customer_email = Column(String(150), index=True, default="")
+    customer_name = Column(String(150), default="")
+    customer_phone = Column(String(50), default="")
+    request_type = Column(String(30), default="cancellation", index=True)
+    reason = Column(Text, default="")
+    status = Column(String(30), default="pending", index=True)
+    admin_note = Column(Text, default="")
+    reviewed_by_admin_id = Column(Integer, nullable=True)
+    reviewed_by_admin_name = Column(String(150), default="")
+    reviewed_by_admin_email = Column(String(150), default="")
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -158,6 +180,13 @@ class Order(Base):
     delivery_started_at = Column(DateTime, nullable=True)
     delivery_completed_at = Column(DateTime, nullable=True)
     delivery_note = Column(Text, default="")
+    cancellation_status = Column(String(30), default="none", index=True)
+    cancellation_reason = Column(Text, default="")
+    cancellation_requested_at = Column(DateTime, nullable=True)
+    cancellation_reviewed_at = Column(DateTime, nullable=True)
+    refund_status = Column(String(30), default="none", index=True)
+    refund_note = Column(Text, default="")
+    inventory_restocked_at = Column(DateTime, nullable=True)
     receipt = Column(Text, nullable=True)
     admin_note = Column(Text, default="")
     service_note = Column(Text, default="")

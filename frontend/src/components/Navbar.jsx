@@ -259,6 +259,7 @@ export default function Navbar() {
 
   const adminMenuLinks = [
     { to: '/admin/orders', label: 'Manage Orders', show: canAdmin('orders:view') },
+    { to: '/admin/cancellations', label: 'Cancellation Requests', show: canAnyAdmin(['cancellations:view', 'cancellations:manage']) },
     { to: '/admin/riders', label: 'Delivery Riders', show: canAnyAdmin(['orders:delivery', 'delivery:manage']) },
     { to: '/admin/stock', label: 'Stock Management', show: canAdmin('stock:view') },
     { to: '/admin/payments', label: 'Payment Approvals', show: canAdmin('payments:view') || canAdmin('payments:approve') },

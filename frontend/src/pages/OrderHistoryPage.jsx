@@ -18,6 +18,10 @@ export default function OrderHistoryPage() {
   const [confirmingDelivery, setConfirmingDelivery] = useState(false)
   const [refreshingOrder, setRefreshingOrder] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [cancelRequestType, setCancelRequestType] = useState('cancellation')
+  const [cancelReason, setCancelReason] = useState('')
+  const [submittingCancelRequest, setSubmittingCancelRequest] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -121,6 +125,8 @@ export default function OrderHistoryPage() {
     setSelectedOrder(null)
     setReceiptFile(null)
     setDeliveryCode('')
+    setCancelModalOpen(false)
+    setCancelReason('')
   }
 
 
@@ -312,6 +318,46 @@ export default function OrderHistoryPage() {
     return <div className="order-history-page"><div className="loading">Loading orders...</div></div>
   }
 
+  const getCancellationEligibility = (order) => {
+    const cancellationStatus = order?.cancellation_status || 'none'
+    const refundStatus = order?.refund_status || 'none'
+    const statuses = [order?.status, order?.order_status, order?.fulfillment_status, order?.payment_status].map((value) => String(value || '').toLowerCase())
+    if (cancellationStatus === 'pending' || refundStatus === 'pending') return { eligible: false, message: 'A cancellation/refund request is already pending for this order.' }
+    if (cancellationStatus === 'approved' || refundStatus === 'processed') return { eligible: false, message: 'Cancellation/refund has already been processed for this order.' }
+    if (statuses.some((status) => ['out_for_delivery', 'delivered', 'cancelled'].includes(status))) return { eligible: false, message: 'Cancellation is no longer available for this order. Please contact FoodNova support.' }
+    if (statuses.some((status) => ['order_placed', 'pending_payment', 'receipt_submitted', 'payment_confirmed', 'confirmed', 'processing'].includes(status))) return { eligible: true, message: '' }
+    return { eligible: false, message: 'Cancellation is no longer available for this order. Please contact FoodNova support.' }
+  }
+
+  const submitCancellationRequest = async (event) => {
+    event.preventDefault()
+    if (cancelReason.trim().length < 10) {
+      toast.error('Please enter a reason with at least 10 characters')
+      return
+    }
+    try {
+      setSubmittingCancelRequest(true)
+      const response = await ordersAPI.requestCancellation(selectedOrder.id, {
+        request_type: cancelRequestType,
+        reason: cancelReason.trim(),
+      })
+      const updatedOrder = response.order || response.data?.order || response.data
+      if (updatedOrder?.id) {
+        setSelectedOrder(updatedOrder)
+        setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
+      } else {
+        await handleRefreshOrder()
+      }
+      setCancelModalOpen(false)
+      setCancelReason('')
+      toast.success('Cancellation request submitted successfully')
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to submit cancellation request')
+    } finally {
+      setSubmittingCancelRequest(false)
+    }
+  }
+
   if (loadError) {
     return <div className="order-history-page"><div className="empty-state"><AlertCircle size={48} /><p>{loadError}</p></div></div>
   }
@@ -326,6 +372,8 @@ export default function OrderHistoryPage() {
       </div>
     )
   }
+
+  const cancellationEligibility = selectedOrder ? getCancellationEligibility(selectedOrder) : { eligible: false, message: '' }
 
   return (
     <div className="order-history-page">
@@ -409,6 +457,23 @@ export default function OrderHistoryPage() {
                 <div className={`status-badge order-status ${normalizeOrderStatusValue(selectedOrder)}`}>
                   {getOrderStatus(selectedOrder)}
                 </div>
+              </div>
+
+              <div className="cancellation-request-section">
+                <h4>Cancellation / Refund</h4>
+                {(selectedOrder.cancellation_status && selectedOrder.cancellation_status !== 'none') || (selectedOrder.refund_status && selectedOrder.refund_status !== 'none') ? (
+                  <div className="cancellation-status-card">
+                    <p><strong>Cancellation Request:</strong> {selectedOrder.cancellation_status || 'none'}</p>
+                    <p><strong>Refund Status:</strong> {selectedOrder.refund_status || 'none'}</p>
+                    {selectedOrder.cancellation_reason && <p><strong>Reason:</strong> {selectedOrder.cancellation_reason}</p>}
+                    {selectedOrder.refund_note && <p><strong>Admin Decision:</strong> {selectedOrder.refund_note}</p>}
+                  </div>
+                ) : null}
+                {cancellationEligibility.eligible ? (
+                  <button type="button" className="btn btn-primary request-cancel-btn" onClick={() => setCancelModalOpen(true)}>Request Cancellation / Refund</button>
+                ) : (
+                  <p className="cancel-unavailable">{cancellationEligibility.message}</p>
+                )}
               </div>
 
               <div className="timeline-section">
@@ -519,6 +584,31 @@ export default function OrderHistoryPage() {
               </div>
             </div>
           </div>
+          {cancelModalOpen && (
+            <div className="cancel-request-modal">
+              <div className="cancel-request-card">
+                <h3>Request Cancellation or Refund</h3>
+                <p>Cancellation requests are reviewed by FoodNova. Refunds are not automatic and depend on payment/order status.</p>
+                <form onSubmit={submitCancellationRequest}>
+                  <label>
+                    Request Type
+                    <select value={cancelRequestType} onChange={(event) => setCancelRequestType(event.target.value)}>
+                      <option value="cancellation">Cancellation</option>
+                      <option value="refund">Refund</option>
+                    </select>
+                  </label>
+                  <label>
+                    Reason
+                    <textarea rows="4" value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Please explain why you want to cancel or request a refund" required />
+                  </label>
+                  <div className="cancel-request-actions">
+                    <button type="button" className="btn btn-secondary" onClick={() => setCancelModalOpen(false)}>Close</button>
+                    <button type="submit" className="btn btn-primary" disabled={submittingCancelRequest}>{submittingCancelRequest ? 'Submitting...' : 'Submit Request'}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

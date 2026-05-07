@@ -28,12 +28,12 @@ const ROLE_OPTIONS = [
 ]
 
 const ROLE_PERMISSIONS = {
-  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
-  orders_manager: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'customers:view'],
+  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
+  orders_manager: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'customers:view'],
   stock_manager: ['dashboard:view', 'stock:view', 'stock:manage'],
-  payment_manager: ['dashboard:view', 'orders:view', 'payments:view', 'payments:approve', 'customers:view'],
+  payment_manager: ['dashboard:view', 'orders:view', 'payments:view', 'payments:approve', 'cancellations:view', 'cancellations:manage', 'customers:view'],
   broadcast_manager: ['dashboard:view', 'broadcasts:view', 'broadcasts:send'],
-  customer_support: ['dashboard:view', 'orders:view', 'orders:update', 'customers:view'],
+  customer_support: ['dashboard:view', 'orders:view', 'orders:update', 'cancellations:view', 'customers:view'],
   viewer: ['dashboard:view', 'orders:view', 'stock:view', 'customers:view'],
 }
 
@@ -43,6 +43,8 @@ const PERMISSION_OPTIONS = [
   ['orders:update', 'Orders Update'],
   ['orders:delivery', 'Delivery Management'],
   ['delivery:manage', 'Rider Management'],
+  ['cancellations:view', 'Cancellation Requests View'],
+  ['cancellations:manage', 'Cancellation Requests Manage'],
   ['payments:view', 'Payments View'],
   ['payments:approve', 'Payment Approval'],
   ['stock:view', 'Stock View'],
@@ -57,7 +59,7 @@ const PERMISSION_OPTIONS = [
 
 const PERMISSION_GROUPS = [
   { title: 'Dashboard', items: [['dashboard:view', 'View dashboard']] },
-  { title: 'Orders', items: [['orders:view', 'View orders'], ['orders:update', 'Update orders'], ['orders:delivery', 'Manage delivery'], ['delivery:manage', 'Manage riders']] },
+  { title: 'Orders', items: [['orders:view', 'View orders'], ['orders:update', 'Update orders'], ['orders:delivery', 'Manage delivery'], ['delivery:manage', 'Manage riders'], ['cancellations:view', 'View cancellations'], ['cancellations:manage', 'Manage cancellations']] },
   { title: 'Payments', items: [['payments:view', 'View payments'], ['payments:approve', 'Approve payments']] },
   { title: 'Stock', items: [['stock:view', 'View stock'], ['stock:manage', 'Manage stock']] },
   { title: 'Broadcasts', items: [['broadcasts:view', 'View broadcasts'], ['broadcasts:send', 'Send broadcasts']] },

@@ -1,0 +1,241 @@
+.admin-cancellations-page {
+  color: var(--fn-text);
+}
+
+.cancellation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.cancellation-header h1 {
+  color: var(--fn-heading);
+  margin-bottom: 0.35rem;
+}
+
+.cancellation-header p {
+  margin: 0;
+  color: var(--fn-muted);
+}
+
+.cancellation-header .btn-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.admin-cancellations-page .btn-view,
+.admin-cancellations-page .btn-view-receipt,
+.admin-cancellations-page .btn-approve,
+.admin-cancellations-page .btn-reject,
+.admin-cancellations-page .btn-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 40px;
+  padding: 0.6rem 0.95rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--fn-border);
+  font-weight: 900;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.admin-cancellations-page .btn-view,
+.admin-cancellations-page .btn-view-receipt,
+.admin-cancellations-page .btn-cancel {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+}
+
+.admin-cancellations-page .btn-approve {
+  background: var(--fn-primary);
+  border-color: var(--fn-primary);
+  color: #fff;
+}
+
+.admin-cancellations-page .btn-reject {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #dc2626;
+}
+
+.admin-cancellations-page .btn-view:hover,
+.admin-cancellations-page .btn-view-receipt:hover,
+.admin-cancellations-page .btn-cancel:hover,
+.admin-cancellations-page .btn-approve:hover,
+.admin-cancellations-page .btn-reject:hover {
+  transform: translateY(-1px);
+}
+
+.admin-cancellations-page button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cancellation-filters {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.cancellation-filters div {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cancellation-filters button {
+  border: 1px solid var(--fn-border);
+  border-radius: 999px;
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  padding: 0.55rem 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.cancellation-filters button.active {
+  background: var(--fn-primary);
+  border-color: var(--fn-primary);
+  color: #fff;
+}
+
+.cancellation-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.cancellation-card {
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 1.1rem;
+  color: var(--fn-text);
+}
+
+.cancellation-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.cancellation-card h3 {
+  margin: 0 0 0.25rem;
+  color: var(--fn-heading);
+}
+
+.cancellation-card p {
+  color: var(--fn-text);
+}
+
+.cancellation-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0;
+  color: var(--fn-muted);
+}
+
+.cancel-status {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.cancel-status.pending {
+  background: color-mix(in srgb, var(--fn-accent, #FFD23F) 25%, transparent);
+  color: #103820;
+}
+
+.cancel-status.approved {
+  background: rgba(8, 122, 52, 0.14);
+  color: var(--fn-primary);
+}
+
+.cancel-status.rejected {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+}
+
+.cancel-reason,
+.cancel-note {
+  margin: 0.75rem 0;
+  line-height: 1.5;
+}
+
+.cancellation-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.cancellation-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.cancellation-modal-card {
+  width: min(520px, 94vw);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: var(--fn-shadow);
+}
+
+.cancellation-modal-card h2 {
+  margin: 0 0 0.5rem;
+  color: var(--fn-heading);
+}
+
+.cancellation-modal-card form {
+  display: grid;
+  gap: 1rem;
+}
+
+.cancellation-modal-card textarea {
+  width: 100%;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  padding: 0.85rem;
+  font: inherit;
+}
+
+.cancellation-modal-card form div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .cancellation-header,
+  .cancellation-card-top {
+    flex-direction: column;
+  }
+
+  .cancellation-modal-card form div {
+    flex-direction: column-reverse;
+  }
+}

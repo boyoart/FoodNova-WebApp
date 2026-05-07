@@ -602,6 +602,98 @@
   color: var(--fn-text);
 }
 
+.cancellation-request-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-surface-2);
+}
+
+.cancellation-request-section h4 {
+  margin: 0 0 0.75rem;
+  color: var(--fn-heading);
+}
+
+.cancellation-status-card {
+  padding: 0.85rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface);
+  margin-bottom: 0.85rem;
+}
+
+.cancellation-status-card p {
+  margin: 0.35rem 0;
+  color: var(--fn-text);
+}
+
+.request-cancel-btn {
+  width: auto;
+  min-height: 42px;
+}
+
+.cancel-unavailable {
+  color: var(--fn-muted);
+  margin: 0;
+}
+
+.cancel-request-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.cancel-request-card {
+  width: min(520px, 94vw);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: var(--fn-shadow);
+}
+
+.cancel-request-card h3 {
+  margin: 0 0 0.5rem;
+  color: var(--fn-heading);
+}
+
+.cancel-request-card form {
+  display: grid;
+  gap: 1rem;
+}
+
+.cancel-request-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--fn-heading);
+  font-weight: 800;
+}
+
+.cancel-request-card select,
+.cancel-request-card textarea {
+  width: 100%;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  padding: 0.85rem;
+  font: inherit;
+}
+
+.cancel-request-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
 .customer-rider-card {
   margin-top: 1rem;
   padding: 1rem;

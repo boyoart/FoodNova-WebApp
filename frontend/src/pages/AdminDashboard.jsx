@@ -4,11 +4,12 @@ import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import { BarChart3, BellRing, ClipboardList, CreditCard, Package, ShieldCheck, ShoppingBag, Users, DollarSign, Truck } from 'lucide-react'
+import { BarChart3, BellRing, ClipboardList, CreditCard, Package, ShieldCheck, ShoppingBag, Users, DollarSign, Truck, Undo2 } from 'lucide-react'
 import './AdminDashboard.css'
 
 const adminTools = [
   { path: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.', icon: ClipboardList, permission: 'orders:view' },
+  { path: '/admin/cancellations', title: 'Cancellation Requests', description: 'Review cancellation and refund requests.', icon: Undo2, permissions: ['cancellations:view', 'cancellations:manage'] },
   { path: '/admin/riders', title: 'Delivery Riders', description: 'Manage riders and assign deliveries.', icon: Truck, permissions: ['orders:delivery', 'delivery:manage'] },
   { path: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.', icon: Package, permission: 'stock:view' },
   { path: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.', icon: CreditCard, permission: 'payments:view' },

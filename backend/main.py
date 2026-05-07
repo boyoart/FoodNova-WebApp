@@ -25,6 +25,7 @@ from models import (
     Address as DBAddress,
     AdminAuditLog as DBAdminAuditLog,
     Broadcast as DBBroadcast,
+    CancellationRequest as DBCancellationRequest,
     Notification as DBNotification,
     Order as DBOrder,
     OrderItem as DBOrderItem,
@@ -362,6 +363,17 @@ class AssignRiderPayload(BaseModel):
     mark_out_for_delivery: Optional[bool] = False
 
 
+class CancellationRequestPayload(BaseModel):
+    request_type: Optional[str] = "cancellation"
+    reason: str
+
+
+class CancellationReviewPayload(BaseModel):
+    admin_note: Optional[str] = ""
+    rejection_reason: Optional[str] = ""
+    refund_status: Optional[str] = None
+
+
 class AdminPasswordResetPayload(BaseModel):
     new_password: str
     confirm_password: Optional[str] = None
@@ -373,12 +385,13 @@ ADMIN_ROLE_PERMISSIONS = {
         "payments:view", "payments:approve", "stock:view", "stock:manage",
         "broadcasts:view", "broadcasts:send", "customers:view", "audit:view",
         "admins:view", "admins:manage", "delivery:manage",
+        "cancellations:view", "cancellations:manage",
     ],
-    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "customers:view"],
+    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
-    "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "customers:view"],
+    "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "cancellations:view", "cancellations:manage", "customers:view"],
     "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send"],
-    "customer_support": ["dashboard:view", "orders:view", "orders:update", "customers:view"],
+    "customer_support": ["dashboard:view", "orders:view", "orders:update", "cancellations:view", "customers:view"],
     "viewer": ["dashboard:view", "orders:view", "stock:view", "customers:view"],
 }
 
@@ -794,6 +807,56 @@ def validate_and_deduct_inventory(db, items: list) -> list:
     return deductions
 
 
+def restock_order_inventory(db, order: DBOrder) -> list:
+    if getattr(order, "inventory_restocked_at", None):
+        return []
+    restocked = []
+    for item in order.items or []:
+        if not item.product_id:
+            continue
+        product = db.query(DBProduct).filter(DBProduct.id == item.product_id).first()
+        if not product:
+            continue
+        quantity = int(item.quantity or item.qty or 0)
+        if quantity <= 0:
+            continue
+        previous = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
+        product.stock_qty = previous + quantity
+        product.stock = product.stock_qty
+        product.updated_at = datetime.utcnow()
+        restocked.append({
+            "product_id": product.id,
+            "name": product.name,
+            "quantity": quantity,
+            "previous_stock": previous,
+            "new_stock": product.stock_qty,
+        })
+    if restocked:
+        order.inventory_restocked_at = datetime.utcnow()
+    return restocked
+
+
+def is_cancellation_eligible(order: DBOrder) -> tuple[bool, str]:
+    cancellation_status = getattr(order, "cancellation_status", "none") or "none"
+    refund_status = getattr(order, "refund_status", "none") or "none"
+    statuses = {
+        str(order.status or "").lower(),
+        str(order.order_status or "").lower(),
+        str(order.fulfillment_status or "").lower(),
+        str(order.payment_status or "").lower(),
+    }
+    if cancellation_status == "pending" or refund_status == "pending":
+        return False, "A cancellation/refund request is already pending for this order."
+    if cancellation_status == "approved" or refund_status == "processed":
+        return False, "Cancellation/refund has already been processed for this order."
+    if statuses.intersection({"out_for_delivery", "delivered", "cancelled"}):
+        return False, "Cancellation is no longer available for this order. Please contact FoodNova support."
+    allowed = {"order_placed", "pending_payment", "receipt_submitted", "payment_confirmed", "confirmed", "processing"}
+    if statuses.intersection(allowed):
+        return True, ""
+    return False, "Cancellation is no longer available for this order. Please contact FoodNova support."
+
+
 def iso(value):
     return value.isoformat() if value else None
 
@@ -1108,6 +1171,13 @@ def order_to_dict(order: DBOrder) -> dict:
         "delivery_started_at": iso(getattr(order, "delivery_started_at", None)),
         "delivery_completed_at": iso(getattr(order, "delivery_completed_at", None)),
         "delivery_note": getattr(order, "delivery_note", "") or "",
+        "cancellation_status": getattr(order, "cancellation_status", "none") or "none",
+        "cancellation_reason": getattr(order, "cancellation_reason", "") or "",
+        "cancellation_requested_at": iso(getattr(order, "cancellation_requested_at", None)),
+        "cancellation_reviewed_at": iso(getattr(order, "cancellation_reviewed_at", None)),
+        "refund_status": getattr(order, "refund_status", "none") or "none",
+        "refund_note": getattr(order, "refund_note", "") or "",
+        "inventory_restocked_at": iso(getattr(order, "inventory_restocked_at", None)),
         "receipt": json_load(order.receipt, None),
         "admin_note": order.admin_note or "",
         "service_note": order.service_note or "",
@@ -1183,6 +1253,31 @@ def payment_audit_log_to_dict(log: DBPaymentApprovalLog) -> dict:
         "user_agent": log.user_agent or "",
         "created_at": iso(log.created_at),
     }
+
+
+def cancellation_request_to_dict(request_obj: DBCancellationRequest, order: DBOrder = None) -> dict:
+    data = {
+        "id": request_obj.id,
+        "order_id": request_obj.order_id,
+        "order_code": request_obj.order_code or "",
+        "customer_email": request_obj.customer_email or "",
+        "customer_name": request_obj.customer_name or "",
+        "customer_phone": request_obj.customer_phone or "",
+        "request_type": request_obj.request_type or "cancellation",
+        "reason": request_obj.reason or "",
+        "status": request_obj.status or "pending",
+        "admin_note": request_obj.admin_note or "",
+        "reviewed_by_admin_id": request_obj.reviewed_by_admin_id,
+        "reviewed_by_admin_name": request_obj.reviewed_by_admin_name or "",
+        "reviewed_by_admin_email": request_obj.reviewed_by_admin_email or "",
+        "requested_at": iso(request_obj.requested_at),
+        "reviewed_at": iso(request_obj.reviewed_at),
+        "created_at": iso(request_obj.created_at),
+        "updated_at": iso(request_obj.updated_at),
+    }
+    if order:
+        data["order"] = order_to_dict(order)
+    return data
 
 
 def create_payment_approval_log(
@@ -1306,6 +1401,13 @@ def ensure_database_compatibility():
             "delivery_started_at": "TIMESTAMP",
             "delivery_completed_at": "TIMESTAMP",
             "delivery_note": "TEXT DEFAULT ''",
+            "cancellation_status": "VARCHAR(30) DEFAULT 'none'",
+            "cancellation_reason": "TEXT DEFAULT ''",
+            "cancellation_requested_at": "TIMESTAMP",
+            "cancellation_reviewed_at": "TIMESTAMP",
+            "refund_status": "VARCHAR(30) DEFAULT 'none'",
+            "refund_note": "TEXT DEFAULT ''",
+            "inventory_restocked_at": "TIMESTAMP",
             "receipt": "TEXT",
             "admin_note": "TEXT DEFAULT ''",
             "service_note": "TEXT DEFAULT ''",
@@ -2163,6 +2265,81 @@ async def upload_receipt(order_id: int, file: UploadFile = File(...)):
     raise HTTPException(status_code=404, detail="Order not found")
 
 
+@app.post("/orders/{order_id}/cancel-request")
+def create_cancel_request(order_id: int, payload: CancellationRequestPayload, request: Request):
+    user = require_user(request)
+    reason = (payload.reason or "").strip()
+    request_type = (payload.request_type or "cancellation").strip().lower()
+    if request_type not in ["cancellation", "refund"]:
+        request_type = "cancellation"
+    if len(reason) < 10:
+        raise HTTPException(status_code=400, detail="Reason must be at least 10 characters")
+    db = SessionLocal()
+    try:
+        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if (order.customer_email or "").strip().lower() != (user.get("email") or "").strip().lower():
+            raise HTTPException(status_code=403, detail="You can only request cancellation for your own order")
+        eligible, message = is_cancellation_eligible(order)
+        if not eligible:
+            raise HTTPException(status_code=400, detail=message)
+        existing = db.query(DBCancellationRequest).filter(
+            DBCancellationRequest.order_id == order.id,
+            DBCancellationRequest.status == "pending",
+        ).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="A cancellation/refund request is already pending for this order.")
+
+        cancel_request = DBCancellationRequest(
+            order_id=order.id,
+            order_code=order.order_code or "",
+            customer_email=order.customer_email or "",
+            customer_name=order.customer_name or "",
+            customer_phone=order.customer_phone or order.phone or "",
+            request_type=request_type,
+            reason=reason,
+            status="pending",
+            requested_at=datetime.utcnow(),
+        )
+        order.cancellation_status = "pending"
+        order.cancellation_reason = reason
+        order.cancellation_requested_at = datetime.utcnow()
+        if request_type == "refund":
+            order.refund_status = "pending"
+        order.updated_at = datetime.utcnow()
+        db.add(cancel_request)
+        db.commit()
+        db.refresh(cancel_request)
+        db.refresh(order)
+        order_data = order_to_dict(order)
+        request_data = cancellation_request_to_dict(cancel_request, order)
+        _create_order_notification(order_data, "Cancellation request submitted", f"Your cancellation/refund request for order {order.order_code} has been submitted.", "order_update", "order")
+        safe_email_call("customer_cancellation_submitted", send_customer_order_email, order_data, "cancellation_submitted")
+        safe_email_call("admin_cancellation_request", send_admin_order_email, order_data, "cancellation_request", {"reason": reason, "request_type": request_type})
+        create_admin_audit_log(request, {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"}, "cancellation_request_submitted", "order", order.id, f"Cancellation/refund request submitted for order {order.order_code}", {"request": request_data})
+        return {"success": True, "message": "Cancellation request submitted successfully", "request": request_data, "order": order_data, "data": request_data}
+    finally:
+        db.close()
+
+
+@app.get("/orders/{order_id}/cancel-request")
+def get_cancel_request(order_id: int, request: Request):
+    user = require_user(request)
+    db = SessionLocal()
+    try:
+        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if (order.customer_email or "").strip().lower() != (user.get("email") or "").strip().lower():
+            raise HTTPException(status_code=403, detail="You can only view your own cancellation request")
+        cancel_request = db.query(DBCancellationRequest).filter(DBCancellationRequest.order_id == order.id).order_by(DBCancellationRequest.created_at.desc(), DBCancellationRequest.id.desc()).first()
+        data = cancellation_request_to_dict(cancel_request, order) if cancel_request else None
+        return {"success": True, "request": data, "data": data}
+    finally:
+        db.close()
+
+
 @app.get("/admin/orders")
 def admin_orders(request: Request):
     require_permission(request, "orders:view")
@@ -2944,6 +3121,124 @@ def get_admin_users(request: Request):
     try:
         admins = [admin_user_to_dict(user) for user in db.query(DBUser).filter(DBUser.role == "admin").order_by(DBUser.created_at.desc(), DBUser.id.desc()).all()]
         return {"success": True, "admins": admins, "data": admins}
+    finally:
+        db.close()
+
+
+@app.get("/admin/cancellation-requests")
+def get_cancellation_requests(request: Request, status: Optional[str] = None, request_type: Optional[str] = None, limit: int = 100):
+    require_any_permission(request, ["cancellations:view", "cancellations:manage", "orders:update", "payments:approve"])
+    db = SessionLocal()
+    try:
+        query = db.query(DBCancellationRequest)
+        if status:
+            query = query.filter(DBCancellationRequest.status == status)
+        if request_type:
+            query = query.filter(DBCancellationRequest.request_type == request_type)
+        safe_limit = max(1, min(int(limit or 100), 500))
+        requests = []
+        for item in query.order_by(DBCancellationRequest.created_at.desc(), DBCancellationRequest.id.desc()).limit(safe_limit).all():
+            order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+            requests.append(cancellation_request_to_dict(item, order))
+        return {"success": True, "requests": requests, "data": requests}
+    finally:
+        db.close()
+
+
+@app.get("/admin/cancellation-requests/{request_id}")
+def get_cancellation_request(request_id: int, request: Request):
+    require_any_permission(request, ["cancellations:view", "cancellations:manage", "orders:update", "payments:approve"])
+    db = SessionLocal()
+    try:
+        item = db.query(DBCancellationRequest).filter(DBCancellationRequest.id == request_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Cancellation request not found")
+        order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+        data = cancellation_request_to_dict(item, order)
+        return {"success": True, "request": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/cancellation-requests/{request_id}/approve")
+def approve_cancellation_request(request_id: int, payload: CancellationReviewPayload, request: Request):
+    admin = require_any_permission(request, ["cancellations:manage", "orders:update", "payments:approve"])
+    db = SessionLocal()
+    try:
+        item = db.query(DBCancellationRequest).filter(DBCancellationRequest.id == request_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Cancellation request not found")
+        order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        item.status = "approved"
+        item.admin_note = payload.admin_note or ""
+        item.reviewed_by_admin_id = admin.get("id")
+        item.reviewed_by_admin_name = admin.get("full_name") or admin.get("name") or "Admin"
+        item.reviewed_by_admin_email = admin.get("email") or ""
+        item.reviewed_at = datetime.utcnow()
+        item.updated_at = datetime.utcnow()
+        order.cancellation_status = "approved"
+        order.cancellation_reviewed_at = item.reviewed_at
+        order.order_status = "cancelled"
+        order.fulfillment_status = "cancelled"
+        order.status = "cancelled"
+        if item.request_type == "refund" or order.payment_status in ["payment_confirmed", "confirmed"]:
+            order.refund_status = payload.refund_status or "approved"
+        order.refund_note = payload.admin_note or order.refund_note or ""
+        order.updated_at = datetime.utcnow()
+        restocked = restock_order_inventory(db, order)
+        db.commit()
+        db.refresh(item)
+        db.refresh(order)
+        order_data = order_to_dict(order)
+        request_data = cancellation_request_to_dict(item, order)
+        _create_order_notification(order_data, "Cancellation request approved", f"Your cancellation/refund request for order {order.order_code} has been approved.", "order_update", "order")
+        safe_email_call("customer_cancellation_approved", send_customer_order_email, order_data, "cancellation_approved")
+        create_admin_audit_log(request, admin, "cancellation_request_approved", "order", order.id, f"Admin approved cancellation/refund request for order {order.order_code}", {"request": request_data})
+        if restocked:
+            create_admin_audit_log(request, admin, "inventory_restocked", "order", order.id, f"Inventory restocked after cancellation approval for order {order.order_code}", {"restocked": restocked})
+        return {"success": True, "message": "Cancellation request approved", "request": request_data, "order": order_data, "data": request_data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/cancellation-requests/{request_id}/reject")
+def reject_cancellation_request(request_id: int, payload: CancellationReviewPayload, request: Request):
+    admin = require_any_permission(request, ["cancellations:manage", "orders:update", "payments:approve"])
+    reason = (payload.rejection_reason or payload.admin_note or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Rejection reason is required")
+    db = SessionLocal()
+    try:
+        item = db.query(DBCancellationRequest).filter(DBCancellationRequest.id == request_id).first()
+        if not item:
+            raise HTTPException(status_code=404, detail="Cancellation request not found")
+        order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        item.status = "rejected"
+        item.admin_note = reason
+        item.reviewed_by_admin_id = admin.get("id")
+        item.reviewed_by_admin_name = admin.get("full_name") or admin.get("name") or "Admin"
+        item.reviewed_by_admin_email = admin.get("email") or ""
+        item.reviewed_at = datetime.utcnow()
+        item.updated_at = datetime.utcnow()
+        order.cancellation_status = "rejected"
+        order.cancellation_reviewed_at = item.reviewed_at
+        if item.request_type == "refund":
+            order.refund_status = "rejected"
+        order.refund_note = reason
+        order.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(item)
+        db.refresh(order)
+        order_data = order_to_dict(order)
+        request_data = cancellation_request_to_dict(item, order)
+        _create_order_notification(order_data, "Cancellation request rejected", f"Your cancellation/refund request for order {order.order_code} was rejected. Reason: {reason}", "order_update", "order")
+        safe_email_call("customer_cancellation_rejected", send_customer_order_email, order_data, "cancellation_rejected", {"reason": reason})
+        create_admin_audit_log(request, admin, "cancellation_request_rejected", "order", order.id, f"Admin rejected cancellation/refund request for order {order.order_code}", {"request": request_data})
+        return {"success": True, "message": "Cancellation request rejected", "request": request_data, "order": order_data, "data": request_data}
     finally:
         db.close()
 

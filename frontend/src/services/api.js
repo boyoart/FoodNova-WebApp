@@ -260,6 +260,8 @@ export const ordersAPI = {
     return data;
   },
   confirmDelivery: async (orderId, code) => (await api.post(`/orders/${orderId}/confirm-delivery`, { delivery_code: code })).data,
+  requestCancellation: async (orderId, payload) => (await api.post(`/orders/${orderId}/cancel-request`, payload)).data,
+  getCancellationRequest: async (orderId) => (await api.get(`/orders/${orderId}/cancel-request`)).data,
 };
 
 export const adminAPI = {
@@ -407,6 +409,12 @@ export const adminAPI = {
     const response = await api.get("/admin/payment-audit", { params });
     return { data: normalizeList(response.data, ["logs"]), raw: response.data };
   },
+  getCancellationRequests: async (params = {}) => {
+    const response = await api.get("/admin/cancellation-requests", { params });
+    return { data: normalizeList(response.data, ["requests"]), raw: response.data };
+  },
+  approveCancellationRequest: async (id, payload = {}) => (await api.patch(`/admin/cancellation-requests/${id}/approve`, payload)).data,
+  rejectCancellationRequest: async (id, payload = {}) => (await api.patch(`/admin/cancellation-requests/${id}/reject`, payload)).data,
   getBroadcasts: async () => {
     const response = await api.get("/admin/broadcasts");
     const broadcasts = normalizeList(response.data, ["broadcasts"]);
