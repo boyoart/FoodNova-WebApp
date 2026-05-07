@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice } from '../utils/formatters'
+import { normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
+import { MessageCircle } from 'lucide-react'
 import './AdminPages.css'
 
 const PAYMENT_STATUS_OPTIONS = [
@@ -165,6 +167,13 @@ export default function AdminOrders() {
     if (receiptUrl) window.open(receiptUrl, '_blank', 'noopener,noreferrer')
   }
 
+  const openCustomerWhatsApp = (order) => {
+    const phone = normalizePhoneForWhatsApp(order?.customer_phone || order?.phone)
+    const orderCode = order?.order_code || (order?.id ? `FN-${order.id}` : 'this order')
+    const message = `Hello ${order?.customer_name || 'Customer'}, this is FoodNova regarding your order ${orderCode}.`
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+  }
+
   if (!isAdmin) {
     return <div className="admin-page"><p>Access denied.</p></div>
   }
@@ -289,6 +298,11 @@ export default function AdminOrders() {
               <h2>Order Details</h2>
               <div className="modal-header-actions">
                 <Link className="btn-view invoice-link-button" to={`/admin/orders/${selectedOrder.id}/invoice`} state={{ order: selectedOrder }}>View Invoice</Link>
+                {(selectedOrder.customer_phone || selectedOrder.phone) && (
+                  <button type="button" className="btn-view order-whatsapp-btn" onClick={() => openCustomerWhatsApp(selectedOrder)}>
+                    <MessageCircle size={14} /> Message Customer on WhatsApp
+                  </button>
+                )}
                 <button className="close-btn" onClick={handleCloseOrder}>×</button>
               </div>
             </div>

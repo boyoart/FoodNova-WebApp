@@ -239,6 +239,18 @@
   align-items: center;
 }
 
+.order-whatsapp-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--fn-primary);
+  color: #fff;
+}
+
+.order-whatsapp-btn:hover {
+  background: var(--fn-primary-dark);
+}
+
 .close-btn {
   background: none;
   border: none;

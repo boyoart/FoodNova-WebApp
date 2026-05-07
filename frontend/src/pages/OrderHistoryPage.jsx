@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { ordersAPI, notificationsAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import { Package, Clock, CheckCircle, AlertCircle, RotateCw } from 'lucide-react'
+import { Package, Clock, CheckCircle, AlertCircle, RotateCw, MessageCircle } from 'lucide-react'
+import { buildWhatsAppLink } from '../utils/contactUtils'
 import './OrderHistoryPage.css'
 
 export default function OrderHistoryPage() {
@@ -145,6 +146,23 @@ export default function OrderHistoryPage() {
     } finally {
       setRefreshingOrder(false)
     }
+  }
+
+  const handleOrderWhatsAppSupport = (order) => {
+    const orderCode = order?.order_code || (order?.id ? `FN-${order.id}` : 'N/A')
+    const message = [
+      'Hello FoodNova, I need help with my order.',
+      '',
+      `Order Code: ${orderCode}`,
+      `Name: ${order?.customer_name || 'Customer'}`,
+      `Phone: ${order?.customer_phone || order?.phone || 'Not available'}`,
+      `Payment Status: ${normalizePaymentStatusValue(order)}`,
+      `Order Status: ${normalizeOrderStatusValue(order)}`,
+      '',
+      'Please assist me.',
+    ].join('\n')
+
+    window.open(buildWhatsAppLink(message), '_blank', 'noopener,noreferrer')
   }
 
   const handleDeliveryConfirmation = async (e) => {
@@ -355,6 +373,7 @@ export default function OrderHistoryPage() {
               <h2>Order Details</h2>
               <div className="modal-header-actions">
                 <Link className="btn-view invoice-link-button" to={`/orders/${selectedOrder.id}/invoice`} state={{ order: selectedOrder }}>View Invoice</Link>
+                <button type="button" className="btn-view order-whatsapp-btn" onClick={() => handleOrderWhatsAppSupport(selectedOrder)}><MessageCircle size={14}/> Chat About This Order</button>
                 <button className="btn-view" onClick={handleRefreshOrder} disabled={refreshingOrder}><RotateCw size={14}/> {refreshingOrder ? "Refreshing..." : "Refresh"}</button>
                 <button className="close-btn" onClick={handleCloseOrder}>×</button>
               </div>

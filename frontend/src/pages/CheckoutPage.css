@@ -103,6 +103,27 @@ legend {
   color: var(--fn-text);
 }
 
+.whatsapp-support-btn.checkout-whatsapp-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 42px;
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+  background: var(--fn-primary);
+  color: #fff;
+  border: 1px solid var(--fn-primary);
+  font-weight: 900;
+  text-decoration: none;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.whatsapp-support-btn.checkout-whatsapp-link:hover {
+  background: var(--fn-primary-dark);
+  transform: translateY(-1px);
+}
+
 .file-selected {
   color: var(--success);
   font-size: 0.9rem;

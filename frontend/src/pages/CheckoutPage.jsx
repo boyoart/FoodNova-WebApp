@@ -4,8 +4,9 @@ import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
 import { ordersAPI, profileAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
+import { buildWhatsAppLink } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
-import { Home, MapPin, Mail, Phone, Truck } from 'lucide-react'
+import { Home, MapPin, Mail, Phone, Truck, MessageCircle } from 'lucide-react'
 import AddressAutocomplete from '../components/AddressAutocomplete'
 import './CheckoutPage.css'
 
@@ -146,7 +147,7 @@ export default function CheckoutPage() {
           <div className="form-row"><label className="checkbox-row"><input type="checkbox" checked={saveNewAddress} onChange={(e) => setSaveNewAddress(e.target.checked)} /><span>Save this address to my profile</span></label><label className="checkbox-row"><input type="checkbox" checked={makeDefaultAddress} onChange={(e) => setMakeDefaultAddress(e.target.checked)} /><span>Make this my default address</span></label></div></div>}
         <div className="form-group"><label>Delivery Notes (Optional)</label><textarea name="delivery_notes" placeholder="Any special delivery instructions" value={formData.delivery_notes} onChange={handleCustomerChange} rows="3" /></div><div className="form-notice warning"><p>Delivery fee is not included in this order total. Delivery fee will be paid directly to the rider after delivery.</p></div></fieldset>}
       {deliveryMethod === 'pickup' && <fieldset><legend>Pickup Notice</legend><div className="form-notice info"><p>You selected pickup. We will contact you when your order is ready for pickup.</p></div></fieldset>}
-      <fieldset><legend>Payment Method</legend><div className="payment-info"><p><strong>Bank Transfer Details:</strong></p><p>Account Number: 6427173992</p><p>Bank: OPay</p><p>Account Name: FOODNOVA LIMITED</p><p>Reference: Use your Order Code after placing the order.</p></div></fieldset><button type="submit" className="btn btn-primary btn-large" disabled={loading}>{loading ? 'Processing...' : 'Place Order'}</button>
+      <fieldset><legend>Payment Method</legend><div className="payment-info"><p><strong>Bank Transfer Details:</strong></p><p>Account Number: 6427173992</p><p>Bank: OPay</p><p>Account Name: FOODNOVA LIMITED</p><p>Reference: Use your Order Code after placing the order.</p></div><a className="whatsapp-support-btn checkout-whatsapp-link" href={buildWhatsAppLink('Hello FoodNova, I need help placing my order.')} target="_blank" rel="noopener noreferrer"><MessageCircle size={16} />Need help? Chat with FoodNova on WhatsApp</a></fieldset><button type="submit" className="btn btn-primary btn-large" disabled={loading}>{loading ? 'Processing...' : 'Place Order'}</button>
     </form></div><div className="checkout-summary"><h2>Order Summary</h2><div className="summary-items">{items.map((item) => { const quantity = item.quantity || item.qty || 1; const price = Number(item.price || item.unit_price || 0); return <div key={item.id} className="summary-item"><span>{item.name || item.product_name || 'FoodNova Item'} x {quantity}</span><span>{formatPrice(price * quantity)}</span></div> })}</div><div className="summary-totals"><div className="summary-row"><span>Product Total:</span><span>{formatPrice(subtotal)}</span></div>{deliveryMethod === 'delivery' && <div className="summary-row"><span>Delivery Fee:</span><span className="delivery-fee">Paid to rider after delivery</span></div>}<div className="summary-row total"><span>Amount to Transfer Now:</span><span>{formatPrice(subtotal)}</span></div></div></div></div></div>
   )
 }

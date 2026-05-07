@@ -32,6 +32,18 @@
   color: #fff;
 }
 
+.invoice-actions .invoice-whatsapp-btn {
+  background: var(--fn-primary);
+  border-color: var(--fn-primary);
+  color: #fff;
+}
+
+.invoice-actions .invoice-whatsapp-btn:hover,
+.invoice-actions .invoice-primary-action:hover {
+  background: var(--fn-primary-dark);
+  border-color: var(--fn-primary-dark);
+}
+
 .invoice-state {
   background: var(--fn-surface);
   border: 1px solid var(--fn-border);

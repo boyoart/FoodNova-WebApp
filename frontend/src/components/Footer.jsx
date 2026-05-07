@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Facebook, Instagram, Twitter, Mail, Phone, MapPin } from 'lucide-react'
+import { Instagram, Mail, Phone, MapPin } from 'lucide-react'
+import { FOODNOVA_CONTACT, FOODNOVA_SOCIAL_LINKS } from '../utils/contactUtils'
 import './Footer.css'
 
 export default function Footer() {
@@ -25,14 +26,11 @@ export default function Footer() {
             </div>
             <p>Fresh food delivery for everyone, everywhere.</p>
             <div className="social-links">
-              <a href="#" aria-label="Facebook">
-                <Facebook size={20} />
-              </a>
-              <a href="https://www.instagram.com/foodnovalimited" aria-label="Instagram: @foodnovalimited">
+              <a href={FOODNOVA_SOCIAL_LINKS.instagram} target="_blank" rel="noopener noreferrer" aria-label={`Instagram: ${FOODNOVA_CONTACT.instagram}`}>
                 <Instagram size={20} />
               </a>
-              <a href="#" aria-label="Twitter">
-                <Twitter size={20} />
+              <a href={FOODNOVA_SOCIAL_LINKS.tiktok} target="_blank" rel="noopener noreferrer" aria-label={`TikTok: ${FOODNOVA_CONTACT.tiktok}`} className="social-icon-text">
+                TT
               </a>
             </div>
           </div>
@@ -53,7 +51,7 @@ export default function Footer() {
             <ul>
               <li><Link to="/privacy">Privacy Policy</Link></li>
               <li><Link to="/terms">Terms of Service</Link></li>
-              <li><a href="mailto:support@foodnova.ng">Report Issue</a></li>
+              <li><a href={`mailto:${FOODNOVA_CONTACT.email}`}>Report Issue</a></li>
             </ul>
           </div>
 
@@ -61,21 +59,21 @@ export default function Footer() {
             <h5>Contact</h5>
             <ul>
               <li>
-                <a href="mailto:support@foodnova.ng">
+                <a href={`mailto:${FOODNOVA_CONTACT.email}`}>
                   <Mail size={16} />
-                  support@foodnova.ng
+                  {FOODNOVA_CONTACT.email}
                 </a>
               </li>
               <li>
-                <a href="tel:+2348025801125">
+                <a href={`tel:${FOODNOVA_CONTACT.phone}`}>
                   <Phone size={16} />
-                  +2348025801125
+                  {FOODNOVA_CONTACT.phone}
                 </a>
               </li>
               <li>
                 <span>
                   <MapPin size={16} />
-                  33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria
+                  {FOODNOVA_CONTACT.address}
                 </span>
               </li>
             </ul>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Instagram, Mail, Phone, MapPin, Send } from 'lucide-react'
+import { Instagram, Mail, MessageCircle, Phone, MapPin, Send } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { buildWhatsAppLink, FOODNOVA_CONTACT, FOODNOVA_SOCIAL_LINKS } from '../utils/contactUtils'
 import './ContactPage.css'
 
 export default function ContactPage() {
@@ -45,7 +46,7 @@ export default function ContactPage() {
               <Mail size={32} />
               <div>
                 <h3>Email</h3>
-                <a href="mailto:support@foodnova.ng">support@foodnova.ng</a>
+                <a href={`mailto:${FOODNOVA_CONTACT.email}`}>{FOODNOVA_CONTACT.email}</a>
               </div>
             </div>
 
@@ -53,7 +54,7 @@ export default function ContactPage() {
               <Phone size={32} />
               <div>
                 <h3>Phone</h3>
-                <a href="tel:+2348025801125">+2348025801125</a>
+                <a href={`tel:${FOODNOVA_CONTACT.phone}`}>{FOODNOVA_CONTACT.phone}</a>
               </div>
             </div>
 
@@ -61,16 +62,27 @@ export default function ContactPage() {
               <MapPin size={32} />
               <div>
                 <h3>Address</h3>
-                <p>33 Ariyo Akinloye Street<br />Isheri-Bucknor, Lagos, Nigeria</p>
+                <p>{FOODNOVA_CONTACT.address}</p>
               </div>
             </div>
 
+            <a className="contact-whatsapp-card" href={buildWhatsAppLink('Hello FoodNova, I need support.')} target="_blank" rel="noopener noreferrer">
+              <MessageCircle size={22} />
+              Chat on WhatsApp
+            </a>
+
             <div className="contact-social-section">
               <h3>Social</h3>
-              <a href="https://www.instagram.com/foodnovalimited" aria-label="Instagram: @foodnovalimited">
-                <Instagram size={22} />
-                Instagram: @foodnovalimited
-              </a>
+              <div className="social-icons">
+                <a className="social-link" href={FOODNOVA_SOCIAL_LINKS.instagram} target="_blank" rel="noopener noreferrer" aria-label={`Instagram: ${FOODNOVA_CONTACT.instagram}`}>
+                  <Instagram size={22} />
+                  <span>Instagram: {FOODNOVA_CONTACT.instagram}</span>
+                </a>
+                <a className="social-link" href={FOODNOVA_SOCIAL_LINKS.tiktok} target="_blank" rel="noopener noreferrer" aria-label={`TikTok: ${FOODNOVA_CONTACT.tiktok}`}>
+                  <span className="social-icon-text">TT</span>
+                  <span>TikTok: {FOODNOVA_CONTACT.tiktok}</span>
+                </a>
+              </div>
             </div>
           </div>
 
