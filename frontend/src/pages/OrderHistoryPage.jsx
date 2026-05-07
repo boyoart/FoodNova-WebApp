@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { ordersAPI, notificationsAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Package, Clock, CheckCircle, AlertCircle, RotateCw, MessageCircle } from 'lucide-react'
-import { buildWhatsAppLink } from '../utils/contactUtils'
+import { buildWhatsAppLink, normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import './OrderHistoryPage.css'
 
 export default function OrderHistoryPage() {
@@ -163,6 +163,13 @@ export default function OrderHistoryPage() {
     ].join('\n')
 
     window.open(buildWhatsAppLink(message), '_blank', 'noopener,noreferrer')
+  }
+
+  const handleContactRider = (order) => {
+    const phone = normalizePhoneForWhatsApp(order?.rider_phone)
+    const orderCode = order?.order_code || (order?.id ? `FN-${order.id}` : 'N/A')
+    const message = `Hello, this is regarding my FoodNova order ${orderCode}.`
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
   }
 
   const handleDeliveryConfirmation = async (e) => {
@@ -455,6 +462,14 @@ export default function OrderHistoryPage() {
                   <div className="delivery-details">
                     <p><strong>Delivery Address:</strong> {selectedOrder.delivery_address || selectedOrder.address || 'Not available'}</p>
                     {selectedOrder.delivery_notes && <p><strong>Delivery Notes:</strong> {selectedOrder.delivery_notes}</p>}
+                    {selectedOrder.rider_name && (
+                      <div className="customer-rider-card">
+                        <p><strong>Delivery Rider:</strong> {selectedOrder.rider_name}</p>
+                        <p><strong>Rider Phone:</strong> {selectedOrder.rider_phone || 'Not available'}</p>
+                        {selectedOrder.delivery_note && <p><strong>Delivery Note:</strong> {selectedOrder.delivery_note}</p>}
+                        {selectedOrder.rider_phone && <button type="button" className="btn btn-primary contact-rider-btn" onClick={() => handleContactRider(selectedOrder)}><MessageCircle size={14} /> Contact Rider</button>}
+                      </div>
+                    )}
                     <p className="delivery-fee-notice">Delivery fee is paid directly to the rider after delivery.</p>
                   </div>
                 ) : (

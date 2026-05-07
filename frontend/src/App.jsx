@@ -20,6 +20,7 @@ import AdminBroadcasts from './pages/AdminBroadcasts'
 import AdminCustomers from './pages/AdminCustomers'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminUsers from './pages/AdminUsers'
+import AdminRiders from './pages/AdminRiders'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
 import ContactPage from './pages/ContactPage'
@@ -53,6 +54,7 @@ function App() {
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
+              <Route path="/admin/riders" element={<AdminRiders />} />
               <Route path="/admin/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/admin/stock" element={<AdminStock />} />
               <Route path="/admin/payments" element={<AdminPayments />} />

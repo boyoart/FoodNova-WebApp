@@ -110,6 +110,21 @@ class Pack(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DeliveryRider(Base):
+    __tablename__ = "delivery_riders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    full_name = Column(String(150), nullable=False, index=True)
+    phone = Column(String(50), nullable=False, index=True)
+    email = Column(String(150), default="")
+    vehicle_type = Column(String(80), default="")
+    vehicle_number = Column(String(80), default="")
+    status = Column(String(30), default="active", index=True)
+    notes = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -134,6 +149,15 @@ class Order(Base):
     delivery_code = Column(String(20), nullable=True)
     delivery_code_created_at = Column(DateTime, nullable=True)
     delivery_confirmed_at = Column(DateTime, nullable=True)
+    rider_id = Column(Integer, nullable=True, index=True)
+    rider_name = Column(String(150), default="")
+    rider_phone = Column(String(50), default="")
+    rider_vehicle_type = Column(String(80), default="")
+    rider_vehicle_number = Column(String(80), default="")
+    delivery_assigned_at = Column(DateTime, nullable=True)
+    delivery_started_at = Column(DateTime, nullable=True)
+    delivery_completed_at = Column(DateTime, nullable=True)
+    delivery_note = Column(Text, default="")
     receipt = Column(Text, nullable=True)
     admin_note = Column(Text, default="")
     service_note = Column(Text, default="")

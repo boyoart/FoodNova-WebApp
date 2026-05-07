@@ -199,6 +199,18 @@ def send_customer_order_email(order, event_type, extra=None):
     elif event_type == "out_for_delivery":
         subject = f"Your FoodNova Order Is Out for Delivery - {order_code}"
         message = "Your order is out for delivery. The dispatch rider will provide the delivery confirmation code when they arrive."
+    elif event_type == "rider_assigned":
+        subject = f"Delivery Rider Assigned - {order_code}"
+        rider_name = extra.get("rider_name") or order.get("rider_name") or "FoodNova rider"
+        rider_phone = extra.get("rider_phone") or order.get("rider_phone") or "Not available"
+        message = f"Your FoodNova order has been assigned to a delivery rider. Rider: {rider_name}. Phone: {rider_phone}."
+        extra_html = (
+            "<div style='background:#eef8ef;border:1px solid #dde8dd;border-radius:14px;padding:16px;margin:18px 0;'>"
+            "<h3 style='margin:0 0 10px;color:#103820;'>Delivery Rider</h3>"
+            f"<p style='margin:4px 0;'>Rider: <strong>{escape(str(rider_name))}</strong></p>"
+            f"<p style='margin:4px 0;'>Phone: <strong>{escape(str(rider_phone))}</strong></p>"
+            "</div>"
+        )
     elif event_type == "delivered":
         subject = f"FoodNova Order Delivered - {order_code}"
         message = "Your order has been marked as delivered. Thank you for shopping with FoodNova."

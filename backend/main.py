@@ -32,6 +32,7 @@ from models import (
     PaymentApprovalLog as DBPaymentApprovalLog,
     Product as DBProduct,
     Profile as DBProfile,
+    DeliveryRider as DBDeliveryRider,
     User as DBUser,
 )
 
@@ -335,6 +336,32 @@ class AdminUserUpdatePayload(BaseModel):
     is_active: Optional[bool] = None
 
 
+class RiderPayload(BaseModel):
+    full_name: str
+    phone: str
+    email: Optional[str] = ""
+    vehicle_type: Optional[str] = ""
+    vehicle_number: Optional[str] = ""
+    status: Optional[str] = "active"
+    notes: Optional[str] = ""
+
+
+class RiderUpdatePayload(BaseModel):
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    vehicle_type: Optional[str] = None
+    vehicle_number: Optional[str] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class AssignRiderPayload(BaseModel):
+    rider_id: int
+    delivery_note: Optional[str] = ""
+    mark_out_for_delivery: Optional[bool] = False
+
+
 class AdminPasswordResetPayload(BaseModel):
     new_password: str
     confirm_password: Optional[str] = None
@@ -345,9 +372,9 @@ ADMIN_ROLE_PERMISSIONS = {
         "dashboard:view", "orders:view", "orders:update", "orders:delivery",
         "payments:view", "payments:approve", "stock:view", "stock:manage",
         "broadcasts:view", "broadcasts:send", "customers:view", "audit:view",
-        "admins:view", "admins:manage",
+        "admins:view", "admins:manage", "delivery:manage",
     ],
-    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "customers:view"],
+    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
     "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "customers:view"],
     "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send"],
@@ -1014,6 +1041,22 @@ def address_to_dict(address: DBAddress) -> dict:
     }
 
 
+def rider_to_dict(rider: DBDeliveryRider) -> dict:
+    return {
+        "id": rider.id,
+        "full_name": rider.full_name or "",
+        "name": rider.full_name or "",
+        "phone": rider.phone or "",
+        "email": rider.email or "",
+        "vehicle_type": rider.vehicle_type or "",
+        "vehicle_number": rider.vehicle_number or "",
+        "status": rider.status or "active",
+        "notes": rider.notes or "",
+        "created_at": iso(rider.created_at),
+        "updated_at": iso(rider.updated_at),
+    }
+
+
 def order_item_to_dict(item: DBOrderItem) -> dict:
     return {
         "id": item.id,
@@ -1056,6 +1099,15 @@ def order_to_dict(order: DBOrder) -> dict:
         "delivery_code": order.delivery_code,
         "delivery_code_created_at": iso(order.delivery_code_created_at),
         "delivery_confirmed_at": iso(order.delivery_confirmed_at),
+        "rider_id": getattr(order, "rider_id", None),
+        "rider_name": getattr(order, "rider_name", "") or "",
+        "rider_phone": getattr(order, "rider_phone", "") or "",
+        "rider_vehicle_type": getattr(order, "rider_vehicle_type", "") or "",
+        "rider_vehicle_number": getattr(order, "rider_vehicle_number", "") or "",
+        "delivery_assigned_at": iso(getattr(order, "delivery_assigned_at", None)),
+        "delivery_started_at": iso(getattr(order, "delivery_started_at", None)),
+        "delivery_completed_at": iso(getattr(order, "delivery_completed_at", None)),
+        "delivery_note": getattr(order, "delivery_note", "") or "",
         "receipt": json_load(order.receipt, None),
         "admin_note": order.admin_note or "",
         "service_note": order.service_note or "",
@@ -1245,6 +1297,15 @@ def ensure_database_compatibility():
             "delivery_code": "VARCHAR(20)",
             "delivery_code_created_at": "TIMESTAMP",
             "delivery_confirmed_at": "TIMESTAMP",
+            "rider_id": "INTEGER",
+            "rider_name": "VARCHAR(150) DEFAULT ''",
+            "rider_phone": "VARCHAR(50) DEFAULT ''",
+            "rider_vehicle_type": "VARCHAR(80) DEFAULT ''",
+            "rider_vehicle_number": "VARCHAR(80) DEFAULT ''",
+            "delivery_assigned_at": "TIMESTAMP",
+            "delivery_started_at": "TIMESTAMP",
+            "delivery_completed_at": "TIMESTAMP",
+            "delivery_note": "TEXT DEFAULT ''",
             "receipt": "TEXT",
             "admin_note": "TEXT DEFAULT ''",
             "service_note": "TEXT DEFAULT ''",
@@ -2131,6 +2192,175 @@ def admin_get_order(order_id: int, request: Request):
     raise HTTPException(status_code=404, detail="Order not found")
 
 
+@app.get("/admin/riders")
+def get_riders(request: Request):
+    require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    db = SessionLocal()
+    try:
+        riders = [
+            rider_to_dict(rider)
+            for rider in db.query(DBDeliveryRider).order_by(DBDeliveryRider.status.asc(), DBDeliveryRider.full_name.asc()).all()
+        ]
+        return {"success": True, "riders": riders, "data": riders}
+    finally:
+        db.close()
+
+
+@app.post("/admin/riders")
+def create_rider(payload: RiderPayload, request: Request):
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    full_name = (payload.full_name or "").strip()
+    phone = (payload.phone or "").strip()
+    if not full_name:
+        raise HTTPException(status_code=400, detail="Rider full name is required")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Rider phone is required")
+    db = SessionLocal()
+    try:
+        rider = DBDeliveryRider(
+            full_name=full_name,
+            phone=phone,
+            email=(payload.email or "").strip(),
+            vehicle_type=(payload.vehicle_type or "").strip(),
+            vehicle_number=(payload.vehicle_number or "").strip(),
+            status=(payload.status or "active").strip().lower() if payload.status else "active",
+            notes=(payload.notes or "").strip(),
+        )
+        if rider.status not in ["active", "inactive"]:
+            rider.status = "active"
+        db.add(rider)
+        db.commit()
+        db.refresh(rider)
+        data = rider_to_dict(rider)
+        create_admin_audit_log(request, admin, "rider_created", "rider", rider.id, f"Admin created rider {rider.full_name}", {"rider": data})
+        return {"success": True, "message": "Rider created successfully", "rider": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/riders/{rider_id}")
+def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    updates = payload.dict(exclude_unset=True)
+    db = SessionLocal()
+    try:
+        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == rider_id).first()
+        if not rider:
+            raise HTTPException(status_code=404, detail="Rider not found")
+        old_data = rider_to_dict(rider)
+        for field in ["full_name", "phone", "email", "vehicle_type", "vehicle_number", "status", "notes"]:
+            if field in updates and updates[field] is not None:
+                value = updates[field].strip() if isinstance(updates[field], str) else updates[field]
+                if field in ["full_name", "phone"] and not value:
+                    raise HTTPException(status_code=400, detail="Rider name and phone are required")
+                if field == "status":
+                    value = str(value or "active").lower()
+                    if value not in ["active", "inactive"]:
+                        value = "active"
+                setattr(rider, field, value)
+        rider.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(rider)
+        data = rider_to_dict(rider)
+        create_admin_audit_log(request, admin, "rider_updated", "rider", rider.id, f"Admin updated rider {rider.full_name}", {"before": old_data, "after": data})
+        return {"success": True, "message": "Rider updated successfully", "rider": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.delete("/admin/riders/{rider_id}")
+def deactivate_rider(rider_id: int, request: Request):
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    db = SessionLocal()
+    try:
+        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == rider_id).first()
+        if not rider:
+            raise HTTPException(status_code=404, detail="Rider not found")
+        rider.status = "inactive"
+        rider.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(rider)
+        data = rider_to_dict(rider)
+        create_admin_audit_log(request, admin, "rider_deactivated", "rider", rider.id, f"Admin deactivated rider {rider.full_name}", {"rider": data})
+        return {"success": True, "message": "Rider deactivated successfully", "rider": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/orders/{order_id}/assign-rider")
+def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: Request):
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    db = SessionLocal()
+    try:
+        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == payload.rider_id).first()
+        if not rider:
+            raise HTTPException(status_code=404, detail="Rider not found")
+        if rider.status != "active":
+            raise HTTPException(status_code=400, detail="Rider must be active before assignment")
+
+        order.rider_id = rider.id
+        order.rider_name = rider.full_name
+        order.rider_phone = rider.phone
+        order.rider_vehicle_type = rider.vehicle_type or ""
+        order.rider_vehicle_number = rider.vehicle_number or ""
+        order.delivery_note = payload.delivery_note or ""
+        order.delivery_assigned_at = datetime.utcnow()
+        if payload.mark_out_for_delivery:
+            order.status = "out_for_delivery"
+            order.order_status = "out_for_delivery"
+            order.fulfillment_status = "out_for_delivery"
+            order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
+            if order.delivery_method == "delivery" and not order.delivery_code:
+                order.delivery_code = "{:06d}".format(random.randint(0, 999999))
+                order.delivery_code_created_at = datetime.utcnow()
+        order.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(order)
+        order_data = order_to_dict(order)
+        rider_data = rider_to_dict(rider)
+
+        if order_data.get("customer_email"):
+            _create_order_notification(
+                order_data,
+                "Delivery Rider Assigned",
+                f"A delivery rider has been assigned to your order {order_data.get('order_code')}. Rider: {rider.full_name}. Phone: {rider.phone}.",
+                "delivery_update",
+                "delivery",
+            )
+            safe_email_call(
+                "customer_rider_assigned",
+                send_customer_order_email,
+                order_data,
+                "rider_assigned",
+                {"rider_name": rider.full_name, "rider_phone": rider.phone},
+            )
+            if payload.mark_out_for_delivery:
+                _create_order_notification(
+                    order_data,
+                    "Out for Delivery",
+                    f"Your order {order_data.get('order_code')} is out for delivery. The dispatch rider will provide the delivery confirmation code when they arrive. Enter it in the app only after you have received your order.",
+                    "delivery_update",
+                    "delivery",
+                )
+                safe_email_call("customer_out_for_delivery", send_customer_order_email, order_data, "out_for_delivery")
+
+        create_admin_audit_log(
+            request,
+            admin,
+            "rider_assigned",
+            "order",
+            order.id,
+            f"Admin assigned rider {rider.full_name} to order {order.order_code}",
+            {"order_code": order.order_code, "rider": rider_data, "delivery_note": payload.delivery_note or ""},
+        )
+        return {"success": True, "message": "Rider assigned successfully", "order": order_data, "data": order_data}
+    finally:
+        db.close()
+
+
 @app.patch("/admin/orders/{order_id}")
 def update_order(order_id: int, payload: dict, request: Request):
     payment_update_requested = any(key in payload for key in ["payment_status", "status"]) and (
@@ -2176,6 +2406,10 @@ def update_order(order_id: int, payload: dict, request: Request):
                 order.delivery_address_snapshot = json_dump(value)
             elif key == "receipt":
                 order.receipt = json_dump(value)
+        if order.order_status == "out_for_delivery" or order.fulfillment_status == "out_for_delivery" or order.status == "out_for_delivery":
+            order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
+        if order.order_status == "delivered" or order.fulfillment_status == "delivered" or order.status == "delivered":
+            order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
         order.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)
@@ -2327,6 +2561,7 @@ def confirm_delivery(order_id: int, payload: dict):
         order.order_status = "delivered"
         order.fulfillment_status = "delivered"
         order.delivery_confirmed_at = datetime.utcnow()
+        order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
         order.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)

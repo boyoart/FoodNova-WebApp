@@ -255,9 +255,11 @@ export default function Navbar() {
     if (isSuperAdminDisplay) return true
     return adminPermissions.includes(permission)
   }
+  const canAnyAdmin = (permissions) => permissions.some((permission) => canAdmin(permission))
 
   const adminMenuLinks = [
     { to: '/admin/orders', label: 'Manage Orders', show: canAdmin('orders:view') },
+    { to: '/admin/riders', label: 'Delivery Riders', show: canAnyAdmin(['orders:delivery', 'delivery:manage']) },
     { to: '/admin/stock', label: 'Stock Management', show: canAdmin('stock:view') },
     { to: '/admin/payments', label: 'Payment Approvals', show: canAdmin('payments:view') || canAdmin('payments:approve') },
     { to: '/admin/broadcasts', label: 'Broadcasts', show: canAdmin('broadcasts:view') },

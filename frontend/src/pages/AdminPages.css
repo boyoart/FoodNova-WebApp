@@ -1439,6 +1439,98 @@ tbody tr:hover {
   color: var(--fn-muted);
 }
 
+.assign-rider-button {
+  margin-top: 1rem;
+}
+
+.assign-rider-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.assign-rider-card {
+  width: min(520px, 94vw);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  box-shadow: var(--fn-shadow);
+  overflow: hidden;
+}
+
+.assign-rider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid var(--fn-border);
+  background: var(--fn-surface-2);
+}
+
+.assign-rider-header h3 {
+  margin: 0;
+  color: var(--fn-heading);
+}
+
+.assign-rider-header button {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  cursor: pointer;
+  font-size: 1.25rem;
+}
+
+.assign-rider-card form {
+  display: grid;
+  gap: 1rem;
+  padding: 1.15rem;
+}
+
+.assign-rider-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--fn-heading);
+  font-weight: 800;
+}
+
+.assign-rider-card select,
+.assign-rider-card textarea {
+  width: 100%;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  padding: 0.8rem;
+  font: inherit;
+}
+
+.assign-rider-check {
+  flex-direction: row !important;
+  align-items: center;
+  color: var(--fn-text) !important;
+}
+
+.assign-rider-check input {
+  width: auto;
+  accent-color: var(--fn-primary);
+}
+
+.assign-rider-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
 .stock-row-low td {
   background: color-mix(in srgb, var(--fn-accent, #FFD23F) 12%, transparent);
 }

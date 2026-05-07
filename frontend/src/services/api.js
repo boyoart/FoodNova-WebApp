@@ -314,6 +314,15 @@ export const adminAPI = {
   updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   updateStock: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   deleteProduct: async (id) => (await api.delete(`/admin/products/${id}`)).data,
+  getRiders: async () => {
+    const response = await api.get("/admin/riders");
+    const riders = normalizeList(response.data, ["riders"]);
+    return { data: riders, raw: response.data };
+  },
+  createRider: async (payload) => (await api.post("/admin/riders", payload)).data,
+  updateRider: async (id, payload) => (await api.patch(`/admin/riders/${id}`, payload)).data,
+  deactivateRider: async (id) => (await api.delete(`/admin/riders/${id}`)).data,
+  assignRider: async (orderId, payload) => (await api.patch(`/admin/orders/${orderId}/assign-rider`, payload)).data,
   getPacks: async () => {
     try {
       const response = await api.get("/admin/packs");

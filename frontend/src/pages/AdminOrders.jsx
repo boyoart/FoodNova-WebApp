@@ -35,6 +35,10 @@ export default function AdminOrders() {
   const [serviceNote, setServiceNote] = useState('')
   const [sendingServiceNote, setSendingServiceNote] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [riders, setRiders] = useState([])
+  const [assignModalOpen, setAssignModalOpen] = useState(false)
+  const [assigningRider, setAssigningRider] = useState(false)
+  const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '', mark_out_for_delivery: true })
 
   useEffect(() => {
     if (isAdmin) {
@@ -133,12 +137,14 @@ export default function AdminOrders() {
     setSelectedOrder(order)
     setServiceNote(order.service_note || '')
     loadPaymentAudit(order.id)
+    loadRiders()
   }
 
   const handleCloseOrder = () => {
     setSelectedOrder(null)
     setServiceNote('')
     setPaymentAuditLogs([])
+    setAssignModalOpen(false)
   }
 
   const loadPaymentAudit = async (orderId) => {
@@ -172,6 +178,54 @@ export default function AdminOrders() {
     const orderCode = order?.order_code || (order?.id ? `FN-${order.id}` : 'this order')
     const message = `Hello ${order?.customer_name || 'Customer'}, this is FoodNova regarding your order ${orderCode}.`
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+  }
+
+  const loadRiders = async () => {
+    try {
+      const response = await adminAPI.getRiders()
+      setRiders((response.data || []).filter((rider) => rider.status === 'active'))
+    } catch (error) {
+      if (![401, 403].includes(error?.response?.status)) console.error(error)
+      setRiders([])
+    }
+  }
+
+  const openAssignModal = () => {
+    setAssignmentForm({
+      rider_id: selectedOrder?.rider_id || '',
+      delivery_note: selectedOrder?.delivery_note || '',
+      mark_out_for_delivery: true,
+    })
+    setAssignModalOpen(true)
+    loadRiders()
+  }
+
+  const submitRiderAssignment = async (event) => {
+    event.preventDefault()
+    if (!assignmentForm.rider_id) {
+      toast.error('Please select a rider')
+      return
+    }
+    try {
+      setAssigningRider(true)
+      const response = await adminAPI.assignRider(selectedOrder.id, {
+        rider_id: Number(assignmentForm.rider_id),
+        delivery_note: assignmentForm.delivery_note,
+        mark_out_for_delivery: assignmentForm.mark_out_for_delivery,
+      })
+      const updatedOrder = response.order || response.data
+      if (updatedOrder?.id) {
+        setSelectedOrder(updatedOrder)
+        setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
+      }
+      setAssignModalOpen(false)
+      toast.success('Rider assigned successfully')
+      fetchOrders()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to assign rider')
+    } finally {
+      setAssigningRider(false)
+    }
   }
 
   if (!isAdmin) {
@@ -349,6 +403,24 @@ export default function AdminOrders() {
                       <span>{selectedOrder.delivery_address || 'N/A'}</span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {selectedOrder.delivery_method === 'delivery' && (
+                <div className="admin-order-section">
+                  <h4>Delivery Assignment</h4>
+                  {selectedOrder.rider_name ? (
+                    <div className="info-grid">
+                      <div className="info-item"><strong>Assigned Rider:</strong><span>{selectedOrder.rider_name}</span></div>
+                      <div className="info-item"><strong>Rider Phone:</strong><span>{selectedOrder.rider_phone || 'N/A'}</span></div>
+                      <div className="info-item"><strong>Vehicle:</strong><span>{[selectedOrder.rider_vehicle_type, selectedOrder.rider_vehicle_number].filter(Boolean).join(' - ') || 'N/A'}</span></div>
+                      <div className="info-item"><strong>Assigned At:</strong><span>{selectedOrder.delivery_assigned_at ? new Date(selectedOrder.delivery_assigned_at).toLocaleString() : 'N/A'}</span></div>
+                      <div className="info-item full-width"><strong>Delivery Note:</strong><span>{selectedOrder.delivery_note || 'No note'}</span></div>
+                    </div>
+                  ) : (
+                    <p className="muted">No rider assigned yet.</p>
+                  )}
+                  <button type="button" className="btn-view assign-rider-button" onClick={openAssignModal}>Assign Rider</button>
                 </div>
               )}
 
@@ -557,6 +629,41 @@ export default function AdminOrders() {
               </div>
             </div>
           </div>
+          {assignModalOpen && (
+            <div className="assign-rider-modal">
+              <div className="assign-rider-card">
+                <div className="assign-rider-header">
+                  <h3>Assign Rider</h3>
+                  <button type="button" onClick={() => setAssignModalOpen(false)}>×</button>
+                </div>
+                <form onSubmit={submitRiderAssignment}>
+                  <label>
+                    Active Rider
+                    <select value={assignmentForm.rider_id} onChange={(event) => setAssignmentForm({ ...assignmentForm, rider_id: event.target.value })} required>
+                      <option value="">Select rider</option>
+                      {riders.map((rider) => (
+                        <option key={rider.id} value={rider.id}>
+                          {rider.full_name || rider.name} - {rider.phone}{rider.vehicle_type ? ` (${rider.vehicle_type})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Delivery Note
+                    <textarea rows="3" value={assignmentForm.delivery_note} onChange={(event) => setAssignmentForm({ ...assignmentForm, delivery_note: event.target.value })} placeholder="Optional delivery note for customer/rider context" />
+                  </label>
+                  <label className="assign-rider-check">
+                    <input type="checkbox" checked={assignmentForm.mark_out_for_delivery} onChange={(event) => setAssignmentForm({ ...assignmentForm, mark_out_for_delivery: event.target.checked })} />
+                    <span>Mark order as Out for Delivery</span>
+                  </label>
+                  <div className="assign-rider-actions">
+                    <button type="button" className="btn-cancel" onClick={() => setAssignModalOpen(false)}>Cancel</button>
+                    <button type="submit" className="btn-primary" disabled={assigningRider}>{assigningRider ? 'Assigning...' : 'Assign Rider'}</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
