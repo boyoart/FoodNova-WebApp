@@ -16,6 +16,11 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import inspect, text
 
 from database import Base, SessionLocal, engine
+from email_service import (
+    send_admin_order_email,
+    send_customer_order_email,
+    send_low_stock_alert,
+)
 from models import (
     Address as DBAddress,
     AdminAuditLog as DBAdminAuditLog,
@@ -655,6 +660,15 @@ def _create_broadcast_notification(title: str, message: str, notif_type: str = "
 def _create_notification(order: dict, notif_type: str, title: str, message: str):
     """Legacy notification creation - delegates to new system."""
     return _create_order_notification(order, title, message, notif_type, "order")
+
+
+def safe_email_call(label: str, func, *args, **kwargs):
+    try:
+        return func(*args, **kwargs)
+    except Exception as error:
+        print(f"EMAIL EVENT ERROR [{label}]:", repr(error))
+        return None
+
 
 def normalize_order_items(items: list) -> list:
     normalized = []
@@ -1908,6 +1922,8 @@ def clear_notifications(request: Request):
 @app.post("/orders")
 def create_order(payload: OrderPayload, request: Request):
     normalized_items = normalize_order_items(payload.items or [])
+    order_data = {}
+    inventory_deductions = []
     # Attempt to enrich with user/profile data when available
     auth = request.headers.get("authorization")
     current_user = _get_user_from_token(auth)
@@ -1978,6 +1994,15 @@ def create_order(payload: OrderPayload, request: Request):
             "order_update",
             "order",
         )
+        safe_email_call("customer_order_placed", send_customer_order_email, order_data, "order_placed")
+
+    safe_email_call("admin_new_order", send_admin_order_email, order_data, "new_order")
+
+    for deduction in inventory_deductions:
+        entered_low_stock = deduction.get("previous_stock", 0) > 5 and deduction.get("low_stock")
+        entered_out_of_stock = deduction.get("previous_stock", 0) > 0 and deduction.get("out_of_stock")
+        if entered_low_stock or entered_out_of_stock:
+            safe_email_call("admin_low_stock", send_low_stock_alert, deduction, order_data)
 
     return {
         "success": True,
@@ -2055,6 +2080,8 @@ async def upload_receipt(order_id: int, file: UploadFile = File(...)):
                 "payment_update",
                 "payment"
             )
+            safe_email_call("customer_receipt_uploaded", send_customer_order_email, order_data, "receipt_uploaded", {"filename": receipt.get("filename")})
+            safe_email_call("admin_receipt_uploaded", send_admin_order_email, order_data, "receipt_uploaded", {"receipt_url": receipt.get("url")})
 
             return {
                 "success": True,
@@ -2238,14 +2265,30 @@ def update_order(order_id: int, payload: dict, request: Request):
             db.commit()
             db.refresh(payment_log)
             create_admin_audit_log(request, admin, "payment_confirmed", "order", order.id, f"Admin confirmed payment for order {order.order_code}", {"order_code": order.order_code, "payment_log": payment_audit_log_to_dict(payment_log)})
+            safe_email_call("customer_payment_confirmed", send_customer_order_email, order_data, "payment_confirmed")
         if order.payment_status != old_payment_status and order.payment_status == "payment_rejected":
             rejection_reason = payload.get("rejection_reason") or payload.get("reason") or payload.get("admin_note") or ""
             payment_log = create_payment_approval_log(db, request, admin, order, "payment_rejected", old_payment_status, order.payment_status, rejection_reason=rejection_reason)
             db.commit()
             db.refresh(payment_log)
             create_admin_audit_log(request, admin, "payment_rejected", "order", order.id, f"Admin rejected payment for order {order.order_code}", {"order_code": order.order_code, "payment_log": payment_audit_log_to_dict(payment_log)})
+            safe_email_call("customer_payment_rejected", send_customer_order_email, order_data, "payment_rejected", {"reason": rejection_reason})
         if generated_delivery_code:
             create_admin_audit_log(request, admin, "delivery_code_generated", "order", order.id, f"Admin generated delivery code for order {order.order_code}", {"order_code": order.order_code})
+
+        delivery_statuses = {
+            value
+            for old_value, value in [
+                (old_order_status, order.order_status),
+                (old_fulfillment_status, order.fulfillment_status),
+                (old_status, order.status),
+            ]
+            if old_value != value
+        }
+        if "out_for_delivery" in delivery_statuses:
+            safe_email_call("customer_out_for_delivery", send_customer_order_email, order_data, "out_for_delivery")
+        if "delivered" in delivery_statuses:
+            safe_email_call("customer_delivered", send_customer_order_email, order_data, "delivered")
 
         return {
             "success": True,
@@ -2281,6 +2324,7 @@ def confirm_delivery(order_id: int, payload: dict):
         db.commit()
         db.refresh(order)
         data = order_to_dict(order)
+        safe_email_call("customer_delivery_confirmed", send_customer_order_email, data, "delivered")
         return {
             "success": True,
             "message": "Delivery confirmed successfully",
