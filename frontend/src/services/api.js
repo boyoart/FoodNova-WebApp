@@ -1,7 +1,18 @@
 import axios from "axios";
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://foodnova-webapp.onrender.com";
+const RENDER_API_BASE_URL = "https://foodnova-webapp.onrender.com";
+const normalizeApiBaseUrl = (value) => {
+  const candidate = String(value || "").trim().replace(/\/+$/, "");
+  if (!candidate) return RENDER_API_BASE_URL;
+  const isFrontendHost = /^https:\/\/(www\.)?foodnova\.com\.ng$/i.test(candidate);
+  if (isFrontendHost) {
+    console.warn("Ignoring frontend domain as API base URL. Using Render backend instead.");
+    return RENDER_API_BASE_URL;
+  }
+  return candidate;
+};
+
+export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,

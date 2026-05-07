@@ -74,17 +74,22 @@ if CLOUDINARY_ENABLED:
 elif any([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
     print("Cloudinary is not fully configured. Falling back to local uploads.")
 
+allowed_origins = [
+    "https://foodnova.com.ng",
+    "https://www.foodnova.com.ng",
+    "https://food-nova-web-app.vercel.app",
+    "https://foodnova-webapp.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+]
+for origin in [os.environ.get("FRONTEND_URL"), os.environ.get("FRONTEND_ORIGIN")]:
+    clean_origin = str(origin or "").strip().rstrip("/")
+    if clean_origin and clean_origin not in allowed_origins:
+        allowed_origins.append(clean_origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://foodnova.com.ng",
-        "https://www.foodnova.com.ng",
-        "https://food-nova-web-app.vercel.app",
-        "https://foodnova-webapp.vercel.app",
-        *([os.environ.get("FRONTEND_ORIGIN")] if os.environ.get("FRONTEND_ORIGIN") else []),
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1383,7 +1388,7 @@ def root_head():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"success": True, "status": "ok"}
 
 
 @app.get("/debug/db")
