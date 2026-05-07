@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import inspect, text
+from sqlalchemy import func, inspect, text
 
 from database import Base, SessionLocal, engine
 from email_service import (
@@ -270,6 +270,11 @@ class OrderPayload(BaseModel):
     delivery_address_id: Optional[int] = None
     delivery_address_snapshot: Optional[dict] = None
     delivery_notes: Optional[str] = ""
+
+
+class TrackOrderPayload(BaseModel):
+    order_code: Optional[str] = ""
+    phone_or_email: Optional[str] = ""
 
 
 class ProfileUpdatePayload(BaseModel):
@@ -1186,6 +1191,78 @@ def order_to_dict(order: DBOrder) -> dict:
     }
 
 
+def normalize_tracking_phone(value: str) -> str:
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+    if not digits:
+        return ""
+    if digits.startswith("234"):
+        return digits
+    if digits.startswith("0"):
+        return f"234{digits[1:]}"
+    return digits
+
+
+def tracking_phone_matches(input_value: str, candidates: list) -> bool:
+    submitted = normalize_tracking_phone(input_value)
+    if not submitted:
+        return False
+    submitted_variants = {submitted}
+    if submitted.startswith("234"):
+        submitted_variants.add(f"0{submitted[3:]}")
+    for candidate in candidates:
+        normalized = normalize_tracking_phone(candidate)
+        if not normalized:
+            continue
+        variants = {normalized}
+        if normalized.startswith("234"):
+            variants.add(f"0{normalized[3:]}")
+        if submitted_variants.intersection(variants):
+            return True
+        if len(submitted) >= 10 and len(normalized) >= 10 and submitted[-10:] == normalized[-10:]:
+            return True
+    return False
+
+
+def public_tracking_order_to_dict(order: DBOrder) -> dict:
+    items = []
+    try:
+        for item in order.items or []:
+            quantity = item.quantity or item.qty or 1
+            price = item.price or item.unit_price or 0
+            items.append({
+                "name": item.name or item.product_name or "FoodNova Item",
+                "quantity": quantity,
+                "price": price,
+                "line_total": item.line_total or (price * quantity),
+            })
+    except Exception:
+        items = []
+
+    receipt = json_load(order.receipt, None)
+    return {
+        "id": order.id,
+        "order_code": order.order_code,
+        "customer_name": order.customer_name or "",
+        "payment_status": order.payment_status or "pending_payment",
+        "order_status": order.order_status or "order_placed",
+        "fulfillment_status": order.fulfillment_status or "order_placed",
+        "delivery_method": order.delivery_method or "delivery",
+        "total_amount": order.total_amount or 0,
+        "created_at": iso(order.created_at),
+        "updated_at": iso(order.updated_at),
+        "receipt_uploaded": bool(receipt),
+        "cancellation_status": getattr(order, "cancellation_status", "none") or "none",
+        "refund_status": getattr(order, "refund_status", "none") or "none",
+        "rider_name": getattr(order, "rider_name", "") or "",
+        "rider_phone": getattr(order, "rider_phone", "") or "",
+        "delivery_note": getattr(order, "delivery_note", "") or "",
+        "delivery_assigned_at": iso(getattr(order, "delivery_assigned_at", None)),
+        "delivery_started_at": iso(getattr(order, "delivery_started_at", None)),
+        "delivery_completed_at": iso(getattr(order, "delivery_completed_at", None)),
+        "items": items,
+    }
+
+
 def notification_to_dict(notification: DBNotification) -> dict:
     return {
         "id": notification.id,
@@ -2088,6 +2165,34 @@ def clear_notifications(request: Request):
         return {"success": True, "message": "Notifications cleared", "data": []}
     finally:
         db.close()
+
+
+@app.post("/track-order")
+def track_order(payload: TrackOrderPayload):
+    order_code = (payload.order_code or "").strip().lower()
+    phone_or_email = (payload.phone_or_email or "").strip()
+    if not order_code:
+        raise HTTPException(status_code=400, detail="Order code is required")
+    if not phone_or_email:
+        raise HTTPException(status_code=400, detail="Phone or email is required")
+
+    db = SessionLocal()
+    try:
+        order = db.query(DBOrder).filter(func.lower(DBOrder.order_code) == order_code).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found. Please check your order code and phone/email.")
+
+        submitted = phone_or_email.lower()
+        email_matches = bool(order.customer_email and submitted == order.customer_email.strip().lower())
+        phone_matches = tracking_phone_matches(phone_or_email, [order.customer_phone, order.phone])
+        if not email_matches and not phone_matches:
+            raise HTTPException(status_code=404, detail="Order not found. Please check your order code and phone/email.")
+
+        data = public_tracking_order_to_dict(order)
+        return {"success": True, "order": data, "data": data}
+    finally:
+        db.close()
+
 
 @app.post("/orders")
 def create_order(payload: OrderPayload, request: Request):

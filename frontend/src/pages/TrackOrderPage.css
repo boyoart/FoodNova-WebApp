@@ -1,0 +1,272 @@
+.track-order-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  color: var(--fn-text);
+}
+
+.tracking-hero {
+  padding: 3rem 1.25rem;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--fn-primary) 18%, var(--fn-border));
+  background:
+    radial-gradient(circle at 16% 0%, color-mix(in srgb, var(--fn-accent) 22%, transparent), transparent 34%),
+    linear-gradient(135deg, var(--fn-surface), var(--fn-surface-2));
+  box-shadow: var(--fn-shadow);
+}
+
+.tracking-kicker {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0 0 1rem;
+  padding: 0.4rem 0.72rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fn-primary) 12%, var(--fn-surface));
+  color: var(--fn-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tracking-hero h1 {
+  color: var(--fn-heading);
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  margin: 0 0 0.75rem;
+}
+
+.tracking-hero p:not(.tracking-kicker) {
+  max-width: 720px;
+  color: var(--fn-muted);
+  font-size: 1.08rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.tracking-layout {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.tracking-form-card,
+.tracking-result,
+.tracking-rider-card,
+.tracking-items {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.tracking-form-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 1rem;
+}
+
+.tracking-form-card label {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--fn-heading);
+  font-weight: 900;
+}
+
+.tracking-form-card input {
+  min-height: 46px;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.75rem;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  padding: 0 0.85rem;
+  font: inherit;
+}
+
+.tracking-submit,
+.tracking-whatsapp,
+.tracking-login,
+.tracking-rider-card button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 46px;
+  border-radius: 999px;
+  padding: 0 1.05rem;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tracking-submit,
+.tracking-whatsapp,
+.tracking-rider-card button {
+  border: 1px solid var(--fn-primary);
+  background: var(--fn-primary);
+  color: #fff;
+}
+
+.tracking-login {
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface-2);
+  color: var(--fn-text);
+}
+
+.tracking-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.tracking-error {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: #dc2626;
+  font-weight: 800;
+}
+
+.tracking-result {
+  display: grid;
+  gap: 1rem;
+}
+
+.tracking-summary,
+.tracking-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.85rem;
+}
+
+.tracking-summary div,
+.tracking-status-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem;
+  border-radius: 0.85rem;
+  background: var(--fn-surface-2);
+  border: 1px solid var(--fn-border);
+}
+
+.tracking-summary span,
+.tracking-status-card span {
+  color: var(--fn-muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.tracking-summary strong,
+.tracking-status-card strong {
+  color: var(--fn-heading);
+}
+
+.tracking-badge {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.82rem;
+}
+
+.tracking-badge.success {
+  background: rgba(8, 122, 52, 0.15);
+  color: var(--fn-primary);
+}
+
+.tracking-badge.warning {
+  background: color-mix(in srgb, var(--fn-accent, #FFD23F) 30%, transparent);
+  color: #103820;
+}
+
+.tracking-badge.danger {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
+.tracking-badge.info {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.tracking-timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.tracking-step {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  padding: 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface);
+  color: var(--fn-muted);
+}
+
+.tracking-step.done {
+  border-color: color-mix(in srgb, var(--fn-primary) 45%, var(--fn-border));
+  background: color-mix(in srgb, var(--fn-primary) 8%, var(--fn-surface));
+  color: var(--fn-primary);
+}
+
+.tracking-step span {
+  display: inline-flex;
+}
+
+.tracking-step p {
+  margin: 0;
+  font-weight: 900;
+}
+
+.tracking-rider-card h3,
+.tracking-items h3 {
+  color: var(--fn-heading);
+  margin: 0 0 0.75rem;
+}
+
+.tracking-rider-card p {
+  margin: 0.4rem 0;
+  color: var(--fn-text);
+}
+
+.tracking-rider-card button {
+  margin-top: 0.75rem;
+}
+
+.tracking-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--fn-border);
+}
+
+.tracking-item span,
+.tracking-item strong {
+  color: var(--fn-text);
+}
+
+.tracking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+@media (max-width: 780px) {
+  .tracking-form-card {
+    grid-template-columns: 1fr;
+  }
+
+  .tracking-submit,
+  .tracking-whatsapp,
+  .tracking-login {
+    width: 100%;
+  }
+
+  .tracking-item {
+    flex-direction: column;
+  }
+}

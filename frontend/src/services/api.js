@@ -264,6 +264,13 @@ export const ordersAPI = {
   getCancellationRequest: async (orderId) => (await api.get(`/orders/${orderId}/cancel-request`)).data,
 };
 
+export const trackingAPI = {
+  trackOrder: async (payload) => {
+    const response = await api.post("/track-order", payload);
+    return response.data;
+  },
+};
+
 export const adminAPI = {
   getOrders: async (params = {}) => {
     try {
