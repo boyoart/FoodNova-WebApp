@@ -40,6 +40,8 @@ export default function Footer() {
             <ul>
               <li><Link to="/">Home</Link></li>
               <li><Link to="/products">Products</Link></li>
+              <li><Link to="/faq">FAQ</Link></li>
+              <li><Link to="/policies">Policies</Link></li>
               <li><Link to="/contact">Contact</Link></li>
               <li><Link to="/privacy">Privacy Policy</Link></li>
               <li><Link to="/terms">Terms of Service</Link></li>
@@ -49,6 +51,7 @@ export default function Footer() {
           <div className="footer-section">
             <h5>Legal</h5>
             <ul>
+              <li><Link to="/policies">Customer Policies</Link></li>
               <li><Link to="/privacy">Privacy Policy</Link></li>
               <li><Link to="/terms">Terms of Service</Link></li>
               <li><a href={`mailto:${FOODNOVA_CONTACT.email}`}>Report Issue</a></li>

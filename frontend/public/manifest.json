@@ -1,13 +1,13 @@
 {
-  "name": "FoodNova - Fresh Food Delivery",
+  "name": "FoodNova | Quality Foodstuff & Reliable Supply",
   "short_name": "FoodNova",
-  "description": "Fresh food delivery platform with fast checkout and secure payments",
+  "description": "Order foodstuff, groceries, and food packs from FoodNova with secure payment, delivery updates, invoices, and customer support.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "theme_color": "#FF6B35",
-  "background_color": "#FFFFFF",
+  "theme_color": "#087A34",
+  "background_color": "#F8FAF7",
   "categories": ["shopping", "food"],
   "icons": [
     {

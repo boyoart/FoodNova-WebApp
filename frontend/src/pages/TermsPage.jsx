@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+import { FOODNOVA_CONTACT } from '../utils/contactUtils'
 import './InfoPages.css'
 
 export default function TermsPage() {
@@ -61,11 +63,17 @@ export default function TermsPage() {
             you are agreeing to be bound by the then current version of these terms of service.
           </p>
 
+          <h2>Customer Policies</h2>
+          <p>
+            Customers should review the <Link to="/policies">FoodNova Customer Policies</Link> for
+            payment, delivery, cancellation, refund request, and support rules that apply to orders.
+          </p>
+
           <h2>Contact</h2>
           <p>
             If you have any questions about these Terms of Service, please contact us at:
             <br />
-            legal@foodnova.com
+            {FOODNOVA_CONTACT.email}
           </p>
         </div>
       </div>

@@ -24,6 +24,8 @@ import AdminRiders from './pages/AdminRiders'
 import AdminCancellations from './pages/AdminCancellations'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
+import FAQPage from './pages/FAQPage'
+import PoliciesPage from './pages/PoliciesPage'
 import ContactPage from './pages/ContactPage'
 import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
@@ -66,6 +68,8 @@ function App() {
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsPage />} />
+              <Route path="/faq" element={<FAQPage />} />
+              <Route path="/policies" element={<PoliciesPage />} />
               <Route path="/contact" element={<ContactPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

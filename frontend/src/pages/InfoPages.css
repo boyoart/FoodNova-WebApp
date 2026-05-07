@@ -27,7 +27,7 @@
   margin-top: 2rem;
   margin-bottom: 1rem;
   color: var(--fn-heading);
-  border-bottom: 2px solid var(--primary);
+  border-bottom: 2px solid var(--fn-primary);
   padding-bottom: 0.5rem;
 }
 
@@ -48,7 +48,7 @@
 }
 
 .content a {
-  color: var(--primary);
+  color: var(--fn-primary);
   text-decoration: none;
   font-weight: 600;
 }

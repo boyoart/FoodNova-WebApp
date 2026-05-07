@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck } from 'lucide-react'
+import { Bell, ChevronLeft, ChevronRight, Headphones, Lock, ShoppingCart } from 'lucide-react'
 import './HomePage.css'
 
 const heroSlides = [
@@ -101,23 +101,23 @@ export default function HomePage() {
         <div className="features-grid">
           <div className="feature-card">
             <ShoppingCart size={32} />
-            <h3>Easy Ordering</h3>
-            <p>Simple, intuitive interface makes ordering a breeze.</p>
-          </div>
-          <div className="feature-card">
-            <Truck size={32} />
-            <h3>Fast Delivery</h3>
-            <p>Quick delivery to your doorstep with real-time tracking.</p>
-          </div>
-          <div className="feature-card">
-            <DollarSign size={32} />
-            <h3>Flexible Payment</h3>
-            <p>Multiple payment options including secure bank transfers.</p>
+            <h3>Quality Foodstuff</h3>
+            <p>Freshly sourced essentials and reliable food packs.</p>
           </div>
           <div className="feature-card">
             <Lock size={32} />
-            <h3>Secure & Safe</h3>
-            <p>Your data and transactions are protected with encryption.</p>
+            <h3>Secure Payment Flow</h3>
+            <p>Use your order code, upload receipt, and track payment confirmation.</p>
+          </div>
+          <div className="feature-card">
+            <Bell size={32} />
+            <h3>Clear Order Updates</h3>
+            <p>Get notifications for payment, processing, delivery, and completion.</p>
+          </div>
+          <div className="feature-card">
+            <Headphones size={32} />
+            <h3>Support When You Need It</h3>
+            <p>Reach FoodNova through WhatsApp or email with your order code.</p>
           </div>
         </div>
       </section>

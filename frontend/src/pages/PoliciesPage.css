@@ -1,0 +1,112 @@
+.policies-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  color: var(--fn-text);
+}
+
+.policies-hero {
+  padding: 3rem 1.25rem;
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--fn-primary) 18%, var(--fn-border));
+  background: linear-gradient(135deg, var(--fn-surface), var(--fn-surface-2));
+  box-shadow: var(--fn-shadow);
+}
+
+.policy-kicker {
+  display: inline-flex;
+  width: fit-content;
+  margin: 0 0 1rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fn-primary) 12%, var(--fn-surface));
+  color: var(--fn-primary);
+  font-weight: 900;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.policies-hero h1 {
+  margin: 0 0 0.75rem;
+  color: var(--fn-heading);
+  font-size: clamp(2rem, 4vw, 3.4rem);
+}
+
+.policies-hero p:not(.policy-kicker) {
+  max-width: 760px;
+  color: var(--fn-muted);
+  font-size: 1.08rem;
+  line-height: 1.65;
+  margin: 0;
+}
+
+.policies-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.policy-card,
+.policy-support-card {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 1.25rem;
+}
+
+.policy-card h2,
+.policy-support-card h2 {
+  color: var(--fn-heading);
+  margin: 0 0 0.85rem;
+}
+
+.policy-card ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--fn-text);
+  line-height: 1.65;
+}
+
+.policy-card li {
+  margin-bottom: 0.55rem;
+}
+
+.policy-support-card {
+  margin-top: 1rem;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--fn-primary) 8%, var(--fn-surface)), var(--fn-surface));
+}
+
+.policy-support-card p {
+  margin: 0.4rem 0;
+  color: var(--fn-text);
+}
+
+.policy-support-card a {
+  color: var(--fn-primary);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.policy-support-link {
+  display: inline-flex;
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 999px;
+  background: var(--fn-primary);
+  color: #fff !important;
+}
+
+@media (max-width: 640px) {
+  .policies-page {
+    padding: 1.25rem 0.75rem;
+  }
+
+  .policies-hero,
+  .policy-card,
+  .policy-support-card {
+    border-radius: 1rem;
+  }
+}
