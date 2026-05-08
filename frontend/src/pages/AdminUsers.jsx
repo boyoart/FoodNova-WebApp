@@ -223,13 +223,17 @@ export default function AdminUsers() {
       closeModal()
       loadAdmins()
     } catch (error) {
-      const message =
-        error?.response?.data?.detail ||
-        error?.response?.data?.message ||
-        error?.message ||
-        (modalMode === 'create' ? 'Admin user creation failed.' : 'Admin user action failed.')
-      console.error(modalMode === 'create' ? 'Create admin failed:' : 'Admin user action failed:', error?.response?.data || error)
-      toast.error(message)
+      console.error(modalMode === 'create' ? 'Create admin failed:' : 'Admin user action failed:', error)
+      if (!error.response) {
+        toast.error('Network error: cannot reach FoodNova backend. Please check API URL, CORS, or Render backend logs.')
+      } else {
+        const message =
+          error.response.data?.detail ||
+          error.response.data?.message ||
+          error.response.data?.error ||
+          (modalMode === 'create' ? 'Admin user creation failed.' : 'Admin user action failed.')
+        toast.error(message)
+      }
     } finally {
       setSaving(false)
     }

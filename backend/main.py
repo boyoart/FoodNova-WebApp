@@ -3690,54 +3690,60 @@ def reject_cancellation_request(request_id: int, payload: CancellationReviewPayl
 
 @app.post("/admin/users")
 def create_admin_user(payload: AdminUserPayload, request: Request):
-    admin = require_permission(request, "admins:manage")
-    full_name = (payload.full_name or payload.name or payload.fullName or "").strip()
-    email = str(payload.email or "").lower().strip()
-    password = payload.password or ""
-    confirm_password = payload.confirm_password or payload.confirmPassword
-    if not full_name:
-        raise HTTPException(status_code=400, detail="Full name is required.")
-    if not email:
-        raise HTTPException(status_code=400, detail="Email is required.")
-    if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
-    if confirm_password is not None and confirm_password != password:
-        raise HTTPException(status_code=400, detail="Passwords do not match.")
-    raw_permissions = payload.permissions
-    if raw_permissions is None and payload.permissions_json is not None:
-        raw_permissions = json_load(payload.permissions_json, payload.permissions_json) if isinstance(payload.permissions_json, str) else payload.permissions_json
-    admin_role, permissions = validate_assignable_permissions(admin, payload.admin_role or "viewer", raw_permissions)
-
-    db = SessionLocal()
     try:
-        if get_db_user_by_email(db, email):
-            raise HTTPException(status_code=400, detail="Email already exists.")
-        new_admin = DBUser(
-            full_name=full_name,
-            email=email,
-            phone=payload.phone or "",
-            password=_hash_password(password),
-            role="admin",
-            admin_role=admin_role,
-            permissions_json=json_dump(permissions),
-            is_active=payload.is_active is not False,
-        )
-        db.add(new_admin)
-        db.commit()
-        db.refresh(new_admin)
-        data = admin_user_to_dict(new_admin)
-        create_admin_audit_log(
-            request,
-            admin,
-            "admin_user_created",
-            "admin_user",
-            new_admin.id,
-            f"{admin.get('full_name') or admin.get('email')} created admin user {new_admin.email}",
-            {"admin_email": new_admin.email, "admin_role": admin_role, "permissions": permissions},
-        )
-        return {"success": True, "message": "Admin user created successfully", "admin": data, "data": data}
-    finally:
-        db.close()
+        admin = require_permission(request, "admins:manage")
+        full_name = (payload.full_name or payload.name or payload.fullName or "").strip()
+        email = str(payload.email or "").lower().strip()
+        password = payload.password or ""
+        confirm_password = payload.confirm_password or payload.confirmPassword
+        if not full_name:
+            raise HTTPException(status_code=400, detail="Full name is required.")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required.")
+        if len(password) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+        if confirm_password is not None and confirm_password != password:
+            raise HTTPException(status_code=400, detail="Passwords do not match.")
+        raw_permissions = payload.permissions
+        if raw_permissions is None and payload.permissions_json is not None:
+            raw_permissions = json_load(payload.permissions_json, payload.permissions_json) if isinstance(payload.permissions_json, str) else payload.permissions_json
+        admin_role, permissions = validate_assignable_permissions(admin, payload.admin_role or "viewer", raw_permissions)
+
+        db = SessionLocal()
+        try:
+            if get_db_user_by_email(db, email):
+                raise HTTPException(status_code=400, detail="Email already exists.")
+            new_admin = DBUser(
+                full_name=full_name,
+                email=email,
+                phone=payload.phone or "",
+                password=_hash_password(password),
+                role="admin",
+                admin_role=admin_role,
+                permissions_json=json_dump(permissions),
+                is_active=payload.is_active is not False,
+            )
+            db.add(new_admin)
+            db.commit()
+            db.refresh(new_admin)
+            data = admin_user_to_dict(new_admin)
+            create_admin_audit_log(
+                request,
+                admin,
+                "admin_user_created",
+                "admin_user",
+                new_admin.id,
+                f"{admin.get('full_name') or admin.get('email')} created admin user {new_admin.email}",
+                {"admin_email": new_admin.email, "admin_role": admin_role, "permissions": permissions},
+            )
+            return {"success": True, "message": "Admin user created successfully", "admin": data, "data": data}
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as error:
+        print("CREATE ADMIN USER ERROR:", repr(error))
+        raise HTTPException(status_code=500, detail=f"Create admin failed: {str(error)}")
 
 
 @app.patch("/admin/users/{admin_id}")
