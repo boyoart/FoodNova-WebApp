@@ -13,6 +13,7 @@ const normalizeApiBaseUrl = (value) => {
 };
 
 export const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+console.log("FoodNova API_BASE_URL:", API_BASE_URL);
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -42,6 +43,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.error("FoodNova API request failed", {
+      url: error?.config?.url,
+      baseURL: error?.config?.baseURL,
+      method: error?.config?.method,
+      message: error?.message,
+      status: error?.response?.status,
+      data: error?.response?.data,
+    });
     if (error?.response?.status === 401) {
       console.warn("FoodNova API session expired or unauthorized", error.config?.url);
     }

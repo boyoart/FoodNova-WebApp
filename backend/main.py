@@ -81,6 +81,9 @@ elif any([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
     print("Cloudinary is not fully configured. Falling back to local uploads.")
 
 allowed_origins = [
+    "capacitor://localhost",
+    "ionic://localhost",
+    "http://localhost",
     "https://foodnova.com.ng",
     "https://www.foodnova.com.ng",
     "https://food-nova-web-app.vercel.app",
