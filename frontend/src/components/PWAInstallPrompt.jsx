@@ -4,12 +4,18 @@ import './PWAInstallPrompt.css'
 const DISMISS_KEY = 'foodnova_pwa_install_dismissed'
 
 const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone
+const isCapacitorApp = () => (
+  window.Capacitor?.isNativePlatform?.()
+  || window.location.protocol === 'capacitor:'
+  || navigator.userAgent.includes('wv')
+)
 
 export default function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
+    if (isCapacitorApp()) return undefined
     if (localStorage.getItem(DISMISS_KEY) === 'true' || isStandalone()) return undefined
 
     const handleBeforeInstallPrompt = (event) => {
@@ -46,7 +52,7 @@ export default function PWAInstallPrompt() {
     setVisible(false)
   }
 
-  if (!visible || !deferredPrompt) return null
+  if (isCapacitorApp() || !visible || !deferredPrompt) return null
 
   return (
     <div className="pwa-install-prompt" role="dialog" aria-label="Install FoodNova app">

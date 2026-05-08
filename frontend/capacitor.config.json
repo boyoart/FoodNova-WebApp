@@ -1,5 +1,13 @@
 {
   "appId": "ng.com.foodnova.app",
   "appName": "FoodNova",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "url": "https://foodnova.com.ng",
+    "cleartext": false,
+    "allowNavigation": [
+      "foodnova.com.ng",
+      "www.foodnova.com.ng"
+    ]
+  }
 }
