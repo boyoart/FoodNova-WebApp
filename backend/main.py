@@ -392,6 +392,7 @@ ADMIN_ROLE_PERMISSIONS = {
         "broadcasts:view", "broadcasts:send", "customers:view", "audit:view",
         "admins:view", "admins:manage", "delivery:manage",
         "cancellations:view", "cancellations:manage", "exports:view", "exports:download",
+        "reports:view",
     ],
     "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
@@ -1376,6 +1377,26 @@ def csv_download_response(filename_prefix: str, columns: list, rows: list):
 
 def require_export_permission(request: Request):
     return require_permission(request, "exports:download")
+
+
+def parse_report_date(value: Optional[str], default: datetime) -> datetime:
+    if not value:
+        return default
+    try:
+        return datetime.strptime(value, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Dates must use YYYY-MM-DD format.")
+
+
+def report_status_counts(values: List[str], allowed_statuses: List[str]) -> List[dict]:
+    counts = {status: 0 for status in allowed_statuses}
+    for value in values:
+        status = str(value or "").lower()
+        if status in counts:
+            counts[status] += 1
+        elif status:
+            counts[status] = counts.get(status, 0) + 1
+    return [{"status": status, "count": count} for status, count in counts.items()]
 
 
 def create_payment_approval_log(
@@ -3236,6 +3257,123 @@ def get_payment_audit_logs(
             for log in query.order_by(DBPaymentApprovalLog.created_at.desc(), DBPaymentApprovalLog.id.desc()).limit(safe_limit).all()
         ]
         return {"success": True, "logs": logs, "data": logs}
+    finally:
+        db.close()
+
+
+@app.get("/admin/reports/summary")
+def admin_reports_summary(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    require_permission(request, "reports:view")
+    now = datetime.utcnow()
+    start_dt = parse_report_date(start_date, now - timedelta(days=30))
+    end_dt = parse_report_date(end_date, now)
+    end_exclusive = end_dt + timedelta(days=1)
+    db = SessionLocal()
+    try:
+        orders = (
+            db.query(DBOrder)
+            .filter(DBOrder.created_at >= start_dt, DBOrder.created_at < end_exclusive)
+            .order_by(DBOrder.created_at.desc(), DBOrder.id.desc())
+            .all()
+        )
+        products = db.query(DBProduct).all()
+        low_stock_threshold = 5
+
+        payment_statuses = [str(order.payment_status or order.status or "pending_payment").lower() for order in orders]
+        order_statuses = [str(order.order_status or order.fulfillment_status or order.status or "order_placed").lower() for order in orders]
+        total_order_value = sum(float(order.total_amount or 0) for order in orders)
+        confirmed_revenue = sum(float(order.total_amount or 0) for order in orders if str(order.payment_status or "").lower() == "payment_confirmed")
+        active_customers = len({order.customer_email for order in orders if order.customer_email}) or db.query(DBUser).filter(DBUser.role == "customer").count()
+        low_stock_products = [
+            product for product in products
+            if int(product.stock_qty if product.stock_qty is not None else product.stock or 0) > 0
+            and int(product.stock_qty if product.stock_qty is not None else product.stock or 0) <= low_stock_threshold
+        ]
+        out_of_stock_products = [
+            product for product in products
+            if int(product.stock_qty if product.stock_qty is not None else product.stock or 0) <= 0
+        ]
+
+        revenue_by_day_map = {}
+        top_products_map = {}
+        for order in orders:
+            day = (order.created_at or now).date().isoformat()
+            day_data = revenue_by_day_map.setdefault(day, {"date": day, "revenue": 0, "confirmed_revenue": 0, "orders": 0})
+            amount = float(order.total_amount or 0)
+            day_data["revenue"] += amount
+            if str(order.payment_status or "").lower() == "payment_confirmed":
+                day_data["confirmed_revenue"] += amount
+            day_data["orders"] += 1
+
+            for item in order.items or []:
+                quantity = int(item.quantity or item.qty or 1)
+                price = float(item.unit_price or item.price or 0)
+                line_total = float(item.line_total or (price * quantity))
+                product_id = item.product_id or 0
+                name = item.name or item.product_name or "FoodNova Item"
+                key = product_id or name.lower()
+                current = top_products_map.setdefault(key, {
+                    "product_id": product_id,
+                    "name": name,
+                    "quantity_sold": 0,
+                    "revenue": 0,
+                })
+                current["quantity_sold"] += quantity
+                current["revenue"] += line_total
+
+        recent_orders = [
+            {
+                "id": order.id,
+                "order_code": order.order_code or "",
+                "customer_name": order.customer_name or "",
+                "total_amount": order.total_amount or 0,
+                "payment_status": order.payment_status or order.status or "",
+                "order_status": order.order_status or order.fulfillment_status or order.status or "",
+                "created_at": iso(order.created_at),
+            }
+            for order in orders[:10]
+        ]
+
+        summary = {
+            "total_orders": len(orders),
+            "total_revenue": confirmed_revenue,
+            "total_order_value": total_order_value,
+            "confirmed_revenue": confirmed_revenue,
+            "pending_payments": payment_statuses.count("pending_payment") + payment_statuses.count("receipt_submitted"),
+            "confirmed_payments": payment_statuses.count("payment_confirmed"),
+            "rejected_payments": payment_statuses.count("payment_rejected"),
+            "delivered_orders": order_statuses.count("delivered"),
+            "cancelled_orders": order_statuses.count("cancelled"),
+            "active_customers": active_customers,
+            "low_stock_products": len(low_stock_products),
+            "out_of_stock_products": len(out_of_stock_products),
+            "assigned_deliveries": len([order for order in orders if order.rider_id or order.rider_name]),
+            "out_for_delivery_orders": order_statuses.count("out_for_delivery"),
+        }
+        payload = {
+            "success": True,
+            "range": {
+                "start_date": start_dt.date().isoformat(),
+                "end_date": end_dt.date().isoformat(),
+            },
+            "summary": summary,
+            "orders_by_status": report_status_counts(order_statuses, ["order_placed", "processing", "ready_for_pickup", "out_for_delivery", "delivered", "cancelled"]),
+            "payments_by_status": report_status_counts(payment_statuses, ["pending_payment", "receipt_submitted", "payment_confirmed", "payment_rejected"]),
+            "revenue_by_day": sorted(revenue_by_day_map.values(), key=lambda item: item["date"]),
+            "top_products": sorted(top_products_map.values(), key=lambda item: item["revenue"], reverse=True)[:10],
+            "low_stock": [
+                {
+                    "id": product.id,
+                    "name": product.name or "",
+                    "stock_qty": int(product.stock_qty if product.stock_qty is not None else product.stock or 0),
+                    "category": product.category or product.category_name or "",
+                }
+                for product in low_stock_products[:10]
+            ],
+            "recent_orders": recent_orders,
+        }
+        payload["data"] = summary
+        return payload
     finally:
         db.close()
 

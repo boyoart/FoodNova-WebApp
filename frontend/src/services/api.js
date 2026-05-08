@@ -432,6 +432,7 @@ export const adminAPI = {
     const logs = normalizeList(response.data, ["logs"]);
     return { data: logs, raw: response.data };
   },
+  getReportsSummary: async (params = {}) => (await api.get("/admin/reports/summary", { params })).data,
   exportData: async (type) => {
     const response = await api.get(`/admin/export/${type}`, { responseType: "blob" });
     const disposition = response.headers?.["content-disposition"] || "";

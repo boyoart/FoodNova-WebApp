@@ -267,6 +267,7 @@ export default function Navbar() {
     { to: '/admin/customers', label: 'Customers', show: canAdmin('customers:view') },
     { to: '/admin/audit-logs', label: 'Activity Logs', show: canAdmin('audit:view') },
     { to: '/admin/users', label: 'Admin Users', show: canAdmin('admins:view') || canAdmin('admins:manage') },
+    { to: '/admin/reports', label: 'Reports', show: canAdmin('reports:view') },
     { to: '/admin/exports', label: 'Data Exports', show: canAnyAdmin(['exports:view', 'exports:download']) },
   ].filter((link) => link.show)
 

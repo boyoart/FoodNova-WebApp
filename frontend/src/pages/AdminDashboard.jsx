@@ -17,6 +17,7 @@ const adminTools = [
   { path: '/admin/customers', title: 'Customers', description: 'View customer data and order history.', icon: Users, permission: 'customers:view' },
   { path: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system changes.', icon: BarChart3, permission: 'audit:view' },
   { path: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.', icon: ShieldCheck, permission: 'admins:view' },
+  { path: '/admin/reports', title: 'Reports', description: 'View sales, revenue, stock, and business performance.', icon: BarChart3, permission: 'reports:view' },
   { path: '/admin/exports', title: 'Data Exports', description: 'Download CSV records for backup and reporting.', icon: BarChart3, permissions: ['exports:view', 'exports:download'] },
 ]
 
