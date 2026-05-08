@@ -28,7 +28,7 @@ const ROLE_OPTIONS = [
 ]
 
 const ROLE_PERMISSIONS = {
-  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
+  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'customers:view', 'audit:view', 'admins:view', 'admins:manage', 'exports:view', 'exports:download'],
   orders_manager: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'customers:view'],
   stock_manager: ['dashboard:view', 'stock:view', 'stock:manage'],
   payment_manager: ['dashboard:view', 'orders:view', 'payments:view', 'payments:approve', 'cancellations:view', 'cancellations:manage', 'customers:view'],
@@ -55,6 +55,8 @@ const PERMISSION_OPTIONS = [
   ['audit:view', 'Audit Logs View'],
   ['admins:view', 'Admin Users View'],
   ['admins:manage', 'Admin Users Manage'],
+  ['exports:view', 'Data Exports View'],
+  ['exports:download', 'Data Exports Download'],
 ]
 
 const PERMISSION_GROUPS = [
@@ -66,6 +68,7 @@ const PERMISSION_GROUPS = [
   { title: 'Customers', items: [['customers:view', 'View customers']] },
   { title: 'Admins', items: [['admins:view', 'View admin users'], ['admins:manage', 'Manage admin users']] },
   { title: 'Audit Logs', items: [['audit:view', 'View audit logs']] },
+  { title: 'Exports', items: [['exports:view', 'View data exports'], ['exports:download', 'Download CSV exports']] },
 ]
 
 const ALL_PERMISSIONS = PERMISSION_OPTIONS.map(([value]) => value)

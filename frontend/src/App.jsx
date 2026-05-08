@@ -22,6 +22,7 @@ import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminUsers from './pages/AdminUsers'
 import AdminRiders from './pages/AdminRiders'
 import AdminCancellations from './pages/AdminCancellations'
+import AdminExports from './pages/AdminExports'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
 import FAQPage from './pages/FAQPage'
@@ -67,6 +68,7 @@ function App() {
               <Route path="/admin/customers" element={<AdminCustomers />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
               <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/exports" element={<AdminExports />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/faq" element={<FAQPage />} />

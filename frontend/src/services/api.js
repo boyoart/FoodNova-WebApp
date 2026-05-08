@@ -432,6 +432,16 @@ export const adminAPI = {
     const logs = normalizeList(response.data, ["logs"]);
     return { data: logs, raw: response.data };
   },
+  exportData: async (type) => {
+    const response = await api.get(`/admin/export/${type}`, { responseType: "blob" });
+    const disposition = response.headers?.["content-disposition"] || "";
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/i);
+    const today = new Date().toISOString().slice(0, 10);
+    return {
+      blob: response.data,
+      filename: filenameMatch?.[1] || `foodnova-${type}-${today}.csv`,
+    };
+  },
   getAdminUsers: async () => {
     const response = await api.get("/admin/users");
     const admins = normalizeList(response.data, ["admins", "users"]);

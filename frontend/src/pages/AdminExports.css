@@ -1,0 +1,138 @@
+.admin-exports-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.admin-exports-hero,
+.admin-export-denied {
+  border: 1px solid var(--fn-border);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(8, 122, 52, 0.12), rgba(255, 210, 63, 0.1)),
+    var(--fn-surface);
+  color: var(--fn-text);
+  padding: clamp(1.4rem, 3vw, 2rem);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.08);
+}
+
+.admin-exports-kicker {
+  margin: 0 0 0.4rem;
+  color: var(--fn-primary);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-exports-hero h1,
+.admin-export-denied h1 {
+  margin: 0;
+  color: var(--fn-heading);
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1.1;
+}
+
+.admin-exports-hero p,
+.admin-export-denied p {
+  max-width: 680px;
+  margin: 0.55rem 0 0;
+  color: var(--fn-muted);
+  line-height: 1.6;
+}
+
+.admin-exports-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.admin-export-card {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 18px;
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  padding: 1.15rem;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.06);
+}
+
+.admin-export-card-icon {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(8, 122, 52, 0.12);
+  color: var(--fn-primary);
+}
+
+.admin-export-card-body {
+  min-width: 0;
+}
+
+.admin-export-card h2 {
+  margin: 0 0 0.45rem;
+  color: var(--fn-heading);
+  font-size: 1.06rem;
+  line-height: 1.25;
+}
+
+.admin-export-card p {
+  margin: 0;
+  color: var(--fn-muted);
+  font-size: 0.94rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.admin-export-btn {
+  width: 100%;
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  border: none;
+  border-radius: 13px;
+  background: var(--fn-primary);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 900;
+  transition: transform 0.2s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+.admin-export-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+.admin-export-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.admin-export-spin {
+  animation: admin-export-spin 0.9s linear infinite;
+}
+
+@keyframes admin-export-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-exports-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-export-card {
+    padding: 1rem;
+  }
+}

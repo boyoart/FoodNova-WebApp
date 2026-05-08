@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from uuid import uuid4
+import csv
 import io
 import json
 import os
@@ -9,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
@@ -390,7 +391,7 @@ ADMIN_ROLE_PERMISSIONS = {
         "payments:view", "payments:approve", "stock:view", "stock:manage",
         "broadcasts:view", "broadcasts:send", "customers:view", "audit:view",
         "admins:view", "admins:manage", "delivery:manage",
-        "cancellations:view", "cancellations:manage",
+        "cancellations:view", "cancellations:manage", "exports:view", "exports:download",
     ],
     "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
@@ -1355,6 +1356,26 @@ def cancellation_request_to_dict(request_obj: DBCancellationRequest, order: DBOr
     if order:
         data["order"] = order_to_dict(order)
     return data
+
+
+def csv_download_response(filename_prefix: str, columns: list, rows: list):
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({column: row.get(column, "") for column in columns})
+    output.seek(0)
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    filename = f"foodnova-{filename_prefix}-{today}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def require_export_permission(request: Request):
+    return require_permission(request, "exports:download")
 
 
 def create_payment_approval_log(
@@ -3215,6 +3236,183 @@ def get_payment_audit_logs(
             for log in query.order_by(DBPaymentApprovalLog.created_at.desc(), DBPaymentApprovalLog.id.desc()).limit(safe_limit).all()
         ]
         return {"success": True, "logs": logs, "data": logs}
+    finally:
+        db.close()
+
+
+@app.get("/admin/export/orders")
+def export_orders(request: Request):
+    require_export_permission(request)
+    db = SessionLocal()
+    try:
+        columns = ["order_id", "order_code", "customer_name", "customer_phone", "customer_email", "total_amount", "payment_status", "order_status", "delivery_method", "created_at", "updated_at"]
+        rows = [
+            {
+                "order_id": order.id,
+                "order_code": order.order_code,
+                "customer_name": order.customer_name or "",
+                "customer_phone": order.customer_phone or order.phone or "",
+                "customer_email": order.customer_email or "",
+                "total_amount": order.total_amount or 0,
+                "payment_status": order.payment_status or "",
+                "order_status": order.order_status or order.fulfillment_status or order.status or "",
+                "delivery_method": order.delivery_method or "",
+                "created_at": iso(order.created_at),
+                "updated_at": iso(order.updated_at),
+            }
+            for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
+        ]
+        return csv_download_response("orders", columns, rows)
+    finally:
+        db.close()
+
+
+@app.get("/admin/export/customers")
+def export_customers(request: Request):
+    require_export_permission(request)
+    db = SessionLocal()
+    try:
+        columns = ["customer_id", "name", "email", "phone", "created_at", "total_orders"]
+        rows = []
+        for user in db.query(DBUser).filter(DBUser.role == "customer").order_by(DBUser.created_at.desc(), DBUser.id.desc()).all():
+            total_orders = db.query(DBOrder).filter(DBOrder.customer_email == user.email).count()
+            rows.append({
+                "customer_id": user.id,
+                "name": user.full_name or "Customer",
+                "email": user.email or "",
+                "phone": user.phone or "",
+                "created_at": iso(user.created_at),
+                "total_orders": total_orders,
+            })
+        return csv_download_response("customers", columns, rows)
+    finally:
+        db.close()
+
+
+@app.get("/admin/export/products")
+def export_products(request: Request):
+    require_export_permission(request)
+    db = SessionLocal()
+    try:
+        columns = ["product_id", "name", "category", "price", "stock_qty", "active", "low_stock", "out_of_stock"]
+        rows = []
+        low_stock_threshold = 5
+        for product in db.query(DBProduct).order_by(DBProduct.name.asc()).all():
+            stock_qty = int(product.stock_qty if product.stock_qty is not None else product.stock or 0)
+            rows.append({
+                "product_id": product.id,
+                "name": product.name or "",
+                "category": product.category or product.category_name or "",
+                "price": product.price or 0,
+                "stock_qty": stock_qty,
+                "active": bool(product.is_active),
+                "low_stock": stock_qty > 0 and stock_qty <= low_stock_threshold,
+                "out_of_stock": stock_qty <= 0,
+            })
+        return csv_download_response("products", columns, rows)
+    finally:
+        db.close()
+
+
+@app.get("/admin/export/payments")
+def export_payments(request: Request):
+    require_export_permission(request)
+    db = SessionLocal()
+    try:
+        columns = ["order_code", "customer_name", "amount", "payment_status", "receipt_uploaded", "approved_by", "approved_at", "rejected_reason"]
+        rows = []
+        for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all():
+            latest_log = (
+                db.query(DBPaymentApprovalLog)
+                .filter(DBPaymentApprovalLog.order_id == order.id)
+                .order_by(DBPaymentApprovalLog.created_at.desc(), DBPaymentApprovalLog.id.desc())
+                .first()
+            )
+            receipt = json_load(order.receipt, None)
+            rows.append({
+                "order_code": order.order_code or "",
+                "customer_name": order.customer_name or "",
+                "amount": order.total_amount or 0,
+                "payment_status": order.payment_status or order.status or "",
+                "receipt_uploaded": bool(receipt),
+                "approved_by": latest_log.admin_name if latest_log and latest_log.action == "payment_confirmed" else "",
+                "approved_at": iso(latest_log.created_at) if latest_log and latest_log.action == "payment_confirmed" else "",
+                "rejected_reason": latest_log.rejection_reason if latest_log and latest_log.action == "payment_rejected" else "",
+            })
+        return csv_download_response("payments", columns, rows)
+    finally:
+        db.close()
+
+
+@app.get("/admin/export/cancellations")
+def export_cancellations(request: Request):
+    require_export_permission(request)
+    db = SessionLocal()
+    try:
+        columns = ["request_id", "order_code", "customer_name", "request_type", "status", "reason", "admin_note", "requested_at", "reviewed_at"]
+        rows = [
+            {
+                "request_id": item.id,
+                "order_code": item.order_code or "",
+                "customer_name": item.customer_name or "",
+                "request_type": item.request_type or "",
+                "status": item.status or "",
+                "reason": item.reason or "",
+                "admin_note": item.admin_note or "",
+                "requested_at": iso(item.requested_at),
+                "reviewed_at": iso(item.reviewed_at),
+            }
+            for item in db.query(DBCancellationRequest).order_by(DBCancellationRequest.created_at.desc(), DBCancellationRequest.id.desc()).all()
+        ]
+        return csv_download_response("cancellations", columns, rows)
+    finally:
+        db.close()
+
+
+@app.get("/admin/export/riders")
+def export_riders(request: Request):
+    require_export_permission(request)
+    db = SessionLocal()
+    try:
+        columns = ["rider_id", "full_name", "phone", "vehicle_type", "vehicle_number", "status", "created_at"]
+        rows = [
+            {
+                "rider_id": rider.id,
+                "full_name": rider.full_name or "",
+                "phone": rider.phone or "",
+                "vehicle_type": rider.vehicle_type or "",
+                "vehicle_number": rider.vehicle_number or "",
+                "status": rider.status or "",
+                "created_at": iso(rider.created_at),
+            }
+            for rider in db.query(DBDeliveryRider).order_by(DBDeliveryRider.created_at.desc(), DBDeliveryRider.id.desc()).all()
+        ]
+        return csv_download_response("riders", columns, rows)
+    finally:
+        db.close()
+
+
+@app.get("/admin/export/audit-logs")
+def export_audit_logs(request: Request):
+    require_export_permission(request)
+    db = SessionLocal()
+    try:
+        columns = ["id", "admin_name", "admin_email", "action", "entity_type", "entity_id", "description", "created_at", "ip_address"]
+        rows = [
+            {
+                "id": log.id,
+                "admin_name": log.admin_name or "",
+                "admin_email": log.admin_email or "",
+                "action": log.action or "",
+                "entity_type": log.entity_type or "",
+                "entity_id": log.entity_id or "",
+                "description": log.description or "",
+                "created_at": iso(log.created_at),
+                "ip_address": log.ip_address or "",
+            }
+            for log in db.query(DBAdminAuditLog).order_by(DBAdminAuditLog.created_at.desc(), DBAdminAuditLog.id.desc()).all()
+        ]
+        return csv_download_response("audit-logs", columns, rows)
     finally:
         db.close()
 
