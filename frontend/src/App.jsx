@@ -4,6 +4,7 @@ import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
 import FloatingCartButton from './components/FloatingCartButton'
+import PWAInstallPrompt from './components/PWAInstallPrompt'
 import HomePage from './pages/HomePage'
 import ProductsPage from './pages/ProductsPage'
 import CartPage from './pages/CartPage'
@@ -83,6 +84,7 @@ function App() {
           </main>
           <Footer />
           <FloatingCartButton />
+          <PWAInstallPrompt />
           <Toaster position="bottom-right" />
         </div>
       </ErrorBoundary>

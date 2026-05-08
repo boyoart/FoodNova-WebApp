@@ -1,0 +1,25 @@
+{
+  "name": "FoodNova",
+  "short_name": "FoodNova",
+  "description": "Order quality foodstuff, groceries, and food packs from FoodNova.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#087A34",
+  "theme_color": "#087A34",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/foodnova-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/foodnova-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
