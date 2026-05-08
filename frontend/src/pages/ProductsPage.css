@@ -41,7 +41,7 @@
 }
 
 .search-form button {
-  background-color: var(--primary);
+  background-color: var(--fn-primary);
   color: white;
   padding: 0.5rem 1rem;
   border-radius: 0.25rem;
@@ -51,7 +51,38 @@
 }
 
 .search-form button:hover {
-  background-color: var(--primary-dark);
+  background-color: var(--fn-primary-dark);
+}
+
+.product-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.85rem;
+  background: var(--fn-surface);
+}
+
+.product-controls label {
+  display: grid;
+  gap: 0.4rem;
+  color: var(--fn-heading);
+  font-weight: 800;
+}
+
+.product-controls select {
+  min-height: 42px;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.65rem;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  padding: 0 0.75rem;
+}
+
+.product-controls select:disabled {
+  opacity: 0.65;
 }
 
 .products-tabs {
@@ -73,8 +104,8 @@
 }
 
 .tab.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+  color: var(--fn-primary);
+  border-bottom-color: var(--fn-primary);
 }
 
 .products-grid {
@@ -166,7 +197,7 @@
 .category {
   display: inline-block;
   background-color: var(--fn-surface-2);
-  color: var(--primary);
+  color: var(--fn-primary);
   padding: 0.25rem 0.75rem;
   border-radius: 0.25rem;
   font-size: 0.75rem;
@@ -206,13 +237,13 @@
 .price {
   font-size: 1.25rem;
   font-weight: 700;
-  color: var(--primary);
+  color: var(--fn-primary);
 }
 
 .btn-add {
   flex: 1;
   padding: 0.5rem;
-  background-color: var(--primary);
+  background-color: var(--fn-primary);
   color: white;
   border: none;
   border-radius: 0.25rem;
@@ -223,7 +254,7 @@
 }
 
 .btn-add:hover:not(:disabled) {
-  background-color: var(--primary-dark);
+  background-color: var(--fn-primary-dark);
 }
 
 .btn-add:disabled {
@@ -241,6 +272,10 @@
 @media (max-width: 768px) {
   .search-form {
     flex-direction: column;
+  }
+
+  .product-controls {
+    grid-template-columns: 1fr;
   }
 
   .products-grid {

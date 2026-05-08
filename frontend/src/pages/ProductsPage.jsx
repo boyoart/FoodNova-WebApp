@@ -10,6 +10,9 @@ export default function ProductsPage() {
   const [products, setProducts] = useState([])
   const [packs, setPacks] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [stockFilter, setStockFilter] = useState('all')
+  const [sortOption, setSortOption] = useState('newest')
   const [activeTab, setActiveTab] = useState('products')
   const [loading, setLoading] = useState(true)
   const { items: cartItems, addItem } = useCartStore()
@@ -85,10 +88,29 @@ export default function ProductsPage() {
 
   const handleSearch = (e) => {
     e.preventDefault()
-    fetchProducts()
   }
 
-  const items = activeTab === 'products' ? products : packs
+  const categories = [...new Set(products.map((product) => product.category).filter(Boolean))]
+  const baseItems = activeTab === 'products' ? products : packs
+  const items = baseItems
+    .filter((item) => {
+      const query = searchTerm.trim().toLowerCase()
+      if (!query) return true
+      return [item.name, item.description, item.category].some((value) => String(value || '').toLowerCase().includes(query))
+    })
+    .filter((item) => activeTab !== 'products' || categoryFilter === 'all' || item.category === categoryFilter)
+    .filter((item) => {
+      if (activeTab !== 'products') return true
+      if (stockFilter === 'available') return !item.is_out_of_stock
+      if (stockFilter === 'low') return item.low_stock && !item.is_out_of_stock
+      if (stockFilter === 'out') return item.is_out_of_stock
+      return true
+    })
+    .sort((a, b) => {
+      if (sortOption === 'price_asc') return Number(a.price || 0) - Number(b.price || 0)
+      if (sortOption === 'price_desc') return Number(b.price || 0) - Number(a.price || 0)
+      return Number(b.id || 0) - Number(a.id || 0)
+    })
 
   return (
     <div className="products-page">
@@ -104,6 +126,33 @@ export default function ProductsPage() {
           />
           <button type="submit">Search</button>
         </form>
+      </div>
+
+      <div className="product-controls">
+        <label>
+          Category
+          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} disabled={activeTab !== 'products'}>
+            <option value="all">All Categories</option>
+            {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+        </label>
+        <label>
+          Stock
+          <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} disabled={activeTab !== 'products'}>
+            <option value="all">All</option>
+            <option value="available">Available</option>
+            <option value="low">Low Stock</option>
+            <option value="out">Out of Stock</option>
+          </select>
+        </label>
+        <label>
+          Sort
+          <select value={sortOption} onChange={(event) => setSortOption(event.target.value)}>
+            <option value="newest">Newest</option>
+            <option value="price_asc">Price Low to High</option>
+            <option value="price_desc">Price High to Low</option>
+          </select>
+        </label>
       </div>
 
       <div className="products-tabs">

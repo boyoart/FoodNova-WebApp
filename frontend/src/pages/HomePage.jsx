@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, ChevronLeft, ChevronRight, Headphones, Lock, ShoppingCart } from 'lucide-react'
+import { Bell, ChevronLeft, ChevronRight, FileText, Headphones, Lock, MessageCircle, PackageCheck, ReceiptText, ShoppingCart, Truck } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { packsAPI, productsAPI } from '../services/api'
+import { useCartStore } from '../store/cartStore'
+import { buildWhatsAppLink } from '../utils/contactUtils'
+import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
 import './HomePage.css'
 
 const heroSlides = [
@@ -35,6 +40,10 @@ const heroSlides = [
 
 export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
+  const [featuredProducts, setFeaturedProducts] = useState([])
+  const [featuredPacks, setFeaturedPacks] = useState([])
+  const [storeError, setStoreError] = useState('')
+  const { items: cartItems, addItem } = useCartStore()
   const slide = heroSlides[activeSlide]
 
   useEffect(() => {
@@ -45,8 +54,72 @@ export default function HomePage() {
     return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    const loadFeaturedStorefront = async () => {
+      try {
+        const [productsRes, packsRes] = await Promise.allSettled([
+          productsAPI.getAll(),
+          packsAPI.getAll(),
+        ])
+        if (productsRes.status === 'fulfilled') {
+          setFeaturedProducts((productsRes.value.data || []).slice(0, 6).map((item) => normalizeStoreItem(item, 'product')))
+        }
+        if (packsRes.status === 'fulfilled') {
+          setFeaturedPacks((packsRes.value.data || []).slice(0, 3).map((item) => normalizeStoreItem(item, 'pack')))
+        }
+        if (productsRes.status === 'rejected' && packsRes.status === 'rejected') {
+          setStoreError('Products are temporarily unavailable. Please check back shortly.')
+        }
+      } catch {
+        setStoreError('Products are temporarily unavailable. Please check back shortly.')
+      }
+    }
+
+    loadFeaturedStorefront()
+  }, [])
+
   const goPrevious = () => setActiveSlide((current) => (current - 1 + heroSlides.length) % heroSlides.length)
   const goNext = () => setActiveSlide((current) => (current + 1) % heroSlides.length)
+  const normalizeStoreItem = (item, itemType = 'product') => {
+    const name = item?.name || item?.product_name || 'FoodNova Item'
+    const price = Number(item?.price || item?.unit_price || 0)
+    const stock = Number(item?.stock_qty ?? item?.stock ?? 999)
+    return {
+      ...item,
+      name,
+      product_name: name,
+      price,
+      unit_price: price,
+      stock,
+      stock_qty: stock,
+      is_out_of_stock: itemType !== 'pack' && (item?.is_out_of_stock === true || stock <= 0),
+      low_stock: itemType !== 'pack' && (item?.low_stock === true || (stock > 0 && stock <= Number(item?.low_stock_threshold || 5))),
+      type: item?.type || item?.item_type || itemType,
+      item_type: item?.item_type || item?.type || itemType,
+      image_url: item?.image_url || item?.image || '/placeholder.png',
+    }
+  }
+
+  const addFeaturedToCart = (item) => {
+    const normalized = normalizeStoreItem(item, item.type || item.item_type || 'product')
+    if (normalized.type !== 'pack' && normalized.is_out_of_stock) {
+      toast.error('This item is out of stock')
+      return
+    }
+    if (normalized.type !== 'pack') {
+      const existingQty = cartItems.find((cartItem) => cartItem.id === normalized.id && (cartItem.type || cartItem.item_type || 'product') !== 'pack')?.quantity || 0
+      if (existingQty + 1 > normalized.stock_qty) {
+        toast.error(`Only ${normalized.stock_qty} left in stock`)
+        return
+      }
+    }
+    addItem(normalized)
+    toast.success('Added to cart!')
+  }
+
+  const openWhatsApp = () => {
+    window.open(buildWhatsAppLink('Hello FoodNova, I want to order foodstuff.'), '_blank', 'noopener,noreferrer')
+  }
 
   return (
     <div className="home-page">
@@ -122,12 +195,111 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="home-store-section">
+        <div className="section-heading">
+          <div>
+            <h2>Popular Foodstuff</h2>
+            <p>Shop everyday essentials and reliable food packs from FoodNova.</p>
+          </div>
+          <Link to="/products">View All Products</Link>
+        </div>
+        {storeError && <p className="home-store-error">{storeError}</p>}
+        {featuredProducts.length > 0 && (
+          <div className="home-product-grid">
+            {featuredProducts.map((product) => (
+              <article className="home-product-card" key={`featured-product-${product.id}`}>
+                <div className="home-product-image">
+                  <img src={getImageUrl(product)} alt={product.name} onError={handleImageError} />
+                  {product.is_out_of_stock && <span className="stock-ribbon out">Out of Stock</span>}
+                  {product.low_stock && !product.is_out_of_stock && <span className="stock-ribbon low">Only {product.stock_qty} left</span>}
+                </div>
+                <div className="home-product-body">
+                  <h3>{product.name}</h3>
+                  <p>{formatPrice(product.price)}</p>
+                  <button type="button" onClick={() => addFeaturedToCart(product)} disabled={product.is_out_of_stock}>
+                    {product.is_out_of_stock ? 'Out of Stock' : 'Add to Cart'}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        {!storeError && featuredProducts.length === 0 && <p className="home-store-error">Popular products will appear here soon.</p>}
+      </section>
+
+      {featuredPacks.length > 0 && (
+        <section className="home-store-section">
+          <div className="section-heading">
+            <div>
+              <h2>FoodNova Food Packs</h2>
+              <p>Curated foodstuff packages for homes, families, and bulk needs.</p>
+            </div>
+            <Link to="/products">Explore Food Packs</Link>
+          </div>
+          <div className="home-pack-grid">
+            {featuredPacks.map((pack) => (
+              <article className="home-pack-card" key={`featured-pack-${pack.id}`}>
+                <img src={getImageUrl(pack)} alt={pack.name} onError={handleImageError} />
+                <div>
+                  <h3>{pack.name}</h3>
+                  <p>{pack.description || 'A curated FoodNova package for convenient restocking.'}</p>
+                  <strong>{formatPrice(pack.price)}</strong>
+                  <button type="button" onClick={() => addFeaturedToCart(pack)}>Shop Pack</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="how-it-works">
+        <div className="section-heading centered">
+          <div>
+            <h2>How FoodNova Works</h2>
+            <p>From cart to delivery, every step is built for clarity.</p>
+          </div>
+        </div>
+        <div className="steps-grid">
+          {[
+            ['Shop Products', 'Browse foodstuff, groceries, and food packs.', ShoppingCart],
+            ['Place Your Order', 'Add items to cart and enter your delivery details.', PackageCheck],
+            ['Pay & Upload Receipt', 'Transfer to FoodNova OPay account and upload JPG, PNG, WEBP, or PDF receipt.', ReceiptText],
+            ['Track Delivery', 'Get updates, invoice, rider info, and delivery confirmation.', Truck],
+          ].map(([title, text, Icon], index) => (
+            <article className="step-card" key={title}>
+              <span>{index + 1}</span>
+              <Icon size={26} />
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="trust-section">
+        <h2>Why Customers Choose FoodNova</h2>
+        <div className="trust-grid">
+          {[
+            ['Quality Foodstuff', ShoppingCart],
+            ['Secure Payment Flow', Lock],
+            ['Order Tracking', PackageCheck],
+            ['WhatsApp Support', MessageCircle],
+            ['Invoice & Receipt', FileText],
+            ['Delivery Updates', Truck],
+          ].map(([label, Icon]) => (
+            <div className="trust-badge" key={label}><Icon size={20} /> {label}</div>
+          ))}
+        </div>
+      </section>
+
       <section className="cta">
-        <h2>Ready to Restock with FoodNova?</h2>
-        <p>Shop fresh staples, food packs, and everyday essentials with clear order updates.</p>
-        <Link to="/products" className="btn btn-primary btn-large">
-          Browse Products Now
-        </Link>
+        <h2>Ready to stock your home?</h2>
+        <p>Order quality foodstuff from FoodNova and track every step from payment to delivery.</p>
+        <div className="cta-actions">
+          <Link to="/products" className="btn btn-primary btn-large">Shop Products</Link>
+          <Link to="/tracking" className="btn btn-secondary btn-large">Track Order</Link>
+          <button type="button" className="btn btn-light btn-large" onClick={openWhatsApp}>Chat on WhatsApp</button>
+        </div>
       </section>
     </div>
   )
