@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="FoodNova Quality Foodstuff Reliable Supply">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#087A34"/>
+      <stop offset="1" stop-color="#103820"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="70%" cy="20%" r="65%">
+      <stop offset="0" stop-color="#FFD23F" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#FFD23F" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <circle cx="1010" cy="96" r="170" fill="#A7D948" opacity="0.25"/>
+  <circle cx="160" cy="532" r="150" fill="#FFD23F" opacity="0.18"/>
+  <rect x="72" y="76" width="1056" height="478" rx="38" fill="rgba(255,255,255,0.09)" stroke="rgba(255,255,255,0.22)" stroke-width="2"/>
+  <text x="118" y="190" fill="#FFD23F" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800">FoodNova</text>
+  <text x="118" y="296" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="900">Quality Foodstuff.</text>
+  <text x="118" y="382" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="900">Reliable Supply.</text>
+  <text x="118" y="462" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="500">Secure payment • Order tracking • Delivery updates</text>
+  <text x="118" y="512" fill="#DDE8DD" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">foodnova.com.ng</text>
+</svg>

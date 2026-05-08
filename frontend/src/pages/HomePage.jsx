@@ -6,11 +6,11 @@ import './HomePage.css'
 const heroSlides = [
   {
     headline: 'Quality Foodstuff. Reliable Supply.',
-    subtext: 'Fresh groceries, food packs, and everyday essentials delivered with convenience.',
+    subtext: 'Shop essential foodstuff, groceries, and curated food packs with secure payment, receipt upload, order tracking, and reliable customer support.',
     primary: 'Shop Products',
     primaryTo: '/products',
-    secondary: 'View Food Packs',
-    secondaryTo: '/products',
+    secondary: 'Track Order',
+    secondaryTo: '/tracking',
     image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=900&h=650&fit=crop',
   },
   {
@@ -27,8 +27,8 @@ const heroSlides = [
     subtext: 'Track your order, upload payment receipts, and receive delivery updates from FoodNova.',
     primary: 'View Products',
     primaryTo: '/products',
-    secondary: 'My Orders',
-    secondaryTo: '/orders',
+    secondary: 'Track Order',
+    secondaryTo: '/tracking',
     image: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=900&h=650&fit=crop',
   },
 ]

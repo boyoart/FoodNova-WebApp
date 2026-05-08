@@ -7,10 +7,12 @@ export default function NotFoundPage() {
       <div className="not-found-content">
         <h1 className="not-found-code">404</h1>
         <h2>Page Not Found</h2>
-        <p>Sorry, the page you're looking for doesn't exist.</p>
-        <Link to="/" className="btn btn-primary">
-          Back to Home
-        </Link>
+        <p>The page you are looking for does not exist or may have moved.</p>
+        <div className="not-found-actions">
+          <Link to="/" className="not-found-btn primary">Back Home</Link>
+          <Link to="/products" className="not-found-btn">Shop Products</Link>
+          <Link to="/tracking" className="not-found-btn">Track Order</Link>
+        </div>
       </div>
     </div>
   )
