@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, ChevronLeft, ChevronRight, FileText, Headphones, Lock, MessageCircle, PackageCheck, ReceiptText, ShoppingCart, Truck } from 'lucide-react'
+import { Bell, ChevronLeft, ChevronRight, FileText, Headphones, Lock, MessageCircle, PackageCheck, ShoppingCart, Truck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { packsAPI, productsAPI } from '../services/api'
 import { useCartStore } from '../store/cartStore'
@@ -263,7 +263,7 @@ export default function HomePage() {
           {[
             ['Shop Products', 'Browse foodstuff, groceries, and food packs.', ShoppingCart],
             ['Place Your Order', 'Add items to cart and enter your delivery details.', PackageCheck],
-            ['Pay & Upload Receipt', 'Transfer to FoodNova OPay account and upload JPG, PNG, WEBP, or PDF receipt.', ReceiptText],
+            ['Pay & Upload Receipt', 'Transfer to FoodNova OPay account and upload JPG, PNG, WEBP, or PDF receipt.', FileText],
             ['Track Delivery', 'Get updates, invoice, rider info, and delivery confirmation.', Truck],
           ].map(([title, text, Icon], index) => (
             <article className="step-card" key={title}>
