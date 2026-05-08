@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from uuid import uuid4
+import base64
 import csv
+import hashlib
+import hmac
 import io
 import json
 import os
@@ -580,6 +583,16 @@ def _password_matches(plain_password: str, stored_password: str) -> bool:
     if not stored_password:
         return False
 
+    if str(stored_password).startswith("pbkdf2_sha256$"):
+        try:
+            _, iterations, salt_b64, digest_b64 = str(stored_password).split("$", 3)
+            salt = base64.b64decode(salt_b64.encode("utf-8"))
+            expected = base64.b64decode(digest_b64.encode("utf-8"))
+            actual = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, int(iterations))
+            return hmac.compare_digest(actual, expected)
+        except Exception:
+            return False
+
     if pwd_context and str(stored_password).startswith(("$2a$", "$2b$", "$2y$")):
         try:
             return pwd_context.verify(plain_password, stored_password)
@@ -596,7 +609,14 @@ def _hash_new_password(password: str) -> str:
         except Exception:
             pass
 
-    return password
+    iterations = 260000
+    salt = os.urandom(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return "pbkdf2_sha256${}${}${}".format(
+        iterations,
+        base64.b64encode(salt).decode("utf-8"),
+        base64.b64encode(digest).decode("utf-8"),
+    )
 
 
 def auth_response(message: str, user: dict, token: str) -> dict:
@@ -3717,7 +3737,7 @@ def create_admin_user(payload: AdminUserPayload, request: Request):
                 full_name=full_name,
                 email=email,
                 phone=payload.phone or "",
-                password=_hash_password(password),
+                password=_hash_new_password(password),
                 role="admin",
                 admin_role=admin_role,
                 permissions_json=json_dump(permissions),
@@ -3793,7 +3813,7 @@ def reset_admin_password(admin_id: int, payload: AdminPasswordResetPayload, requ
         target = db.query(DBUser).filter(DBUser.id == admin_id, DBUser.role == "admin").first()
         if not target:
             raise HTTPException(status_code=404, detail="Admin user not found")
-        target.password = _hash_password(password)
+        target.password = _hash_new_password(password)
         target.updated_at = datetime.utcnow()
         db.commit()
         data = admin_user_to_dict(target)
