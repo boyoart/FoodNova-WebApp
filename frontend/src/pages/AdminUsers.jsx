@@ -154,9 +154,36 @@ export default function AdminUsers() {
 
   const submitForm = async (event) => {
     event.preventDefault()
-    if (modalMode === 'create' && (!form.full_name.trim() || !form.email.trim() || form.password.length < 6 || form.password !== form.confirm_password)) {
-      toast.error('Please complete all required fields and confirm passwords match')
-      return
+    const selectedPermissions = Array.isArray(form.permissions) ? form.permissions : []
+    if (modalMode === 'create') {
+      if (!form.full_name.trim()) {
+        toast.error('Full name is required.')
+        return
+      }
+      if (!form.email.trim()) {
+        toast.error('Email is required.')
+        return
+      }
+      if (!form.admin_role) {
+        toast.error('Admin role is required.')
+        return
+      }
+      if (!form.password) {
+        toast.error('Password is required.')
+        return
+      }
+      if (form.password.length < 6) {
+        toast.error('Password must be at least 6 characters.')
+        return
+      }
+      if (form.password !== form.confirm_password) {
+        toast.error('Passwords do not match.')
+        return
+      }
+      if (form.admin_role === 'custom' && !selectedPermissions.length) {
+        toast.error('Select at least one permission for a custom role.')
+        return
+      }
     }
     if (modalMode === 'password' && (form.password.length < 6 || form.password !== form.confirm_password)) {
       toast.error('Password must be at least 6 characters and match confirmation')
@@ -166,10 +193,17 @@ export default function AdminUsers() {
       setSaving(true)
       if (modalMode === 'create') {
         await adminAPI.createAdminUser({
-          ...form,
-          permissions: form.permissions,
+          full_name: form.full_name,
+          name: form.full_name,
+          email: form.email,
+          phone: form.phone || '',
+          password: form.password,
+          confirm_password: form.confirm_password,
+          admin_role: form.admin_role || 'viewer',
+          permissions: selectedPermissions,
+          is_active: form.is_active !== false,
         })
-        toast.success('Admin user created')
+        toast.success('Admin user created successfully')
       } else if (modalMode === 'edit') {
         await adminAPI.updateAdminUser(selectedAdmin.id, {
           full_name: form.full_name,
@@ -189,7 +223,13 @@ export default function AdminUsers() {
       closeModal()
       loadAdmins()
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Admin user action failed')
+      const message =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        error?.message ||
+        (modalMode === 'create' ? 'Admin user creation failed.' : 'Admin user action failed.')
+      console.error(modalMode === 'create' ? 'Create admin failed:' : 'Admin user action failed:', error?.response?.data || error)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -211,7 +251,9 @@ export default function AdminUsers() {
   }
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
-  const canManageAdmins = admin?.admin_role === 'super_admin' || admin?.permissions?.includes('admins:manage')
+  const adminPermissions = Array.isArray(admin?.permissions) ? admin.permissions : []
+  const isSuperAdminDisplay = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || adminPermissions.length === 0))
+  const canManageAdmins = isSuperAdminDisplay || adminPermissions.includes('admins:manage')
   const activePermissions = form.permissions || []
   const isCreateMode = modalMode === 'create'
   const isPasswordMode = modalMode === 'password'
@@ -219,7 +261,7 @@ export default function AdminUsers() {
   const modalSubtitle = isCreateMode ? 'Add a new admin and assign permissions' : selectedAdmin?.email || 'Update admin account access.'
   const formInvalid = isPasswordMode
     ? form.password.length < 6 || form.password !== form.confirm_password
-    : !form.full_name.trim() || !form.email.trim() || (isCreateMode && (form.password.length < 6 || form.password !== form.confirm_password))
+    : !form.full_name.trim() || !form.email.trim() || !form.admin_role || (isCreateMode && (form.password.length < 6 || form.password !== form.confirm_password || (form.admin_role === 'custom' && !activePermissions.length)))
   const setRolePreset = (role) => {
     setForm({ ...form, admin_role: role, permissions: ROLE_PERMISSIONS[role] || form.permissions })
   }
@@ -321,6 +363,12 @@ export default function AdminUsers() {
                         <label>Phone<input placeholder="+2348000000000" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
                       </section>
 
+                      <section className="admin-form-card">
+                        <h3>Role</h3>
+                        <label>Admin Role<select value={form.admin_role} onChange={(event) => setRolePreset(event.target.value)} required>{ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                        <label className="admin-user-toggle"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /> <span>Active admin account</span></label>
+                      </section>
+
                       {modalMode === 'create' && (
                         <section className="admin-form-card">
                           <h3>Security</h3>
@@ -332,12 +380,6 @@ export default function AdminUsers() {
                     </div>
 
                     <div className="admin-form-column">
-                      <section className="admin-form-card">
-                        <h3>Role</h3>
-                        <label>Admin Role<select value={form.admin_role} onChange={(event) => setRolePreset(event.target.value)}>{ROLE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                        <label className="admin-user-toggle"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /> <span>Active admin account</span></label>
-                      </section>
-
                       <section className="admin-form-card permissions-section">
                         <div className="permissions-heading">
                           <div>

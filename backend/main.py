@@ -325,13 +325,17 @@ class NotificationUpdatePayload(BaseModel):
 
 
 class AdminUserPayload(BaseModel):
-    full_name: str
-    email: EmailStr
+    full_name: Optional[str] = None
+    name: Optional[str] = None
+    fullName: Optional[str] = None
+    email: Optional[EmailStr] = None
     phone: Optional[str] = ""
     password: str
     confirm_password: Optional[str] = None
+    confirmPassword: Optional[str] = None
     admin_role: Optional[str] = "viewer"
     permissions: Optional[list] = None
+    permissions_json: Optional[object] = None
     is_active: Optional[bool] = True
 
 
@@ -3687,21 +3691,27 @@ def reject_cancellation_request(request_id: int, payload: CancellationReviewPayl
 @app.post("/admin/users")
 def create_admin_user(payload: AdminUserPayload, request: Request):
     admin = require_permission(request, "admins:manage")
-    full_name = (payload.full_name or "").strip()
-    email = payload.email.lower().strip()
+    full_name = (payload.full_name or payload.name or payload.fullName or "").strip()
+    email = str(payload.email or "").lower().strip()
     password = payload.password or ""
+    confirm_password = payload.confirm_password or payload.confirmPassword
     if not full_name:
-        raise HTTPException(status_code=400, detail="Full name is required")
+        raise HTTPException(status_code=400, detail="Full name is required.")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required.")
     if len(password) < 6:
-        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
-    if payload.confirm_password is not None and payload.confirm_password != password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-    admin_role, permissions = validate_assignable_permissions(admin, payload.admin_role, payload.permissions)
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters.")
+    if confirm_password is not None and confirm_password != password:
+        raise HTTPException(status_code=400, detail="Passwords do not match.")
+    raw_permissions = payload.permissions
+    if raw_permissions is None and payload.permissions_json is not None:
+        raw_permissions = json_load(payload.permissions_json, payload.permissions_json) if isinstance(payload.permissions_json, str) else payload.permissions_json
+    admin_role, permissions = validate_assignable_permissions(admin, payload.admin_role or "viewer", raw_permissions)
 
     db = SessionLocal()
     try:
         if get_db_user_by_email(db, email):
-            raise HTTPException(status_code=400, detail="Email already exists")
+            raise HTTPException(status_code=400, detail="Email already exists.")
         new_admin = DBUser(
             full_name=full_name,
             email=email,
