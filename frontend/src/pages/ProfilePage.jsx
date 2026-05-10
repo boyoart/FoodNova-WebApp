@@ -1,7 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Home, KeyRound, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
+import { Fingerprint, Home, KeyRound, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
 import { authAPI, profileAPI, resolveMediaUrl } from '../services/api'
+import {
+  checkBiometricSupport,
+  clearBiometricSession,
+  isBiometricEnabled,
+  isNativeApp,
+  saveBiometricSession,
+  verifyBiometric,
+} from '../utils/biometricAuth'
 import './ProfilePage.css'
 
 const emptyAddress = {
@@ -29,6 +38,8 @@ const getInitials = (name = 'User') =>
     .toUpperCase() || 'U'
 
 export default function ProfilePage() {
+  const location = useLocation()
+  const biometricSectionRef = useRef(null)
   const [profile, setProfile] = useState({ full_name: '', email: '', phone: '', avatar_url: '' })
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -45,12 +56,31 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [biometricEnabled, setBiometricEnabledState] = useState(isBiometricEnabled())
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [biometricMessage, setBiometricMessage] = useState('')
+  const [biometricBusy, setBiometricBusy] = useState(false)
 
   const hasGoogleKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY)
 
   useEffect(() => {
     loadProfile()
+    checkBiometricSupport().then((result) => {
+      setBiometricAvailable(result.supported)
+      setBiometricMessage(result.reason || '')
+    })
   }, [])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('highlight') !== 'biometric') return undefined
+    const timer = setTimeout(() => {
+      biometricSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      biometricSectionRef.current?.classList.add('biometric-highlight')
+      setTimeout(() => biometricSectionRef.current?.classList.remove('biometric-highlight'), 2600)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [location.search, loading])
 
   useEffect(() => () => {
     if (avatarPreview) URL.revokeObjectURL(avatarPreview)
@@ -244,6 +274,55 @@ export default function ProfilePage() {
     }
   }
 
+  const enableBiometrics = async () => {
+    try {
+      setBiometricBusy(true)
+      const support = await checkBiometricSupport()
+      setBiometricAvailable(support.supported)
+      setBiometricMessage(support.reason || '')
+      if (!support.supported) {
+        toast.error(support.reason || 'Biometric login is not available on this device.')
+        return
+      }
+
+      const verified = await verifyBiometric()
+      if (!verified.success) {
+        toast.error('Biometric setup failed. Please try again.')
+        return
+      }
+
+      const token = localStorage.getItem('token')
+      const storedUser = JSON.parse(localStorage.getItem('user') || 'null')
+      if (!token || !storedUser) {
+        toast.error('Please login again before enabling biometric login.')
+        return
+      }
+
+      await saveBiometricSession({ token, user: { ...storedUser, ...profile } })
+      setBiometricEnabledState(true)
+      toast.success('Biometric login enabled.')
+    } catch (error) {
+      toast.error('Biometric setup failed. Please try again.')
+      console.error(error)
+    } finally {
+      setBiometricBusy(false)
+    }
+  }
+
+  const disableBiometrics = async () => {
+    try {
+      setBiometricBusy(true)
+      await clearBiometricSession()
+      setBiometricEnabledState(false)
+      toast.success('Biometric login disabled.')
+    } catch (error) {
+      toast.error('Failed to disable biometric login')
+      console.error(error)
+    } finally {
+      setBiometricBusy(false)
+    }
+  }
+
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }))
 
   const formatAddress = (address) =>
@@ -395,6 +474,38 @@ export default function ProfilePage() {
                 <KeyRound size={18} /> {changingPassword ? 'Changing...' : 'Change Password'}
               </button>
             </form>
+          </section>
+
+          <section className="profile-panel biometric-panel" ref={biometricSectionRef}>
+            <div className="section-heading">
+              <Fingerprint size={20} />
+              <div>
+                <h2>Biometric Login</h2>
+                <p>Use fingerprint or face unlock to access FoodNova faster on this device.</p>
+              </div>
+            </div>
+
+            {!isNativeApp() && (
+              <div className="biometric-note">Biometric login is available only in the mobile app.</div>
+            )}
+
+            {isNativeApp() && !biometricAvailable && (
+              <div className="biometric-note">{biometricMessage || 'Biometric login is not available on this device.'}</div>
+            )}
+
+            <button
+              type="button"
+              className={biometricEnabled ? 'secondary-action biometric-action' : 'primary-action biometric-action'}
+              onClick={biometricEnabled ? disableBiometrics : enableBiometrics}
+              disabled={biometricBusy || !isNativeApp() || !biometricAvailable}
+            >
+              <Fingerprint size={18} />
+              {biometricBusy
+                ? 'Checking...'
+                : biometricEnabled
+                  ? 'Disable Biometric Login'
+                  : 'Enable Biometric Login'}
+            </button>
           </section>
         </div>
 

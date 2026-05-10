@@ -249,7 +249,9 @@ class RegisterPayload(BaseModel):
 
 
 class LoginPayload(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    auth_method: Optional[str] = None
     password: str
 
 
@@ -1462,6 +1464,13 @@ def get_db_user_by_email(db, email: str):
     return db.query(DBUser).filter(DBUser.email == str(email).strip().lower()).first()
 
 
+def get_db_user_by_phone(db, phone: str):
+    normalized = str(phone or "").strip()
+    if not normalized:
+        return None
+    return db.query(DBUser).filter(DBUser.phone == normalized).first()
+
+
 def ensure_profile(db, user: DBUser) -> DBProfile:
     profile = db.query(DBProfile).filter(DBProfile.user_id == user.id).first()
     if profile:
@@ -1851,13 +1860,14 @@ def register(payload: RegisterPayload):
 
 @app.post("/auth/login")
 def login(payload: LoginPayload, request: Request):
-    email = payload.email.lower().strip()
+    email = payload.email.lower().strip() if payload.email else ""
+    phone = (payload.phone or "").strip()
     db = SessionLocal()
     try:
-        user = get_db_user_by_email(db, email)
+        user = get_db_user_by_email(db, email) if email else get_db_user_by_phone(db, phone)
 
         if not user or not _password_matches(payload.password, user.password):
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+            raise HTTPException(status_code=401, detail="Invalid login credentials")
         if (user.role or "customer") == "admin":
             raise HTTPException(status_code=403, detail="Please use the admin login page")
 
@@ -1881,6 +1891,8 @@ def login(payload: LoginPayload, request: Request):
 
 @app.post("/auth/admin/login")
 def admin_login(payload: LoginPayload, request: Request):
+    if not payload.email:
+        raise HTTPException(status_code=400, detail="Admin email is required")
     email = payload.email.lower().strip()
     db = SessionLocal()
     try:

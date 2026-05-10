@@ -120,3 +120,57 @@
   color: #155724;
   border: 1px solid #155724;
 }
+
+.biometric-login-btn {
+  margin-bottom: 1rem;
+}
+
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.auth-modal {
+  width: min(100%, 380px);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+.auth-modal-icon {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #155724;
+}
+
+.auth-modal h2 {
+  margin: 0;
+  color: var(--fn-heading);
+  font-size: 1.35rem;
+}
+
+.auth-modal p {
+  margin: 0.75rem 0 0;
+  color: var(--fn-muted);
+  line-height: 1.45;
+}
+
+.auth-modal-actions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
