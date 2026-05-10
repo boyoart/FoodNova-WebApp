@@ -25,6 +25,7 @@ export default function LoginPage() {
     try {
       setLoading(true)
       const res = await authAPI.login(formData)
+      localStorage.removeItem('guestMode')
       login(res.data.user, res.data.access_token)
       toast.success('Login successful!')
       navigate('/')

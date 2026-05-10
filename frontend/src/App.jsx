@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -10,6 +10,8 @@ import ProductsPage from './pages/ProductsPage'
 import CartPage from './pages/CartPage'
 import CheckoutPage from './pages/CheckoutPage'
 import LoginPage from './pages/LoginPage'
+import OnboardingPage from './pages/OnboardingPage'
+import AuthLandingPage from './pages/AuthLandingPage'
 import RegisterPage from './pages/RegisterPage'
 import OrderHistoryPage from './pages/OrderHistoryPage'
 import AdminLoginPage from './pages/AdminLoginPage'
@@ -37,6 +39,23 @@ import InboxPage from './pages/InboxPage'
 import InvoicePage from './pages/InvoicePage'
 import './modal-scroll-fix.css'
 
+
+function RootEntry() {
+  const hasToken = !!localStorage.getItem('token')
+  const isGuest = localStorage.getItem('guestMode') === 'true'
+  const onboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true'
+
+  if (!onboardingCompleted) {
+    return <Navigate to="/onboarding" replace />
+  }
+
+  if (!hasToken && !isGuest) {
+    return <Navigate to="/auth" replace />
+  }
+
+  return <HomePage />
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -45,7 +64,9 @@ function App() {
           <Navbar />
           <main style={{ flex: 1, paddingTop: '60px' }}>
             <Routes>
-              <Route path="/" element={<HomePage />} />
+              <Route path="/" element={<RootEntry />} />
+              <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="/auth" element={<AuthLandingPage />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />

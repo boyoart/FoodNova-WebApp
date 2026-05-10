@@ -71,3 +71,52 @@
 .auth-footer a:hover {
   text-decoration: underline;
 }
+
+.onboarding-page {
+  background: linear-gradient(180deg, #f8fff6 0%, #ffffff 100%);
+}
+
+.onboarding-card,
+.auth-landing-card {
+  text-align: center;
+}
+
+.onboarding-progress {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d1d5db;
+}
+
+.onboarding-dot.active {
+  width: 20px;
+  background: #155724;
+}
+
+.onboarding-actions,
+.auth-landing-actions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.auth-landing-actions .btn,
+.onboarding-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: #155724;
+  border: 1px solid #155724;
+}
