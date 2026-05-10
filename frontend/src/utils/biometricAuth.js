@@ -1,4 +1,5 @@
-import { Capacitor, registerPlugin } from '@capacitor/core'
+import { Capacitor } from '@capacitor/core'
+import { NativeBiometric } from '@capgo/capacitor-native-biometric'
 
 export const BIOMETRIC_KEYS = {
   enabled: 'foodnova_biometric_enabled',
@@ -6,9 +7,7 @@ export const BIOMETRIC_KEYS = {
   user: 'foodnova_biometric_user',
 }
 
-const NativeBiometric = registerPlugin('NativeBiometric')
-const BiometricAuth = registerPlugin('BiometricAuth')
-const SecureStoragePlugin = registerPlugin('SecureStoragePlugin')
+const BIOMETRIC_SERVER = 'ng.com.foodnova.app.customer-session'
 
 export const isNativeApp = () => {
   try {
@@ -19,28 +18,15 @@ export const isNativeApp = () => {
 }
 
 const setSecureValue = async (key, value) => {
-  try {
-    await SecureStoragePlugin.set({ key, value })
-  } catch {
-    localStorage.setItem(key, value)
-  }
+  localStorage.setItem(key, value)
 }
 
 const getSecureValue = async (key) => {
-  try {
-    const result = await SecureStoragePlugin.get({ key })
-    return result?.value || null
-  } catch {
-    return localStorage.getItem(key)
-  }
+  return localStorage.getItem(key)
 }
 
 const removeSecureValue = async (key) => {
-  try {
-    await SecureStoragePlugin.remove({ key })
-  } catch {
-    localStorage.removeItem(key)
-  }
+  localStorage.removeItem(key)
 }
 
 export const isBiometricEnabled = () => localStorage.getItem(BIOMETRIC_KEYS.enabled) === 'true'
@@ -51,12 +37,33 @@ export const setBiometricEnabled = (enabled) => {
 
 export const hasBiometricSession = async () => {
   if (!isBiometricEnabled()) return false
+  if (isNativeApp()) {
+    try {
+      const result = await NativeBiometric.isCredentialsSaved({ server: BIOMETRIC_SERVER })
+      return Boolean(result?.isSaved)
+    } catch {
+      return false
+    }
+  }
   const token = await getSecureValue(BIOMETRIC_KEYS.token)
   return Boolean(token)
 }
 
 export const getBiometricUser = async () => {
+  if (isNativeApp()) {
+    try {
+      const credentials = await NativeBiometric.getCredentials({ server: BIOMETRIC_SERVER })
+      return parseBiometricUser(credentials?.username)
+    } catch {
+      return null
+    }
+  }
+
   const value = await getSecureValue(BIOMETRIC_KEYS.user)
+  return parseBiometricUser(value)
+}
+
+const parseBiometricUser = (value) => {
   if (!value) return null
   try {
     return JSON.parse(value)
@@ -78,18 +85,9 @@ export const checkBiometricSupport = async () => {
       reason: supported ? '' : 'Biometric login is not available on this device.',
     }
   } catch {
-    try {
-      const result = await BiometricAuth.checkBiometry()
-      const supported = Boolean(result?.isAvailable || result?.available || result?.strongBiometryIsAvailable)
-      return {
-        supported,
-        reason: supported ? '' : 'Biometric login is not available on this device.',
-      }
-    } catch {
-      return {
-        supported: false,
-        reason: 'Biometric login is not configured for this mobile build.',
-      }
+    return {
+      supported: false,
+      reason: 'Biometric login is not configured for this mobile build.',
     }
   }
 }
@@ -104,37 +102,48 @@ export const verifyBiometric = async () => {
       subtitle: 'Unlock FoodNova faster',
       description: 'Confirm your fingerprint or face unlock to continue.',
       reason: 'Confirm your fingerprint or face unlock to continue.',
+      useFallback: true,
     })
     return { supported: true, success: true }
   } catch {
-    try {
-      await BiometricAuth.authenticate({
-        reason: 'Confirm your fingerprint or face unlock to continue.',
-        cancelTitle: 'Use password',
-        allowDeviceCredential: true,
-      })
-      return { supported: true, success: true }
-    } catch {
-      return { supported: true, success: false }
-    }
+    return { supported: true, success: false }
   }
 }
 
 export const saveBiometricSession = async ({ token, user }) => {
   if (!token || !user) throw new Error('Missing customer session')
-  await setSecureValue(BIOMETRIC_KEYS.token, token)
-  await setSecureValue(BIOMETRIC_KEYS.user, JSON.stringify({
+  const biometricUser = {
     id: user.id,
     full_name: user.full_name || user.fullName || user.name || '',
     name: user.name || user.full_name || user.fullName || '',
     email: user.email || '',
     phone: user.phone || '',
     avatar_url: user.avatar_url || '',
-  }))
+  }
+
+  if (isNativeApp()) {
+    await NativeBiometric.setCredentials({
+      username: JSON.stringify(biometricUser),
+      password: token,
+      server: BIOMETRIC_SERVER,
+    })
+  } else {
+    await setSecureValue(BIOMETRIC_KEYS.token, token)
+    await setSecureValue(BIOMETRIC_KEYS.user, JSON.stringify(biometricUser))
+  }
+
   setBiometricEnabled(true)
 }
 
 export const restoreBiometricSession = async () => {
+  if (isNativeApp()) {
+    const credentials = await NativeBiometric.getCredentials({ server: BIOMETRIC_SERVER })
+    const token = credentials?.password
+    const user = parseBiometricUser(credentials?.username)
+    if (!token || !user) return null
+    return { token, user }
+  }
+
   const token = await getSecureValue(BIOMETRIC_KEYS.token)
   const user = await getBiometricUser()
   if (!token || !user) return null
@@ -142,7 +151,11 @@ export const restoreBiometricSession = async () => {
 }
 
 export const clearBiometricSession = async () => {
-  await removeSecureValue(BIOMETRIC_KEYS.token)
-  await removeSecureValue(BIOMETRIC_KEYS.user)
+  if (isNativeApp()) {
+    await NativeBiometric.deleteCredentials({ server: BIOMETRIC_SERVER }).catch(() => null)
+  } else {
+    await removeSecureValue(BIOMETRIC_KEYS.token)
+    await removeSecureValue(BIOMETRIC_KEYS.user)
+  }
   setBiometricEnabled(false)
 }

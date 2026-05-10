@@ -7,11 +7,11 @@ FoodNova is configured as a Capacitor Android app shell.
 The web/PWA build stays functional without native biometric packages. For Android biometric login, install and sync a Capacitor biometric plugin plus secure storage plugin before building the native app:
 
 ```bash
-npm install capacitor-native-biometric capacitor-secure-storage-plugin
+npm install @capgo/capacitor-native-biometric
 npx cap sync android
 ```
 
-The app looks for the `NativeBiometric` and `SecureStoragePlugin` Capacitor plugins at runtime. If those plugins are missing, biometric controls show a clear unavailable message and normal email/phone login continues to work.
+The app uses `NativeBiometric` from `@capgo/capacitor-native-biometric` for fingerprint/face verification and Android Keystore-backed customer session storage. If the native plugin is missing, biometric controls show a clear unavailable message and normal email/phone login continues to work.
 
 ## App Details
 
