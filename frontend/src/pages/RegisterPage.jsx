@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import { Mail, Lock, User, Phone } from 'lucide-react'
+import { Home, Mail, Lock, User, Phone } from 'lucide-react'
 import './AuthPages.css'
 
 export default function RegisterPage() {
@@ -14,6 +14,7 @@ export default function RegisterPage() {
     name: '',
     email: '',
     phone: '',
+    deliveryAddress: '',
     password: '',
     confirmPassword: '',
   })
@@ -59,6 +60,8 @@ export default function RegisterPage() {
         fullName: formData.name,
         email: formData.email,
         phone: formData.phone,
+        address: formData.deliveryAddress,
+        delivery_address: formData.deliveryAddress,
         password: formData.password,
         confirmPassword: formData.confirmPassword,
         confirm_password: formData.confirmPassword,
@@ -123,7 +126,7 @@ export default function RegisterPage() {
             <div className="form-group">
               <label>
                 <Phone size={18} />
-                Phone
+                Phone Number
               </label>
               <input
                 type="tel"
@@ -132,6 +135,20 @@ export default function RegisterPage() {
                 onChange={handleChange}
                 required
                 placeholder="+2348000000000"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>
+                <Home size={18} />
+                Delivery Address
+              </label>
+              <textarea
+                name="deliveryAddress"
+                value={formData.deliveryAddress}
+                onChange={handleChange}
+                placeholder="Optional delivery address"
+                rows="3"
               />
             </div>
 

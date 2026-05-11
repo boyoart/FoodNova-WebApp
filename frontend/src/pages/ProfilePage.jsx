@@ -493,6 +493,10 @@ export default function ProfilePage() {
               <div className="biometric-note">{biometricMessage || 'Biometric login is not available on this device.'}</div>
             )}
 
+            {isNativeApp() && biometricAvailable && (
+              <div className="biometric-note success">Biometric login is available on this device.</div>
+            )}
+
             <button
               type="button"
               className={biometricEnabled ? 'secondary-action biometric-action' : 'primary-action biometric-action'}

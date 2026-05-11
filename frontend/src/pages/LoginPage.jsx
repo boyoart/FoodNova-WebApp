@@ -69,7 +69,12 @@ export default function LoginPage() {
   const handleBiometricLogin = async () => {
     try {
       setBiometricLoading(true)
-      const verified = await verifyBiometric()
+      const verified = await verifyBiometric({
+        reason: 'Login to FoodNova',
+        title: 'FoodNova Biometric Login',
+        subtitle: 'Verify your identity',
+        description: 'Use fingerprint or face unlock',
+      })
       if (!verified.success) {
         toast.error(verified.reason || 'Biometric login failed. Use email/phone login instead.')
         return

@@ -3,20 +3,21 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
 import './AuthPages.css'
 
-const ONBOARDING_KEY = 'onboardingCompleted'
+const ONBOARDING_KEY = 'foodnova_onboarding_complete'
+const LEGACY_ONBOARDING_KEY = 'onboardingCompleted'
 
 const slides = [
   {
     title: 'Welcome to FoodNova',
-    subtitle: 'Quality foodstuff. Reliable supply.',
+    subtitle: 'Quality Foodstuff. Reliable Supply.',
   },
   {
     title: 'Shop Essentials',
-    subtitle: 'Rice, beans, garri, oil, egusi, and food packs.',
+    subtitle: 'Rice, beans, garri, oil, egusi and everyday groceries.',
   },
   {
     title: 'Track Orders',
-    subtitle: 'Follow payment, delivery, and order progress.',
+    subtitle: 'Follow payment, order processing and delivery updates.',
   },
 ]
 
@@ -28,6 +29,7 @@ export default function OnboardingPage() {
 
   const completeOnboarding = () => {
     localStorage.setItem(ONBOARDING_KEY, 'true')
+    localStorage.setItem(LEGACY_ONBOARDING_KEY, 'true')
     navigate('/auth', { replace: true })
   }
 

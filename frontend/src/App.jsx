@@ -1,5 +1,7 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
+import toast from 'react-hot-toast'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -37,13 +39,21 @@ import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
 import InboxPage from './pages/InboxPage'
 import InvoicePage from './pages/InvoicePage'
+import { useAuthStore } from './store/authStore'
+import {
+  enforceSessionTimeout,
+  SESSION_EXPIRED_EVENT,
+  startSessionWatcher,
+  stopSessionWatcher,
+  updateLastActivity,
+} from './utils/sessionManager'
 import './modal-scroll-fix.css'
 
 
 function RootEntry() {
   const hasToken = !!localStorage.getItem('token')
   const isGuest = localStorage.getItem('guestMode') === 'true'
-  const onboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true'
+  const onboardingCompleted = localStorage.getItem('foodnova_onboarding_complete') === 'true' || localStorage.getItem('onboardingCompleted') === 'true'
 
   if (!onboardingCompleted) {
     return <Navigate to="/onboarding" replace />
@@ -56,11 +66,45 @@ function RootEntry() {
   return <HomePage />
 }
 
+function RequireCustomerAuth({ children }) {
+  const hasToken = !!localStorage.getItem('token')
+  if (!hasToken) return <Navigate to="/auth" replace />
+  return children
+}
+
+function SessionSupervisor() {
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  useEffect(() => {
+    const handleExpired = (event) => {
+      useAuthStore.setState({ user: null, admin: null, isAuthenticated: false, isAdmin: false })
+      toast.error('Session expired. Please log in again.')
+      navigate(event.detail?.role === 'admin' ? '/admin/login' : '/auth', { replace: true })
+    }
+
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired)
+    startSessionWatcher()
+
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired)
+      stopSessionWatcher()
+    }
+  }, [navigate])
+
+  useEffect(() => {
+    if (!enforceSessionTimeout()) updateLastActivity()
+  }, [location.pathname, location.search])
+
+  return null
+}
+
 function App() {
   return (
     <BrowserRouter>
       <ErrorBoundary>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          <SessionSupervisor />
           <Navbar />
           <main style={{ flex: 1, paddingTop: '60px' }}>
             <Routes>
@@ -69,16 +113,16 @@ function App() {
               <Route path="/auth" element={<AuthLandingPage />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/cart" element={<CartPage />} />
-              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/checkout" element={<RequireCustomerAuth><CheckoutPage /></RequireCustomerAuth>} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/orders" element={<OrderHistoryPage />} />
-              <Route path="/orders/:orderId/invoice" element={<InvoicePage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/inbox" element={<InboxPage />} />
-              <Route path="/inbox/*" element={<InboxPage />} />
-              <Route path="/notifications" element={<InboxPage />} />
-              <Route path="/customer/inbox" element={<InboxPage />} />
+              <Route path="/orders" element={<RequireCustomerAuth><OrderHistoryPage /></RequireCustomerAuth>} />
+              <Route path="/orders/:orderId/invoice" element={<RequireCustomerAuth><InvoicePage /></RequireCustomerAuth>} />
+              <Route path="/profile" element={<RequireCustomerAuth><ProfilePage /></RequireCustomerAuth>} />
+              <Route path="/inbox" element={<RequireCustomerAuth><InboxPage /></RequireCustomerAuth>} />
+              <Route path="/inbox/*" element={<RequireCustomerAuth><InboxPage /></RequireCustomerAuth>} />
+              <Route path="/notifications" element={<RequireCustomerAuth><InboxPage /></RequireCustomerAuth>} />
+              <Route path="/customer/inbox" element={<RequireCustomerAuth><InboxPage /></RequireCustomerAuth>} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
@@ -97,8 +141,8 @@ function App() {
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/faq" element={<FAQPage />} />
               <Route path="/policies" element={<PoliciesPage />} />
-              <Route path="/tracking" element={<TrackOrderPage />} />
-              <Route path="/track-order" element={<TrackOrderPage />} />
+              <Route path="/tracking" element={<RequireCustomerAuth><TrackOrderPage /></RequireCustomerAuth>} />
+              <Route path="/track-order" element={<RequireCustomerAuth><TrackOrderPage /></RequireCustomerAuth>} />
               <Route path="/contact" element={<ContactPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>

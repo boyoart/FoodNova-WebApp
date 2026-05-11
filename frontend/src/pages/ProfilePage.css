@@ -303,6 +303,12 @@
   margin-bottom: 1rem;
 }
 
+.biometric-note.success {
+  color: var(--success);
+  background: rgba(6, 168, 125, 0.1);
+  border-color: rgba(6, 168, 125, 0.24);
+}
+
 .biometric-action {
   width: 100%;
 }

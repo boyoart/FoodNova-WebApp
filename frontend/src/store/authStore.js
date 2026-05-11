@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { clearActiveSessionOnly, updateLastActivity } from '../utils/sessionManager'
 
 const safeJsonParse = (key, fallback) => {
   try {
@@ -21,20 +22,19 @@ export const useAuthStore = create((set) => ({
   login: (user, token) => {
     localStorage.setItem('token', token)
     localStorage.setItem('user', JSON.stringify(user))
+    updateLastActivity()
     set({ user, isAuthenticated: true })
   },
 
   adminLogin: (admin, token) => {
     localStorage.setItem('admin_token', token)
     localStorage.setItem('admin', JSON.stringify(admin))
+    updateLastActivity()
     set({ admin, isAdmin: true })
   },
 
   logout: () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    localStorage.removeItem('admin_token')
-    localStorage.removeItem('admin')
+    clearActiveSessionOnly()
     set({ user: null, admin: null, isAuthenticated: false, isAdmin: false })
   },
 

@@ -7,7 +7,7 @@ export const BIOMETRIC_KEYS = {
   user: 'foodnova_biometric_user',
 }
 
-const BIOMETRIC_SERVER = 'ng.com.foodnova.app.customer-session'
+const BIOMETRIC_SERVER = 'foodnova'
 
 export const isNativeApp = () => {
   try {
@@ -73,36 +73,42 @@ const parseBiometricUser = (value) => {
 }
 
 export const checkBiometricSupport = async () => {
-  if (!isNativeApp()) {
+  const nativePlatform = isNativeApp()
+  console.log('Native platform:', nativePlatform)
+
+  if (!nativePlatform) {
     return { supported: false, reason: 'Biometric login is available only in the mobile app.' }
   }
 
   try {
-    const result = await NativeBiometric.isAvailable()
+    const result = await NativeBiometric.isAvailable({ useFallback: true })
+    console.log('Biometric available:', result)
     const supported = Boolean(result?.isAvailable || result?.available)
     return {
       supported,
       reason: supported ? '' : 'Biometric login is not available on this device.',
     }
-  } catch {
+  } catch (error) {
+    console.log('Biometric available:', { isAvailable: false, error })
     return {
       supported: false,
-      reason: 'Biometric login is not configured for this mobile build.',
+      reason: 'Biometric login is not available on this device.',
     }
   }
 }
 
-export const verifyBiometric = async () => {
+export const verifyBiometric = async (options = {}) => {
   const support = await checkBiometricSupport()
   if (!support.supported) return support
 
   try {
     await NativeBiometric.verifyIdentity({
       title: 'FoodNova Biometric Login',
-      subtitle: 'Unlock FoodNova faster',
-      description: 'Confirm your fingerprint or face unlock to continue.',
-      reason: 'Confirm your fingerprint or face unlock to continue.',
+      subtitle: 'Verify your identity',
+      description: 'Use fingerprint or face unlock',
+      reason: 'Enable biometric login for FoodNova',
       useFallback: true,
+      ...options,
     })
     return { supported: true, success: true }
   } catch {
