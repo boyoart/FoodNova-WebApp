@@ -8,16 +8,16 @@ const LEGACY_ONBOARDING_KEY = 'onboardingCompleted'
 
 const slides = [
   {
-    title: 'Welcome to FoodNova',
-    subtitle: 'Quality Foodstuff. Reliable Supply.',
+    title: 'Fresh Groceries Delivered',
+    subtitle: 'Shop quality rice, beans, garri, oil, egusi, and everyday essentials with ease.',
   },
   {
-    title: 'Shop Essentials',
-    subtitle: 'Rice, beans, garri, oil, egusi and everyday groceries.',
+    title: 'Fast & Reliable Ordering',
+    subtitle: 'Order anytime and get your foodstuff delivered quickly and securely.',
   },
   {
-    title: 'Track Orders',
-    subtitle: 'Follow payment, order processing and delivery updates.',
+    title: 'Simple Payments & Tracking',
+    subtitle: 'Upload receipts, track orders, and manage deliveries all in one place.',
   },
 ]
 
@@ -54,6 +54,7 @@ export default function OnboardingPage() {
 
           <h1>{slides[currentIndex].title}</h1>
           <p className="auth-subtitle">{slides[currentIndex].subtitle}</p>
+          <p className="onboarding-brand-line">Quality Foodstuff. Reliable Supply.</p>
 
           <div className="onboarding-actions">
             {!isLastSlide && (

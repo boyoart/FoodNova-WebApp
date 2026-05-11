@@ -1,5 +1,5 @@
-const CUSTOMER_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
-const ADMIN_TIMEOUT_MS = 12 * 60 * 60 * 1000;
+const CUSTOMER_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+const ADMIN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'foodnova_last_activity';
 
 export function updateLastActivity() {
@@ -44,7 +44,22 @@ export function isSessionExpired() {
   return Date.now() - last > timeout;
 }
 
-export function clearActiveSessionOnly() {
+export function clearActiveSessionOnly(role = getCurrentSessionRole()) {
+  if (role === 'customer') {
+    localStorage.removeItem('token');
+    localStorage.removeItem('foodnova_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('foodnova_user');
+    return;
+  }
+
+  if (role === 'admin') {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin');
+    localStorage.removeItem('foodnova_admin');
+    return;
+  }
+
   localStorage.removeItem('token');
   localStorage.removeItem('foodnova_token');
   localStorage.removeItem('user');
@@ -63,16 +78,17 @@ export function clearActiveSessionOnly() {
 export function enforceSessionTimeout({ navigate, notify } = {}) {
   if (!isSessionExpired()) return false;
 
-  clearActiveSessionOnly();
+  const role = getCurrentSessionRole();
+  clearActiveSessionOnly(role);
 
   if (typeof notify === 'function') {
     notify('Session expired. Please log in again.');
   }
 
   if (typeof navigate === 'function') {
-    navigate('/login');
+    navigate(role === 'admin' ? '/admin/login' : '/auth');
   } else {
-    window.location.href = '/login';
+    window.location.href = role === 'admin' ? '/admin/login' : '/auth';
   }
 
   return true;
@@ -123,13 +139,13 @@ export function startSessionWatcher({ navigate, notify } = {}) {
 export function expireCustomerSessionForTesting() {
   localStorage.setItem(
     LAST_ACTIVITY_KEY,
-    String(Date.now() - 31 * 24 * 60 * 60 * 1000)
+    String(Date.now() - 25 * 60 * 60 * 1000)
   );
 }
 
 export function expireAdminSessionForTesting() {
   localStorage.setItem(
     LAST_ACTIVITY_KEY,
-    String(Date.now() - 13 * 60 * 60 * 1000)
+    String(Date.now() - 3 * 60 * 60 * 1000)
   );
 }

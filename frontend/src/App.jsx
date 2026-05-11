@@ -51,7 +51,7 @@ import './modal-scroll-fix.css'
 
 
 function RootEntry() {
-  const hasToken = !!localStorage.getItem('token')
+  const hasToken = !!(localStorage.getItem('token') || localStorage.getItem('foodnova_token'))
   const isGuest = localStorage.getItem('guestMode') === 'true'
   const onboardingCompleted = localStorage.getItem('foodnova_onboarding_complete') === 'true' || localStorage.getItem('onboardingCompleted') === 'true'
 
@@ -67,7 +67,7 @@ function RootEntry() {
 }
 
 function RequireCustomerAuth({ children }) {
-  const hasToken = !!localStorage.getItem('token')
+  const hasToken = !!(localStorage.getItem('token') || localStorage.getItem('foodnova_token'))
   if (!hasToken) return <Navigate to="/auth" replace />
   return children
 }

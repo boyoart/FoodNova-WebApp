@@ -30,13 +30,15 @@ export async function checkBiometricAvailability() {
   }
 
   try {
-    const result = await NativeBiometric.isAvailable({
-      useFallback: true,
-    });
+    const result = await NativeBiometric.isAvailable();
 
-    console.log('[FoodNova Biometrics] Availability result:', result);
+    console.log(
+      '[FoodNova Biometrics] NativeBiometric.isAvailable result:',
+      JSON.stringify(result),
+      result
+    );
 
-    if (result?.isAvailable) {
+    if (result && result.isAvailable) {
       return {
         native: true,
         available: true,
@@ -51,17 +53,26 @@ export async function checkBiometricAvailability() {
       available: false,
       status: 'unavailable',
       message:
-        'Biometric login is not available on this device. Please set up fingerprint, face unlock, or screen lock in your phone settings.',
+        'Please enable fingerprint, face unlock, or screen lock on this phone first.',
       raw: result,
     };
   } catch (error) {
-    console.error('[FoodNova Biometrics] Availability check failed:', error);
+    const errorDetails = {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+      stack: error?.stack,
+      raw: String(error),
+    };
+
+    console.error('[FoodNova Biometrics] FULL ERROR:', errorDetails, error);
 
     return {
       native: true,
       available: false,
       status: 'error',
       message: 'Unable to check biometric availability on this device.',
+      errorDetails,
       raw: error,
     };
   }

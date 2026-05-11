@@ -286,54 +286,6 @@
   background: linear-gradient(180deg, var(--fn-surface) 0%, var(--fn-surface-2) 100%);
 }
 
-.biometric-panel {
-  border-color: color-mix(in srgb, var(--fn-primary) 22%, var(--fn-border));
-}
-
-.biometric-panel.biometric-highlight {
-  animation: biometricPulse 1.3s ease-in-out 2;
-}
-
-.biometric-note {
-  border: 1px solid color-mix(in srgb, var(--fn-primary) 20%, var(--fn-border));
-  border-radius: 0.85rem;
-  padding: 0.85rem 1rem;
-  background: var(--fn-surface-2);
-  color: var(--fn-muted);
-  margin-bottom: 1rem;
-}
-
-.biometric-note.success {
-  color: var(--success);
-  background: rgba(6, 168, 125, 0.1);
-  border-color: rgba(6, 168, 125, 0.24);
-}
-
-.biometric-debug-line {
-  margin-bottom: 0.75rem;
-  color: var(--fn-muted);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.biometric-action {
-  width: 100%;
-}
-
-@keyframes biometricPulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--fn-primary) 30%, transparent);
-  }
-
-  60% {
-    box-shadow: 0 0 0 8px color-mix(in srgb, var(--fn-primary) 10%, transparent);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-  }
-}
-
 .address-list {
   display: grid;
   gap: 0.85rem;

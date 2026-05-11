@@ -14,9 +14,9 @@ const safeJsonParse = (key, fallback) => {
 }
 
 export const useAuthStore = create((set) => ({
-  user: safeJsonParse('user', null),
-  admin: safeJsonParse('admin', null),
-  isAuthenticated: !!localStorage.getItem('token'),
+  user: safeJsonParse('user', null) || safeJsonParse('foodnova_user', null),
+  admin: safeJsonParse('admin', null) || safeJsonParse('foodnova_admin', null),
+  isAuthenticated: !!(localStorage.getItem('token') || localStorage.getItem('foodnova_token')),
   isAdmin: !!localStorage.getItem('admin_token'),
 
   login: (user, token) => {

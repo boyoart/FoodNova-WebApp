@@ -1,16 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Fingerprint, Home, KeyRound, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
+import { Home, KeyRound, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
 import { authAPI, profileAPI, resolveMediaUrl } from '../services/api'
-import {
-  checkBiometricAvailability,
-  disableBiometricLogin,
-  enableBiometricLogin,
-  getBiometricUser,
-  isBiometricEnabledLocally,
-} from '../utils/biometricService'
-import { useAuthStore } from '../store/authStore'
 import './ProfilePage.css'
 
 const emptyAddress = {
@@ -39,8 +31,6 @@ const getInitials = (name = 'User') =>
 
 export default function ProfilePage() {
   const location = useLocation()
-  const authUser = useAuthStore((state) => state.user)
-  const biometricSectionRef = useRef(null)
   const [profile, setProfile] = useState({ full_name: '', email: '', phone: '', avatar_url: '' })
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
@@ -57,31 +47,17 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = useState(null)
   const [avatarPreview, setAvatarPreview] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [biometricStatus, setBiometricStatus] = useState({
-    native: false,
-    available: false,
-    status: 'web',
-    message: 'Biometric login is available only in the FoodNova mobile app.',
-  })
-  const [biometricEnabled, setBiometricEnabledState] = useState(isBiometricEnabledLocally())
-  const [biometricBusy, setBiometricBusy] = useState(false)
 
   const hasGoogleKey = Boolean(import.meta.env.VITE_GOOGLE_MAPS_API_KEY)
 
   useEffect(() => {
     loadProfile()
-    refreshBiometricStatus()
   }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(location.search)
     if (params.get('highlight') !== 'biometric') return undefined
-    const timer = setTimeout(() => {
-      biometricSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      biometricSectionRef.current?.classList.add('biometric-highlight')
-      setTimeout(() => biometricSectionRef.current?.classList.remove('biometric-highlight'), 2600)
-    }, 300)
-    return () => clearTimeout(timer)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [location.search, loading])
 
   useEffect(() => () => {
@@ -276,58 +252,6 @@ export default function ProfilePage() {
     }
   }
 
-  const getStoredCustomerUser = () => {
-    if (authUser) return authUser
-    for (const key of ['foodnova_user', 'user']) {
-      try {
-        const value = localStorage.getItem(key)
-        if (value) return JSON.parse(value)
-      } catch {
-        // Try the next local user cache.
-      }
-    }
-    return getBiometricUser()
-  }
-
-  const refreshBiometricStatus = async () => {
-    const status = await checkBiometricAvailability()
-    setBiometricStatus(status)
-    setBiometricEnabledState(isBiometricEnabledLocally())
-    return status
-  }
-
-  const enableBiometrics = async () => {
-    try {
-      setBiometricBusy(true)
-      const token = localStorage.getItem('token') || localStorage.getItem('foodnova_token')
-      const storedUser = getStoredCustomerUser()
-      await enableBiometricLogin({ token, user: { ...storedUser, ...profile } })
-      setBiometricEnabledState(true)
-      toast.success('Biometric login enabled.')
-    } catch (error) {
-      toast.error(error?.message || 'Biometric setup failed. Please try again.')
-      console.error(error)
-    } finally {
-      await refreshBiometricStatus()
-      setBiometricBusy(false)
-    }
-  }
-
-  const disableBiometrics = async () => {
-    try {
-      setBiometricBusy(true)
-      await disableBiometricLogin()
-      setBiometricEnabledState(false)
-      toast.success('Biometric login disabled.')
-    } catch (error) {
-      toast.error('Failed to disable biometric login')
-      console.error(error)
-    } finally {
-      await refreshBiometricStatus()
-      setBiometricBusy(false)
-    }
-  }
-
   const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }))
 
   const formatAddress = (address) =>
@@ -481,37 +405,6 @@ export default function ProfilePage() {
             </form>
           </section>
 
-          <section className="profile-panel biometric-panel" ref={biometricSectionRef}>
-            <div className="section-heading">
-              <Fingerprint size={20} />
-              <div>
-                <h2>Biometric Login</h2>
-                <p>Use fingerprint or face unlock to access FoodNova faster on this device.</p>
-              </div>
-            </div>
-
-            <div className="biometric-debug-line">
-              Platform: {biometricStatus.native ? 'native' : 'web'} · Status: {biometricStatus.status}
-            </div>
-
-            <div className={`biometric-note ${biometricStatus.available || biometricEnabled ? 'success' : ''}`}>
-              {biometricEnabled ? 'Biometric login is enabled on this device.' : biometricStatus.message}
-            </div>
-
-            <button
-              type="button"
-              className={biometricEnabled ? 'secondary-action biometric-action' : 'primary-action biometric-action'}
-              onClick={biometricEnabled ? disableBiometrics : enableBiometrics}
-              disabled={biometricBusy || (!biometricEnabled && !biometricStatus.available)}
-            >
-              <Fingerprint size={18} />
-              {biometricBusy
-                ? 'Checking...'
-                : biometricEnabled
-                  ? 'Disable Biometric Login'
-                  : 'Enable Biometric Login'}
-            </button>
-          </section>
         </div>
 
         <section className="profile-panel address-panel">
