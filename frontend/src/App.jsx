@@ -23,6 +23,7 @@ import AdminOrders from './pages/AdminOrders'
 import AdminStock from './pages/AdminStock'
 import AdminPayments from './pages/AdminPayments'
 import AdminBroadcasts from './pages/AdminBroadcasts'
+import AdminAnnouncements from './pages/AdminAnnouncements'
 import AdminCustomers from './pages/AdminCustomers'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminUsers from './pages/AdminUsers'
@@ -154,6 +155,7 @@ function App() {
               <Route path="/admin/stock" element={<AdminStock />} />
               <Route path="/admin/payments" element={<AdminPayments />} />
               <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
+              <Route path="/admin/announcements" element={<AdminAnnouncements />} />
               <Route path="/admin/customers" element={<AdminCustomers />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
               <Route path="/admin/users" element={<AdminUsers />} />

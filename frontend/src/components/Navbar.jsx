@@ -264,6 +264,7 @@ export default function Navbar() {
     { to: '/admin/stock', label: 'Stock Management', show: canAdmin('stock:view') },
     { to: '/admin/payments', label: 'Payment Approvals', show: canAdmin('payments:view') || canAdmin('payments:approve') },
     { to: '/admin/broadcasts', label: 'Broadcasts', show: canAdmin('broadcasts:view') },
+    { to: '/admin/announcements', label: 'Homepage Announcements', show: canAnyAdmin(['announcements:view', 'announcements:manage']) },
     { to: '/admin/customers', label: 'Customers', show: canAdmin('customers:view') },
     { to: '/admin/audit-logs', label: 'Activity Logs', show: canAdmin('audit:view') },
     { to: '/admin/users', label: 'Admin Users', show: canAdmin('admins:view') || canAdmin('admins:manage') },

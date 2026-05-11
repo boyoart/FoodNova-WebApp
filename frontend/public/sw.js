@@ -1,7 +1,11 @@
-const CACHE_NAME = "foodnova-app-shell-v1";
+const CACHE_NAME = "foodnova-app-shell-v2";
 const STATIC_ASSETS = [
   "/",
   "/foodnova-logo.png",
+  "/favicon.png",
+  "/favicon-32x32.png",
+  "/apple-touch-icon.png",
+  "/android-chrome-192x192.png",
   "/manifest.webmanifest"
 ];
 

@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import func, inspect, text
+from sqlalchemy import func, inspect, or_, text
 
 from database import Base, SessionLocal, engine
 from email_service import (
@@ -28,6 +28,7 @@ from email_service import (
 from models import (
     Address as DBAddress,
     AdminAuditLog as DBAdminAuditLog,
+    Announcement as DBAnnouncement,
     Broadcast as DBBroadcast,
     CancellationRequest as DBCancellationRequest,
     Notification as DBNotification,
@@ -328,6 +329,34 @@ class BroadcastUpdatePayload(BaseModel):
     resend: Optional[bool] = False
 
 
+class AnnouncementPayload(BaseModel):
+    title: str
+    message: str
+    display_type: Optional[str] = "top_bar"
+    button_text: Optional[str] = None
+    button_link: Optional[str] = None
+    image_url: Optional[str] = None
+    theme: Optional[str] = "green"
+    priority: Optional[int] = 0
+    is_active: Optional[bool] = True
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+
+class AnnouncementUpdatePayload(BaseModel):
+    title: Optional[str] = None
+    message: Optional[str] = None
+    display_type: Optional[str] = None
+    button_text: Optional[str] = None
+    button_link: Optional[str] = None
+    image_url: Optional[str] = None
+    theme: Optional[str] = None
+    priority: Optional[int] = None
+    is_active: Optional[bool] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+
 class NotificationUpdatePayload(BaseModel):
     is_read: Optional[bool] = None
 
@@ -401,7 +430,7 @@ ADMIN_ROLE_PERMISSIONS = {
     "super_admin": [
         "dashboard:view", "orders:view", "orders:update", "orders:delivery",
         "payments:view", "payments:approve", "stock:view", "stock:manage",
-        "broadcasts:view", "broadcasts:send", "customers:view", "audit:view",
+        "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage", "customers:view", "audit:view",
         "admins:view", "admins:manage", "delivery:manage",
         "cancellations:view", "cancellations:manage", "exports:view", "exports:download",
         "reports:view",
@@ -409,7 +438,7 @@ ADMIN_ROLE_PERMISSIONS = {
     "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
     "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "cancellations:view", "cancellations:manage", "customers:view"],
-    "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send"],
+    "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage"],
     "customer_support": ["dashboard:view", "orders:view", "orders:update", "cancellations:view", "customers:view"],
     "viewer": ["dashboard:view", "orders:view", "stock:view", "customers:view"],
 }
@@ -1325,6 +1354,27 @@ def broadcast_to_dict(broadcast: DBBroadcast) -> dict:
     }
 
 
+def announcement_to_dict(announcement: DBAnnouncement) -> dict:
+    return {
+        "id": announcement.id,
+        "title": announcement.title,
+        "message": announcement.message,
+        "display_type": announcement.display_type or "top_bar",
+        "button_text": announcement.button_text or "",
+        "button_link": announcement.button_link or "",
+        "image_url": announcement.image_url or "",
+        "theme": announcement.theme or "green",
+        "priority": announcement.priority or 0,
+        "is_active": bool(announcement.is_active),
+        "start_date": iso(announcement.start_date),
+        "end_date": iso(announcement.end_date),
+        "created_by_admin_id": announcement.created_by_admin_id,
+        "created_by_admin_name": announcement.created_by_admin_name or "",
+        "created_at": iso(announcement.created_at),
+        "updated_at": iso(announcement.updated_at),
+    }
+
+
 def audit_log_to_dict(log: DBAdminAuditLog) -> dict:
     return {
         "id": log.id,
@@ -1577,6 +1627,21 @@ def ensure_database_compatibility():
             "quantity": "INTEGER DEFAULT 1",
             "qty": "INTEGER DEFAULT 1",
             "line_total": "FLOAT DEFAULT 0",
+        },
+        "announcements": {
+            "display_type": "VARCHAR(40) DEFAULT 'top_bar'",
+            "button_text": "VARCHAR(120)",
+            "button_link": "TEXT",
+            "image_url": "TEXT",
+            "theme": "VARCHAR(40) DEFAULT 'green'",
+            "priority": "INTEGER DEFAULT 0",
+            "is_active": "BOOLEAN DEFAULT TRUE",
+            "start_date": "TIMESTAMP",
+            "end_date": "TIMESTAMP",
+            "created_by_admin_id": "INTEGER",
+            "created_by_admin_name": "VARCHAR(150)",
+            "created_at": "TIMESTAMP",
+            "updated_at": "TIMESTAMP",
         },
     }
 
@@ -3854,6 +3919,163 @@ def deactivate_admin_user(admin_id: int, request: Request):
         data = admin_user_to_dict(target)
         create_admin_audit_log(request, admin, "admin_user_deactivated", "admin_user", target.id, f"{admin.get('full_name') or admin.get('email')} deactivated admin user {target.email}", {"admin_email": target.email})
         return {"success": True, "message": "Admin user deactivated successfully", "admin": data, "data": data}
+    finally:
+        db.close()
+
+
+ANNOUNCEMENT_DISPLAY_TYPES = {"top_bar", "hero_banner", "popup"}
+ANNOUNCEMENT_THEMES = {"green", "yellow", "dark", "light", "promo", "urgent"}
+
+
+def clean_announcement_payload(data: dict, partial: bool = False) -> dict:
+    cleaned = {}
+    for key, value in data.items():
+        if isinstance(value, str):
+            value = value.strip()
+        cleaned[key] = value
+
+    if not partial or "title" in cleaned:
+        if not cleaned.get("title"):
+            raise HTTPException(status_code=400, detail="Announcement title is required")
+    if not partial or "message" in cleaned:
+        if not cleaned.get("message"):
+            raise HTTPException(status_code=400, detail="Announcement message is required")
+
+    display_type = cleaned.get("display_type")
+    if display_type is not None:
+        display_type = str(display_type or "top_bar").strip() or "top_bar"
+        if display_type not in ANNOUNCEMENT_DISPLAY_TYPES:
+            raise HTTPException(status_code=400, detail="Invalid announcement display type")
+        cleaned["display_type"] = display_type
+
+    theme = cleaned.get("theme")
+    if theme is not None:
+        theme = str(theme or "green").strip() or "green"
+        if theme not in ANNOUNCEMENT_THEMES:
+            raise HTTPException(status_code=400, detail="Invalid announcement theme")
+        cleaned["theme"] = theme
+
+    if "priority" in cleaned and cleaned["priority"] is not None:
+        cleaned["priority"] = int(cleaned["priority"])
+
+    return cleaned
+
+
+@app.get("/announcements/active")
+def get_active_announcements():
+    db = SessionLocal()
+    try:
+        now = datetime.utcnow()
+        announcements = [
+            announcement_to_dict(announcement)
+            for announcement in db.query(DBAnnouncement)
+            .filter(DBAnnouncement.is_active == True)
+            .filter(or_(DBAnnouncement.start_date == None, DBAnnouncement.start_date <= now))
+            .filter(or_(DBAnnouncement.end_date == None, DBAnnouncement.end_date >= now))
+            .order_by(DBAnnouncement.priority.desc(), DBAnnouncement.created_at.desc(), DBAnnouncement.id.desc())
+            .all()
+        ]
+        return {"success": True, "announcements": announcements, "data": announcements}
+    except Exception as error:
+        print("ACTIVE ANNOUNCEMENTS LOAD ERROR:", repr(error))
+        return {"success": True, "announcements": [], "data": []}
+    finally:
+        db.close()
+
+
+@app.get("/admin/announcements")
+def get_admin_announcements(request: Request):
+    require_any_permission(request, ["announcements:view", "announcements:manage"])
+    db = SessionLocal()
+    try:
+        announcements = [
+            announcement_to_dict(announcement)
+            for announcement in db.query(DBAnnouncement)
+            .order_by(DBAnnouncement.priority.desc(), DBAnnouncement.created_at.desc(), DBAnnouncement.id.desc())
+            .all()
+        ]
+        return {"success": True, "announcements": announcements, "data": announcements}
+    except Exception as error:
+        print("ADMIN ANNOUNCEMENTS LOAD ERROR:", repr(error))
+        return {"success": True, "announcements": [], "data": []}
+    finally:
+        db.close()
+
+
+@app.post("/admin/announcements")
+def create_announcement(payload: AnnouncementPayload, request: Request):
+    admin = require_permission(request, "announcements:manage")
+    data = clean_announcement_payload(payload.dict())
+    db = SessionLocal()
+    try:
+        announcement = DBAnnouncement(
+            title=data["title"],
+            message=data["message"],
+            display_type=data.get("display_type") or "top_bar",
+            button_text=data.get("button_text") or None,
+            button_link=data.get("button_link") or None,
+            image_url=data.get("image_url") or None,
+            theme=data.get("theme") or "green",
+            priority=data.get("priority") or 0,
+            is_active=data.get("is_active") is not False,
+            start_date=data.get("start_date"),
+            end_date=data.get("end_date"),
+            created_by_admin_id=admin.get("id"),
+            created_by_admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+        )
+        db.add(announcement)
+        db.commit()
+        db.refresh(announcement)
+        announcement_data = announcement_to_dict(announcement)
+        create_admin_audit_log(request, admin, "announcement_created", "announcement", announcement.id, f"Admin created announcement {announcement.title}", {"announcement": announcement_data})
+        return {"success": True, "message": "Announcement created successfully", "announcement": announcement_data, "data": announcement_data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/announcements/{announcement_id}")
+def update_announcement(announcement_id: int, payload: AnnouncementUpdatePayload, request: Request):
+    admin = require_permission(request, "announcements:manage")
+    updates = clean_announcement_payload(payload.dict(exclude_unset=True), partial=True)
+    db = SessionLocal()
+    try:
+        announcement = db.query(DBAnnouncement).filter(DBAnnouncement.id == announcement_id).first()
+        if not announcement:
+            raise HTTPException(status_code=404, detail="Announcement not found")
+        old_data = announcement_to_dict(announcement)
+        for field in [
+            "title", "message", "display_type", "button_text", "button_link", "image_url",
+            "theme", "priority", "is_active", "start_date", "end_date",
+        ]:
+            if field in updates:
+                setattr(announcement, field, updates[field])
+        announcement.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(announcement)
+        data = announcement_to_dict(announcement)
+        action = "announcement_status_changed" if "is_active" in updates and len(updates) == 1 else "announcement_updated"
+        create_admin_audit_log(request, admin, action, "announcement", announcement.id, f"Admin updated announcement {announcement.title}", {"before": old_data, "after": data})
+        return {"success": True, "message": "Announcement updated successfully", "announcement": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.delete("/admin/announcements/{announcement_id}")
+def delete_announcement(announcement_id: int, request: Request):
+    admin = require_permission(request, "announcements:manage")
+    db = SessionLocal()
+    try:
+        announcement = db.query(DBAnnouncement).filter(DBAnnouncement.id == announcement_id).first()
+        if not announcement:
+            raise HTTPException(status_code=404, detail="Announcement not found")
+        old_data = announcement_to_dict(announcement)
+        announcement.is_active = False
+        announcement.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(announcement)
+        data = announcement_to_dict(announcement)
+        create_admin_audit_log(request, admin, "announcement_deactivated", "announcement", announcement.id, f"Admin deactivated announcement {announcement.title}", {"before": old_data, "after": data})
+        return {"success": True, "message": "Announcement deactivated successfully", "announcement": data, "data": data}
     finally:
         db.close()
 

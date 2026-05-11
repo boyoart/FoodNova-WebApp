@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, ChevronLeft, ChevronRight, FileText, Headphones, Lock, MessageCircle, PackageCheck, ShoppingCart, Truck } from 'lucide-react'
+import { Bell, ChevronLeft, ChevronRight, FileText, Headphones, Lock, MessageCircle, PackageCheck, ShoppingCart, Truck, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { packsAPI, productsAPI } from '../services/api'
+import { announcementsAPI, packsAPI, productsAPI } from '../services/api'
 import { useCartStore } from '../store/cartStore'
 import { buildWhatsAppLink } from '../utils/contactUtils'
 import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
@@ -38,10 +38,66 @@ const heroSlides = [
   },
 ]
 
+function AnnouncementAction({ announcement, className = '' }) {
+  if (!announcement?.button_text || !announcement?.button_link) return null
+  const link = announcement.button_link
+  if (link.startsWith('/')) {
+    return <Link to={link} className={className}>{announcement.button_text}</Link>
+  }
+  return <a href={link} className={className} target="_blank" rel="noopener noreferrer">{announcement.button_text}</a>
+}
+
+function AnnouncementTopBar({ announcement }) {
+  return (
+    <section className={`homepage-announcement-top ${announcement.theme || 'green'}`}>
+      <div>
+        <strong>{announcement.title}</strong>
+        <span>{announcement.message}</span>
+      </div>
+      <AnnouncementAction announcement={announcement} />
+    </section>
+  )
+}
+
+function AnnouncementHeroBanner({ announcement }) {
+  return (
+    <section className={`homepage-announcement-hero ${announcement.theme || 'green'}`}>
+      {announcement.image_url ? (
+        <img src={announcement.image_url} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
+      ) : null}
+      <div>
+        <p className="announcement-label">FoodNova update</p>
+        <h2>{announcement.title}</h2>
+        <p>{announcement.message}</p>
+      </div>
+      <AnnouncementAction announcement={announcement} className="announcement-cta" />
+    </section>
+  )
+}
+
+function AnnouncementPopup({ announcement, onDismiss }) {
+  if (!announcement) return null
+  return (
+    <div className="homepage-announcement-popup-backdrop" role="dialog" aria-modal="true" aria-labelledby="foodnova-popup-title">
+      <div className={`homepage-announcement-popup ${announcement.theme || 'green'}`}>
+        <button type="button" onClick={onDismiss} aria-label="Close announcement"><X size={18} /></button>
+        {announcement.image_url ? (
+          <img src={announcement.image_url} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
+        ) : null}
+        <h2 id="foodnova-popup-title">{announcement.title}</h2>
+        <p>{announcement.message}</p>
+        <AnnouncementAction announcement={announcement} className="announcement-cta" />
+      </div>
+    </div>
+  )
+}
+
 export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [featuredProducts, setFeaturedProducts] = useState([])
   const [featuredPacks, setFeaturedPacks] = useState([])
+  const [announcements, setAnnouncements] = useState([])
+  const [activePopupId, setActivePopupId] = useState(null)
   const [storeError, setStoreError] = useState('')
   const { items: cartItems, addItem } = useCartStore()
   const slide = heroSlides[activeSlide]
@@ -76,6 +132,26 @@ export default function HomePage() {
     }
 
     loadFeaturedStorefront()
+  }, [])
+
+  useEffect(() => {
+    const loadAnnouncements = async () => {
+      try {
+        const response = await announcementsAPI.getActive()
+        const activeAnnouncements = response.data || []
+        setAnnouncements(activeAnnouncements)
+        const popup = activeAnnouncements.find((announcement) => (
+          announcement.display_type === 'popup'
+          && !sessionStorage.getItem(`foodnova_popup_dismissed_${announcement.id}`)
+        ))
+        setActivePopupId(popup?.id || null)
+      } catch (error) {
+        console.warn('FoodNova announcements unavailable:', error)
+        setAnnouncements([])
+      }
+    }
+
+    loadAnnouncements()
   }, [])
 
   const goPrevious = () => setActiveSlide((current) => (current - 1 + heroSlides.length) % heroSlides.length)
@@ -121,8 +197,20 @@ export default function HomePage() {
     window.open(buildWhatsAppLink('Hello FoodNova, I want to order foodstuff.'), '_blank', 'noopener,noreferrer')
   }
 
+  const topBarAnnouncements = announcements.filter((announcement) => announcement.display_type === 'top_bar')
+  const heroAnnouncements = announcements.filter((announcement) => announcement.display_type === 'hero_banner')
+  const activePopup = announcements.find((announcement) => announcement.id === activePopupId)
+  const dismissPopup = () => {
+    if (activePopupId) sessionStorage.setItem(`foodnova_popup_dismissed_${activePopupId}`, 'true')
+    setActivePopupId(null)
+  }
+
   return (
     <div className="home-page">
+      {topBarAnnouncements.map((announcement) => (
+        <AnnouncementTopBar key={`top-${announcement.id}`} announcement={announcement} />
+      ))}
+
       <section className="hero-slider" aria-label="FoodNova highlights">
         <div className="hero-slide">
           <div className="hero-content">
@@ -168,6 +256,14 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      {heroAnnouncements.length > 0 && (
+        <div className="homepage-announcement-hero-list">
+          {heroAnnouncements.map((announcement) => (
+            <AnnouncementHeroBanner key={`hero-${announcement.id}`} announcement={announcement} />
+          ))}
+        </div>
+      )}
 
       <section className="features">
         <h2>Why Choose FoodNova?</h2>
@@ -301,6 +397,8 @@ export default function HomePage() {
           <button type="button" className="btn btn-light btn-large" onClick={openWhatsApp}>Chat on WhatsApp</button>
         </div>
       </section>
+
+      <AnnouncementPopup announcement={activePopup} onDismiss={dismissPopup} />
     </div>
   )
 }

@@ -436,6 +436,11 @@ export const adminAPI = {
     const broadcasts = normalizeList(response.data, ["broadcasts"]);
     return { data: broadcasts, raw: response.data };
   },
+  getAnnouncements: async () => {
+    const response = await api.get("/admin/announcements");
+    const announcements = normalizeList(response.data, ["announcements"]);
+    return { data: announcements, raw: response.data };
+  },
   getAuditLogs: async (params = {}) => {
     const response = await api.get("/admin/audit-logs", { params });
     const logs = normalizeList(response.data, ["logs"]);
@@ -464,6 +469,17 @@ export const adminAPI = {
   createBroadcast: async (payload) => (await api.post("/admin/broadcasts", payload)).data,
   updateBroadcast: async (id, payload) => (await api.patch(`/admin/broadcasts/${id}`, payload)).data,
   deleteBroadcast: async (id) => (await api.delete(`/admin/broadcasts/${id}`)).data,
+  createAnnouncement: async (payload) => (await api.post("/admin/announcements", payload)).data,
+  updateAnnouncement: async (id, payload) => (await api.patch(`/admin/announcements/${id}`, payload)).data,
+  deleteAnnouncement: async (id) => (await api.delete(`/admin/announcements/${id}`)).data,
+};
+
+export const announcementsAPI = {
+  getActive: async () => {
+    const response = await api.get("/announcements/active");
+    const announcements = normalizeList(response.data, ["announcements"]);
+    return { data: announcements, raw: response.data };
+  },
 };
 
 export const getProducts = async () => (await productsAPI.getAll()).data;

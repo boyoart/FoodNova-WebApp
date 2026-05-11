@@ -245,6 +245,27 @@ class Broadcast(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(180), nullable=False)
+    message = Column(Text, nullable=False)
+    display_type = Column(String(40), default="top_bar", index=True)
+    button_text = Column(String(120), nullable=True)
+    button_link = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)
+    theme = Column(String(40), default="green", index=True)
+    priority = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True, index=True)
+    start_date = Column(DateTime, nullable=True)
+    end_date = Column(DateTime, nullable=True)
+    created_by_admin_id = Column(Integer, nullable=True)
+    created_by_admin_name = Column(String(150), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AdminAuditLog(Base):
     __tablename__ = "admin_audit_logs"
 
