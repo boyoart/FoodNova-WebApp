@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import toast from 'react-hot-toast'
+import { App as CapacitorApp } from '@capacitor/app'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -42,10 +43,9 @@ import InvoicePage from './pages/InvoicePage'
 import { useAuthStore } from './store/authStore'
 import {
   enforceSessionTimeout,
-  SESSION_EXPIRED_EVENT,
+  expireAdminSessionForTesting,
+  expireCustomerSessionForTesting,
   startSessionWatcher,
-  stopSessionWatcher,
-  updateLastActivity,
 } from './utils/sessionManager'
 import './modal-scroll-fix.css'
 
@@ -75,25 +75,47 @@ function RequireCustomerAuth({ children }) {
 function SessionSupervisor() {
   const navigate = useNavigate()
   const location = useLocation()
+  const notifySessionExpired = (message) => {
+    useAuthStore.setState({ user: null, admin: null, isAuthenticated: false, isAdmin: false })
+    toast.error(message)
+  }
 
   useEffect(() => {
-    const handleExpired = (event) => {
-      useAuthStore.setState({ user: null, admin: null, isAuthenticated: false, isAdmin: false })
-      toast.error('Session expired. Please log in again.')
-      navigate(event.detail?.role === 'admin' ? '/admin/login' : '/auth', { replace: true })
+    enforceSessionTimeout({ navigate, notify: notifySessionExpired })
+    const stopWatcher = startSessionWatcher({ navigate, notify: notifySessionExpired })
+    let appStateHandle
+
+    CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) enforceSessionTimeout({ navigate, notify: notifySessionExpired })
+    }).then((handle) => {
+      appStateHandle = handle
+    }).catch(() => {
+      appStateHandle = null
+    })
+
+    if (import.meta.env.DEV) {
+      window.foodnovaExpireCustomerSession = () => {
+        expireCustomerSessionForTesting()
+        window.location.reload()
+      }
+      window.foodnovaExpireAdminSession = () => {
+        expireAdminSessionForTesting()
+        window.location.reload()
+      }
     }
 
-    window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired)
-    startSessionWatcher()
-
     return () => {
-      window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired)
-      stopSessionWatcher()
+      stopWatcher?.()
+      appStateHandle?.remove?.()
+      if (import.meta.env.DEV) {
+        delete window.foodnovaExpireCustomerSession
+        delete window.foodnovaExpireAdminSession
+      }
     }
   }, [navigate])
 
   useEffect(() => {
-    if (!enforceSessionTimeout()) updateLastActivity()
+    enforceSessionTimeout({ navigate, notify: notifySessionExpired })
   }, [location.pathname, location.search])
 
   return null

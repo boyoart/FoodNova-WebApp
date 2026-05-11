@@ -4,7 +4,8 @@ import toast from 'react-hot-toast'
 import { Fingerprint, Mail, Phone, UserPlus, User } from 'lucide-react'
 import { authAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
-import { clearBiometricSession, hasBiometricSession, restoreBiometricSession, verifyBiometric } from '../utils/biometricAuth'
+import { disableBiometricLogin, hasSavedBiometricCredentials, restoreBiometricLogin } from '../utils/biometricService'
+import { clearActiveSessionOnly, updateLastActivity } from '../utils/sessionManager'
 import './AuthPages.css'
 
 export default function AuthLandingPage() {
@@ -14,7 +15,7 @@ export default function AuthLandingPage() {
   const [biometricLoading, setBiometricLoading] = useState(false)
 
   useEffect(() => {
-    hasBiometricSession().then(setShowBiometricLogin).catch(() => setShowBiometricLogin(false))
+    hasSavedBiometricCredentials().then(setShowBiometricLogin).catch(() => setShowBiometricLogin(false))
   }, [])
 
   const enterGuestMode = () => {
@@ -25,34 +26,23 @@ export default function AuthLandingPage() {
   const handleBiometricLogin = async () => {
     try {
       setBiometricLoading(true)
-      const verified = await verifyBiometric({
-        reason: 'Login to FoodNova',
-        title: 'FoodNova Biometric Login',
-        subtitle: 'Verify your identity',
-        description: 'Use fingerprint or face unlock',
-      })
-      if (!verified.success) {
-        toast.error(verified.reason || 'Biometric login failed. Use email/phone login instead.')
-        return
-      }
-
-      const session = await restoreBiometricSession()
+      const session = await restoreBiometricLogin()
       if (!session?.token || !session?.user) {
-        await clearBiometricSession()
         setShowBiometricLogin(false)
-        toast.error('Session expired. Please login again.')
+        toast.error('Biometric login failed. Please log in with email or phone.')
         return
       }
 
       localStorage.setItem('token', session.token)
+      localStorage.setItem('foodnova_token', session.token)
       localStorage.setItem('user', JSON.stringify(session.user))
+      localStorage.setItem('foodnova_user', JSON.stringify(session.user))
       try {
         await authAPI.me()
       } catch (error) {
         if (error?.response?.status === 401) {
-          localStorage.removeItem('token')
-          localStorage.removeItem('user')
-          await clearBiometricSession()
+          await disableBiometricLogin()
+          clearActiveSessionOnly()
           setShowBiometricLogin(false)
           toast.error('Session expired. Please login again.')
           return
@@ -62,10 +52,11 @@ export default function AuthLandingPage() {
 
       localStorage.removeItem('guestMode')
       login(session.user, session.token)
+      updateLastActivity()
       toast.success('Biometric login successful')
       navigate('/', { replace: true })
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Biometric login failed. Use email/phone login instead.')
+      toast.error(error?.response?.data?.detail || 'Biometric login failed. Please log in with email or phone.')
     } finally {
       setBiometricLoading(false)
     }

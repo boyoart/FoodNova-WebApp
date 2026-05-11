@@ -309,6 +309,13 @@
   border-color: rgba(6, 168, 125, 0.24);
 }
 
+.biometric-debug-line {
+  margin-bottom: 0.75rem;
+  color: var(--fn-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
 .biometric-action {
   width: 100%;
 }

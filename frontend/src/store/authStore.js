@@ -21,7 +21,9 @@ export const useAuthStore = create((set) => ({
 
   login: (user, token) => {
     localStorage.setItem('token', token)
+    localStorage.setItem('foodnova_token', token)
     localStorage.setItem('user', JSON.stringify(user))
+    localStorage.setItem('foodnova_user', JSON.stringify(user))
     updateLastActivity()
     set({ user, isAuthenticated: true })
   },
@@ -29,6 +31,7 @@ export const useAuthStore = create((set) => ({
   adminLogin: (admin, token) => {
     localStorage.setItem('admin_token', token)
     localStorage.setItem('admin', JSON.stringify(admin))
+    localStorage.setItem('foodnova_admin', JSON.stringify(admin))
     updateLastActivity()
     set({ admin, isAdmin: true })
   },
@@ -40,6 +43,7 @@ export const useAuthStore = create((set) => ({
 
   updateUser: (user) => {
     localStorage.setItem('user', JSON.stringify(user))
+    localStorage.setItem('foodnova_user', JSON.stringify(user))
     set({ user })
   },
 
