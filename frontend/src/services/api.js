@@ -293,6 +293,7 @@ export const adminAPI = {
   },
   getOrder: async (id) => (await api.get(`/admin/orders/${id}`)).data,
   updateOrder: async (id, payload) => (await api.patch(`/admin/orders/${id}`, payload)).data,
+  deleteOrder: async (id) => (await api.delete(`/admin/orders/${id}`)).data,
   updateOrderStatus: async (id, payload = {}) => {
     const status = payload.status || payload.order_status || payload.fulfillment_status;
     const response = await api.patch(`/admin/orders/${id}`, { ...payload, ...(status ? { status, order_status: status, fulfillment_status: status } : {}) });
@@ -472,6 +473,11 @@ export const adminAPI = {
   createAnnouncement: async (payload) => (await api.post("/admin/announcements", payload)).data,
   updateAnnouncement: async (id, payload) => (await api.patch(`/admin/announcements/${id}`, payload)).data,
   deleteAnnouncement: async (id) => (await api.delete(`/admin/announcements/${id}`)).data,
+  uploadAnnouncementImage: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return (await api.post("/admin/uploads/announcement-image", formData, multipartConfig)).data;
+  },
 };
 
 export const announcementsAPI = {

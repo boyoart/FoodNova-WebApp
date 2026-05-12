@@ -5,7 +5,7 @@ import { adminAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import { normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
-import { MessageCircle } from 'lucide-react'
+import { MessageCircle, Trash2 } from 'lucide-react'
 import './AdminPages.css'
 
 const PAYMENT_STATUS_OPTIONS = [
@@ -26,11 +26,15 @@ const ORDER_STATUS_OPTIONS = [
 ]
 
 export default function AdminOrders() {
-  const { isAdmin } = useAuthStore()
+  const { isAdmin, admin } = useAuthStore()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
+  const [orderScope, setOrderScope] = useState('active')
   const [selectedOrder, setSelectedOrder] = useState(null)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deletingOrder, setDeletingOrder] = useState(false)
   const [paymentAuditLogs, setPaymentAuditLogs] = useState([])
   const [serviceNote, setServiceNote] = useState('')
   const [sendingServiceNote, setSendingServiceNote] = useState(false)
@@ -44,7 +48,11 @@ export default function AdminOrders() {
     if (isAdmin) {
       fetchOrders()
     }
-  }, [isAdmin, filter])
+  }, [isAdmin, filter, orderScope])
+
+  const adminPermissions = Array.isArray(admin?.permissions) ? admin.permissions : []
+  const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || adminPermissions.length === 0))
+  const canDeleteOrders = isSuperAdmin || adminPermissions.includes('orders:delete')
 
   const normalizeOrderResponse = (res) => {
     if (Array.isArray(res)) return res
@@ -58,7 +66,10 @@ export default function AdminOrders() {
     try {
       setLoading(true)
       setLoadError('')
-      const params = filter !== 'all' ? { status: filter } : {}
+      const params = {
+        ...(filter !== 'all' ? { status: filter } : {}),
+        ...(orderScope === 'deleted' && canDeleteOrders ? { include_deleted: true } : {}),
+      }
       const res = await adminAPI.getOrders(params)
       setOrders(normalizeOrderResponse(res))
     } catch (error) {
@@ -145,6 +156,28 @@ export default function AdminOrders() {
     setServiceNote('')
     setPaymentAuditLogs([])
     setAssignModalOpen(false)
+    setDeleteModalOpen(false)
+    setDeleteConfirmText('')
+  }
+
+  const openDeleteModal = () => {
+    setDeleteConfirmText('')
+    setDeleteModalOpen(true)
+  }
+
+  const deleteSelectedOrder = async () => {
+    if (!selectedOrder || deleteConfirmText !== 'DELETE') return
+    try {
+      setDeletingOrder(true)
+      await adminAPI.deleteOrder(selectedOrder.id)
+      toast.success('Order deleted successfully')
+      handleCloseOrder()
+      await fetchOrders()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to delete order')
+    } finally {
+      setDeletingOrder(false)
+    }
   }
 
   const loadPaymentAudit = async (orderId) => {
@@ -235,6 +268,13 @@ export default function AdminOrders() {
   return (
     <div className="admin-page">
       <h1>Order Management</h1>
+
+      {canDeleteOrders && (
+        <div className="order-scope-tabs">
+          <button type="button" className={orderScope === 'active' ? 'active' : ''} onClick={() => setOrderScope('active')}>Active Orders</button>
+          <button type="button" className={orderScope === 'deleted' ? 'active' : ''} onClick={() => setOrderScope('deleted')}>Deleted Orders</button>
+        </div>
+      )}
 
       <div className="filter-tabs">
         {[
@@ -355,6 +395,11 @@ export default function AdminOrders() {
                 {(selectedOrder.customer_phone || selectedOrder.phone) && (
                   <button type="button" className="btn-view order-whatsapp-btn" onClick={() => openCustomerWhatsApp(selectedOrder)}>
                     <MessageCircle size={14} /> Message Customer on WhatsApp
+                  </button>
+                )}
+                {canDeleteOrders && !selectedOrder.is_deleted && (
+                  <button type="button" className="btn-delete order-delete-button" onClick={openDeleteModal}>
+                    <Trash2 size={14} /> Delete Order
                   </button>
                 )}
                 <button className="close-btn" onClick={handleCloseOrder}>×</button>
@@ -661,6 +706,28 @@ export default function AdminOrders() {
                     <button type="submit" className="btn-primary" disabled={assigningRider}>{assigningRider ? 'Assigning...' : 'Assign Rider'}</button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+          {deleteModalOpen && (
+            <div className="order-delete-modal">
+              <div className="order-delete-card">
+                <h3>Delete Order?</h3>
+                <p>This will remove the order from active records. This action should only be used for duplicate, test, or incorrect orders.</p>
+                <div className="delete-order-summary">
+                  <strong>{selectedOrder.order_code || `#${selectedOrder.id}`}</strong>
+                  <span>{selectedOrder.customer_name || 'Unknown customer'} · {formatPrice(selectedOrder.total_amount || 0)}</span>
+                </div>
+                <label>
+                  Type DELETE to confirm
+                  <input value={deleteConfirmText} onChange={(event) => setDeleteConfirmText(event.target.value)} autoFocus />
+                </label>
+                <div className="delete-order-actions">
+                  <button type="button" className="btn-cancel" onClick={() => setDeleteModalOpen(false)}>Cancel</button>
+                  <button type="button" className="btn-delete" disabled={deleteConfirmText !== 'DELETE' || deletingOrder} onClick={deleteSelectedOrder}>
+                    {deletingOrder ? 'Deleting...' : 'Delete Order'}
+                  </button>
+                </div>
               </div>
             </div>
           )}

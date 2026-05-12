@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bell, ChevronLeft, ChevronRight, FileText, Headphones, Lock, MessageCircle, PackageCheck, ShoppingCart, Truck, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { announcementsAPI, packsAPI, productsAPI } from '../services/api'
+import { announcementsAPI, packsAPI, productsAPI, resolveMediaUrl } from '../services/api'
 import { useCartStore } from '../store/cartStore'
 import { buildWhatsAppLink } from '../utils/contactUtils'
 import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
@@ -63,7 +63,7 @@ function AnnouncementHeroBanner({ announcement }) {
   return (
     <section className={`homepage-announcement-hero ${announcement.theme || 'green'}`}>
       {announcement.image_url ? (
-        <img src={announcement.image_url} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
+        <img src={resolveMediaUrl(announcement.image_url)} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
       ) : null}
       <div>
         <p className="announcement-label">FoodNova update</p>
@@ -82,7 +82,7 @@ function AnnouncementPopup({ announcement, onDismiss }) {
       <div className={`homepage-announcement-popup ${announcement.theme || 'green'}`}>
         <button type="button" onClick={onDismiss} aria-label="Close announcement"><X size={18} /></button>
         {announcement.image_url ? (
-          <img src={announcement.image_url} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
+          <img src={resolveMediaUrl(announcement.image_url)} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
         ) : null}
         <h2 id="foodnova-popup-title">{announcement.title}</h2>
         <p>{announcement.message}</p>

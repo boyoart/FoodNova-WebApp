@@ -190,6 +190,10 @@ class Order(Base):
     receipt = Column(Text, nullable=True)
     admin_note = Column(Text, default="")
     service_note = Column(Text, default="")
+    is_deleted = Column(Boolean, default=False, index=True)
+    deleted_at = Column(DateTime, nullable=True)
+    deleted_by_admin_id = Column(Integer, nullable=True)
+    deleted_by_admin_name = Column(String(150), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

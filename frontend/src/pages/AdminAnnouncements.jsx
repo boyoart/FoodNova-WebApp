@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Edit3, Eye, Megaphone, Plus, Trash2, X } from 'lucide-react'
-import { adminAPI } from '../services/api'
+import { Edit3, Eye, ImagePlus, Megaphone, Plus, Trash2, X } from 'lucide-react'
+import { adminAPI, resolveMediaUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './AdminAnnouncements.css'
 
@@ -52,7 +52,7 @@ function AnnouncementPreview({ announcement }) {
   return (
     <div className={`announcement-preview ${type} ${theme}`}>
       {type === 'hero_banner' && announcement.image_url ? (
-        <img src={announcement.image_url} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
+        <img src={resolveMediaUrl(announcement.image_url)} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
       ) : null}
       <div>
         <strong>{announcement.title || 'Announcement title'}</strong>
@@ -68,6 +68,7 @@ export default function AdminAnnouncements() {
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [filters, setFilters] = useState({ status: 'all', display_type: 'all' })
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -127,6 +128,37 @@ export default function AdminAnnouncements() {
   }
 
   const updateField = (field, value) => setForm((current) => ({ ...current, [field]: value }))
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload a JPG, PNG, or WEBP image')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be 5MB or smaller')
+      return
+    }
+
+    try {
+      setUploadingImage(true)
+      const response = await adminAPI.uploadAnnouncementImage(file)
+      const imageUrl = response.image_url || response.url || response.data?.image_url
+      if (!imageUrl) throw new Error('Upload did not return an image URL')
+      setForm((current) => ({ ...current, image_url: imageUrl }))
+      toast.success('Announcement image uploaded')
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || error.message || 'Failed to upload image')
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const removeImage = () => setForm((current) => ({ ...current, image_url: '' }))
 
   const submitForm = async (event) => {
     event.preventDefault()
@@ -313,9 +345,27 @@ export default function AdminAnnouncements() {
                 Button Link
                 <input value={form.button_link} onChange={(event) => updateField('button_link', event.target.value)} placeholder="/products" disabled={!canManage} />
               </label>
+              <div className="announcement-image-upload span-2">
+                <div>
+                  <div className="announcement-image-upload-title">Announcement Image</div>
+                  <p>Upload JPG, PNG, or WEBP up to 5MB. The uploaded URL is saved with the announcement.</p>
+                </div>
+                <div className="announcement-image-upload-row">
+                  <div className="announcement-image-preview">
+                    {form.image_url ? <img src={resolveMediaUrl(form.image_url)} alt="Announcement preview" /> : <span>No image selected</span>}
+                  </div>
+                  <div className="announcement-image-actions">
+                    <label className={`announcement-upload-button ${uploadingImage ? 'disabled' : ''}`}>
+                      <ImagePlus size={16} /> {uploadingImage ? 'Uploading...' : 'Upload Image'}
+                      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageUpload} disabled={!canManage || uploadingImage} />
+                    </label>
+                    {form.image_url ? <button type="button" onClick={removeImage} disabled={!canManage || uploadingImage}>Remove image</button> : null}
+                  </div>
+                </div>
+              </div>
               <label className="span-2">
-                Image URL
-                <input value={form.image_url} onChange={(event) => updateField('image_url', event.target.value)} placeholder="Optional hero/banner image URL" disabled={!canManage} />
+                Manual Image URL
+                <input value={form.image_url} onChange={(event) => updateField('image_url', event.target.value)} placeholder="Optional fallback image URL" disabled={!canManage || uploadingImage} />
               </label>
               <label>
                 Theme

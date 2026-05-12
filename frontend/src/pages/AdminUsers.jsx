@@ -28,11 +28,11 @@ const ROLE_OPTIONS = [
 ]
 
 const ROLE_PERMISSIONS = {
-  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'customers:view', 'audit:view', 'admins:view', 'admins:manage', 'exports:view', 'exports:download', 'reports:view'],
+  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delete', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'announcements:view', 'announcements:manage', 'customers:view', 'audit:view', 'admins:view', 'admins:manage', 'exports:view', 'exports:download', 'reports:view'],
   orders_manager: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'cancellations:view', 'cancellations:manage', 'customers:view'],
   stock_manager: ['dashboard:view', 'stock:view', 'stock:manage'],
   payment_manager: ['dashboard:view', 'orders:view', 'payments:view', 'payments:approve', 'cancellations:view', 'cancellations:manage', 'customers:view'],
-  broadcast_manager: ['dashboard:view', 'broadcasts:view', 'broadcasts:send'],
+  broadcast_manager: ['dashboard:view', 'broadcasts:view', 'broadcasts:send', 'announcements:view', 'announcements:manage'],
   customer_support: ['dashboard:view', 'orders:view', 'orders:update', 'cancellations:view', 'customers:view'],
   viewer: ['dashboard:view', 'orders:view', 'stock:view', 'customers:view'],
 }
@@ -41,6 +41,7 @@ const PERMISSION_OPTIONS = [
   ['dashboard:view', 'Dashboard View'],
   ['orders:view', 'Orders View'],
   ['orders:update', 'Orders Update'],
+  ['orders:delete', 'Orders Delete'],
   ['orders:delivery', 'Delivery Management'],
   ['delivery:manage', 'Rider Management'],
   ['cancellations:view', 'Cancellation Requests View'],
@@ -51,6 +52,8 @@ const PERMISSION_OPTIONS = [
   ['stock:manage', 'Stock Management'],
   ['broadcasts:view', 'Broadcast View'],
   ['broadcasts:send', 'Broadcast Send'],
+  ['announcements:view', 'Homepage Announcements View'],
+  ['announcements:manage', 'Homepage Announcements Manage'],
   ['customers:view', 'Customers View'],
   ['audit:view', 'Audit Logs View'],
   ['admins:view', 'Admin Users View'],
@@ -62,10 +65,10 @@ const PERMISSION_OPTIONS = [
 
 const PERMISSION_GROUPS = [
   { title: 'Dashboard', items: [['dashboard:view', 'View dashboard']] },
-  { title: 'Orders', items: [['orders:view', 'View orders'], ['orders:update', 'Update orders'], ['orders:delivery', 'Manage delivery'], ['delivery:manage', 'Manage riders'], ['cancellations:view', 'View cancellations'], ['cancellations:manage', 'Manage cancellations']] },
+  { title: 'Orders', items: [['orders:view', 'View orders'], ['orders:update', 'Update orders'], ['orders:delete', 'Delete orders'], ['orders:delivery', 'Manage delivery'], ['delivery:manage', 'Manage riders'], ['cancellations:view', 'View cancellations'], ['cancellations:manage', 'Manage cancellations']] },
   { title: 'Payments', items: [['payments:view', 'View payments'], ['payments:approve', 'Approve payments']] },
   { title: 'Stock', items: [['stock:view', 'View stock'], ['stock:manage', 'Manage stock']] },
-  { title: 'Broadcasts', items: [['broadcasts:view', 'View broadcasts'], ['broadcasts:send', 'Send broadcasts']] },
+  { title: 'Broadcasts', items: [['broadcasts:view', 'View broadcasts'], ['broadcasts:send', 'Send broadcasts'], ['announcements:view', 'View homepage announcements'], ['announcements:manage', 'Manage homepage announcements']] },
   { title: 'Customers', items: [['customers:view', 'View customers']] },
   { title: 'Admins', items: [['admins:view', 'View admin users'], ['admins:manage', 'Manage admin users']] },
   { title: 'Audit Logs', items: [['audit:view', 'View audit logs']] },

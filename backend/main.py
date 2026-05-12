@@ -59,11 +59,13 @@ UPLOAD_DIR = "uploads"
 AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
 PRODUCT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "products")
 PACK_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "packs")
+ANNOUNCEMENT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "announcements")
 RECEIPT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "receipts")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
 os.makedirs(PACK_UPLOAD_DIR, exist_ok=True)
+os.makedirs(ANNOUNCEMENT_UPLOAD_DIR, exist_ok=True)
 os.makedirs(RECEIPT_UPLOAD_DIR, exist_ok=True)
 
 CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
@@ -433,7 +435,7 @@ ADMIN_ROLE_PERMISSIONS = {
         "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage", "customers:view", "audit:view",
         "admins:view", "admins:manage", "delivery:manage",
         "cancellations:view", "cancellations:manage", "exports:view", "exports:download",
-        "reports:view",
+        "reports:view", "orders:delete",
     ],
     "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
@@ -1022,6 +1024,7 @@ async def save_uploaded_image(file: UploadFile, folder: str, prefix: str) -> str
         AVATAR_UPLOAD_DIR: "foodnova/avatars",
         PRODUCT_UPLOAD_DIR: "foodnova/products",
         PACK_UPLOAD_DIR: "foodnova/packs",
+        ANNOUNCEMENT_UPLOAD_DIR: "foodnova/announcements",
     }
     result = await upload_to_cloudinary(file, folder_map.get(folder, f"foodnova/{prefix}s"), IMAGE_CONTENT_TYPES, 5)
     return result.get("url", "")
@@ -1246,9 +1249,17 @@ def order_to_dict(order: DBOrder) -> dict:
         "receipt": json_load(order.receipt, None),
         "admin_note": order.admin_note or "",
         "service_note": order.service_note or "",
+        "is_deleted": bool(getattr(order, "is_deleted", False)),
+        "deleted_at": iso(getattr(order, "deleted_at", None)),
+        "deleted_by_admin_id": getattr(order, "deleted_by_admin_id", None),
+        "deleted_by_admin_name": getattr(order, "deleted_by_admin_name", "") or "",
         "created_at": iso(order.created_at),
         "updated_at": iso(order.updated_at),
     }
+
+
+def active_order_filter(query):
+    return query.filter(or_(DBOrder.is_deleted == False, DBOrder.is_deleted == None))
 
 
 def normalize_tracking_phone(value: str) -> str:
@@ -1616,6 +1627,10 @@ def ensure_database_compatibility():
             "receipt": "TEXT",
             "admin_note": "TEXT DEFAULT ''",
             "service_note": "TEXT DEFAULT ''",
+            "is_deleted": "BOOLEAN DEFAULT FALSE",
+            "deleted_at": "TIMESTAMP",
+            "deleted_by_admin_id": "INTEGER",
+            "deleted_by_admin_name": "VARCHAR(150)",
             "updated_at": "TIMESTAMP",
         },
         "order_items": {
@@ -1690,6 +1705,7 @@ def ensure_database_compatibility():
             connection.execute(text("UPDATE orders SET payment_status = COALESCE(NULLIF(payment_status, ''), status, 'pending_payment') WHERE payment_status IS NULL OR payment_status = ''"))
             connection.execute(text("UPDATE orders SET order_status = COALESCE(NULLIF(order_status, ''), 'order_placed') WHERE order_status IS NULL OR order_status = ''"))
             connection.execute(text("UPDATE orders SET fulfillment_status = COALESCE(NULLIF(fulfillment_status, ''), order_status, 'order_placed') WHERE fulfillment_status IS NULL OR fulfillment_status = ''"))
+            connection.execute(text("UPDATE orders SET is_deleted = FALSE WHERE is_deleted IS NULL"))
         if "order_items" in existing_tables:
             if is_postgres:
                 if "product_id" in table_columns.get("order_items", {}) and not table_columns["order_items"]["product_id"].get("nullable", True):
@@ -1785,7 +1801,7 @@ def debug_db():
             "users_count": db.query(DBUser).count(),
             "products_count": db.query(DBProduct).count(),
             "packs_count": db.query(DBPack).count(),
-            "orders_count": db.query(DBOrder).count(),
+            "orders_count": active_order_filter(db.query(DBOrder)).count(),
             "notifications_count": db.query(DBNotification).count(),
             "broadcasts_count": db.query(DBBroadcast).count(),
         }
@@ -2324,7 +2340,7 @@ def track_order(payload: TrackOrderPayload):
 
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(func.lower(DBOrder.order_code) == order_code).first()
+        order = active_order_filter(db.query(DBOrder)).filter(func.lower(DBOrder.order_code) == order_code).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found. Please check your order code and phone/email.")
 
@@ -2441,7 +2457,7 @@ def my_orders(request: Request):
     try:
         orders = [
             order_to_dict(order)
-            for order in db.query(DBOrder).filter(DBOrder.customer_email == email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
+            for order in active_order_filter(db.query(DBOrder)).filter(DBOrder.customer_email == email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
         ]
         return {"success": True, "orders": orders, "data": orders}
     except Exception as error:
@@ -2455,7 +2471,7 @@ def my_orders(request: Request):
 def all_orders():
     db = SessionLocal()
     try:
-        orders = [order_to_dict(order) for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
+        orders = [order_to_dict(order) for order in active_order_filter(db.query(DBOrder)).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
         return {"success": True, "orders": orders, "data": orders}
     except Exception as error:
         print("ORDERS LOAD ERROR:", repr(error))
@@ -2468,7 +2484,7 @@ def all_orders():
 def get_order(order_id: int):
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if order:
             data = order_to_dict(order)
             return {"success": True, "order": data, "data": data}
@@ -2482,7 +2498,7 @@ def get_order(order_id: int):
 async def upload_receipt(order_id: int, file: UploadFile = File(...)):
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if order:
             receipt = await save_uploaded_receipt(file)
             receipt["status"] = "submitted"
@@ -2527,7 +2543,7 @@ def create_cancel_request(order_id: int, payload: CancellationRequestPayload, re
         raise HTTPException(status_code=400, detail="Reason must be at least 10 characters")
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         if (order.customer_email or "").strip().lower() != (user.get("email") or "").strip().lower():
@@ -2579,7 +2595,7 @@ def get_cancel_request(order_id: int, request: Request):
     user = require_user(request)
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         if (order.customer_email or "").strip().lower() != (user.get("email") or "").strip().lower():
@@ -2592,11 +2608,25 @@ def get_cancel_request(order_id: int, request: Request):
 
 
 @app.get("/admin/orders")
-def admin_orders(request: Request):
+def admin_orders(request: Request, include_deleted: bool = False, status: Optional[str] = None):
     require_permission(request, "orders:view")
     db = SessionLocal()
     try:
-        orders = [order_to_dict(order) for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
+        query = db.query(DBOrder)
+        if include_deleted:
+            require_permission(request, "orders:delete")
+            query = query.filter(DBOrder.is_deleted == True)
+        else:
+            query = active_order_filter(query)
+        clean_status = str(status or "").strip().lower()
+        if clean_status and clean_status != "all":
+            query = query.filter(or_(
+                func.lower(DBOrder.payment_status) == clean_status,
+                func.lower(DBOrder.order_status) == clean_status,
+                func.lower(DBOrder.fulfillment_status) == clean_status,
+                func.lower(DBOrder.status) == clean_status,
+            ))
+        orders = [order_to_dict(order) for order in query.order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
         return {"success": True, "orders": orders, "data": orders}
     except Exception as error:
         print("ADMIN ORDERS LOAD ERROR:", repr(error))
@@ -2610,7 +2640,7 @@ def admin_get_order(order_id: int, request: Request):
     require_permission(request, "orders:view")
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if order:
             data = order_to_dict(order)
             return {"success": True, "order": data, "data": data}
@@ -2618,6 +2648,36 @@ def admin_get_order(order_id: int, request: Request):
         db.close()
 
     raise HTTPException(status_code=404, detail="Order not found")
+
+
+@app.delete("/admin/orders/{order_id}")
+def delete_admin_order(order_id: int, request: Request):
+    admin = require_permission(request, "orders:delete")
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        old_data = order_to_dict(order)
+        order.is_deleted = True
+        order.deleted_at = datetime.utcnow()
+        order.deleted_by_admin_id = admin.get("id")
+        order.deleted_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
+        order.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(order)
+        create_admin_audit_log(
+            request,
+            admin,
+            "order_deleted",
+            "order",
+            order.id,
+            f"Admin deleted order {order.order_code}",
+            {"order_id": order.id, "order_code": order.order_code, "before": old_data, "after": order_to_dict(order)},
+        )
+        return {"success": True, "message": "Order deleted successfully"}
+    finally:
+        db.close()
 
 
 @app.get("/admin/riders")
@@ -2720,7 +2780,7 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
     admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == payload.rider_id).first()
@@ -2804,7 +2864,7 @@ def update_order(order_id: int, payload: dict, request: Request):
         admin = require_permission(request, "orders:update")
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
 
@@ -2973,7 +3033,7 @@ def update_order(order_id: int, payload: dict, request: Request):
 def confirm_delivery(order_id: int, payload: dict):
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         delivery_code = str(payload.get("delivery_code", "")).strip()
@@ -3278,7 +3338,7 @@ def admin_customers(request: Request):
                 default_address = next((a for a in addresses if a.is_default), addresses[0])
 
             orders = (
-                db.query(DBOrder)
+                active_order_filter(db.query(DBOrder))
                 .filter(DBOrder.customer_email == customer.email)
                 .order_by(DBOrder.created_at.desc())
                 .all()
@@ -3375,7 +3435,7 @@ def admin_reports_summary(request: Request, start_date: Optional[str] = None, en
     db = SessionLocal()
     try:
         orders = (
-            db.query(DBOrder)
+            active_order_filter(db.query(DBOrder))
             .filter(DBOrder.created_at >= start_dt, DBOrder.created_at < end_exclusive)
             .order_by(DBOrder.created_at.desc(), DBOrder.id.desc())
             .all()
@@ -3502,7 +3562,7 @@ def export_orders(request: Request):
                 "created_at": iso(order.created_at),
                 "updated_at": iso(order.updated_at),
             }
-            for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
+            for order in active_order_filter(db.query(DBOrder)).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
         ]
         return csv_download_response("orders", columns, rows)
     finally:
@@ -3517,7 +3577,7 @@ def export_customers(request: Request):
         columns = ["customer_id", "name", "email", "phone", "created_at", "total_orders"]
         rows = []
         for user in db.query(DBUser).filter(DBUser.role == "customer").order_by(DBUser.created_at.desc(), DBUser.id.desc()).all():
-            total_orders = db.query(DBOrder).filter(DBOrder.customer_email == user.email).count()
+            total_orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.customer_email == user.email).count()
             rows.append({
                 "customer_id": user.id,
                 "name": user.full_name or "Customer",
@@ -3563,7 +3623,7 @@ def export_payments(request: Request):
     try:
         columns = ["order_code", "customer_name", "amount", "payment_status", "receipt_uploaded", "approved_by", "approved_at", "rejected_reason"]
         rows = []
-        for order in db.query(DBOrder).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all():
+        for order in active_order_filter(db.query(DBOrder)).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all():
             latest_log = (
                 db.query(DBPaymentApprovalLog)
                 .filter(DBPaymentApprovalLog.order_id == order.id)
@@ -3683,7 +3743,7 @@ def get_cancellation_requests(request: Request, status: Optional[str] = None, re
         safe_limit = max(1, min(int(limit or 100), 500))
         requests = []
         for item in query.order_by(DBCancellationRequest.created_at.desc(), DBCancellationRequest.id.desc()).limit(safe_limit).all():
-            order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+            order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == item.order_id).first()
             requests.append(cancellation_request_to_dict(item, order))
         return {"success": True, "requests": requests, "data": requests}
     finally:
@@ -3698,7 +3758,7 @@ def get_cancellation_request(request_id: int, request: Request):
         item = db.query(DBCancellationRequest).filter(DBCancellationRequest.id == request_id).first()
         if not item:
             raise HTTPException(status_code=404, detail="Cancellation request not found")
-        order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == item.order_id).first()
         data = cancellation_request_to_dict(item, order)
         return {"success": True, "request": data, "data": data}
     finally:
@@ -3713,7 +3773,7 @@ def approve_cancellation_request(request_id: int, payload: CancellationReviewPay
         item = db.query(DBCancellationRequest).filter(DBCancellationRequest.id == request_id).first()
         if not item:
             raise HTTPException(status_code=404, detail="Cancellation request not found")
-        order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == item.order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         item.status = "approved"
@@ -3759,7 +3819,7 @@ def reject_cancellation_request(request_id: int, payload: CancellationReviewPayl
         item = db.query(DBCancellationRequest).filter(DBCancellationRequest.id == request_id).first()
         if not item:
             raise HTTPException(status_code=404, detail="Cancellation request not found")
-        order = db.query(DBOrder).filter(DBOrder.id == item.order_id).first()
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == item.order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         item.status = "rejected"
@@ -4000,6 +4060,13 @@ def get_admin_announcements(request: Request):
         return {"success": True, "announcements": [], "data": []}
     finally:
         db.close()
+
+
+@app.post("/admin/uploads/announcement-image")
+async def upload_announcement_image(request: Request, file: UploadFile = File(...)):
+    require_any_permission(request, ["announcements:manage"])
+    image_url = await save_uploaded_image(file, ANNOUNCEMENT_UPLOAD_DIR, "announcement")
+    return {"success": True, "image_url": image_url, "url": image_url, "data": {"image_url": image_url}}
 
 
 @app.post("/admin/announcements")

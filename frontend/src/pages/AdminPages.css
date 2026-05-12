@@ -1315,6 +1315,108 @@ tbody tr:hover {
   background: var(--fn-primary-dark);
 }
 
+.order-delete-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.order-scope-tabs {
+  display: inline-flex;
+  gap: 0.5rem;
+  background: #eef6f1;
+  border-radius: 8px;
+  padding: 0.35rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.order-scope-tabs button {
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  color: #12351f;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 0.6rem 0.9rem;
+}
+
+.order-scope-tabs button.active {
+  background: var(--fn-primary);
+  color: #fff;
+}
+
+.order-delete-modal {
+  align-items: center;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 1700;
+}
+
+.order-delete-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  max-width: 460px;
+  padding: 1.25rem;
+  width: 100%;
+}
+
+.order-delete-card h3 {
+  color: var(--danger);
+  margin: 0 0 0.5rem;
+}
+
+.order-delete-card p {
+  color: #4b5563;
+  margin: 0 0 1rem;
+}
+
+.delete-order-summary {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+}
+
+.delete-order-summary span {
+  color: #6b7280;
+}
+
+.order-delete-card label {
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  font-weight: 800;
+  gap: 0.45rem;
+}
+
+.order-delete-card input {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  padding: 0.65rem 0.75rem;
+}
+
+.delete-order-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.delete-order-actions .btn-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .admin-receipt-inline,
 .receipt-preview-block {
   display: flex;
