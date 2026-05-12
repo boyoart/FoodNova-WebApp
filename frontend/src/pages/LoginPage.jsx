@@ -36,6 +36,14 @@ export default function LoginPage() {
       const token = res.data.access_token
       login(user, token)
       toast.success('Login successful!')
+      if (user.role === 'messenger' || user.delivery_worker_type === 'messenger') {
+        navigate('/messenger/dashboard')
+        return
+      }
+      if (user.role === 'rider' || user.delivery_worker_type === 'rider') {
+        navigate('/rider/dashboard')
+        return
+      }
       navigate('/')
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed')

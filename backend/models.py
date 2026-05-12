@@ -125,6 +125,92 @@ class DeliveryRider(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DeliveryWorker(Base):
+    __tablename__ = "delivery_workers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    worker_type = Column(String(30), default="messenger", index=True)
+    full_name = Column(String(150), nullable=False, index=True)
+    phone = Column(String(50), nullable=False, index=True)
+    email = Column(String(150), default="", index=True)
+    home_address = Column(Text, default="")
+    emergency_contact_name = Column(String(150), default="")
+    emergency_contact_phone = Column(String(50), default="")
+    id_type = Column(String(80), default="")
+    id_number = Column(String(120), default="")
+    profile_photo_url = Column(Text, default="")
+    id_document_url = Column(Text, default="")
+    vehicle_type = Column(String(80), default="")
+    plate_number = Column(String(80), default="")
+    driver_license_number = Column(String(120), default="")
+    vehicle_photo_url = Column(Text, default="")
+    kyc_status = Column(String(30), default="KYC_PENDING", index=True)
+    operational_status = Column(String(30), default="OFFLINE", index=True)
+    review_note = Column(Text, default="")
+    trust_score = Column(Float, default=100)
+    completed_deliveries = Column(Integer, default=0)
+    failed_deliveries = Column(Integer, default=0)
+    late_deliveries = Column(Integer, default=0)
+    customer_complaints = Column(Integer, default=0)
+    suspicious_gps_gaps = Column(Integer, default=0)
+    latest_latitude = Column(Float, nullable=True)
+    latest_longitude = Column(Float, nullable=True)
+    latest_accuracy = Column(Float, nullable=True)
+    latest_heading = Column(Float, nullable=True)
+    latest_speed = Column(Float, nullable=True)
+    last_seen_at = Column(DateTime, nullable=True)
+    inside_zone = Column(Boolean, default=False)
+    approved_at = Column(DateTime, nullable=True)
+    approved_by_admin_id = Column(Integer, nullable=True)
+    approved_by_admin_name = Column(String(150), default="")
+    suspended_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User")
+
+
+class OperationalZone(Base):
+    __tablename__ = "operational_zones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    zone_name = Column(String(150), default="FoodNova Local Zone")
+    center_latitude = Column(Float, default=6.5244)
+    center_longitude = Column(Float, default=3.3792)
+    radius_meters = Column(Integer, default=5000)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DeliveryAssignmentLog(Base):
+    __tablename__ = "delivery_assignment_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, nullable=True, index=True)
+    order_code = Column(String(30), default="", index=True)
+    worker_id = Column(Integer, nullable=True, index=True)
+    worker_type = Column(String(30), default="")
+    worker_name = Column(String(150), default="")
+    worker_phone = Column(String(50), default="")
+    status = Column(String(60), default="assigned", index=True)
+    assigned_by_admin_id = Column(Integer, nullable=True)
+    assigned_by_admin_name = Column(String(150), default="")
+    released_by_admin_id = Column(Integer, nullable=True)
+    released_by_admin_name = Column(String(150), default="")
+    released_at = Column(DateTime, nullable=True)
+    pickup_time = Column(DateTime, nullable=True)
+    pickup_latitude = Column(Float, nullable=True)
+    pickup_longitude = Column(Float, nullable=True)
+    gps_trail_json = Column(Text, default="[]")
+    completion_time = Column(DateTime, nullable=True)
+    delivery_code_entered = Column(String(50), default="")
+    risk_flags_json = Column(Text, default="[]")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CancellationRequest(Base):
     __tablename__ = "cancellation_requests"
 

@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import io
 import json
+import math
 import os
 import random
 from pathlib import Path
@@ -39,6 +40,9 @@ from models import (
     Product as DBProduct,
     Profile as DBProfile,
     DeliveryRider as DBDeliveryRider,
+    DeliveryWorker as DBDeliveryWorker,
+    DeliveryAssignmentLog as DBDeliveryAssignmentLog,
+    OperationalZone as DBOperationalZone,
     User as DBUser,
 )
 
@@ -60,12 +64,14 @@ AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
 PRODUCT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "products")
 PACK_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "packs")
 ANNOUNCEMENT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "announcements")
+WORKFORCE_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "workforce")
 RECEIPT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "receipts")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(AVATAR_UPLOAD_DIR, exist_ok=True)
 os.makedirs(PRODUCT_UPLOAD_DIR, exist_ok=True)
 os.makedirs(PACK_UPLOAD_DIR, exist_ok=True)
 os.makedirs(ANNOUNCEMENT_UPLOAD_DIR, exist_ok=True)
+os.makedirs(WORKFORCE_UPLOAD_DIR, exist_ok=True)
 os.makedirs(RECEIPT_UPLOAD_DIR, exist_ok=True)
 
 CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
@@ -258,6 +264,28 @@ class LoginPayload(BaseModel):
     password: str
 
 
+class LocationPingPayload(BaseModel):
+    latitude: float
+    longitude: float
+    accuracy: Optional[float] = None
+    heading: Optional[float] = None
+    speed: Optional[float] = None
+    timestamp: Optional[datetime] = None
+
+
+class WorkerReviewPayload(BaseModel):
+    status: str
+    review_note: Optional[str] = ""
+
+
+class OperationalZonePayload(BaseModel):
+    zone_name: Optional[str] = "FoodNova Local Zone"
+    center_latitude: float
+    center_longitude: float
+    radius_meters: int
+    is_active: Optional[bool] = True
+
+
 class ChangePasswordPayload(BaseModel):
     current_password: str
     new_password: str
@@ -435,9 +463,9 @@ ADMIN_ROLE_PERMISSIONS = {
         "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage", "customers:view", "audit:view",
         "admins:view", "admins:manage", "delivery:manage",
         "cancellations:view", "cancellations:manage", "exports:view", "exports:download",
-        "reports:view", "orders:delete",
+        "reports:view", "orders:delete", "riders:manage", "workforce:view", "workforce:manage",
     ],
-    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "cancellations:view", "cancellations:manage", "customers:view"],
+    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
     "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "cancellations:view", "cancellations:manage", "customers:view"],
     "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage"],
@@ -1056,9 +1084,23 @@ async def save_uploaded_receipt(file: UploadFile) -> dict:
     }
 
 
+async def save_workforce_upload(file: Optional[UploadFile], allow_pdf: bool = False) -> str:
+    if not file:
+        return ""
+    allowed = RECEIPT_CONTENT_TYPES if allow_pdf else IMAGE_CONTENT_TYPES
+    result = await upload_to_cloudinary(
+        file,
+        "foodnova/workforce",
+        allowed,
+        10 if allow_pdf else 5,
+        "Only JPG, PNG, WEBP, or PDF files are allowed." if allow_pdf else "Only JPG, PNG, or WEBP images are allowed.",
+    )
+    return result.get("url", "")
+
+
 def db_user_to_dict(user: DBUser) -> dict:
     full_name = user.full_name or "FoodNova User"
-    return {
+    data = {
         "id": user.id,
         "full_name": full_name,
         "fullName": full_name,
@@ -1074,6 +1116,9 @@ def db_user_to_dict(user: DBUser) -> dict:
         "created_at": iso(user.created_at),
         "updated_at": iso(user.updated_at),
     }
+    if (user.role or "") in ["messenger", "rider"]:
+        data["delivery_worker_type"] = user.role
+    return data
 
 
 def admin_user_to_dict(user: DBUser) -> dict:
@@ -1188,6 +1233,64 @@ def rider_to_dict(rider: DBDeliveryRider) -> dict:
     }
 
 
+def operational_zone_to_dict(zone: DBOperationalZone) -> dict:
+    return {
+        "id": zone.id,
+        "zone_name": zone.zone_name or "FoodNova Local Zone",
+        "center_latitude": zone.center_latitude,
+        "center_longitude": zone.center_longitude,
+        "radius_meters": zone.radius_meters or 0,
+        "is_active": bool(zone.is_active),
+        "created_at": iso(zone.created_at),
+        "updated_at": iso(zone.updated_at),
+    }
+
+
+def worker_to_dict(worker: DBDeliveryWorker) -> dict:
+    return {
+        "id": worker.id,
+        "user_id": worker.user_id,
+        "worker_type": worker.worker_type or "messenger",
+        "delivery_worker_type": worker.worker_type or "messenger",
+        "full_name": worker.full_name or "",
+        "name": worker.full_name or "",
+        "phone": worker.phone or "",
+        "email": worker.email or "",
+        "home_address": worker.home_address or "",
+        "emergency_contact_name": worker.emergency_contact_name or "",
+        "emergency_contact_phone": worker.emergency_contact_phone or "",
+        "id_type": worker.id_type or "",
+        "id_number": worker.id_number or "",
+        "profile_photo_url": worker.profile_photo_url or "",
+        "id_document_url": worker.id_document_url or "",
+        "vehicle_type": worker.vehicle_type or "",
+        "plate_number": worker.plate_number or "",
+        "driver_license_number": worker.driver_license_number or "",
+        "vehicle_photo_url": worker.vehicle_photo_url or "",
+        "kyc_status": worker.kyc_status or "KYC_PENDING",
+        "operational_status": worker.operational_status or "OFFLINE",
+        "review_note": worker.review_note or "",
+        "trust_score": worker.trust_score or 100,
+        "completed_deliveries": worker.completed_deliveries or 0,
+        "failed_deliveries": worker.failed_deliveries or 0,
+        "late_deliveries": worker.late_deliveries or 0,
+        "customer_complaints": worker.customer_complaints or 0,
+        "suspicious_gps_gaps": worker.suspicious_gps_gaps or 0,
+        "latest_latitude": worker.latest_latitude,
+        "latest_longitude": worker.latest_longitude,
+        "latest_accuracy": worker.latest_accuracy,
+        "latest_heading": worker.latest_heading,
+        "latest_speed": worker.latest_speed,
+        "last_seen_at": iso(worker.last_seen_at),
+        "inside_zone": bool(worker.inside_zone),
+        "approved_at": iso(worker.approved_at),
+        "approved_by_admin_name": worker.approved_by_admin_name or "",
+        "suspended_at": iso(worker.suspended_at),
+        "created_at": iso(worker.created_at),
+        "updated_at": iso(worker.updated_at),
+    }
+
+
 def order_item_to_dict(item: DBOrderItem) -> dict:
     return {
         "id": item.id,
@@ -1260,6 +1363,56 @@ def order_to_dict(order: DBOrder) -> dict:
 
 def active_order_filter(query):
     return query.filter(or_(DBOrder.is_deleted == False, DBOrder.is_deleted == None))
+
+
+def distance_meters(lat1, lon1, lat2, lon2) -> float:
+    radius = 6371000
+    phi1 = math.radians(float(lat1))
+    phi2 = math.radians(float(lat2))
+    d_phi = math.radians(float(lat2) - float(lat1))
+    d_lambda = math.radians(float(lon2) - float(lon1))
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    return radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def get_active_operational_zone(db) -> Optional[DBOperationalZone]:
+    return db.query(DBOperationalZone).filter(DBOperationalZone.is_active == True).order_by(DBOperationalZone.updated_at.desc(), DBOperationalZone.id.desc()).first()
+
+
+def ensure_default_operational_zone(db) -> DBOperationalZone:
+    zone = get_active_operational_zone(db)
+    if zone:
+        return zone
+    zone = DBOperationalZone(zone_name="FoodNova Local Zone", center_latitude=6.5244, center_longitude=3.3792, radius_meters=5000, is_active=True)
+    db.add(zone)
+    db.commit()
+    db.refresh(zone)
+    return zone
+
+
+def worker_inside_zone(worker: DBDeliveryWorker, latitude: float, longitude: float, db) -> bool:
+    if (worker.worker_type or "") != "messenger":
+        return True
+    zone = ensure_default_operational_zone(db)
+    if not zone.is_active:
+        return True
+    return distance_meters(latitude, longitude, zone.center_latitude, zone.center_longitude) <= float(zone.radius_meters or 0)
+
+
+def require_worker(request: Request, expected_type: Optional[str] = None):
+    user = require_user(request)
+    if user.get("role") not in ["messenger", "rider"]:
+        raise HTTPException(status_code=403, detail="Delivery worker access required.")
+    if expected_type and user.get("role") != expected_type:
+        raise HTTPException(status_code=403, detail=f"{expected_type.title()} access required.")
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
+        return user, worker_to_dict(worker)
+    finally:
+        db.close()
 
 
 def normalize_tracking_phone(value: str) -> str:
@@ -1764,6 +1917,7 @@ def seed_database():
                     items=json_dump(pack.get("items", [])),
                     is_active=pack.get("is_active", True),
                 ))
+        ensure_default_operational_zone(db)
         db.commit()
         db.close()
     except Exception as error:
@@ -1939,6 +2093,96 @@ def register(payload: RegisterPayload):
         db.close()
 
 
+@app.post("/delivery/workers/signup")
+async def delivery_worker_signup(
+    request: Request,
+    worker_type: str = Form(...),
+    full_name: str = Form(...),
+    phone: str = Form(...),
+    password: str = Form(...),
+    confirm_password: str = Form(...),
+    email: Optional[str] = Form(""),
+    home_address: str = Form(...),
+    emergency_contact_name: str = Form(...),
+    emergency_contact_phone: str = Form(...),
+    id_type: str = Form(...),
+    id_number: str = Form(...),
+    vehicle_type: Optional[str] = Form(""),
+    plate_number: Optional[str] = Form(""),
+    driver_license_number: Optional[str] = Form(""),
+    profile_photo: Optional[UploadFile] = File(None),
+    id_document: Optional[UploadFile] = File(None),
+    vehicle_photo: Optional[UploadFile] = File(None),
+):
+    worker_type = (worker_type or "").strip().lower()
+    if worker_type not in ["messenger", "rider"]:
+        raise HTTPException(status_code=400, detail="Invalid delivery worker type")
+    if password != confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    if worker_type == "rider" and not (vehicle_type or "").strip():
+        raise HTTPException(status_code=400, detail="Vehicle type is required for riders")
+
+    clean_phone = (phone or "").strip()
+    clean_email = (email or "").strip().lower()
+    account_email = clean_email or f"{''.join(ch for ch in clean_phone if ch.isdigit())}@{worker_type}.foodnova.local"
+
+    db = SessionLocal()
+    try:
+        if get_db_user_by_email(db, account_email) or get_db_user_by_phone(db, clean_phone):
+            raise HTTPException(status_code=400, detail="A delivery account with this email or phone already exists")
+
+        profile_photo_url = await save_workforce_upload(profile_photo, False)
+        id_document_url = await save_workforce_upload(id_document, True)
+        vehicle_photo_url = await save_workforce_upload(vehicle_photo, False) if worker_type == "rider" else ""
+
+        user = DBUser(
+            full_name=full_name.strip(),
+            email=account_email,
+            phone=clean_phone,
+            password=_hash_new_password(password),
+            role=worker_type,
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+        worker = DBDeliveryWorker(
+            user_id=user.id,
+            worker_type=worker_type,
+            full_name=full_name.strip(),
+            phone=clean_phone,
+            email=clean_email,
+            home_address=home_address.strip(),
+            emergency_contact_name=emergency_contact_name.strip(),
+            emergency_contact_phone=emergency_contact_phone.strip(),
+            id_type=id_type.strip(),
+            id_number=id_number.strip(),
+            profile_photo_url=profile_photo_url,
+            id_document_url=id_document_url,
+            vehicle_type=(vehicle_type or "").strip() if worker_type == "rider" else "",
+            plate_number=(plate_number or "").strip() if worker_type == "rider" else "",
+            driver_license_number=(driver_license_number or "").strip() if worker_type == "rider" else "",
+            vehicle_photo_url=vehicle_photo_url,
+            kyc_status="KYC_PENDING",
+            operational_status="OFFLINE",
+        )
+        db.add(worker)
+        db.commit()
+        db.refresh(worker)
+        worker_data = worker_to_dict(worker)
+        create_admin_audit_log(
+            request,
+            {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
+            "worker_registered",
+            "delivery_worker",
+            worker.id,
+            f"{worker_type.title()} registered for FoodNova delivery workforce",
+            {"worker": worker_data},
+        )
+        return {"success": True, "message": "Delivery account submitted for review", "worker": worker_data, "data": worker_data}
+    finally:
+        db.close()
+
+
 @app.post("/auth/login")
 def login(payload: LoginPayload, request: Request):
     email = payload.email.lower().strip() if payload.email else ""
@@ -1956,6 +2200,11 @@ def login(payload: LoginPayload, request: Request):
         token = create_access_token(user)
 
         user_data = db_user_to_dict(user)
+        if user_data.get("role") in ["messenger", "rider"]:
+            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
+            if worker:
+                user_data["delivery_worker"] = worker_to_dict(worker)
+                user_data["delivery_worker_type"] = worker.worker_type or user_data.get("role")
         if user_data.get("role") == "admin":
             create_admin_audit_log(
                 request,
@@ -1987,6 +2236,129 @@ def admin_login(payload: LoginPayload, request: Request):
         user_data = db_user_to_dict(user)
         create_admin_audit_log(request, user_data, "admin_login", "admin", user.id, "Admin logged in")
         return auth_response("Admin login successful", user_data, token)
+    finally:
+        db.close()
+
+
+def update_worker_location(worker: DBDeliveryWorker, payload: LocationPingPayload, db) -> bool:
+    inside_zone = worker_inside_zone(worker, payload.latitude, payload.longitude, db)
+    worker.latest_latitude = payload.latitude
+    worker.latest_longitude = payload.longitude
+    worker.latest_accuracy = payload.accuracy
+    worker.latest_heading = payload.heading
+    worker.latest_speed = payload.speed
+    worker.last_seen_at = payload.timestamp or datetime.utcnow()
+    worker.inside_zone = inside_zone
+    worker.updated_at = datetime.utcnow()
+    return inside_zone
+
+
+def get_current_worker_record(request: Request, expected_type: Optional[str] = None):
+    user = require_user(request)
+    role = user.get("role")
+    if role not in ["messenger", "rider"]:
+        raise HTTPException(status_code=403, detail="Delivery worker access required.")
+    if expected_type and role != expected_type:
+        raise HTTPException(status_code=403, detail=f"{expected_type.title()} access required.")
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
+        return db, user, worker
+    except Exception:
+        db.close()
+        raise
+
+
+@app.get("/delivery/me")
+def delivery_me(request: Request):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        data = worker_to_dict(worker)
+        return {"success": True, "user": user, "worker": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.post("/messenger/go-online")
+def messenger_go_online(payload: LocationPingPayload, request: Request):
+    db, user, worker = get_current_worker_record(request, "messenger")
+    try:
+        if worker.kyc_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
+        inside_zone = update_worker_location(worker, payload, db)
+        if not inside_zone:
+            worker.operational_status = "OFFLINE"
+            db.commit()
+            raise HTTPException(status_code=403, detail="You must be within the operational area to receive delivery requests.")
+        worker.operational_status = "ONLINE"
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"Messenger {worker.full_name} went online", {"worker": data})
+        return {"success": True, "worker": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.post("/rider/go-online")
+def rider_go_online(payload: LocationPingPayload, request: Request):
+    db, user, worker = get_current_worker_record(request, "rider")
+    try:
+        if worker.kyc_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
+        update_worker_location(worker, payload, db)
+        worker.operational_status = "ONLINE"
+        worker.inside_zone = True
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"Rider {worker.full_name} went online", {"worker": data})
+        return {"success": True, "worker": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.post("/delivery/go-offline")
+def delivery_go_offline(request: Request):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        worker.operational_status = "OFFLINE"
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        create_admin_audit_log(request, user, "worker_go_offline", "delivery_worker", worker.id, f"{worker.worker_type.title()} {worker.full_name} went offline", {"worker": data})
+        return {"success": True, "worker": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.post("/delivery/location-ping")
+def delivery_location_ping(payload: LocationPingPayload, request: Request):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        if worker.kyc_status != "APPROVED":
+            raise HTTPException(status_code=403, detail="Delivery account is not approved.")
+        update_worker_location(worker, payload, db)
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        create_admin_audit_log(request, user, "worker_location_ping", "delivery_worker", worker.id, f"Location ping from {worker.full_name}", {"latitude": payload.latitude, "longitude": payload.longitude, "inside_zone": worker.inside_zone})
+        return {"success": True, "worker": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.post("/delivery/panic-alert")
+def delivery_panic_alert(payload: LocationPingPayload, request: Request):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        update_worker_location(worker, payload, db)
+        db.commit()
+        create_admin_audit_log(request, user, "worker_panic_alert", "delivery_worker", worker.id, f"Emergency alert from {worker.full_name}", {"worker": worker_to_dict(worker), "latitude": payload.latitude, "longitude": payload.longitude})
+        return {"success": True, "message": "Emergency alert sent to FoodNova admin."}
     finally:
         db.close()
 
@@ -2648,6 +3020,108 @@ def admin_get_order(order_id: int, request: Request):
         db.close()
 
     raise HTTPException(status_code=404, detail="Order not found")
+
+
+def require_workforce_view(request: Request):
+    return require_any_permission(request, ["workforce:view", "workforce:manage", "delivery:manage", "riders:manage"])
+
+
+def require_workforce_manage(request: Request):
+    return require_any_permission(request, ["workforce:manage", "delivery:manage", "riders:manage"])
+
+
+@app.get("/admin/workforce")
+def get_delivery_workforce(request: Request, worker_type: Optional[str] = None, status: Optional[str] = None, operational_status: Optional[str] = None, inside_zone: Optional[bool] = None):
+    require_workforce_view(request)
+    db = SessionLocal()
+    try:
+        query = db.query(DBDeliveryWorker)
+        if worker_type in ["messenger", "rider"]:
+            query = query.filter(DBDeliveryWorker.worker_type == worker_type)
+        if status:
+            query = query.filter(DBDeliveryWorker.kyc_status == status.upper())
+        if operational_status:
+            query = query.filter(DBDeliveryWorker.operational_status == operational_status.upper())
+        if inside_zone is not None:
+            query = query.filter(DBDeliveryWorker.inside_zone == inside_zone)
+        workers = [worker_to_dict(worker) for worker in query.order_by(DBDeliveryWorker.created_at.desc(), DBDeliveryWorker.id.desc()).all()]
+        return {"success": True, "workers": workers, "data": workers}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/workforce/{worker_id}/status")
+def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request: Request):
+    admin = require_workforce_manage(request)
+    new_status = (payload.status or "").strip().upper()
+    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "KYC_PENDING"]:
+        raise HTTPException(status_code=400, detail="Invalid worker status")
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id).first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Delivery worker not found")
+        old_data = worker_to_dict(worker)
+        worker.kyc_status = new_status
+        worker.review_note = (payload.review_note or "").strip()
+        if new_status == "APPROVED":
+            worker.approved_at = datetime.utcnow()
+            worker.approved_by_admin_id = admin.get("id")
+            worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
+            worker.suspended_at = None
+        if new_status == "SUSPENDED":
+            worker.operational_status = "OFFLINE"
+            worker.suspended_at = datetime.utcnow()
+        if new_status in ["REJECTED", "KYC_PENDING"]:
+            worker.operational_status = "OFFLINE"
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        action = {
+            "APPROVED": "worker_approved",
+            "REJECTED": "worker_rejected",
+            "SUSPENDED": "worker_suspended",
+            "KYC_PENDING": "worker_reactivated",
+        }.get(new_status, "worker_status_updated")
+        create_admin_audit_log(request, admin, action, "delivery_worker", worker.id, f"Admin set {worker.full_name} to {new_status}", {"before": old_data, "after": data})
+        return {"success": True, "worker": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.get("/admin/delivery-zone")
+def get_delivery_zone(request: Request):
+    require_workforce_view(request)
+    db = SessionLocal()
+    try:
+        zone = ensure_default_operational_zone(db)
+        data = operational_zone_to_dict(zone)
+        return {"success": True, "zone": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/delivery-zone")
+def update_delivery_zone(payload: OperationalZonePayload, request: Request):
+    admin = require_workforce_manage(request)
+    db = SessionLocal()
+    try:
+        zone = ensure_default_operational_zone(db)
+        old_data = operational_zone_to_dict(zone)
+        zone.zone_name = (payload.zone_name or "FoodNova Local Zone").strip()
+        zone.center_latitude = payload.center_latitude
+        zone.center_longitude = payload.center_longitude
+        zone.radius_meters = max(50, int(payload.radius_meters or 0))
+        zone.is_active = payload.is_active is not False
+        zone.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(zone)
+        data = operational_zone_to_dict(zone)
+        create_admin_audit_log(request, admin, "delivery_zone_updated", "operational_zone", zone.id, "Admin updated delivery operational zone", {"before": old_data, "after": data})
+        return {"success": True, "zone": data, "data": data}
+    finally:
+        db.close()
 
 
 @app.delete("/admin/orders/{order_id}")

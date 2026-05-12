@@ -239,6 +239,21 @@ export const authAPI = {
   },
 };
 
+export const workerAPI = {
+  signup: async (payload = {}) => {
+    const formData = new FormData();
+    Object.entries(payload).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") formData.append(key, value);
+    });
+    return (await api.post("/delivery/workers/signup", formData, multipartConfig)).data;
+  },
+  me: async () => (await api.get("/delivery/me")).data,
+  goOnline: async (workerType, payload) => (await api.post(workerType === "messenger" ? "/messenger/go-online" : "/rider/go-online", payload)).data,
+  goOffline: async () => (await api.post("/delivery/go-offline")).data,
+  locationPing: async (payload) => (await api.post("/delivery/location-ping", payload)).data,
+  panicAlert: async (payload) => (await api.post("/delivery/panic-alert", payload)).data,
+};
+
 export const ordersAPI = {
   create: async (payload) => {
     const response = await api.post("/orders", payload);
@@ -338,6 +353,14 @@ export const adminAPI = {
     const riders = normalizeList(response.data, ["riders"]);
     return { data: riders, raw: response.data };
   },
+  getWorkforce: async (params = {}) => {
+    const response = await api.get("/admin/workforce", { params });
+    const workers = normalizeList(response.data, ["workers"]);
+    return { data: workers, raw: response.data };
+  },
+  updateWorkerStatus: async (id, payload) => (await api.patch(`/admin/workforce/${id}/status`, payload)).data,
+  getDeliveryZone: async () => (await api.get("/admin/delivery-zone")).data,
+  updateDeliveryZone: async (payload) => (await api.patch("/admin/delivery-zone", payload)).data,
   createRider: async (payload) => (await api.post("/admin/riders", payload)).data,
   updateRider: async (id, payload) => (await api.patch(`/admin/riders/${id}`, payload)).data,
   deactivateRider: async (id) => (await api.delete(`/admin/riders/${id}`)).data,

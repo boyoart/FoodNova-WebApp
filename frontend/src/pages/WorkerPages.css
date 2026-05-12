@@ -1,0 +1,260 @@
+.worker-auth-page,
+.worker-dashboard {
+  background: #f6fbf8;
+  min-height: calc(100vh - 60px);
+  padding: 1.5rem;
+}
+
+.worker-signup-card,
+.worker-panel,
+.delivery-zone-card,
+.invite-links-panel,
+.workforce-card {
+  background: #fff;
+  border: 1px solid rgba(8, 122, 52, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+}
+
+.worker-signup-card {
+  margin: 0 auto;
+  max-width: 920px;
+  padding: 1.25rem;
+}
+
+.worker-auth-header p,
+.worker-hero-panel p {
+  color: #087a34;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+}
+
+.worker-auth-header h1,
+.worker-hero-panel h1,
+.delivery-zone-card h1,
+.workforce-header h1 {
+  color: #12351f;
+  margin: 0;
+}
+
+.worker-auth-header span,
+.worker-hero-panel span,
+.delivery-zone-card p,
+.workforce-header p {
+  color: #5d6b62;
+}
+
+.worker-form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 1.25rem 0;
+}
+
+.worker-form-grid label,
+.delivery-zone-card label {
+  color: #24382b;
+  display: flex;
+  flex-direction: column;
+  font-weight: 800;
+  gap: 0.4rem;
+}
+
+.worker-form-grid input,
+.delivery-zone-card input,
+.worker-review-actions input,
+.workforce-filters select {
+  border: 1px solid #d9e7de;
+  border-radius: 8px;
+  font: inherit;
+  min-height: 42px;
+  padding: 0.65rem 0.75rem;
+}
+
+.worker-primary-button,
+.worker-actions-grid button,
+.delivery-zone-card button,
+.workforce-header button,
+.invite-links-panel button,
+.worker-review-actions button {
+  align-items: center;
+  background: #087a34;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 0.45rem;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0.7rem 1rem;
+}
+
+.worker-primary-button {
+  width: 100%;
+}
+
+.worker-auth-footer {
+  text-align: center;
+}
+
+.worker-dashboard {
+  display: grid;
+  gap: 1rem;
+}
+
+.worker-panel {
+  padding: 1.25rem;
+}
+
+.worker-hero-panel,
+.workforce-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.worker-hero-panel strong,
+.worker-status {
+  background: #e6f6ec;
+  border-radius: 999px;
+  color: #087a34;
+  font-weight: 900;
+  padding: 0.35rem 0.75rem;
+}
+
+.worker-actions-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.worker-actions-grid .panic-button {
+  background: #b3261e;
+}
+
+.worker-detail-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.worker-detail-grid div {
+  background: #f7fbf8;
+  border-radius: 8px;
+  padding: 0.85rem;
+}
+
+.worker-detail-grid strong,
+.worker-detail-grid span {
+  display: block;
+}
+
+.worker-detail-grid strong {
+  color: #12351f;
+}
+
+.worker-detail-grid span,
+.muted {
+  color: #64756a;
+}
+
+.workforce-admin-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.invite-links-panel {
+  padding: 1rem;
+}
+
+.invite-links-panel div,
+.workforce-filters,
+.worker-review-actions div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.workforce-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.workforce-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+}
+
+.workforce-card-head {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.workforce-card h2,
+.invite-links-panel h2 {
+  color: #12351f;
+  margin: 0;
+}
+
+.workforce-card p {
+  color: #5d6b62;
+  margin: 0;
+}
+
+.worker-status.REJECTED,
+.worker-status.SUSPENDED {
+  background: #fee9e7;
+  color: #b3261e;
+}
+
+.worker-status.KYC_PENDING {
+  background: #fff6d7;
+  color: #8a6500;
+}
+
+.worker-review-actions {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.worker-review-actions button:nth-child(2),
+.worker-review-actions button:nth-child(3) {
+  background: #b3261e;
+}
+
+.delivery-zone-card {
+  display: grid;
+  gap: 1rem;
+  margin: 0 auto;
+  max-width: 640px;
+  padding: 1.25rem;
+}
+
+.zone-checkbox {
+  align-items: center;
+  flex-direction: row !important;
+}
+
+@media (max-width: 720px) {
+  .worker-form-grid,
+  .worker-actions-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .worker-hero-panel,
+  .workforce-header,
+  .workforce-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
