@@ -2093,6 +2093,7 @@ def register(payload: RegisterPayload):
         db.close()
 
 
+@app.post("/delivery-workers/signup")
 @app.post("/delivery/workers/signup")
 async def delivery_worker_signup(
     request: Request,

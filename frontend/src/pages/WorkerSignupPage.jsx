@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { workerAPI } from '../services/api'
 import './WorkerPages.css'
@@ -21,14 +21,20 @@ const emptyForm = {
 }
 
 export default function WorkerSignupPage({ workerType }) {
-  const navigate = useNavigate()
   const routeType = useParams().workerType
   const type = (workerType || routeType) === 'rider' ? 'rider' : 'messenger'
   const [form, setForm] = useState(emptyForm)
   const [files, setFiles] = useState({})
   const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
 
-  const title = useMemo(() => type === 'rider' ? 'Rider Signup' : 'Messenger Signup', [type])
+  const title = useMemo(() => type === 'rider' ? 'FoodNova Rider Signup' : 'FoodNova Messenger Signup', [type])
+  const subtitle = useMemo(
+    () => type === 'rider'
+      ? 'Apply as a vehicle-based delivery rider for FoodNova.'
+      : 'Apply as a local walking delivery messenger for FoodNova.',
+    [type],
+  )
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }))
   const updateFile = (field, file) => setFiles((current) => ({ ...current, [field]: file || null }))
 
@@ -48,7 +54,7 @@ export default function WorkerSignupPage({ workerType }) {
         vehicle_photo: files.vehicle_photo,
       })
       toast.success('Delivery account submitted for review')
-      navigate('/login')
+      setSubmitted(true)
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Signup failed')
     } finally {
@@ -58,11 +64,21 @@ export default function WorkerSignupPage({ workerType }) {
 
   return (
     <div className="worker-auth-page">
-      <form className="worker-signup-card" onSubmit={submit}>
+      {submitted ? (
+        <section className="worker-signup-card worker-submitted-card">
+          <div className="worker-auth-header">
+            <p>Application received</p>
+            <h1>{title}</h1>
+            <span>Your FoodNova delivery account is under review. You will be notified once approved.</span>
+          </div>
+          <p className="worker-auth-footer"><Link to="/login">Go to login</Link></p>
+        </section>
+      ) : (
+        <form className="worker-signup-card" onSubmit={submit}>
         <div className="worker-auth-header">
           <p>Private FoodNova workforce link</p>
           <h1>{title}</h1>
-          <span>{type === 'messenger' ? 'Local walking delivery personnel' : 'Vehicle delivery personnel'}</span>
+          <span>{subtitle}</span>
         </div>
 
         <div className="worker-form-grid">
@@ -90,7 +106,8 @@ export default function WorkerSignupPage({ workerType }) {
 
         <button type="submit" className="worker-primary-button" disabled={submitting}>{submitting ? 'Submitting...' : 'Submit for Review'}</button>
         <p className="worker-auth-footer">Already approved? <Link to="/login">Login here</Link></p>
-      </form>
+        </form>
+      )}
     </div>
   )
 }

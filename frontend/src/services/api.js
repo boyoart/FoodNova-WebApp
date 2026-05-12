@@ -245,7 +245,7 @@ export const workerAPI = {
     Object.entries(payload).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== "") formData.append(key, value);
     });
-    return (await api.post("/delivery/workers/signup", formData, multipartConfig)).data;
+    return (await api.post("/delivery-workers/signup", formData, multipartConfig)).data;
   },
   me: async () => (await api.get("/delivery/me")).data,
   goOnline: async (workerType, payload) => (await api.post(workerType === "messenger" ? "/messenger/go-online" : "/rider/go-online", payload)).data,
