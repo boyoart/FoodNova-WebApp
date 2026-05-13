@@ -371,6 +371,12 @@ class AdminAuditLog(Base):
     metadata_json = Column(Text, nullable=True)
     ip_address = Column(String(80), default="")
     user_agent = Column(Text, default="")
+    device_type = Column(String(80), nullable=True)
+    browser = Column(String(120), nullable=True)
+    operating_system = Column(String(120), nullable=True)
+    location_country = Column(String(120), nullable=True)
+    location_region = Column(String(120), nullable=True)
+    location_city = Column(String(120), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

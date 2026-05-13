@@ -19,6 +19,19 @@ const formatAction = (value) =>
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 
+const recorded = (value) => value || 'Not recorded'
+
+const locationLabel = (log) => {
+  const parts = [log.location_city, log.location_region, log.location_country].filter(Boolean)
+  return parts.length ? parts.join(', ') : 'Not recorded'
+}
+
+const deviceLabel = (log) => {
+  const browser = log.browser || 'Browser not recorded'
+  const os = log.operating_system || 'OS not recorded'
+  return `${browser} on ${os}`
+}
+
 const sameDay = (a, b) =>
   a.getFullYear() === b.getFullYear() &&
   a.getMonth() === b.getMonth() &&
@@ -67,6 +80,7 @@ export default function AdminAuditLogs() {
       }
       if (range.start_date) params.start_date = range.start_date
       if (range.end_date) params.end_date = range.end_date
+      if (search.trim()) params.search = search.trim()
       if (actionFilter) params.action = actionFilter
       const response = await adminAPI.getAuditLogs(params)
       setLogs(response.data || [])
@@ -105,24 +119,7 @@ export default function AdminAuditLogs() {
     fetchLogs(1, emptyRange)
   }
 
-  const filteredLogs = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    if (!term) return logs
-    return logs.filter((log) => {
-      const haystack = [
-        log.admin_name,
-        log.admin_email,
-        log.action,
-        log.entity_type,
-        log.entity_id,
-        log.description,
-        log.ip_address,
-      ].join(' ').toLowerCase()
-      return haystack.includes(term)
-    })
-  }, [logs, search])
-
-  const groupedLogs = useMemo(() => groupLogsByDate(filteredLogs), [filteredLogs])
+  const groupedLogs = useMemo(() => groupLogsByDate(logs), [logs])
   const groupEntries = Object.entries(groupedLogs)
 
   if (!isAdmin) {
@@ -148,7 +145,10 @@ export default function AdminAuditLogs() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search current page"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') fetchLogs(1)
+            }}
+            placeholder="Search name, action, IP, city, country, device"
           />
         </label>
         <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)}>
@@ -165,7 +165,7 @@ export default function AdminAuditLogs() {
           <span>End date</span>
           <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
         </label>
-        <button type="button" className="audit-filter-button" onClick={applyDateRange} disabled={loading}>Apply</button>
+        <button type="button" className="audit-filter-button" onClick={applyDateRange} disabled={loading}>Search / Apply</button>
         <button type="button" className="audit-clear-button" onClick={clearDateRange} disabled={loading || (!appliedRange.start_date && !appliedRange.end_date && !startDate && !endDate)}>Clear</button>
       </div>
 
@@ -193,8 +193,9 @@ export default function AdminAuditLogs() {
                       <th>Admin</th>
                       <th>Action</th>
                       <th>Entity</th>
+                      <th>Location</th>
+                      <th>Device</th>
                       <th>Description</th>
-                      <th>IP</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -207,8 +208,16 @@ export default function AdminAuditLogs() {
                         </td>
                         <td><span className="audit-action">{formatAction(log.action)}</span></td>
                         <td>{log.entity_type ? `${log.entity_type}${log.entity_id ? ` #${log.entity_id}` : ''}` : 'N/A'}</td>
+                        <td>
+                          <strong>IP: {recorded(log.ip_address)}</strong>
+                          <small>Location: {locationLabel(log)}</small>
+                        </td>
+                        <td>
+                          <strong>{deviceLabel(log)}</strong>
+                          <small>Type: {recorded(log.device_type)}</small>
+                          <small>User agent: {log.user_agent ? log.user_agent.slice(0, 80) : 'Not recorded'}</small>
+                        </td>
                         <td>{log.description || 'N/A'}</td>
-                        <td>{log.ip_address || 'N/A'}</td>
                       </tr>
                     ))}
                   </tbody>

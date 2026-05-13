@@ -471,7 +471,7 @@ export const adminAPI = {
     return { data: announcements, raw: response.data };
   },
   getAuditLogs: async (params = {}) => {
-    const response = await api.get("/admin/audit-logs", { params });
+    const response = await api.get("/admin/activity-logs", { params });
     const logs = normalizeList(response.data, ["logs"]);
     return { data: logs, raw: response.data };
   },

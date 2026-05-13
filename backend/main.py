@@ -6,6 +6,7 @@ import csv
 import hashlib
 import hmac
 import io
+import ipaddress
 import json
 import math
 import os
@@ -616,6 +617,82 @@ def require_admin(request: Request):
     return user
 
 
+def get_request_ip(request: Optional[Request]) -> str:
+    if not request:
+        return ""
+    candidates = []
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        candidates.extend(part.strip() for part in forwarded_for.split(","))
+    real_ip = request.headers.get("x-real-ip", "")
+    if real_ip:
+        candidates.append(real_ip.strip())
+    if request.client and request.client.host:
+        candidates.append(request.client.host)
+    for candidate in candidates:
+        value = str(candidate or "").strip()
+        if not value:
+            continue
+        if value.startswith("[") and "]" in value:
+            value = value[1:value.index("]")]
+        elif value.count(":") == 1 and "." in value:
+            value = value.split(":", 1)[0]
+        try:
+            ipaddress.ip_address(value)
+            return value
+        except ValueError:
+            continue
+    return ""
+
+
+def parse_user_agent(user_agent: str) -> dict:
+    ua = str(user_agent or "")
+    lower = ua.lower()
+    if not ua:
+        return {"device_type": "", "browser": "", "operating_system": ""}
+
+    if "ipad" in lower or "tablet" in lower:
+        device_type = "Tablet"
+    elif "mobile" in lower or "iphone" in lower or "android" in lower:
+        device_type = "Mobile"
+    else:
+        device_type = "Desktop"
+
+    if "edg/" in lower or "edge/" in lower:
+        browser = "Microsoft Edge"
+    elif "opr/" in lower or "opera" in lower:
+        browser = "Opera"
+    elif "chrome/" in lower and "chromium" not in lower:
+        browser = "Chrome"
+    elif "safari/" in lower and "chrome/" not in lower:
+        browser = "Safari"
+    elif "firefox/" in lower:
+        browser = "Firefox"
+    elif "msie" in lower or "trident/" in lower:
+        browser = "Internet Explorer"
+    else:
+        browser = "Unknown browser"
+
+    if "windows nt" in lower:
+        operating_system = "Windows"
+    elif "android" in lower:
+        operating_system = "Android"
+    elif "iphone" in lower or "ipad" in lower or "ios" in lower:
+        operating_system = "iOS"
+    elif "mac os x" in lower or "macintosh" in lower:
+        operating_system = "macOS"
+    elif "linux" in lower:
+        operating_system = "Linux"
+    else:
+        operating_system = "Unknown OS"
+
+    return {
+        "device_type": device_type,
+        "browser": browser,
+        "operating_system": operating_system,
+    }
+
+
 def create_admin_audit_log(
     request: Optional[Request],
     admin: dict,
@@ -625,6 +702,8 @@ def create_admin_audit_log(
     description: str = "",
     metadata: dict = None,
 ):
+    user_agent = request.headers.get("user-agent", "") if request else ""
+    device_info = parse_user_agent(user_agent)
     db = SessionLocal()
     try:
         log = DBAdminAuditLog(
@@ -636,8 +715,14 @@ def create_admin_audit_log(
             entity_id=str(entity_id or ""),
             description=description,
             metadata_json=json.dumps(metadata or {}),
-            ip_address=request.client.host if request and request.client else "",
-            user_agent=request.headers.get("user-agent", "") if request else "",
+            ip_address=get_request_ip(request),
+            user_agent=user_agent,
+            device_type=device_info.get("device_type") or "",
+            browser=device_info.get("browser") or "",
+            operating_system=device_info.get("operating_system") or "",
+            location_country="",
+            location_region="",
+            location_city="",
         )
         db.add(log)
         db.commit()
@@ -1627,6 +1712,12 @@ def audit_log_to_dict(log: DBAdminAuditLog) -> dict:
         "metadata": json_load(log.metadata_json, {}),
         "ip_address": log.ip_address or "",
         "user_agent": log.user_agent or "",
+        "device_type": getattr(log, "device_type", "") or "",
+        "browser": getattr(log, "browser", "") or "",
+        "operating_system": getattr(log, "operating_system", "") or "",
+        "location_country": getattr(log, "location_country", "") or "",
+        "location_region": getattr(log, "location_region", "") or "",
+        "location_city": getattr(log, "location_city", "") or "",
         "created_at": iso(log.created_at),
     }
 
@@ -1805,6 +1896,25 @@ def ensure_database_compatibility():
             "rejection_reason": "TEXT DEFAULT ''",
             "ip_address": "VARCHAR(80) DEFAULT ''",
             "user_agent": "TEXT DEFAULT ''",
+            "created_at": "TIMESTAMP",
+        },
+        "admin_audit_logs": {
+            "admin_id": "INTEGER",
+            "admin_name": "VARCHAR(150) DEFAULT ''",
+            "admin_email": "VARCHAR(150) DEFAULT ''",
+            "action": "VARCHAR(120)",
+            "entity_type": "VARCHAR(80) DEFAULT ''",
+            "entity_id": "VARCHAR(80) DEFAULT ''",
+            "description": "TEXT DEFAULT ''",
+            "metadata_json": "TEXT",
+            "ip_address": "VARCHAR(80)",
+            "user_agent": "TEXT",
+            "device_type": "VARCHAR(80)",
+            "browser": "VARCHAR(120)",
+            "operating_system": "VARCHAR(120)",
+            "location_country": "VARCHAR(120)",
+            "location_region": "VARCHAR(120)",
+            "location_city": "VARCHAR(120)",
             "created_at": "TIMESTAMP",
         },
         "products": {
@@ -4880,6 +4990,7 @@ def get_admin_audit_logs(
     limit: int = 10,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    search: Optional[str] = None,
     action: Optional[str] = None,
     entity_type: Optional[str] = None,
     admin_email: Optional[str] = None,
@@ -4894,6 +5005,21 @@ def get_admin_audit_logs(
             query = query.filter(DBAdminAuditLog.entity_type == entity_type)
         if admin_email:
             query = query.filter(DBAdminAuditLog.admin_email == admin_email.strip().lower())
+        if search:
+            term = f"%{search.strip()}%"
+            query = query.filter(or_(
+                DBAdminAuditLog.action.ilike(term),
+                DBAdminAuditLog.admin_name.ilike(term),
+                DBAdminAuditLog.admin_email.ilike(term),
+                DBAdminAuditLog.ip_address.ilike(term),
+                DBAdminAuditLog.location_city.ilike(term),
+                DBAdminAuditLog.location_region.ilike(term),
+                DBAdminAuditLog.location_country.ilike(term),
+                DBAdminAuditLog.browser.ilike(term),
+                DBAdminAuditLog.operating_system.ilike(term),
+                DBAdminAuditLog.device_type.ilike(term),
+                DBAdminAuditLog.description.ilike(term),
+            ))
         if start_date:
             try:
                 start_dt = datetime.strptime(start_date, "%Y-%m-%d")
