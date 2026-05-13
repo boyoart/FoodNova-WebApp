@@ -16,6 +16,7 @@ const emptyForm = {
   id_type: '',
   id_number: '',
   vehicle_type: '',
+  partner_company: '',
   plate_number: '',
   driver_license_number: '',
 }
@@ -97,6 +98,7 @@ export default function DeliveryWorkerSignup({ workerType }) {
             {type === 'rider' && (
               <>
                 <label>Vehicle Type<input value={form.vehicle_type} onChange={(event) => update('vehicle_type', event.target.value)} placeholder="Motorcycle, car, bike" required /></label>
+                <label>Delivery Company Optional<input value={form.partner_company} onChange={(event) => update('partner_company', event.target.value)} placeholder="Company or partner name" /></label>
                 <label>Plate Number Optional<input value={form.plate_number} onChange={(event) => update('plate_number', event.target.value)} /></label>
                 <label>License Number Optional<input value={form.driver_license_number} onChange={(event) => update('driver_license_number', event.target.value)} /></label>
                 <label>Vehicle Photo Optional<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => updateFile('vehicle_photo', event.target.files?.[0])} /></label>

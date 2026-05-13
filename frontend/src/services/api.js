@@ -358,6 +358,11 @@ export const adminAPI = {
     const workers = normalizeList(response.data, ["workers"]);
     return { data: workers, raw: response.data };
   },
+  getEligibleWorkforce: async (deliveryType = "local") => {
+    const response = await api.get("/admin/workforce/eligible", { params: { delivery_type: deliveryType } });
+    const workers = normalizeList(response.data, ["workers"]);
+    return { data: workers, raw: response.data };
+  },
   updateWorkerStatus: async (id, payload) => (await api.patch(`/admin/workforce/${id}/status`, payload)).data,
   getDeliveryZone: async () => (await api.get("/admin/delivery-zone")).data,
   updateDeliveryZone: async (payload) => (await api.patch("/admin/delivery-zone", payload)).data,

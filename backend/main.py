@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from uuid import uuid4
 import base64
@@ -284,6 +284,10 @@ class OperationalZonePayload(BaseModel):
     center_longitude: float
     radius_meters: int
     is_active: Optional[bool] = True
+
+
+GPS_RECENCY_SECONDS = 60
+MESSENGER_OUTSIDE_ZONE_MESSAGE = "You must be within the operational area to receive delivery requests."
 
 
 class ChangePasswordPayload(BaseModel):
@@ -1246,12 +1250,71 @@ def operational_zone_to_dict(zone: DBOperationalZone) -> dict:
     }
 
 
+def worker_gps_age_seconds(worker: DBDeliveryWorker) -> Optional[float]:
+    if not worker.last_seen_at:
+        return None
+    return max(0, (datetime.utcnow() - as_naive_utc(worker.last_seen_at)).total_seconds())
+
+
+def worker_has_recent_gps(worker: DBDeliveryWorker, max_age_seconds: int = GPS_RECENCY_SECONDS) -> bool:
+    age = worker_gps_age_seconds(worker)
+    return age is not None and age <= max_age_seconds
+
+
+def payload_has_recent_timestamp(payload: LocationPingPayload, max_age_seconds: int = GPS_RECENCY_SECONDS) -> bool:
+    timestamp = as_naive_utc(payload.timestamp) if payload.timestamp else datetime.utcnow()
+    age = (datetime.utcnow() - timestamp).total_seconds()
+    return -10 <= age <= max_age_seconds
+
+
+def as_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
+    worker_type = (worker.worker_type or "messenger").lower()
+    approved = (worker.kyc_status or "") == "APPROVED"
+    online = (worker.operational_status or "") in ["ONLINE", "ASSIGNED", "ON_DELIVERY"]
+    gps_recent = worker_has_recent_gps(worker)
+    is_messenger = worker_type == "messenger"
+    inside_zone = bool(worker.inside_zone)
+    eligible = approved and online and gps_recent and (inside_zone if is_messenger else True)
+    if not approved:
+        reason = "KYC approval required"
+    elif not online:
+        reason = "Worker is offline"
+    elif not gps_recent:
+        reason = f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds"
+    elif is_messenger and not inside_zone:
+        reason = MESSENGER_OUTSIDE_ZONE_MESSAGE
+    else:
+        reason = "Ready for delivery assignment"
+    return {
+        "eligible": eligible,
+        "reason": reason,
+        "gps_recent": gps_recent,
+        "gps_age_seconds": worker_gps_age_seconds(worker),
+        "is_geo_fenced": is_messenger,
+        "geo_fence_enforced": is_messenger,
+        "assignment_scope": "hyperlocal" if is_messenger else "wide_area",
+        "delivery_type_label": "Walking Messenger" if is_messenger else "Rider / Delivery Partner",
+        "gps_ping_interval_seconds": 30 if is_messenger else 60,
+        "active_delivery_ping_interval_seconds": 15,
+        "can_receive_delivery_notifications": eligible,
+        "can_accept_delivery_requests": eligible,
+    }
+
+
 def worker_to_dict(worker: DBDeliveryWorker) -> dict:
+    assignment_policy = worker_assignment_policy(worker)
     return {
         "id": worker.id,
         "user_id": worker.user_id,
         "worker_type": worker.worker_type or "messenger",
         "delivery_worker_type": worker.worker_type or "messenger",
+        "delivery_type_label": assignment_policy["delivery_type_label"],
         "full_name": worker.full_name or "",
         "name": worker.full_name or "",
         "phone": worker.phone or "",
@@ -1264,6 +1327,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "profile_photo_url": worker.profile_photo_url or "",
         "id_document_url": worker.id_document_url or "",
         "vehicle_type": worker.vehicle_type or "",
+        "partner_company": getattr(worker, "partner_company", "") or "",
         "plate_number": worker.plate_number or "",
         "driver_license_number": worker.driver_license_number or "",
         "vehicle_photo_url": worker.vehicle_photo_url or "",
@@ -1283,6 +1347,17 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "latest_speed": worker.latest_speed,
         "last_seen_at": iso(worker.last_seen_at),
         "inside_zone": bool(worker.inside_zone),
+        "gps_recent": assignment_policy["gps_recent"],
+        "gps_age_seconds": assignment_policy["gps_age_seconds"],
+        "is_geo_fenced": assignment_policy["is_geo_fenced"],
+        "geo_fence_enforced": assignment_policy["geo_fence_enforced"],
+        "assignment_scope": assignment_policy["assignment_scope"],
+        "assignment_eligible": assignment_policy["eligible"],
+        "assignment_eligibility_reason": assignment_policy["reason"],
+        "can_receive_delivery_notifications": assignment_policy["can_receive_delivery_notifications"],
+        "can_accept_delivery_requests": assignment_policy["can_accept_delivery_requests"],
+        "gps_ping_interval_seconds": assignment_policy["gps_ping_interval_seconds"],
+        "active_delivery_ping_interval_seconds": assignment_policy["active_delivery_ping_interval_seconds"],
         "approved_at": iso(worker.approved_at),
         "approved_by_admin_name": worker.approved_by_admin_name or "",
         "suspended_at": iso(worker.suspended_at),
@@ -1392,7 +1467,7 @@ def ensure_default_operational_zone(db) -> DBOperationalZone:
 
 def worker_inside_zone(worker: DBDeliveryWorker, latitude: float, longitude: float, db) -> bool:
     if (worker.worker_type or "") != "messenger":
-        return True
+        return False
     zone = ensure_default_operational_zone(db)
     if not zone.is_active:
         return True
@@ -1825,6 +1900,7 @@ def ensure_database_compatibility():
             "profile_photo_url": "TEXT DEFAULT ''",
             "id_document_url": "TEXT DEFAULT ''",
             "vehicle_type": "VARCHAR(80) DEFAULT ''",
+            "partner_company": "VARCHAR(150) DEFAULT ''",
             "plate_number": "VARCHAR(80) DEFAULT ''",
             "driver_license_number": "VARCHAR(120) DEFAULT ''",
             "vehicle_photo_url": "TEXT DEFAULT ''",
@@ -2158,6 +2234,7 @@ async def delivery_worker_signup(
     id_type: str = Form(...),
     id_number: str = Form(...),
     vehicle_type: Optional[str] = Form(""),
+    partner_company: Optional[str] = Form(""),
     plate_number: Optional[str] = Form(""),
     driver_license_number: Optional[str] = Form(""),
     profile_photo: Optional[UploadFile] = File(None),
@@ -2209,6 +2286,7 @@ async def delivery_worker_signup(
             profile_photo_url=profile_photo_url,
             id_document_url=id_document_url,
             vehicle_type=(vehicle_type or "").strip() if worker_type == "rider" else "",
+            partner_company=(partner_company or "").strip() if worker_type == "rider" else "",
             plate_number=(plate_number or "").strip() if worker_type == "rider" else "",
             driver_license_number=(driver_license_number or "").strip() if worker_type == "rider" else "",
             vehicle_photo_url=vehicle_photo_url,
@@ -2297,7 +2375,7 @@ def update_worker_location(worker: DBDeliveryWorker, payload: LocationPingPayloa
     worker.latest_accuracy = payload.accuracy
     worker.latest_heading = payload.heading
     worker.latest_speed = payload.speed
-    worker.last_seen_at = payload.timestamp or datetime.utcnow()
+    worker.last_seen_at = as_naive_utc(payload.timestamp) if payload.timestamp else datetime.utcnow()
     worker.inside_zone = inside_zone
     worker.updated_at = datetime.utcnow()
     return inside_zone
@@ -2337,11 +2415,15 @@ def messenger_go_online(payload: LocationPingPayload, request: Request):
     try:
         if worker.kyc_status != "APPROVED":
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
+        if not payload_has_recent_timestamp(payload):
+            worker.operational_status = "OFFLINE"
+            db.commit()
+            raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds to go online.")
         inside_zone = update_worker_location(worker, payload, db)
         if not inside_zone:
             worker.operational_status = "OFFLINE"
             db.commit()
-            raise HTTPException(status_code=403, detail="You must be within the operational area to receive delivery requests.")
+            raise HTTPException(status_code=403, detail=MESSENGER_OUTSIDE_ZONE_MESSAGE)
         worker.operational_status = "ONLINE"
         db.commit()
         db.refresh(worker)
@@ -2358,9 +2440,13 @@ def rider_go_online(payload: LocationPingPayload, request: Request):
     try:
         if worker.kyc_status != "APPROVED":
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
+        if not payload_has_recent_timestamp(payload):
+            worker.operational_status = "OFFLINE"
+            db.commit()
+            raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds to go online.")
         update_worker_location(worker, payload, db)
         worker.operational_status = "ONLINE"
-        worker.inside_zone = True
+        worker.inside_zone = False
         db.commit()
         db.refresh(worker)
         data = worker_to_dict(worker)
@@ -2391,7 +2477,11 @@ def delivery_location_ping(payload: LocationPingPayload, request: Request):
     try:
         if worker.kyc_status != "APPROVED":
             raise HTTPException(status_code=403, detail="Delivery account is not approved.")
-        update_worker_location(worker, payload, db)
+        if not payload_has_recent_timestamp(payload):
+            raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds.")
+        inside_zone = update_worker_location(worker, payload, db)
+        if (worker.worker_type or "") == "messenger" and worker.operational_status == "ONLINE" and not inside_zone:
+            worker.operational_status = "OFFLINE"
         db.commit()
         db.refresh(worker)
         data = worker_to_dict(worker)
@@ -3096,6 +3186,36 @@ def get_delivery_workforce(request: Request, worker_type: Optional[str] = None, 
             query = query.filter(DBDeliveryWorker.inside_zone == inside_zone)
         workers = [worker_to_dict(worker) for worker in query.order_by(DBDeliveryWorker.created_at.desc(), DBDeliveryWorker.id.desc()).all()]
         return {"success": True, "workers": workers, "data": workers}
+    finally:
+        db.close()
+
+
+@app.get("/admin/workforce/eligible")
+def get_eligible_delivery_workforce(request: Request, delivery_type: Optional[str] = "local"):
+    require_workforce_view(request)
+    requested_type = (delivery_type or "local").strip().lower()
+    db = SessionLocal()
+    try:
+        workers = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.kyc_status == "APPROVED").all()
+        eligible_workers = []
+        for worker in workers:
+            policy = worker_assignment_policy(worker)
+            if not policy["eligible"]:
+                continue
+            if requested_type in ["local", "short_distance", "hyperlocal"]:
+                priority = 0 if (worker.worker_type or "") == "messenger" else 1
+            else:
+                priority = 0 if (worker.worker_type or "") == "rider" else 1
+            data = worker_to_dict(worker)
+            data["assignment_priority"] = priority
+            eligible_workers.append(data)
+        eligible_workers.sort(key=lambda item: (item.get("assignment_priority", 9), -(item.get("trust_score") or 0), item.get("gps_age_seconds") or 999999))
+        return {
+            "success": True,
+            "delivery_type": requested_type,
+            "workers": eligible_workers,
+            "data": eligible_workers,
+        }
     finally:
         db.close()
 

@@ -33,7 +33,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const type = workerType || user?.delivery_worker_type || user?.role
-  const title = type === 'rider' ? 'Rider Dashboard' : 'Messenger Dashboard'
+  const title = type === 'rider' ? 'Rider / Delivery Partner Dashboard' : 'Walking Messenger Dashboard'
 
   const loadWorker = async () => {
     try {
@@ -131,7 +131,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
         <div>
           <p>FoodNova Delivery Workforce</p>
           <h1>{title}</h1>
-          <span>{type === 'messenger' ? 'Local zone required before going online' : 'Wider delivery coverage enabled'}</span>
+          <span>{type === 'messenger' ? 'Hyperlocal: local zone required before going online' : 'Wide-area: messenger geo-fence does not block riders'}</span>
         </div>
         <strong>{worker.operational_status}</strong>
       </section>
@@ -149,7 +149,9 @@ export default function DeliveryWorkerDashboard({ workerType }) {
         <h2>Location Status</h2>
         <div className="worker-detail-grid">
           <div><strong>Last Seen</strong><span>{worker.last_seen_at ? new Date(worker.last_seen_at).toLocaleString() : 'No GPS ping yet'}</span></div>
-          <div><strong>Zone</strong><span>{type === 'messenger' ? (worker.inside_zone ? 'Inside operational zone' : 'Outside operational zone') : 'Rider coverage'}</span></div>
+          <div><strong>Geo-Fence</strong><span>{type === 'messenger' ? (worker.inside_zone ? 'Inside operational zone' : 'Outside operational zone') : 'Not enforced for riders'}</span></div>
+          <div><strong>GPS Fresh</strong><span>{worker.gps_recent ? 'Yes' : 'No'}</span></div>
+          <div><strong>Assignment</strong><span>{worker.assignment_eligible ? 'Eligible' : (worker.assignment_eligibility_reason || 'Not eligible')}</span></div>
           <div><strong>Coordinates</strong><span>{worker.latest_latitude ? `${worker.latest_latitude}, ${worker.latest_longitude}` : 'Not available'}</span></div>
         </div>
       </section>

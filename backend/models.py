@@ -142,6 +142,7 @@ class DeliveryWorker(Base):
     profile_photo_url = Column(Text, default="")
     id_document_url = Column(Text, default="")
     vehicle_type = Column(String(80), default="")
+    partner_company = Column(String(150), default="")
     plate_number = Column(String(80), default="")
     driver_license_number = Column(String(120), default="")
     vehicle_photo_url = Column(Text, default="")
