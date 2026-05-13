@@ -1,4 +1,4 @@
-const CACHE_NAME = "foodnova-app-shell-v2";
+const CACHE_NAME = "foodnova-app-shell-v3";
 const STATIC_ASSETS = [
   "/",
   "/foodnova-logo.png",
@@ -55,7 +55,21 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (request.destination === "script" || request.destination === "style" || request.destination === "image" || request.destination === "font" || url.pathname === "/manifest.webmanifest") {
+  if (request.destination === "script" || request.destination === "style") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (!response || response.status !== 200 || response.type === "opaque") return response;
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  if (request.destination === "image" || request.destination === "font" || url.pathname === "/manifest.webmanifest") {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;
