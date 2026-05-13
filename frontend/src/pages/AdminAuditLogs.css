@@ -60,7 +60,8 @@
 }
 
 .audit-search input,
-.audit-filters select {
+.audit-filters select,
+.audit-date-filter input {
   border: 0;
   outline: 0;
   background: transparent;
@@ -72,13 +73,78 @@
   width: 100%;
 }
 
-.audit-filters select {
+.audit-filters select,
+.audit-date-filter {
   min-height: 44px;
   min-width: 180px;
   border: 1px solid var(--fn-border);
   border-radius: 12px;
   background: var(--fn-input-bg);
   padding: 0 0.85rem;
+}
+
+.audit-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--fn-muted);
+  font-weight: 800;
+}
+
+.audit-date-filter input {
+  min-width: 130px;
+}
+
+.audit-filter-button,
+.audit-clear-button,
+.audit-pagination button {
+  min-height: 44px;
+  border: 1px solid var(--fn-primary);
+  border-radius: 12px;
+  background: var(--fn-primary);
+  color: #fff;
+  padding: 0 1rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.audit-clear-button,
+.audit-pagination button {
+  background: var(--fn-surface);
+  color: var(--fn-primary);
+}
+
+.audit-filter-button:disabled,
+.audit-clear-button:disabled,
+.audit-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.audit-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  color: var(--fn-muted);
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+
+.audit-log-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.audit-date-group {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.audit-date-group h2 {
+  color: var(--fn-heading);
+  font-size: 1.05rem;
+  margin: 0;
 }
 
 .audit-table-wrap {
@@ -133,9 +199,25 @@
 }
 
 .audit-empty {
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
+  border-radius: 16px;
   text-align: center;
   color: var(--fn-muted);
   padding: 2rem;
+}
+
+.audit-pagination {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.audit-pagination span {
+  color: var(--fn-heading);
+  font-weight: 900;
 }
 
 @media (max-width: 700px) {
@@ -144,8 +226,16 @@
   }
 
   .audit-refresh,
-  .audit-filters select {
+  .audit-filters select,
+  .audit-date-filter,
+  .audit-filter-button,
+  .audit-clear-button {
     width: 100%;
     justify-content: center;
+  }
+
+  .audit-pagination {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

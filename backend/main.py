@@ -4873,9 +4873,13 @@ def get_broadcasts(request: Request):
 
 
 @app.get("/admin/audit-logs")
+@app.get("/admin/activity-logs")
 def get_admin_audit_logs(
     request: Request,
-    limit: int = 100,
+    page: int = 1,
+    limit: int = 10,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     action: Optional[str] = None,
     entity_type: Optional[str] = None,
     admin_email: Optional[str] = None,
@@ -4890,13 +4894,38 @@ def get_admin_audit_logs(
             query = query.filter(DBAdminAuditLog.entity_type == entity_type)
         if admin_email:
             query = query.filter(DBAdminAuditLog.admin_email == admin_email.strip().lower())
+        if start_date:
+            try:
+                start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+                query = query.filter(DBAdminAuditLog.created_at >= start_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="start_date must be YYYY-MM-DD")
+        if end_date:
+            try:
+                end_dt = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1)
+                query = query.filter(DBAdminAuditLog.created_at < end_dt)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="end_date must be YYYY-MM-DD")
 
-        safe_limit = max(1, min(int(limit or 100), 500))
+        safe_page = max(1, int(page or 1))
+        safe_limit = max(1, min(int(limit or 10), 100))
+        total = query.count()
+        total_pages = math.ceil(total / safe_limit) if total else 0
         logs = [
             audit_log_to_dict(log)
-            for log in query.order_by(DBAdminAuditLog.created_at.desc(), DBAdminAuditLog.id.desc()).limit(safe_limit).all()
+            for log in query.order_by(DBAdminAuditLog.created_at.desc(), DBAdminAuditLog.id.desc()).offset((safe_page - 1) * safe_limit).limit(safe_limit).all()
         ]
-        return {"success": True, "logs": logs, "data": logs}
+        return {
+            "success": True,
+            "logs": logs,
+            "data": logs,
+            "page": safe_page,
+            "limit": safe_limit,
+            "total": total,
+            "total_pages": total_pages,
+        }
+    except HTTPException:
+        raise
     except Exception as error:
         print("AUDIT LOGS LOAD ERROR:", repr(error))
         return {"success": True, "logs": [], "data": []}
