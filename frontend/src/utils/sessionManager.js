@@ -1,5 +1,5 @@
-const CUSTOMER_TIMEOUT_MS = 24 * 60 * 60 * 1000;
-const ADMIN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+const CUSTOMER_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
+const ADMIN_TIMEOUT_MS = 12 * 60 * 60 * 1000;
 const LAST_ACTIVITY_KEY = 'foodnova_last_activity';
 
 export function updateLastActivity() {
@@ -139,13 +139,13 @@ export function startSessionWatcher({ navigate, notify } = {}) {
 export function expireCustomerSessionForTesting() {
   localStorage.setItem(
     LAST_ACTIVITY_KEY,
-    String(Date.now() - 25 * 60 * 60 * 1000)
+    String(Date.now() - 31 * 24 * 60 * 60 * 1000)
   );
 }
 
 export function expireAdminSessionForTesting() {
   localStorage.setItem(
     LAST_ACTIVITY_KEY,
-    String(Date.now() - 3 * 60 * 60 * 1000)
+    String(Date.now() - 13 * 60 * 60 * 1000)
   );
 }

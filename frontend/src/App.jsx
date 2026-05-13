@@ -43,7 +43,7 @@ import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
 import InboxPage from './pages/InboxPage'
 import InvoicePage from './pages/InvoicePage'
-import WorkerSignupPage from './pages/WorkerSignupPage'
+import DeliveryWorkerSignup from './pages/DeliveryWorkerSignup'
 import DeliveryWorkerDashboard from './pages/DeliveryWorkerDashboard'
 import { useAuthStore } from './store/authStore'
 import {
@@ -163,8 +163,8 @@ function App() {
               <Route path="/checkout" element={<RequireCustomerAuth><CheckoutPage /></RequireCustomerAuth>} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/messenger/signup" element={<WorkerSignupPage workerType="messenger" />} />
-              <Route path="/rider/signup" element={<WorkerSignupPage workerType="rider" />} />
+              <Route path="/messenger/signup" element={<DeliveryWorkerSignup workerType="messenger" />} />
+              <Route path="/rider/signup" element={<DeliveryWorkerSignup workerType="rider" />} />
               <Route path="/messenger/dashboard" element={<RequireWorkerAuth workerType="messenger"><DeliveryWorkerDashboard workerType="messenger" /></RequireWorkerAuth>} />
               <Route path="/rider/dashboard" element={<RequireWorkerAuth workerType="rider"><DeliveryWorkerDashboard workerType="rider" /></RequireWorkerAuth>} />
               <Route path="/orders" element={<RequireCustomerAuth><OrderHistoryPage /></RequireCustomerAuth>} />
