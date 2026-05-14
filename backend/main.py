@@ -13,6 +13,7 @@ import os
 import random
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -59,6 +60,9 @@ try:
     import cloudinary.uploader
 except Exception:
     cloudinary = None
+
+load_dotenv()
+print("CHECKMYNINBVN_API_KEY loaded:", bool(os.getenv("CHECKMYNINBVN_API_KEY")))
 
 app = FastAPI(title="FoodNova API")
 UPLOAD_DIR = "uploads"

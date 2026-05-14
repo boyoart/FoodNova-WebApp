@@ -21,7 +21,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
 
     api_key = os.getenv("CHECKMYNINBVN_API_KEY", "").strip()
     if not api_key:
-        raise CheckMyNINBVNError("NIN verification is not configured.")
+        raise CheckMyNINBVNError("Server API key is not configured. Please contact admin.")
 
     payload = json.dumps({"nin": nin, "consent": True}).encode("utf-8")
     request = urllib.request.Request(

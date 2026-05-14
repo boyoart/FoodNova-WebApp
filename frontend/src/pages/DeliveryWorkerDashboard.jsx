@@ -131,7 +131,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
         <div>
           <p>FoodNova Delivery Workforce</p>
           <h1>{title}</h1>
-          <span>{type === 'messenger' ? 'Hyperlocal: local zone required before going online' : 'Wide-area: messenger geo-fence does not block riders'}</span>
+          <span>{type === 'messenger' ? 'Hyperlocal: local zone required before going online' : 'You are online and available for wider delivery requests.'}</span>
         </div>
         <strong>{worker.operational_status}</strong>
       </section>
