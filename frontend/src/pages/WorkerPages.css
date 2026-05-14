@@ -248,6 +248,13 @@
   padding: 0.65rem 0.75rem;
 }
 
+.location-warning-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
 .location-warning-card button {
   align-items: center;
   background: #087a34;
@@ -262,6 +269,104 @@
   justify-self: flex-start;
   min-height: 42px;
   padding: 0.7rem 1rem;
+}
+
+.location-warning-card .settings-button {
+  background: #eef5f0;
+  color: #12351f;
+}
+
+.location-warning-card .settings-button.emphasized {
+  background: #8a6500;
+  color: #fff;
+}
+
+.permission-badge {
+  border-radius: 999px;
+  display: inline-flex !important;
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 0.2rem 0.55rem;
+  width: fit-content;
+}
+
+.permission-badge.granted {
+  background: #e6f6ec;
+  color: #087a34;
+}
+
+.permission-badge.prompt {
+  background: #eef5f0;
+  color: #12351f;
+}
+
+.permission-badge.denied {
+  background: #fff6d7;
+  color: #8a6500;
+}
+
+.location-settings-modal {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 1rem;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.location-settings-dialog {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  color: #24382b;
+  display: grid;
+  gap: 0.9rem;
+  max-width: 520px;
+  padding: 1.25rem;
+  position: relative;
+  width: min(100%, 520px);
+}
+
+.location-settings-dialog h2,
+.location-settings-dialog h3,
+.location-settings-dialog p {
+  margin: 0;
+}
+
+.location-settings-dialog h2,
+.location-settings-dialog h3 {
+  color: #12351f;
+}
+
+.location-settings-dialog button {
+  align-items: center;
+  background: #087a34;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  justify-content: center;
+  justify-self: flex-start;
+  min-height: 40px;
+  padding: 0.65rem 0.95rem;
+}
+
+.location-settings-close {
+  background: #eef5f0 !important;
+  color: #12351f !important;
+  justify-self: flex-end !important;
+  min-height: 34px !important;
+  padding: 0.45rem !important;
+  position: absolute;
+  right: 0.85rem;
+  top: 0.85rem;
 }
 
 .delivery-offer-list {

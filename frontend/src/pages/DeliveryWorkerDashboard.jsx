@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlertTriangle, MapPin, Power, RefreshCw, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, MapPin, Power, RefreshCw, Settings, ShieldCheck, X } from 'lucide-react'
 import { workerAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './WorkerPages.css'
@@ -49,6 +49,16 @@ async function requestLocationPosition() {
   return getPosition()
 }
 
+async function getGeolocationPermissionState() {
+  if (!navigator.permissions?.query) return 'prompt'
+  try {
+    const permission = await navigator.permissions.query({ name: 'geolocation' })
+    return permission.state || 'prompt'
+  } catch {
+    return 'prompt'
+  }
+}
+
 function locationPayload(position) {
   const coords = position.coords
   return {
@@ -72,6 +82,8 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const [busy, setBusy] = useState(false)
   const [locationWarning, setLocationWarning] = useState('')
   const [locationMessage, setLocationMessage] = useState('')
+  const [permissionState, setPermissionState] = useState('prompt')
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [offers, setOffers] = useState([])
   const previousPendingOfferCount = useRef(0)
   const type = workerType || user?.delivery_worker_type || user?.role
@@ -99,9 +111,48 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     }
   }
 
+  const refreshPermissionState = async () => {
+    const state = await getGeolocationPermissionState()
+    setPermissionState(state)
+    return state
+  }
+
   useEffect(() => {
     loadWorker()
     loadOffers()
+  }, [])
+
+  useEffect(() => {
+    let permissionStatus
+    let cancelled = false
+    const syncPermission = async () => {
+      const state = await refreshPermissionState()
+      if (!cancelled && state === 'denied') {
+        setLocationWarning('permission-denied')
+        setLocationMessage('Location access is blocked. Please enable location permission in your phone/browser settings.')
+      }
+    }
+    syncPermission()
+    if (navigator.permissions?.query) {
+      navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+        if (cancelled) return
+        permissionStatus = status
+        permissionStatus.onchange = async () => {
+          const state = permissionStatus.state || 'prompt'
+          setPermissionState(state)
+          if (state === 'granted') {
+            await retryLocation()
+          } else if (state === 'denied') {
+            setLocationWarning('permission-denied')
+            setLocationMessage('Location access is blocked. Please enable location permission in your phone/browser settings.')
+          }
+        }
+      }).catch(() => {})
+    }
+    return () => {
+      cancelled = true
+      if (permissionStatus) permissionStatus.onchange = null
+    }
   }, [])
 
   useEffect(() => {
@@ -205,9 +256,16 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const retryLocation = async () => {
     try {
       setBusy(true)
+      const state = await refreshPermissionState()
+      if (state === 'denied') {
+        setLocationWarning('permission-denied')
+        setLocationMessage('Location access is blocked. Please enable location permission in your phone/browser settings.')
+        return
+      }
       const position = await requestLocationPosition()
       const response = await workerAPI.locationPing(locationPayload(position))
       setWorker(response.worker || response.data)
+      setPermissionState('granted')
       setLocationWarning('')
       setLocationMessage('')
       toast.success('Location access enabled')
@@ -223,6 +281,44 @@ export default function DeliveryWorkerDashboard({ workerType }) {
       setBusy(false)
     }
   }
+
+  const openLocationSettings = async () => {
+    const plugins = window.Capacitor?.Plugins || {}
+    const candidates = [
+      async () => {
+        if (!plugins.App?.openSettings) return false
+        await plugins.App.openSettings()
+        return true
+      },
+      async () => {
+        if (!plugins.Settings?.openAppSettings) return false
+        await plugins.Settings.openAppSettings()
+        return true
+      },
+      async () => {
+        if (!plugins.CapacitorSettings?.openAppSettings) return false
+        await plugins.CapacitorSettings.openAppSettings()
+        return true
+      },
+      async () => {
+        if (!plugins.AppLauncher?.openUrl) return false
+        await plugins.AppLauncher.openUrl({ url: 'app-settings:' })
+        return true
+      },
+    ]
+    if (window.Capacitor?.isNativePlatform?.()) {
+      for (const open of candidates) {
+        try {
+          if (await open()) return
+        } catch {
+          // Try the next available native settings hook.
+        }
+      }
+    }
+    setSettingsModalOpen(true)
+  }
+
+  const permissionLabel = permissionState === 'granted' ? 'Allowed' : permissionState === 'denied' ? 'Blocked' : 'Prompt'
 
   const acceptOffer = async (offer) => {
     try {
@@ -328,9 +424,16 @@ export default function DeliveryWorkerDashboard({ workerType }) {
             <li>emergency support</li>
             <li>accurate delivery updates</li>
           </ul>
-          <button type="button" onClick={retryLocation} disabled={busy}>
-            <RefreshCw size={18} /> Retry Location
-          </button>
+          <div className="location-warning-actions">
+            {permissionState !== 'denied' && (
+              <button type="button" onClick={retryLocation} disabled={busy}>
+                <RefreshCw size={18} /> Retry Location
+              </button>
+            )}
+            <button type="button" className={permissionState === 'denied' ? 'settings-button emphasized' : 'settings-button'} onClick={openLocationSettings} disabled={busy}>
+              <Settings size={18} /> Open Settings
+            </button>
+          </div>
         </section>
       )}
 
@@ -340,6 +443,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
           <p className="location-helper-text">Location access is still required for live tracking, delivery assignment accuracy, and emergency support.</p>
         )}
         <div className="worker-detail-grid">
+          <div><strong>Location Permission</strong><span className={`permission-badge ${permissionState}`}>{permissionLabel}</span></div>
           <div><strong>Last Seen</strong><span>{worker.last_seen_at ? new Date(worker.last_seen_at).toLocaleString() : 'No GPS ping yet'}</span></div>
           <div><strong>Geo-Fence</strong><span>{type === 'messenger' ? (worker.inside_zone ? 'Inside operational zone' : 'Outside operational zone') : 'Not enforced for riders'}</span></div>
           <div><strong>GPS Fresh</strong><span>{worker.gps_recent ? 'Yes' : 'No'}</span></div>
@@ -367,6 +471,24 @@ export default function DeliveryWorkerDashboard({ workerType }) {
           <p className="muted"><MapPin size={16} /> No active assigned delivery.</p>
         )}
       </section>
+
+      {settingsModalOpen && (
+        <div className="location-settings-modal" role="dialog" aria-modal="true" aria-labelledby="location-settings-title">
+          <div className="location-settings-dialog">
+            <button type="button" className="location-settings-close" onClick={() => setSettingsModalOpen(false)} aria-label="Close location settings instructions"><X size={18} /></button>
+            <h2 id="location-settings-title">Open Location Settings</h2>
+            <div>
+              <h3>Chrome / Browser</h3>
+              <p>Open Site Settings, choose Location, then set FoodNova to Allow.</p>
+            </div>
+            <div>
+              <h3>Android App Settings</h3>
+              <p>Open Android App Settings, choose Permissions, then Location, and allow location access for FoodNova.</p>
+            </div>
+            <button type="button" onClick={() => setSettingsModalOpen(false)}>Done</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
