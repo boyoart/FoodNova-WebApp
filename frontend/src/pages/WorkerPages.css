@@ -74,12 +74,76 @@
   padding: 0.65rem 0.75rem;
 }
 
+.worker-consent {
+  align-items: flex-start;
+  background: #f7fbf8;
+  border: 1px solid #d9e7de;
+  border-radius: 8px;
+  color: #24382b;
+  display: flex;
+  gap: 0.65rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+}
+
+.worker-consent input {
+  margin-top: 0.2rem;
+}
+
+.worker-verify-row,
+.worker-camera-panel div {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.worker-verify-row span {
+  color: #087a34;
+  font-weight: 900;
+}
+
+.worker-camera-panel {
+  border: 1px solid #d9e7de;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0;
+  padding: 1rem;
+}
+
+.worker-camera-panel h2,
+.worker-camera-panel p {
+  margin: 0;
+}
+
+.worker-camera-panel h2 {
+  color: #12351f;
+}
+
+.worker-camera-panel p {
+  color: #64756a;
+}
+
+.worker-camera-panel video,
+.worker-camera-panel img {
+  background: #12351f;
+  border-radius: 8px;
+  max-height: 320px;
+  object-fit: cover;
+  width: 100%;
+}
+
 .worker-primary-button,
 .worker-actions-grid button,
 .delivery-zone-card button,
 .workforce-header button,
 .invite-links-panel button,
-.worker-review-actions button {
+.worker-review-actions button,
+.worker-verify-row button,
+.worker-camera-panel button {
   align-items: center;
   background: #087a34;
   border: 0;

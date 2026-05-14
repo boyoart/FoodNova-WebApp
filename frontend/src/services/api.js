@@ -240,6 +240,7 @@ export const authAPI = {
 };
 
 export const workerAPI = {
+  verifyNin: async (payload = {}) => (await api.post("/delivery-workers/verify-nin", payload)).data,
   signup: async (payload = {}) => {
     const formData = new FormData();
     Object.entries(payload).forEach(([key, value]) => {

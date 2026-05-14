@@ -27,6 +27,7 @@ from email_service import (
     send_customer_order_email,
     send_low_stock_alert,
 )
+from services.ninbvnportal_service import CheckMyNINBVNError, verify_nin
 from models import (
     Address as DBAddress,
     AdminAuditLog as DBAdminAuditLog,
@@ -272,6 +273,11 @@ class LocationPingPayload(BaseModel):
     heading: Optional[float] = None
     speed: Optional[float] = None
     timestamp: Optional[datetime] = None
+
+
+class NINVerificationPayload(BaseModel):
+    nin: str
+    consent: bool
 
 
 class WorkerReviewPayload(BaseModel):
@@ -643,6 +649,12 @@ def get_request_ip(request: Optional[Request]) -> str:
         except ValueError:
             continue
     return ""
+
+
+def is_mobile_worker_registration_request(request: Request) -> bool:
+    user_agent = (request.headers.get("user-agent") or "").lower()
+    capacitor_hint = (request.headers.get("x-requested-with") or "").lower()
+    return any(token in user_agent for token in ["mobile", "android", "iphone", "ipad", "ipod"]) or "capacitor" in capacitor_hint
 
 
 def parse_user_agent(user_agent: str) -> dict:
@@ -1173,13 +1185,13 @@ async def save_uploaded_receipt(file: UploadFile) -> dict:
     }
 
 
-async def save_workforce_upload(file: Optional[UploadFile], allow_pdf: bool = False) -> str:
+async def save_workforce_upload(file: Optional[UploadFile], allow_pdf: bool = False, folder: str = "foodnova/workforce") -> str:
     if not file:
         return ""
     allowed = RECEIPT_CONTENT_TYPES if allow_pdf else IMAGE_CONTENT_TYPES
     result = await upload_to_cloudinary(
         file,
-        "foodnova/workforce",
+        folder,
         allowed,
         10 if allow_pdf else 5,
         "Only JPG, PNG, WEBP, or PDF files are allowed." if allow_pdf else "Only JPG, PNG, or WEBP images are allowed.",
@@ -1409,6 +1421,18 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "emergency_contact_phone": worker.emergency_contact_phone or "",
         "id_type": worker.id_type or "",
         "id_number": worker.id_number or "",
+        "nin_verified": bool(getattr(worker, "nin_verified", False)),
+        "nin_report_id": getattr(worker, "nin_report_id", "") or "",
+        "nin_last4": getattr(worker, "nin_last4", "") or "",
+        "masked_nin": f"*******{getattr(worker, 'nin_last4', '')}" if getattr(worker, "nin_last4", "") else "",
+        "verified_first_name": getattr(worker, "verified_first_name", "") or "",
+        "verified_middle_name": getattr(worker, "verified_middle_name", "") or "",
+        "verified_surname": getattr(worker, "verified_surname", "") or "",
+        "verified_phone": getattr(worker, "verified_phone", "") or "",
+        "verified_gender": getattr(worker, "verified_gender", "") or "",
+        "verified_birthdate": getattr(worker, "verified_birthdate", "") or "",
+        "verified_photo_url": getattr(worker, "verified_photo_url", "") or "",
+        "selfie_url": getattr(worker, "selfie_url", "") or "",
         "profile_photo_url": worker.profile_photo_url or "",
         "id_document_url": worker.id_document_url or "",
         "vehicle_type": worker.vehicle_type or "",
@@ -2007,6 +2031,17 @@ def ensure_database_compatibility():
             "emergency_contact_phone": "VARCHAR(50) DEFAULT ''",
             "id_type": "VARCHAR(80) DEFAULT ''",
             "id_number": "VARCHAR(120) DEFAULT ''",
+            "nin_verified": "BOOLEAN DEFAULT FALSE",
+            "nin_report_id": "VARCHAR(120) DEFAULT ''",
+            "nin_last4": "VARCHAR(4) DEFAULT ''",
+            "verified_first_name": "VARCHAR(120) DEFAULT ''",
+            "verified_middle_name": "VARCHAR(120) DEFAULT ''",
+            "verified_surname": "VARCHAR(120) DEFAULT ''",
+            "verified_phone": "VARCHAR(50) DEFAULT ''",
+            "verified_gender": "VARCHAR(30) DEFAULT ''",
+            "verified_birthdate": "VARCHAR(40) DEFAULT ''",
+            "verified_photo_url": "TEXT DEFAULT ''",
+            "selfie_url": "TEXT DEFAULT ''",
             "profile_photo_url": "TEXT DEFAULT ''",
             "id_document_url": "TEXT DEFAULT ''",
             "vehicle_type": "VARCHAR(80) DEFAULT ''",
@@ -2337,40 +2372,84 @@ async def delivery_worker_signup(
     phone: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...),
-    email: Optional[str] = Form(""),
+    email: str = Form(...),
     home_address: str = Form(...),
     emergency_contact_name: str = Form(...),
     emergency_contact_phone: str = Form(...),
+    nin_number: str = Form(...),
+    nin_consent: bool = Form(...),
     id_type: str = Form(...),
     id_number: str = Form(...),
     vehicle_type: Optional[str] = Form(""),
     partner_company: Optional[str] = Form(""),
     plate_number: Optional[str] = Form(""),
     driver_license_number: Optional[str] = Form(""),
-    profile_photo: Optional[UploadFile] = File(None),
-    id_document: Optional[UploadFile] = File(None),
+    selfie: UploadFile = File(...),
+    id_document: UploadFile = File(...),
     vehicle_photo: Optional[UploadFile] = File(None),
 ):
+    if not is_mobile_worker_registration_request(request):
+        raise HTTPException(status_code=403, detail="Delivery partner registration must be completed on a mobile phone so we can capture your selfie and verify your identity.")
     worker_type = (worker_type or "").strip().lower()
     if worker_type not in ["messenger", "rider"]:
         raise HTTPException(status_code=400, detail="Invalid delivery worker type")
+    required_values = {
+        "full name": full_name,
+        "phone": phone,
+        "email": email,
+        "home address": home_address,
+        "emergency contact name": emergency_contact_name,
+        "emergency contact phone": emergency_contact_phone,
+        "NIN": nin_number,
+        "ID type": id_type,
+        "ID number": id_number,
+    }
+    missing = [label for label, value in required_values.items() if not str(value or "").strip()]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing required field: {', '.join(missing)}")
     if password != confirm_password:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    if worker_type == "rider" and not (vehicle_type or "").strip():
-        raise HTTPException(status_code=400, detail="Vehicle type is required for riders")
+    if len("".join(ch for ch in str(nin_number or "") if ch.isdigit())) != 11:
+        raise HTTPException(status_code=400, detail="NIN must be exactly 11 digits")
+    if not nin_consent:
+        raise HTTPException(status_code=400, detail="NIN verification consent is required")
+    if not selfie:
+        raise HTTPException(status_code=400, detail="Live selfie capture is required")
+    if not id_document:
+        raise HTTPException(status_code=400, detail="ID document upload is required")
+    if worker_type == "rider":
+        rider_missing = []
+        if not (vehicle_type or "").strip():
+            rider_missing.append("vehicle type")
+        if not (plate_number or "").strip():
+            rider_missing.append("plate number")
+        if not (driver_license_number or "").strip():
+            rider_missing.append("driver license number")
+        if not vehicle_photo:
+            rider_missing.append("vehicle photo")
+        if rider_missing:
+            raise HTTPException(status_code=400, detail=f"Missing required rider field: {', '.join(rider_missing)}")
 
     clean_phone = (phone or "").strip()
     clean_email = (email or "").strip().lower()
-    account_email = clean_email or f"{''.join(ch for ch in clean_phone if ch.isdigit())}@{worker_type}.foodnova.local"
+    account_email = clean_email
+
+    try:
+        nin_result = verify_nin(nin_number, True)
+    except CheckMyNINBVNError as error:
+        raise HTTPException(status_code=400, detail=str(error) or "NIN verification failed. Please check the number and try again.")
+    if not nin_result.get("verified"):
+        raise HTTPException(status_code=400, detail=nin_result.get("message") or "NIN verification failed. Please check the number and try again.")
+    nin_data = nin_result.get("data") or {}
 
     db = SessionLocal()
     try:
         if get_db_user_by_email(db, account_email) or get_db_user_by_phone(db, clean_phone):
             raise HTTPException(status_code=400, detail="A delivery account with this email or phone already exists")
 
-        profile_photo_url = await save_workforce_upload(profile_photo, False)
-        id_document_url = await save_workforce_upload(id_document, True)
-        vehicle_photo_url = await save_workforce_upload(vehicle_photo, False) if worker_type == "rider" else ""
+        selfie_url = await save_workforce_upload(selfie, False, "foodnova/workforce/selfies")
+        id_document_url = await save_workforce_upload(id_document, True, "foodnova/workforce/id-documents")
+        vehicle_photo_url = await save_workforce_upload(vehicle_photo, False, "foodnova/workforce/vehicles") if worker_type == "rider" else ""
 
         user = DBUser(
             full_name=full_name.strip(),
@@ -2393,7 +2472,18 @@ async def delivery_worker_signup(
             emergency_contact_phone=emergency_contact_phone.strip(),
             id_type=id_type.strip(),
             id_number=id_number.strip(),
-            profile_photo_url=profile_photo_url,
+            nin_verified=True,
+            nin_report_id=nin_result.get("report_id") or "",
+            nin_last4="".join(ch for ch in str(nin_number or "") if ch.isdigit())[-4:],
+            verified_first_name=nin_data.get("first_name") or "",
+            verified_middle_name=nin_data.get("middle_name") or "",
+            verified_surname=nin_data.get("surname") or "",
+            verified_phone=nin_data.get("phone") or "",
+            verified_gender=nin_data.get("gender") or "",
+            verified_birthdate=nin_data.get("birthdate") or "",
+            verified_photo_url="",
+            selfie_url=selfie_url,
+            profile_photo_url=selfie_url,
             id_document_url=id_document_url,
             vehicle_type=(vehicle_type or "").strip() if worker_type == "rider" else "",
             partner_company=(partner_company or "").strip() if worker_type == "rider" else "",
@@ -2410,6 +2500,15 @@ async def delivery_worker_signup(
         create_admin_audit_log(
             request,
             {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
+            "worker_nin_verified",
+            "delivery_worker",
+            worker.id,
+            f"NIN verified for {worker_type} delivery workforce application",
+            {"worker_id": worker.id, "worker_type": worker_type, "nin_last4": worker.nin_last4, "report_id": worker.nin_report_id},
+        )
+        create_admin_audit_log(
+            request,
+            {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
             "worker_registered",
             "delivery_worker",
             worker.id,
@@ -2419,6 +2518,34 @@ async def delivery_worker_signup(
         return {"success": True, "message": "Delivery account submitted for review", "worker": worker_data, "data": worker_data}
     finally:
         db.close()
+
+
+@app.post("/delivery-workers/verify-nin")
+def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request):
+    if not is_mobile_worker_registration_request(request):
+        raise HTTPException(status_code=403, detail="NIN verification must be completed on a mobile phone.")
+    try:
+        result = verify_nin(payload.nin, payload.consent)
+    except CheckMyNINBVNError as error:
+        return {"success": False, "verified": False, "message": str(error) or "NIN verification failed."}
+    if not result.get("verified"):
+        return {"success": False, "verified": False, "message": result.get("message") or "NIN verification failed."}
+    data = result.get("data") or {}
+    return {
+        "success": True,
+        "verified": True,
+        "message": result.get("message") or "NIN verified successfully.",
+        "report_id": result.get("report_id") or "",
+        "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
+        "data": {
+            "first_name": data.get("first_name") or "",
+            "last_name": data.get("surname") or "",
+            "middle_name": data.get("middle_name") or "",
+            "date_of_birth": data.get("birthdate") or "",
+            "gender": data.get("gender") or "",
+            "phone": data.get("phone") or "",
+        },
+    }
 
 
 @app.post("/auth/login")
@@ -3293,7 +3420,7 @@ def get_delivery_workforce(request: Request, worker_type: Optional[str] = None, 
         if operational_status:
             query = query.filter(DBDeliveryWorker.operational_status == operational_status.upper())
         if inside_zone is not None:
-            query = query.filter(DBDeliveryWorker.inside_zone == inside_zone)
+            query = query.filter(DBDeliveryWorker.worker_type == "messenger", DBDeliveryWorker.inside_zone == inside_zone)
         workers = [worker_to_dict(worker) for worker in query.order_by(DBDeliveryWorker.created_at.desc(), DBDeliveryWorker.id.desc()).all()]
         return {"success": True, "workers": workers, "data": workers}
     finally:

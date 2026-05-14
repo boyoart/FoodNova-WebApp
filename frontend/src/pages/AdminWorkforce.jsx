@@ -27,6 +27,7 @@ export default function AdminWorkforce() {
   const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || permissions.length === 0))
   const canView = isSuperAdmin || ['workforce:view', 'workforce:manage', 'delivery:manage', 'riders:manage'].some((permission) => permissions.includes(permission))
   const canManage = isSuperAdmin || ['workforce:manage', 'delivery:manage', 'riders:manage'].some((permission) => permissions.includes(permission))
+  const canViewKycDocuments = isSuperAdmin || permissions.includes('workforce:manage')
 
   const loadWorkers = async () => {
     try {
@@ -140,11 +141,16 @@ export default function AdminWorkforce() {
               <p><strong>Readiness:</strong> {worker.assignment_eligibility_reason || 'N/A'}</p>
               <p><strong>Address:</strong> {worker.home_address || 'N/A'}</p>
               <p><strong>Emergency:</strong> {worker.emergency_contact_name} - {worker.emergency_contact_phone}</p>
+              <p><strong>NIN:</strong> {worker.masked_nin || 'Not verified'} - {worker.nin_verified ? 'Verified' : 'Not verified'}</p>
+              {worker.nin_verified && (
+                <p><strong>Verified Identity:</strong> {[worker.verified_first_name, worker.verified_middle_name, worker.verified_surname].filter(Boolean).join(' ') || 'N/A'}</p>
+              )}
+              {worker.nin_report_id && <p><strong>NIN Report:</strong> {worker.nin_report_id}</p>}
               {worker.worker_type === 'rider' && <p><strong>Partner Company:</strong> {worker.partner_company || 'Independent rider'}</p>}
               {locationHref(worker) && <a href={locationHref(worker)} target="_blank" rel="noopener noreferrer">View live GPS location</a>}
-              {worker.profile_photo_url && <a href={resolveMediaUrl(worker.profile_photo_url)} target="_blank" rel="noopener noreferrer">View profile photo</a>}
-              {worker.id_document_url && <a href={resolveMediaUrl(worker.id_document_url)} target="_blank" rel="noopener noreferrer">View ID document</a>}
-              {worker.vehicle_photo_url && <a href={resolveMediaUrl(worker.vehicle_photo_url)} target="_blank" rel="noopener noreferrer">View vehicle photo</a>}
+              {canViewKycDocuments && worker.selfie_url && <a href={resolveMediaUrl(worker.selfie_url)} target="_blank" rel="noopener noreferrer">View selfie</a>}
+              {canViewKycDocuments && worker.id_document_url && <a href={resolveMediaUrl(worker.id_document_url)} target="_blank" rel="noopener noreferrer">View ID document</a>}
+              {canViewKycDocuments && worker.vehicle_photo_url && <a href={resolveMediaUrl(worker.vehicle_photo_url)} target="_blank" rel="noopener noreferrer">View vehicle photo</a>}
               {canManage && (
                 <div className="worker-review-actions">
                   <input placeholder="Admin note optional" value={reviewNotes[worker.id] || ''} onChange={(event) => setReviewNotes({ ...reviewNotes, [worker.id]: event.target.value })} />
