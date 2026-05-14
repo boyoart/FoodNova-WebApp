@@ -2676,22 +2676,23 @@ def messenger_go_online(payload: LocationPingPayload, request: Request):
 
 
 @app.post("/rider/go-online")
-def rider_go_online(payload: LocationPingPayload, request: Request):
+def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = None):
     db, user, worker = get_current_worker_record(request, "rider")
     try:
         if worker.kyc_status != "APPROVED":
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
-        if not payload_has_recent_timestamp(payload):
-            worker.operational_status = "OFFLINE"
-            db.commit()
-            raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds to go online.")
-        update_worker_location(worker, payload, db)
+        if payload:
+            if payload_has_recent_timestamp(payload):
+                update_worker_location(worker, payload, db)
+            else:
+                worker.suspicious_gps_gaps = (worker.suspicious_gps_gaps or 0) + 1
         worker.operational_status = "ONLINE"
         worker.inside_zone = False
+        worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(worker)
         data = worker_to_dict(worker)
-        create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"Rider {worker.full_name} went online", {"worker": data})
+        create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"Rider {worker.full_name} went online", {"worker": data, "gps_provided": bool(payload), "gps_recent": data.get("gps_recent")})
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()

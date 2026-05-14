@@ -208,6 +208,55 @@
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
+.location-helper-text {
+  color: #5d6b62;
+  margin: -0.25rem 0 1rem;
+}
+
+.location-warning-card {
+  background: #fff9e8;
+  border-color: #f1c75b;
+  color: #463600;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.location-warning-card div {
+  align-items: center;
+  display: flex;
+  gap: 0.55rem;
+}
+
+.location-warning-card h2,
+.location-warning-card p {
+  margin: 0;
+}
+
+.location-warning-card h2 {
+  color: #463600;
+}
+
+.location-warning-card ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.location-warning-card button {
+  align-items: center;
+  background: #087a34;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  font-weight: 900;
+  gap: 0.45rem;
+  justify-content: center;
+  justify-self: flex-start;
+  min-height: 42px;
+  padding: 0.7rem 1rem;
+}
+
 .worker-detail-grid div {
   background: #f7fbf8;
   border-radius: 8px;
