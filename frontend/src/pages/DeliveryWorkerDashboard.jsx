@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { AlertTriangle, MapPin, Power, RefreshCw, Settings, ShieldCheck, X } from 'lucide-react'
+import { Capacitor } from '@capacitor/core'
+import { Geolocation } from '@capacitor/geolocation'
 import { workerAPI } from '../services/api'
+import { requestDeliveryPushToken } from '../services/pushNotifications'
 import { useAuthStore } from '../store/authStore'
 import './WorkerPages.css'
 
@@ -15,11 +18,11 @@ function getPosition() {
       navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
     }
 
-    const capacitorGeolocation = window.Capacitor?.Plugins?.Geolocation
-    if (window.Capacitor?.isNativePlatform?.() && capacitorGeolocation?.getCurrentPosition) {
-      capacitorGeolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+    if (Capacitor.isNativePlatform?.()) {
+      Geolocation.requestPermissions()
+        .then(() => Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }))
         .then(resolve)
-        .catch(() => requestBrowserLocation())
+        .catch(reject)
       return
     }
 
@@ -32,8 +35,7 @@ function getPosition() {
 }
 
 async function requestLocationPosition() {
-  const capacitorGeolocation = window.Capacitor?.Plugins?.Geolocation
-  if (window.Capacitor?.isNativePlatform?.() && capacitorGeolocation?.getCurrentPosition) {
+  if (Capacitor.isNativePlatform?.()) {
     return getPosition()
   }
   if (navigator.permissions?.query) {
@@ -84,6 +86,8 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const [locationMessage, setLocationMessage] = useState('')
   const [permissionState, setPermissionState] = useState('prompt')
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
+  const [pushStatus, setPushStatus] = useState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission || 'prompt')
+  const [pushBusy, setPushBusy] = useState(false)
   const [offers, setOffers] = useState([])
   const previousPendingOfferCount = useRef(0)
   const type = workerType || user?.delivery_worker_type || user?.role
@@ -319,6 +323,27 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   }
 
   const permissionLabel = permissionState === 'granted' ? 'Allowed' : permissionState === 'denied' ? 'Blocked' : 'Prompt'
+  const pushLabel = pushStatus === 'granted' ? 'Allowed' : pushStatus === 'denied' ? 'Blocked' : pushStatus === 'unsupported' ? 'Unsupported' : pushStatus === 'configured_missing' ? 'Setup Needed' : 'Prompt'
+
+  const enablePushNotifications = async () => {
+    try {
+      setPushBusy(true)
+      const result = await requestDeliveryPushToken()
+      setPushStatus(result.status || 'prompt')
+      if (result.token) {
+        await workerAPI.registerFcmToken({ token: result.token, platform: result.platform || (Capacitor.isNativePlatform?.() ? 'android' : 'web') })
+        toast.success('Delivery push notifications enabled')
+      } else if (result.status === 'configured_missing') {
+        toast.error('Firebase web push settings are not configured yet')
+      } else if (result.status === 'denied') {
+        toast.error('Notification permission is blocked. Enable it in settings.')
+      }
+    } catch (error) {
+      toast.error(error?.message || 'Unable to enable push notifications')
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   const acceptOffer = async (offer) => {
     try {
@@ -379,6 +404,9 @@ export default function DeliveryWorkerDashboard({ workerType }) {
       <section className="worker-actions-grid">
         <button type="button" onClick={worker.operational_status === 'OFFLINE' ? goOnline : goOffline} disabled={busy}>
           <Power size={20} /> {worker.operational_status === 'OFFLINE' ? 'Go Online' : 'Go Offline'}
+        </button>
+        <button type="button" className="secondary-worker-button" onClick={enablePushNotifications} disabled={pushBusy}>
+          <RefreshCw size={20} /> Enable Push Alerts
         </button>
         <button type="button" className="panic-button" onClick={sendPanic} disabled={busy}>
           <AlertTriangle size={20} /> Emergency Alert
@@ -444,6 +472,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
         )}
         <div className="worker-detail-grid">
           <div><strong>Location Permission</strong><span className={`permission-badge ${permissionState}`}>{permissionLabel}</span></div>
+          <div><strong>Push Notifications</strong><span className={`permission-badge ${pushStatus}`}>{pushLabel}</span></div>
           <div><strong>Last Seen</strong><span>{worker.last_seen_at ? new Date(worker.last_seen_at).toLocaleString() : 'No GPS ping yet'}</span></div>
           <div><strong>Geo-Fence</strong><span>{type === 'messenger' ? (worker.inside_zone ? 'Inside operational zone' : 'Outside operational zone') : 'Not enforced for riders'}</span></div>
           <div><strong>GPS Fresh</strong><span>{worker.gps_recent ? 'Yes' : 'No'}</span></div>

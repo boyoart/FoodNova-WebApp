@@ -253,6 +253,7 @@ export const workerAPI = {
   goOffline: async () => (await api.post("/delivery/go-offline")).data,
   locationPing: async (payload) => (await api.post("/delivery/location-ping", payload)).data,
   panicAlert: async (payload) => (await api.post("/delivery/panic-alert", payload)).data,
+  registerFcmToken: async (payload) => (await api.post("/delivery-workers/register-fcm-token", payload)).data,
   getOffers: async () => (await api.get("/delivery/offers")).data,
   acceptOffer: async (offerId) => (await api.post(`/delivery/offers/${offerId}/accept`)).data,
   declineOffer: async (offerId) => (await api.post(`/delivery/offers/${offerId}/decline`)).data,

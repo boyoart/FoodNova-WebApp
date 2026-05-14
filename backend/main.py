@@ -11,6 +11,8 @@ import json
 import math
 import os
 import random
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -29,6 +31,14 @@ from email_service import (
     send_low_stock_alert,
 )
 from services.ninbvnportal_service import CheckMyNINBVNError, verify_nin
+
+try:
+    import firebase_admin
+    from firebase_admin import credentials, messaging
+except Exception:
+    firebase_admin = None
+    credentials = None
+    messaging = None
 from models import (
     Address as DBAddress,
     AdminAuditLog as DBAdminAuditLog,
@@ -463,6 +473,11 @@ class DeliveryOfferActionPayload(BaseModel):
 
 class DeliveryAssignmentModePayload(BaseModel):
     mode: str
+
+
+class FCMTokenPayload(BaseModel):
+    token: str
+    platform: Optional[str] = ""
 
 
 class CancellationRequestPayload(BaseModel):
@@ -965,6 +980,86 @@ def set_app_setting(db, key: str, value: str) -> DBAppSetting:
 def get_delivery_assignment_mode(db) -> str:
     mode = (get_app_setting(db, "delivery_assignment_mode", "automatic") or "automatic").strip().lower()
     return mode if mode in ["automatic", "manual"] else "automatic"
+
+
+def get_firebase_app():
+    if not firebase_admin:
+        return None
+    if firebase_admin._apps:
+        return firebase_admin.get_app()
+    service_account_json = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON") or ""
+    service_account_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH") or ""
+    try:
+        if service_account_json:
+            return firebase_admin.initialize_app(credentials.Certificate(json.loads(service_account_json)))
+        if service_account_path:
+            return firebase_admin.initialize_app(credentials.Certificate(service_account_path))
+    except Exception as error:
+        print("FCM INIT ERROR:", repr(error))
+    return None
+
+
+def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) -> bool:
+    token = (token or "").strip()
+    if not token:
+        return False
+    data = {str(key): str(value) for key, value in (data or {}).items() if value is not None}
+    app = get_firebase_app()
+    if app and messaging:
+        try:
+            messaging.send(messaging.Message(
+                token=token,
+                notification=messaging.Notification(title=title, body=body),
+                data=data,
+                webpush=messaging.WebpushConfig(fcm_options=messaging.WebpushFCMOptions(link=data.get("click_action") or "/")),
+                android=messaging.AndroidConfig(notification=messaging.AndroidNotification(click_action="OPEN_WORKER_DASHBOARD")),
+            ))
+            return True
+        except Exception as error:
+            print("FCM SEND ERROR:", repr(error))
+            return False
+    server_key = os.getenv("FCM_SERVER_KEY") or ""
+    if not server_key:
+        return False
+    payload = json.dumps({
+        "to": token,
+        "notification": {"title": title, "body": body, "click_action": data.get("click_action") or "/"},
+        "data": data,
+    }).encode("utf-8")
+    request_obj = urllib.request.Request(
+        "https://fcm.googleapis.com/fcm/send",
+        data=payload,
+        headers={"Authorization": f"key={server_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request_obj, timeout=10) as response:
+            return 200 <= response.status < 300
+    except (urllib.error.URLError, urllib.error.HTTPError) as error:
+        print("FCM LEGACY SEND ERROR:", repr(error))
+        return False
+
+
+def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -> None:
+    tokens = []
+    if worker.fcm_token:
+        tokens.append(worker.fcm_token)
+    for token in json_load(getattr(worker, "fcm_tokens_json", None), []) or []:
+        if token and token not in tokens:
+            tokens.append(token)
+    for token in tokens:
+        send_fcm_push_token(
+            token,
+            "New Delivery Request",
+            "You have a new FoodNova delivery offer.",
+            {
+                "type": "delivery_offer",
+                "offer_id": offer.id,
+                "order_id": offer.order_id,
+                "worker_type": offer.worker_type,
+                "click_action": "/rider/dashboard" if offer.worker_type == "rider" else "/messenger/dashboard",
+            },
+        )
 
 
 def safe_email_call(label: str, func, *args, **kwargs):
@@ -1801,6 +1896,7 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
         "delivery",
         order_to_dict(order),
     )
+    send_delivery_offer_push(worker, offer)
     return offer
 
 
@@ -2381,6 +2477,8 @@ def ensure_database_compatibility():
             "latest_speed": "FLOAT",
             "last_seen_at": "TIMESTAMP",
             "inside_zone": "BOOLEAN DEFAULT FALSE",
+            "fcm_token": "TEXT DEFAULT ''",
+            "fcm_tokens_json": "TEXT DEFAULT '[]'",
             "approved_at": "TIMESTAMP",
             "approved_by_admin_id": "INTEGER",
             "approved_by_admin_name": "VARCHAR(150) DEFAULT ''",
@@ -3075,6 +3173,26 @@ def delivery_panic_alert(payload: LocationPingPayload, request: Request):
         db.commit()
         create_admin_audit_log(request, user, "worker_panic_alert", "delivery_worker", worker.id, f"Emergency alert from {worker.full_name}", {"worker": worker_to_dict(worker), "latitude": payload.latitude, "longitude": payload.longitude})
         return {"success": True, "message": "Emergency alert sent to FoodNova admin."}
+    finally:
+        db.close()
+
+
+@app.post("/delivery-workers/register-fcm-token")
+def register_delivery_worker_fcm_token(payload: FCMTokenPayload, request: Request):
+    db, user, worker = get_current_worker_record(request)
+    token = (payload.token or "").strip()
+    if not token:
+        db.close()
+        raise HTTPException(status_code=400, detail="FCM token is required")
+    try:
+        tokens = json_load(getattr(worker, "fcm_tokens_json", None), []) or []
+        tokens = [item for item in tokens if item and item != token]
+        tokens.insert(0, token)
+        worker.fcm_token = token
+        worker.fcm_tokens_json = json_dump(tokens[:5])
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        return {"success": True, "message": "Push notification token registered"}
     finally:
         db.close()
 

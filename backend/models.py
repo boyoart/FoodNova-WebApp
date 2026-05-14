@@ -173,6 +173,8 @@ class DeliveryWorker(Base):
     latest_speed = Column(Float, nullable=True)
     last_seen_at = Column(DateTime, nullable=True)
     inside_zone = Column(Boolean, default=False)
+    fcm_token = Column(Text, default="")
+    fcm_tokens_json = Column(Text, default="[]")
     approved_at = Column(DateTime, nullable=True)
     approved_by_admin_id = Column(Integer, nullable=True)
     approved_by_admin_name = Column(String(150), default="")
