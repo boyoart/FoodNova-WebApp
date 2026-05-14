@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import { AlertTriangle, MapPin, Power, RefreshCw, ShieldCheck } from 'lucide-react'
 import { workerAPI } from '../services/api'
@@ -12,12 +12,12 @@ function getPosition() {
         reject(new Error('GPS is not available on this device.'))
         return
       }
-      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 })
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
     }
 
     const capacitorGeolocation = window.Capacitor?.Plugins?.Geolocation
     if (window.Capacitor?.isNativePlatform?.() && capacitorGeolocation?.getCurrentPosition) {
-      capacitorGeolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })
+      capacitorGeolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
         .then(resolve)
         .catch(() => requestBrowserLocation())
       return
@@ -29,6 +29,24 @@ function getPosition() {
     }
     requestBrowserLocation()
   })
+}
+
+async function requestLocationPosition() {
+  const capacitorGeolocation = window.Capacitor?.Plugins?.Geolocation
+  if (window.Capacitor?.isNativePlatform?.() && capacitorGeolocation?.getCurrentPosition) {
+    return getPosition()
+  }
+  if (navigator.permissions?.query) {
+    try {
+      const permission = await navigator.permissions.query({ name: 'geolocation' })
+      if (permission.state === 'denied') {
+        throw new Error('Location access is blocked. Please enable location permission in your phone/browser settings.')
+      }
+    } catch (error) {
+      if (/blocked/i.test(error?.message || '')) throw error
+    }
+  }
+  return getPosition()
 }
 
 function locationPayload(position) {
@@ -44,7 +62,7 @@ function locationPayload(position) {
 }
 
 function isLocationPermissionDenied(error) {
-  return error?.code === 1 || /denied|permission/i.test(error?.message || '')
+  return error?.code === 1 || /blocked|denied|permission/i.test(error?.message || '')
 }
 
 export default function DeliveryWorkerDashboard({ workerType }) {
@@ -55,6 +73,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const [locationWarning, setLocationWarning] = useState('')
   const [locationMessage, setLocationMessage] = useState('')
   const [offers, setOffers] = useState([])
+  const previousPendingOfferCount = useRef(0)
   const type = workerType || user?.delivery_worker_type || user?.role
   const title = type === 'rider' ? 'Rider / Delivery Partner Dashboard' : 'Walking Messenger Dashboard'
 
@@ -87,10 +106,10 @@ export default function DeliveryWorkerDashboard({ workerType }) {
 
   useEffect(() => {
     if (!worker || worker.kyc_status !== 'APPROVED' || worker.operational_status === 'OFFLINE') return undefined
-    const intervalMs = worker.operational_status === 'ON_DELIVERY' ? 15000 : type === 'messenger' ? 30000 : 60000
+    const intervalMs = worker.operational_status === 'ON_DELIVERY' || worker.operational_status === 'ASSIGNED' ? 12000 : type === 'messenger' ? 20000 : 30000
     const interval = window.setInterval(async () => {
       try {
-        const position = await getPosition()
+        const position = await requestLocationPosition()
         const response = await workerAPI.locationPing(locationPayload(position))
         setWorker(response.worker || response.data)
       } catch {
@@ -106,17 +125,41 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     return () => window.clearInterval(interval)
   }, [worker?.kyc_status])
 
+  useEffect(() => {
+    const pendingCount = offers.filter((offer) => offer.status === 'PENDING').length
+    if (pendingCount > previousPendingOfferCount.current) {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext
+        if (AudioContextClass) {
+          const context = new AudioContextClass()
+          const oscillator = context.createOscillator()
+          const gain = context.createGain()
+          oscillator.frequency.value = 880
+          gain.gain.value = 0.04
+          oscillator.connect(gain)
+          gain.connect(context.destination)
+          oscillator.start()
+          oscillator.stop(context.currentTime + 0.18)
+        }
+      } catch {
+        // Browser or app may block sound until user interaction.
+      }
+    }
+    previousPendingOfferCount.current = pendingCount
+  }, [offers])
+
   const goOnline = async () => {
     try {
       setBusy(true)
       let payload = null
       try {
-        const position = await getPosition()
+        const position = await requestLocationPosition()
         payload = locationPayload(position)
         setLocationWarning('')
       } catch (locationError) {
         if (type === 'messenger') throw locationError
         setLocationWarning(isLocationPermissionDenied(locationError) ? 'permission-denied' : 'unavailable')
+        setLocationMessage(isLocationPermissionDenied(locationError) ? 'Location access is blocked. Please enable location permission in your phone/browser settings.' : 'Unable to get your location. Please turn on GPS and try again.')
       }
       const response = await workerAPI.goOnline(type, payload)
       setWorker(response.worker || response.data)
@@ -124,6 +167,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     } catch (error) {
       if (type === 'rider' && isLocationPermissionDenied(error)) {
         setLocationWarning('permission-denied')
+        setLocationMessage('Location access is blocked. Please enable location permission in your phone/browser settings.')
       } else {
         toast.error(error?.response?.data?.detail || error.message || 'Unable to go online')
       }
@@ -148,7 +192,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const sendPanic = async () => {
     try {
       setBusy(true)
-      const position = await getPosition()
+      const position = await requestLocationPosition()
       await workerAPI.panicAlert(locationPayload(position))
       toast.success('Emergency alert sent')
     } catch (error) {
@@ -161,7 +205,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const retryLocation = async () => {
     try {
       setBusy(true)
-      const position = await getPosition()
+      const position = await requestLocationPosition()
       const response = await workerAPI.locationPing(locationPayload(position))
       setWorker(response.worker || response.data)
       setLocationWarning('')
@@ -170,7 +214,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     } catch (error) {
       if (isLocationPermissionDenied(error)) {
         setLocationWarning('permission-denied')
-        setLocationMessage('Location permission was denied. Please enable location permission in your phone settings.')
+        setLocationMessage('Location access is blocked. Please enable location permission in your phone/browser settings.')
       } else {
         setLocationWarning('unavailable')
         setLocationMessage('Unable to get your location. Please turn on GPS and try again.')
@@ -246,7 +290,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
       </section>
 
       <section className="worker-panel">
-        <h2>Pending Delivery Offers</h2>
+        <h2>Pending Delivery Offers {offers.filter((offer) => offer.status === 'PENDING').length > 0 && <span className="offer-count-badge">{offers.filter((offer) => offer.status === 'PENDING').length}</span>}</h2>
         {offers.filter((offer) => offer.status === 'PENDING').length ? (
           <div className="delivery-offer-list">
             {offers.filter((offer) => offer.status === 'PENDING').map((offer) => (
@@ -285,7 +329,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
             <li>accurate delivery updates</li>
           </ul>
           <button type="button" onClick={retryLocation} disabled={busy}>
-            <RefreshCw size={18} /> Enable Location Access
+            <RefreshCw size={18} /> Retry Location
           </button>
         </section>
       )}
@@ -315,7 +359,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
                   <span>{offer.order_code}</span>
                 </div>
                 <p><strong>Pickup:</strong> {offer.pickup_area || 'FoodNova pickup'}</p>
-                <p><strong>Delivery:</strong> {offer.delivery_area || 'Customer area'}</p>
+                <p><strong>Delivery:</strong> {offer.delivery_address || offer.delivery_area || 'Customer area'}</p>
               </article>
             ))}
           </div>

@@ -182,9 +182,11 @@ export default function TrackOrderPage() {
 
             {order.rider_name && (
               <div className="tracking-rider-card">
-                <h3>Rider Information</h3>
-                <p><strong>Rider Name:</strong> {order.rider_name}</p>
-                <p><strong>Rider Phone:</strong> {order.rider_phone || 'Not available'}</p>
+                <h3>Delivery Worker Information</h3>
+                <p><strong>Name:</strong> {order.rider_name}</p>
+                <p><strong>Type:</strong> {order.delivery_worker_type === 'messenger' ? 'Messenger' : 'Rider'}</p>
+                <p><strong>Phone:</strong> {order.rider_phone || 'Not available'}</p>
+                <p><strong>Delivery Status:</strong> {order.delivery_status || order.fulfillment_status || 'Assigned'}</p>
                 {order.delivery_note && <p><strong>Delivery Note:</strong> {order.delivery_note}</p>}
                 {order.rider_phone && <button type="button" onClick={contactRider}><MessageCircle size={16} /> Contact Rider</button>}
               </div>

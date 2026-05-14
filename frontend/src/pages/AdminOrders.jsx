@@ -456,8 +456,10 @@ export default function AdminOrders() {
                   <h4>Delivery Assignment</h4>
                   {selectedOrder.rider_name ? (
                     <div className="info-grid">
-                      <div className="info-item"><strong>Assigned Rider:</strong><span>{selectedOrder.rider_name}</span></div>
-                      <div className="info-item"><strong>Rider Phone:</strong><span>{selectedOrder.rider_phone || 'N/A'}</span></div>
+                      <div className="info-item"><strong>Assigned Worker:</strong><span>{selectedOrder.rider_name}</span></div>
+                      <div className="info-item"><strong>Worker Type:</strong><span>{selectedOrder.delivery_worker_type === 'messenger' ? 'Messenger' : 'Rider'}</span></div>
+                      <div className="info-item"><strong>Worker Phone:</strong><span>{selectedOrder.rider_phone || 'N/A'}</span></div>
+                      <div className="info-item"><strong>Delivery Status:</strong><span>{selectedOrder.delivery_status || selectedOrder.fulfillment_status || 'N/A'}</span></div>
                       <div className="info-item"><strong>Vehicle:</strong><span>{[selectedOrder.rider_vehicle_type, selectedOrder.rider_vehicle_number].filter(Boolean).join(' - ') || 'N/A'}</span></div>
                       <div className="info-item"><strong>Assigned At:</strong><span>{selectedOrder.delivery_assigned_at ? new Date(selectedOrder.delivery_assigned_at).toLocaleString() : 'N/A'}</span></div>
                       <div className="info-item full-width"><strong>Delivery Note:</strong><span>{selectedOrder.delivery_note || 'No note'}</span></div>

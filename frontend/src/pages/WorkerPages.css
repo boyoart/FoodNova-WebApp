@@ -269,6 +269,19 @@
   gap: 0.85rem;
 }
 
+.offer-count-badge {
+  background: #b3261e;
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  font-size: 0.78rem;
+  font-weight: 900;
+  justify-content: center;
+  margin-left: 0.4rem;
+  min-width: 1.5rem;
+  padding: 0.15rem 0.45rem;
+}
+
 .delivery-offer-card {
   background: #f7fbf8;
   border: 1px solid #d9e7de;
@@ -354,6 +367,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.assignment-mode-control button.active {
+  background: #12351f;
 }
 
 .workforce-grid {

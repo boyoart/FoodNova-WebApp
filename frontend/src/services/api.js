@@ -373,6 +373,8 @@ export const adminAPI = {
     const offers = normalizeList(response.data, ["offers"]);
     return { data: offers, raw: response.data };
   },
+  getDeliveryAssignmentMode: async () => (await api.get("/admin/delivery-assignment-mode")).data,
+  updateDeliveryAssignmentMode: async (mode) => (await api.patch("/admin/delivery-assignment-mode", { mode })).data,
   assignDeliveryOffer: async (offerId) => (await api.post(`/admin/delivery-offers/${offerId}/assign`)).data,
   rejectDeliveryOffer: async (offerId, payload = {}) => (await api.post(`/admin/delivery-offers/${offerId}/reject`, payload)).data,
   getDeliveryZone: async () => (await api.get("/admin/delivery-zone")).data,

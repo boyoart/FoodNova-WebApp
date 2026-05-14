@@ -579,8 +579,10 @@ export default function OrderHistoryPage() {
                     {selectedOrder.delivery_notes && <p><strong>Delivery Notes:</strong> {selectedOrder.delivery_notes}</p>}
                     {selectedOrder.rider_name && (
                       <div className="customer-rider-card">
-                        <p><strong>Delivery Rider:</strong> {selectedOrder.rider_name}</p>
-                        <p><strong>Rider Phone:</strong> {selectedOrder.rider_phone || 'Not available'}</p>
+                        <p><strong>Delivery Worker:</strong> {selectedOrder.rider_name}</p>
+                        <p><strong>Worker Type:</strong> {selectedOrder.delivery_worker_type === 'messenger' ? 'Messenger' : 'Rider'}</p>
+                        <p><strong>Phone:</strong> {selectedOrder.rider_phone || 'Not available'}</p>
+                        <p><strong>Delivery Status:</strong> {selectedOrder.delivery_status || selectedOrder.fulfillment_status || 'Assigned'}</p>
                         {selectedOrder.delivery_note && <p><strong>Delivery Note:</strong> {selectedOrder.delivery_note}</p>}
                         {selectedOrder.rider_phone && <button type="button" className="btn btn-primary contact-rider-btn" onClick={() => handleContactRider(selectedOrder)}><MessageCircle size={14} /> Contact Rider</button>}
                       </div>

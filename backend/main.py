@@ -33,6 +33,7 @@ from models import (
     Address as DBAddress,
     AdminAuditLog as DBAdminAuditLog,
     Announcement as DBAnnouncement,
+    AppSetting as DBAppSetting,
     Broadcast as DBBroadcast,
     CancellationRequest as DBCancellationRequest,
     Notification as DBNotification,
@@ -458,6 +459,10 @@ class AssignRiderPayload(BaseModel):
 
 class DeliveryOfferActionPayload(BaseModel):
     reason: Optional[str] = ""
+
+
+class DeliveryAssignmentModePayload(BaseModel):
+    mode: str
 
 
 class CancellationRequestPayload(BaseModel):
@@ -938,6 +943,28 @@ def _create_broadcast_notification(title: str, message: str, notif_type: str = "
 def _create_notification(order: dict, notif_type: str, title: str, message: str):
     """Legacy notification creation - delegates to new system."""
     return _create_order_notification(order, title, message, notif_type, "order")
+
+
+def get_app_setting(db, key: str, default: str = "") -> str:
+    setting = db.query(DBAppSetting).filter(DBAppSetting.key == key).first()
+    return setting.value if setting and setting.value is not None else default
+
+
+def set_app_setting(db, key: str, value: str) -> DBAppSetting:
+    setting = db.query(DBAppSetting).filter(DBAppSetting.key == key).first()
+    if not setting:
+        setting = DBAppSetting(key=key, value=value)
+        db.add(setting)
+    else:
+        setting.value = value
+        setting.updated_at = datetime.utcnow()
+    db.flush()
+    return setting
+
+
+def get_delivery_assignment_mode(db) -> str:
+    mode = (get_app_setting(db, "delivery_assignment_mode", "automatic") or "automatic").strip().lower()
+    return mode if mode in ["automatic", "manual"] else "automatic"
 
 
 def safe_email_call(label: str, func, *args, **kwargs):
@@ -1662,7 +1689,7 @@ def delivery_area_for_order(order: DBOrder) -> str:
     snapshot = json_load(getattr(order, "delivery_address_snapshot", None), None) or {}
     pieces = [snapshot.get("area"), snapshot.get("city"), snapshot.get("lga"), snapshot.get("state")]
     area = ", ".join([str(piece) for piece in pieces if piece])
-    return area or (order.delivery_address or "Customer delivery area")[:180]
+    return area or "Customer area"
 
 
 def worker_inside_zone(worker: DBDeliveryWorker, latitude: float, longitude: float, db) -> bool:
@@ -1689,6 +1716,7 @@ def delivery_offer_to_dict(offer: DBDeliveryOffer, worker: DBDeliveryWorker = No
         "estimated_distance_meters": offer.estimated_distance_meters,
         "pickup_area": offer.pickup_area or "FoodNova pickup",
         "delivery_area": offer.delivery_area or "",
+        "delivery_address": order.delivery_address if order and offer.status == "ASSIGNED" else "",
         "accepted_at": iso(offer.accepted_at),
         "declined_at": iso(offer.declined_at),
         "expires_at": iso(offer.expires_at),
@@ -1706,6 +1734,7 @@ def expire_stale_delivery_offers(db) -> list[int]:
     for offer in stale:
         offer.status = "EXPIRED"
         offer.updated_at = datetime.utcnow()
+        create_admin_audit_log(None, {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"}, "delivery_offer_expired", "delivery_offer", offer.id, f"Delivery offer expired for order {offer.order_code}", {"order_id": offer.order_id, "worker_id": offer.worker_id})
     return order_ids
 
 
@@ -1809,7 +1838,60 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
         f"Delivery offer created for {worker.full_name} on order {order.order_code}",
         {"order_code": order.order_code, "worker_id": worker.id, "worker_type": worker.worker_type, "delivery_type": order.delivery_type},
     )
+    create_admin_audit_log(
+        request,
+        {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
+        "delivery_offer_sent",
+        "delivery_offer",
+        offer.id,
+        f"Delivery offer sent to {worker.full_name} for order {order.order_code}",
+        {"order_code": order.order_code, "worker_id": worker.id, "worker_type": worker.worker_type},
+    )
     return offer
+
+
+def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliveryWorker, order: DBOrder, request: Request, actor: dict, automatic: bool = False) -> dict:
+    offer.status = "ASSIGNED"
+    offer.updated_at = datetime.utcnow()
+    order.delivery_worker_id = worker.id
+    order.delivery_worker_type = worker.worker_type or ""
+    order.delivery_status = "ASSIGNED"
+    order.rider_id = worker.id
+    order.rider_name = worker.full_name
+    order.rider_phone = worker.phone
+    order.rider_vehicle_type = worker.vehicle_type or ""
+    order.rider_vehicle_number = worker.plate_number or ""
+    order.delivery_assigned_at = datetime.utcnow()
+    order.updated_at = datetime.utcnow()
+    worker.operational_status = "ASSIGNED"
+    worker.updated_at = datetime.utcnow()
+    db.flush()
+    order_data = order_to_dict(order)
+    _create_user_notification(
+        worker.email,
+        "You have been assigned this delivery",
+        f"You have been assigned order {order.order_code}.",
+        "delivery_assigned",
+        "delivery",
+        order_data,
+    )
+    _create_order_notification(
+        order_data,
+        "Delivery Assigned",
+        "Your order has been assigned for delivery.",
+        "delivery_update",
+        "delivery",
+    )
+    _create_admin_notifications(
+        f"Delivery assigned for order #{order.order_code}",
+        f"{worker.full_name} has been assigned to order #{order.order_code}.",
+        "delivery_auto_assigned" if automatic else "delivery_manual_assigned",
+        "delivery",
+        order_data,
+    )
+    action = "delivery_auto_assigned" if automatic else "delivery_manual_assigned"
+    create_admin_audit_log(request, actor, action, "delivery_offer", offer.id, f"{'System auto assigned' if automatic else 'Admin assigned'} {worker.full_name} to order {order.order_code}", {"offer": delivery_offer_to_dict(offer, worker, order)})
+    return order_data
 
 
 def require_worker(request: Request, expected_type: Optional[str] = None):
@@ -2330,6 +2412,12 @@ def ensure_database_compatibility():
             "expires_at": "TIMESTAMP",
             "created_at": "TIMESTAMP",
             "updated_at": "TIMESTAMP",
+        },
+        "app_settings": {
+            "key": "VARCHAR(120)",
+            "value": "TEXT DEFAULT ''",
+            "updated_at": "TIMESTAMP",
+            "created_at": "TIMESTAMP",
         },
     }
 
@@ -2973,7 +3061,7 @@ def delivery_location_ping(payload: LocationPingPayload, request: Request):
         db.commit()
         db.refresh(worker)
         data = worker_to_dict(worker)
-        create_admin_audit_log(request, user, "worker_location_ping", "delivery_worker", worker.id, f"Location ping from {worker.full_name}", {"latitude": payload.latitude, "longitude": payload.longitude, "inside_zone": worker.inside_zone})
+        create_admin_audit_log(request, user, "delivery_location_ping", "delivery_worker", worker.id, f"Location ping from {worker.full_name}", {"latitude": payload.latitude, "longitude": payload.longitude, "inside_zone": worker.inside_zone})
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()
@@ -3005,7 +3093,10 @@ def get_worker_delivery_offers(request: Request):
             DBDeliveryOffer.worker_id == worker.id,
             DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"]),
         ).order_by(DBDeliveryOffer.created_at.desc(), DBDeliveryOffer.id.desc()).all()
-        items = [delivery_offer_to_dict(offer, worker) for offer in offers]
+        items = []
+        for offer in offers:
+            order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
+            items.append(delivery_offer_to_dict(offer, worker, order))
         return {"success": True, "offers": items, "data": items}
     finally:
         db.close()
@@ -3030,18 +3121,22 @@ def accept_delivery_offer(offer_id: int, request: Request):
         offer.status = "ACCEPTED"
         offer.accepted_at = datetime.utcnow()
         offer.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(offer)
         order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
         order_data = order_to_dict(order) if order else {"id": offer.order_id, "order_code": offer.order_code}
         worker_type_label = "Rider" if (worker.worker_type or "") == "rider" else "Messenger"
-        _create_admin_notifications(
-            f"{worker_type_label} accepted order #{offer.order_code}",
-            f"{worker_type_label} accepted order #{offer.order_code}. Confirm assignment.",
-            "delivery_offer_accepted",
-            "delivery",
-            order_data,
-        )
+        assignment_mode = get_delivery_assignment_mode(db)
+        if assignment_mode == "automatic" and order:
+            order_data = assign_delivery_offer_to_order(db, offer, worker, order, request, {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"}, automatic=True)
+        else:
+            _create_admin_notifications(
+                f"{worker_type_label} accepted order #{offer.order_code}",
+                f"{worker_type_label} accepted order #{offer.order_code}. Confirm assignment.",
+                "delivery_offer_accepted",
+                "delivery",
+                order_data,
+            )
+        db.commit()
+        db.refresh(offer)
         create_admin_audit_log(request, user, "delivery_offer_accepted", "delivery_offer", offer.id, f"{worker.full_name} accepted order {offer.order_code}", {"offer": delivery_offer_to_dict(offer, worker, order)})
         return {"success": True, "offer": delivery_offer_to_dict(offer, worker, order), "data": delivery_offer_to_dict(offer, worker, order)}
     finally:
@@ -3059,6 +3154,7 @@ def decline_delivery_offer(offer_id: int, request: Request, payload: DeliveryOff
             offer.status = "DECLINED"
             offer.declined_at = datetime.utcnow()
             offer.updated_at = datetime.utcnow()
+            create_admin_audit_log(request, user, "delivery_offer_declined", "delivery_offer", offer.id, f"{worker.full_name} declined order {offer.order_code}", {"offer": delivery_offer_to_dict(offer, worker)})
             order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
             if order:
                 start_delivery_matching(db, order, request)
@@ -3750,7 +3846,13 @@ def get_delivery_workforce(request: Request, worker_type: Optional[str] = None, 
             query = query.filter(DBDeliveryWorker.operational_status == operational_status.upper())
         if inside_zone is not None:
             query = query.filter(DBDeliveryWorker.worker_type == "messenger", DBDeliveryWorker.inside_zone == inside_zone)
-        workers = [worker_to_dict(worker) for worker in query.order_by(DBDeliveryWorker.created_at.desc(), DBDeliveryWorker.id.desc()).all()]
+        workers = []
+        for worker in query.order_by(DBDeliveryWorker.created_at.desc(), DBDeliveryWorker.id.desc()).all():
+            data = worker_to_dict(worker)
+            assigned_order = active_order_filter(db.query(DBOrder)).filter(DBOrder.delivery_worker_id == worker.id, DBOrder.delivery_status == "ASSIGNED").order_by(DBOrder.delivery_assigned_at.desc(), DBOrder.id.desc()).first()
+            data["availability_status"] = "ASSIGNED" if assigned_order or worker.operational_status in ["ASSIGNED", "ON_DELIVERY"] else "AVAILABLE" if worker.operational_status == "ONLINE" else "OFFLINE"
+            data["active_order"] = order_to_dict(assigned_order) if assigned_order else None
+            workers.append(data)
         return {"success": True, "workers": workers, "data": workers}
     finally:
         db.close()
@@ -3786,6 +3888,33 @@ def get_admin_delivery_offers(request: Request, status: Optional[str] = None):
         db.close()
 
 
+@app.get("/admin/delivery-assignment-mode")
+def get_admin_delivery_assignment_mode(request: Request):
+    require_any_permission(request, ["workforce:view", "workforce:manage", "delivery:manage", "orders:delivery"])
+    db = SessionLocal()
+    try:
+        mode = get_delivery_assignment_mode(db)
+        return {"success": True, "mode": mode, "data": {"mode": mode}}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/delivery-assignment-mode")
+def update_admin_delivery_assignment_mode(payload: DeliveryAssignmentModePayload, request: Request):
+    admin = require_any_permission(request, ["workforce:manage", "delivery:manage", "orders:delivery"])
+    mode = (payload.mode or "").strip().lower()
+    if mode not in ["automatic", "manual"]:
+        raise HTTPException(status_code=400, detail="Delivery assignment mode must be automatic or manual")
+    db = SessionLocal()
+    try:
+        set_app_setting(db, "delivery_assignment_mode", mode)
+        db.commit()
+        create_admin_audit_log(request, admin, "delivery_assignment_mode_updated", "app_setting", "delivery_assignment_mode", f"Admin set delivery assignment mode to {mode}", {"mode": mode})
+        return {"success": True, "mode": mode, "data": {"mode": mode}}
+    finally:
+        db.close()
+
+
 @app.post("/admin/delivery-offers/{offer_id}/assign")
 def assign_delivery_offer(offer_id: int, request: Request):
     admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
@@ -3800,41 +3929,11 @@ def assign_delivery_offer(offer_id: int, request: Request):
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == offer.worker_id).first()
         if not order or not worker:
             raise HTTPException(status_code=404, detail="Order or worker not found")
-        offer.status = "ASSIGNED"
-        offer.updated_at = datetime.utcnow()
-        order.delivery_worker_id = worker.id
-        order.delivery_worker_type = worker.worker_type or ""
-        order.delivery_status = "ASSIGNED"
-        order.rider_id = worker.id
-        order.rider_name = worker.full_name
-        order.rider_phone = worker.phone
-        order.rider_vehicle_type = worker.vehicle_type or ""
-        order.rider_vehicle_number = worker.plate_number or ""
-        order.delivery_assigned_at = datetime.utcnow()
-        order.updated_at = datetime.utcnow()
-        worker.operational_status = "ASSIGNED"
-        worker.updated_at = datetime.utcnow()
+        order_data = assign_delivery_offer_to_order(db, offer, worker, order, request, admin, automatic=False)
         db.commit()
         db.refresh(order)
         db.refresh(worker)
         db.refresh(offer)
-        order_data = order_to_dict(order)
-        _create_user_notification(
-            worker.email,
-            "You have been assigned this delivery",
-            f"You have been assigned order {order.order_code}.",
-            "delivery_assigned",
-            "delivery",
-            order_data,
-        )
-        _create_order_notification(
-            order_data,
-            "Delivery Assigned",
-            "Your order has been assigned for delivery.",
-            "delivery_update",
-            "delivery",
-        )
-        create_admin_audit_log(request, admin, "delivery_offer_assigned", "delivery_offer", offer.id, f"Admin assigned {worker.full_name} to order {order.order_code}", {"offer": delivery_offer_to_dict(offer, worker, order)})
         return {"success": True, "offer": delivery_offer_to_dict(offer, worker, order), "order": order_data, "data": order_data}
     finally:
         db.close()
@@ -4336,6 +4435,12 @@ def update_order(order_id: int, payload: dict, request: Request):
             safe_email_call("customer_out_for_delivery", send_customer_order_email, order_data, "out_for_delivery")
         if "delivered" in delivery_statuses:
             safe_email_call("customer_delivered", send_customer_order_email, order_data, "delivered")
+        if "processing" in delivery_statuses and (order.delivery_method or "delivery") == "delivery":
+            classify_and_save_order_delivery(order, db)
+            start_delivery_matching(db, order, request)
+            db.commit()
+            db.refresh(order)
+            order_data = order_to_dict(order)
 
         return {
             "success": True,

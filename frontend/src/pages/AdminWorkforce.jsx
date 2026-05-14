@@ -20,6 +20,7 @@ export default function AdminWorkforce() {
   const { isAdmin, admin } = useAuthStore()
   const [workers, setWorkers] = useState([])
   const [offers, setOffers] = useState([])
+  const [assignmentMode, setAssignmentMode] = useState('automatic')
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ worker_type: 'all', status: 'all', operational_status: 'all', zone: 'all' })
   const [reviewNotes, setReviewNotes] = useState({})
@@ -58,11 +59,30 @@ export default function AdminWorkforce() {
     }
   }
 
+  const loadAssignmentMode = async () => {
+    try {
+      const response = await adminAPI.getDeliveryAssignmentMode()
+      setAssignmentMode(response.mode || response.data?.mode || 'automatic')
+    } catch (error) {
+      if (![401, 403].includes(error?.response?.status)) console.error(error)
+    }
+  }
+
   useEffect(() => {
     if (isAdmin && canView) {
       loadWorkers()
       loadOffers()
+      loadAssignmentMode()
     }
+  }, [isAdmin, canView, filters.worker_type, filters.status, filters.operational_status, filters.zone])
+
+  useEffect(() => {
+    if (!isAdmin || !canView) return undefined
+    const interval = window.setInterval(() => {
+      loadWorkers()
+      loadOffers()
+    }, 20000)
+    return () => window.clearInterval(interval)
   }, [isAdmin, canView, filters.worker_type, filters.status, filters.operational_status, filters.zone])
 
   const updateWorkerStatus = async (worker, status) => {
@@ -102,6 +122,17 @@ export default function AdminWorkforce() {
     }
   }
 
+  const updateAssignmentMode = async (mode) => {
+    if (!canManage) return
+    try {
+      await adminAPI.updateDeliveryAssignmentMode(mode)
+      setAssignmentMode(mode)
+      toast.success('Delivery assignment mode updated')
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to update assignment mode')
+    }
+  }
+
   const visibleWorkers = useMemo(() => workers, [workers])
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied.</p></div>
@@ -111,11 +142,20 @@ export default function AdminWorkforce() {
     <div className="admin-page workforce-admin-page">
       <div className="workforce-header">
         <div>
-          <h1>Delivery Workforce</h1>
-          <p>Review private walking messenger and rider applications, KYC status, live location, and dispatch readiness.</p>
+          <h1>Active Delivery Workforce</h1>
+          <p>Review live riders/messengers, pending assignments, KYC status, location, and dispatch readiness.</p>
         </div>
         <button type="button" onClick={() => { loadWorkers(); loadOffers() }}><RefreshCw size={16} /> Refresh</button>
       </div>
+
+      <section className="invite-links-panel">
+        <h2>Delivery Assignment Mode</h2>
+        <div className="assignment-mode-control">
+          <button type="button" className={assignmentMode === 'automatic' ? 'active' : ''} onClick={() => updateAssignmentMode('automatic')} disabled={!canManage}>Automatic Assignment</button>
+          <button type="button" className={assignmentMode === 'manual' ? 'active' : ''} onClick={() => updateAssignmentMode('manual')} disabled={!canManage}>Manual Approval</button>
+        </div>
+        <p className="muted">{assignmentMode === 'automatic' ? 'Workers are assigned automatically after accepting a valid offer.' : 'Admins confirm every accepted delivery offer before assignment.'}</p>
+      </section>
 
       <section className="invite-links-panel">
         <h2>Delivery Requests / Pending Assignments</h2>
@@ -197,10 +237,13 @@ export default function AdminWorkforce() {
               </div>
               <div className="worker-detail-grid">
                 <div><strong>Operational</strong><span>{worker.operational_status}</span></div>
+                <div><strong>Availability</strong><span>{worker.availability_status || 'N/A'}</span></div>
                 <div><strong>Coverage</strong><span>{worker.assignment_scope === 'wide_area' ? 'Wide area' : 'Hyperlocal'}</span></div>
                 <div><strong>Geo-Fence</strong><span>{worker.geo_fence_enforced ? (worker.inside_zone ? 'Inside zone' : 'Outside zone') : 'Not enforced'}</span></div>
                 <div><strong>Last Seen</strong><span>{worker.last_seen_at ? new Date(worker.last_seen_at).toLocaleString() : 'No GPS yet'}</span></div>
                 <div><strong>GPS Fresh</strong><span>{worker.gps_recent ? 'Yes' : 'No'}</span></div>
+                <div><strong>Coordinates</strong><span>{worker.latest_latitude ? `${worker.latest_latitude}, ${worker.latest_longitude}` : 'N/A'}</span></div>
+                <div><strong>Active Order</strong><span>{worker.active_order?.order_code || 'None'}</span></div>
                 <div><strong>Assignment</strong><span>{worker.assignment_eligible ? 'Eligible' : 'Not eligible'}</span></div>
                 <div><strong>Trust Score</strong><span>{worker.trust_score}</span></div>
               </div>
