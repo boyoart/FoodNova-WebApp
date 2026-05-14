@@ -223,6 +223,26 @@ class DeliveryAssignmentLog(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DeliveryOffer(Base):
+    __tablename__ = "delivery_offers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, nullable=False, index=True)
+    order_code = Column(String(30), default="", index=True)
+    worker_id = Column(Integer, nullable=False, index=True)
+    worker_type = Column(String(30), default="", index=True)
+    status = Column(String(30), default="PENDING", index=True)
+    delivery_type = Column(String(40), default="needs_admin_review", index=True)
+    estimated_distance_meters = Column(Float, nullable=True)
+    pickup_area = Column(String(180), default="")
+    delivery_area = Column(String(180), default="")
+    accepted_at = Column(DateTime, nullable=True)
+    declined_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class CancellationRequest(Base):
     __tablename__ = "cancellation_requests"
 
@@ -278,6 +298,11 @@ class Order(Base):
     delivery_started_at = Column(DateTime, nullable=True)
     delivery_completed_at = Column(DateTime, nullable=True)
     delivery_note = Column(Text, default="")
+    delivery_type = Column(String(40), default="needs_admin_review", index=True)
+    estimated_distance_meters = Column(Float, nullable=True)
+    delivery_worker_id = Column(Integer, nullable=True, index=True)
+    delivery_worker_type = Column(String(30), default="")
+    delivery_status = Column(String(40), default="", index=True)
     cancellation_status = Column(String(30), default="none", index=True)
     cancellation_reason = Column(Text, default="")
     cancellation_requested_at = Column(DateTime, nullable=True)

@@ -7,11 +7,27 @@ import './WorkerPages.css'
 
 function getPosition() {
   return new Promise((resolve, reject) => {
+    const requestBrowserLocation = () => {
+      if (!navigator.geolocation) {
+        reject(new Error('GPS is not available on this device.'))
+        return
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 })
+    }
+
+    const capacitorGeolocation = window.Capacitor?.Plugins?.Geolocation
+    if (window.Capacitor?.isNativePlatform?.() && capacitorGeolocation?.getCurrentPosition) {
+      capacitorGeolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000 })
+        .then(resolve)
+        .catch(() => requestBrowserLocation())
+      return
+    }
+
     if (!navigator.geolocation) {
       reject(new Error('GPS is not available on this device.'))
       return
     }
-    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 })
+    requestBrowserLocation()
   })
 }
 
@@ -37,6 +53,8 @@ export default function DeliveryWorkerDashboard({ workerType }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [locationWarning, setLocationWarning] = useState('')
+  const [locationMessage, setLocationMessage] = useState('')
+  const [offers, setOffers] = useState([])
   const type = workerType || user?.delivery_worker_type || user?.role
   const title = type === 'rider' ? 'Rider / Delivery Partner Dashboard' : 'Walking Messenger Dashboard'
 
@@ -53,8 +71,18 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     }
   }
 
+  const loadOffers = async () => {
+    try {
+      const response = await workerAPI.getOffers()
+      setOffers(response.offers || response.data || [])
+    } catch {
+      setOffers([])
+    }
+  }
+
   useEffect(() => {
     loadWorker()
+    loadOffers()
   }, [])
 
   useEffect(() => {
@@ -71,6 +99,12 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     }, intervalMs)
     return () => window.clearInterval(interval)
   }, [worker?.operational_status, worker?.kyc_status, type])
+
+  useEffect(() => {
+    if (!worker || worker.kyc_status !== 'APPROVED') return undefined
+    const interval = window.setInterval(loadOffers, 15000)
+    return () => window.clearInterval(interval)
+  }, [worker?.kyc_status])
 
   const goOnline = async () => {
     try {
@@ -131,13 +165,43 @@ export default function DeliveryWorkerDashboard({ workerType }) {
       const response = await workerAPI.locationPing(locationPayload(position))
       setWorker(response.worker || response.data)
       setLocationWarning('')
+      setLocationMessage('')
       toast.success('Location access enabled')
     } catch (error) {
       if (isLocationPermissionDenied(error)) {
         setLocationWarning('permission-denied')
+        setLocationMessage('Location permission was denied. Please enable location permission in your phone settings.')
       } else {
         setLocationWarning('unavailable')
+        setLocationMessage('Unable to get your location. Please turn on GPS and try again.')
       }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const acceptOffer = async (offer) => {
+    try {
+      setBusy(true)
+      await workerAPI.acceptOffer(offer.id)
+      toast.success('Delivery request accepted. Admin will confirm assignment.')
+      await loadOffers()
+      await loadWorker()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Unable to accept delivery request')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const declineOffer = async (offer) => {
+    try {
+      setBusy(true)
+      await workerAPI.declineOffer(offer.id)
+      toast.success('Delivery request declined')
+      await loadOffers()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Unable to decline delivery request')
     } finally {
       setBusy(false)
     }
@@ -181,6 +245,31 @@ export default function DeliveryWorkerDashboard({ workerType }) {
         </button>
       </section>
 
+      <section className="worker-panel">
+        <h2>Pending Delivery Offers</h2>
+        {offers.filter((offer) => offer.status === 'PENDING').length ? (
+          <div className="delivery-offer-list">
+            {offers.filter((offer) => offer.status === 'PENDING').map((offer) => (
+              <article className="delivery-offer-card" key={offer.id}>
+                <div>
+                  <h3>New delivery request available</h3>
+                  <span>{offer.delivery_type?.replace(/_/g, ' ') || 'delivery request'}</span>
+                </div>
+                <p><strong>Pickup:</strong> {offer.pickup_area || 'FoodNova pickup'}</p>
+                <p><strong>Delivery:</strong> {offer.delivery_area || 'Customer area'}</p>
+                <p><strong>Distance:</strong> {offer.estimated_distance_meters ? `${(offer.estimated_distance_meters / 1000).toFixed(1)} km` : 'Needs admin review'}</p>
+                <div className="delivery-offer-actions">
+                  <button type="button" onClick={() => acceptOffer(offer)} disabled={busy}>Accept</button>
+                  <button type="button" className="secondary-worker-button" onClick={() => declineOffer(offer)} disabled={busy}>Decline</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="muted"><MapPin size={16} /> New delivery assignments will appear here after admin dispatch.</p>
+        )}
+      </section>
+
       {type === 'rider' && locationWarning && (
         <section className="worker-panel location-warning-card" aria-live="polite">
           <div>
@@ -188,6 +277,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
             <h2>Location Permission Needed</h2>
           </div>
           <p>FoodNova riders are not restricted by geo-fencing, but GPS access is required for:</p>
+          {locationMessage && <p className="location-warning-message">{locationMessage}</p>}
           <ul>
             <li>live delivery tracking</li>
             <li>assignment routing</li>
@@ -215,8 +305,23 @@ export default function DeliveryWorkerDashboard({ workerType }) {
       </section>
 
       <section className="worker-panel">
-        <h2>Assigned Deliveries</h2>
-        <p className="muted"><MapPin size={16} /> New delivery assignments will appear here after admin dispatch.</p>
+        <h2>Active Assigned Delivery</h2>
+        {offers.filter((offer) => ['ACCEPTED', 'ASSIGNED'].includes(offer.status)).length ? (
+          <div className="delivery-offer-list">
+            {offers.filter((offer) => ['ACCEPTED', 'ASSIGNED'].includes(offer.status)).map((offer) => (
+              <article className="delivery-offer-card" key={offer.id}>
+                <div>
+                  <h3>{offer.status === 'ASSIGNED' ? 'Assigned delivery' : 'Awaiting admin confirmation'}</h3>
+                  <span>{offer.order_code}</span>
+                </div>
+                <p><strong>Pickup:</strong> {offer.pickup_area || 'FoodNova pickup'}</p>
+                <p><strong>Delivery:</strong> {offer.delivery_area || 'Customer area'}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="muted"><MapPin size={16} /> No active assigned delivery.</p>
+        )}
       </section>
     </div>
   )

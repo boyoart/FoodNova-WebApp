@@ -253,6 +253,9 @@ export const workerAPI = {
   goOffline: async () => (await api.post("/delivery/go-offline")).data,
   locationPing: async (payload) => (await api.post("/delivery/location-ping", payload)).data,
   panicAlert: async (payload) => (await api.post("/delivery/panic-alert", payload)).data,
+  getOffers: async () => (await api.get("/delivery/offers")).data,
+  acceptOffer: async (offerId) => (await api.post(`/delivery/offers/${offerId}/accept`)).data,
+  declineOffer: async (offerId) => (await api.post(`/delivery/offers/${offerId}/decline`)).data,
 };
 
 export const ordersAPI = {
@@ -365,6 +368,13 @@ export const adminAPI = {
     return { data: workers, raw: response.data };
   },
   updateWorkerStatus: async (id, payload) => (await api.patch(`/admin/workforce/${id}/status`, payload)).data,
+  getDeliveryOffers: async (params = {}) => {
+    const response = await api.get("/admin/delivery-offers", { params });
+    const offers = normalizeList(response.data, ["offers"]);
+    return { data: offers, raw: response.data };
+  },
+  assignDeliveryOffer: async (offerId) => (await api.post(`/admin/delivery-offers/${offerId}/assign`)).data,
+  rejectDeliveryOffer: async (offerId, payload = {}) => (await api.post(`/admin/delivery-offers/${offerId}/reject`, payload)).data,
   getDeliveryZone: async () => (await api.get("/admin/delivery-zone")).data,
   updateDeliveryZone: async (payload) => (await api.patch("/admin/delivery-zone", payload)).data,
   createRider: async (payload) => (await api.post("/admin/riders", payload)).data,

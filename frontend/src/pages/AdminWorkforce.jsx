@@ -19,6 +19,7 @@ function locationHref(worker) {
 export default function AdminWorkforce() {
   const { isAdmin, admin } = useAuthStore()
   const [workers, setWorkers] = useState([])
+  const [offers, setOffers] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ worker_type: 'all', status: 'all', operational_status: 'all', zone: 'all' })
   const [reviewNotes, setReviewNotes] = useState({})
@@ -47,8 +48,21 @@ export default function AdminWorkforce() {
     }
   }
 
+  const loadOffers = async () => {
+    try {
+      const response = await adminAPI.getDeliveryOffers()
+      setOffers(response.data || [])
+    } catch (error) {
+      if (![401, 403].includes(error?.response?.status)) console.error(error)
+      setOffers([])
+    }
+  }
+
   useEffect(() => {
-    if (isAdmin && canView) loadWorkers()
+    if (isAdmin && canView) {
+      loadWorkers()
+      loadOffers()
+    }
   }, [isAdmin, canView, filters.worker_type, filters.status, filters.operational_status, filters.zone])
 
   const updateWorkerStatus = async (worker, status) => {
@@ -68,6 +82,26 @@ export default function AdminWorkforce() {
     toast.success('Private signup link copied')
   }
 
+  const assignOffer = async (offer) => {
+    try {
+      await adminAPI.assignDeliveryOffer(offer.id)
+      toast.success('Delivery assigned')
+      await Promise.all([loadOffers(), loadWorkers()])
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to assign delivery')
+    }
+  }
+
+  const rejectOffer = async (offer) => {
+    try {
+      await adminAPI.rejectDeliveryOffer(offer.id)
+      toast.success('Offer rejected. Searching another worker if available.')
+      await loadOffers()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to reject offer')
+    }
+  }
+
   const visibleWorkers = useMemo(() => workers, [workers])
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied.</p></div>
@@ -80,8 +114,40 @@ export default function AdminWorkforce() {
           <h1>Delivery Workforce</h1>
           <p>Review private walking messenger and rider applications, KYC status, live location, and dispatch readiness.</p>
         </div>
-        <button type="button" onClick={loadWorkers}><RefreshCw size={16} /> Refresh</button>
+        <button type="button" onClick={() => { loadWorkers(); loadOffers() }}><RefreshCw size={16} /> Refresh</button>
       </div>
+
+      <section className="invite-links-panel">
+        <h2>Delivery Requests / Pending Assignments</h2>
+        {offers.length ? (
+          <div className="pending-assignment-list">
+            {offers.map((offer) => (
+              <article className="delivery-offer-card" key={offer.id}>
+                <div className="workforce-card-head">
+                  <div>
+                    <h3>{offer.order_code || `Order #${offer.order_id}`}</h3>
+                    <p>{offer.delivery_type?.replace(/_/g, ' ') || 'delivery request'} - {offer.status}</p>
+                  </div>
+                  <span className="worker-status">{offer.worker_type || 'worker'}</span>
+                </div>
+                <div className="worker-detail-grid">
+                  <div><strong>Suggested Worker</strong><span>{offer.worker_name || `Worker #${offer.worker_id}`}</span></div>
+                  <div><strong>Worker Status</strong><span>{offer.worker_status || 'N/A'}</span></div>
+                  <div><strong>Accepted Time</strong><span>{offer.accepted_at ? new Date(offer.accepted_at).toLocaleString() : 'Not accepted yet'}</span></div>
+                  <div><strong>Distance</strong><span>{offer.estimated_distance_meters ? `${(offer.estimated_distance_meters / 1000).toFixed(1)} km` : 'N/A'}</span></div>
+                </div>
+                <div className="delivery-offer-actions">
+                  <button type="button" onClick={() => assignOffer(offer)} disabled={offer.status !== 'ACCEPTED'}>Assign</button>
+                  <button type="button" className="secondary-worker-button" onClick={() => rejectOffer(offer)}>Reject</button>
+                  <button type="button" className="secondary-worker-button" onClick={() => window.location.assign('/admin/orders')}>Manual Assign</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">No pending delivery requests.</p>
+        )}
+      </section>
 
       <section className="invite-links-panel">
         <h2>Private Invite Links</h2>
