@@ -57,7 +57,7 @@ Address verification accepts image/PDF selection locally and prepares upload met
 The delivery app is prepared to reuse the existing FoodNova Render backend:
 
 ```text
-https://foodnova-backend.onrender.com/
+https://foodnova-webapp.onrender.com/
 ```
 
 Change this through the `FOODNOVA_API_BASE_URL` `buildConfigField` in `app/build.gradle.kts` when environment-specific build variants are added.

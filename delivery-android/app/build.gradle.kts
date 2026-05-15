@@ -17,7 +17,7 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-        buildConfigField("String", "FOODNOVA_API_BASE_URL", "\"https://foodnova-backend.onrender.com/\"")
+        buildConfigField("String", "FOODNOVA_API_BASE_URL", "\"https://foodnova-webapp.onrender.com/\"")
     }
 
     buildTypes {

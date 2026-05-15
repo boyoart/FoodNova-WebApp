@@ -1,7 +1,9 @@
 package com.foodnova.delivery.core.di
 
 import com.foodnova.delivery.core.DeliveryAppConfig
+import com.foodnova.delivery.network.AuthInterceptor
 import com.foodnova.delivery.network.FoodNovaDeliveryApi
+import com.foodnova.delivery.network.RequestUrlLoggingInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -22,12 +24,13 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(authInterceptor: com.foodnova.delivery.network.AuthInterceptor): OkHttpClient {
+    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+            level = HttpLoggingInterceptor.Level.BODY
         }
 
         return OkHttpClient.Builder()
+            .addInterceptor(RequestUrlLoggingInterceptor())
             .addInterceptor(authInterceptor)
             .addInterceptor(logging)
             .build()
