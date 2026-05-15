@@ -1,0 +1,178 @@
+package com.foodnova.delivery.kyc.presentation.verification
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.foodnova.delivery.core.AppResult
+import com.foodnova.delivery.kyc.data.remote.dto.AddressVerificationRequest
+import com.foodnova.delivery.kyc.data.remote.dto.EmergencyContactRequest
+import com.foodnova.delivery.kyc.domain.AddressDocumentType
+import com.foodnova.delivery.kyc.domain.EmergencyRelationship
+import com.foodnova.delivery.kyc.domain.KycRepository
+import com.foodnova.delivery.kyc.domain.VerificationProgress
+import com.foodnova.delivery.kyc.domain.VerificationStatus
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+@HiltViewModel
+class VerificationViewModel @Inject constructor(
+    private val kycRepository: KycRepository
+) : ViewModel() {
+    private val _state = MutableStateFlow(VerificationUiState())
+    val state: StateFlow<VerificationUiState> = _state.asStateFlow()
+
+    fun refreshVerificationStatus() {
+        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            when (val result = kycRepository.verificationStatus()) {
+                is AppResult.Success -> _state.update {
+                    it.copy(
+                        isLoading = false,
+                        progress = VerificationProgress(
+                            identityStatus = result.value.identityStatus.toVerificationStatus(),
+                            addressStatus = result.value.addressStatus.toVerificationStatus(),
+                            emergencyContactStatus = result.value.emergencyContactStatus.toVerificationStatus(),
+                            adminApprovalStatus = result.value.adminApprovalStatus.toVerificationStatus()
+                        )
+                    )
+                }
+                is AppResult.Failure -> _state.update {
+                    it.copy(isLoading = false, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
+    fun onAddressDocumentTypeChanged(value: AddressDocumentType) {
+        _state.update { it.copy(addressDocumentType = value) }
+    }
+
+    fun onAddressDocumentSelected(uri: String, name: String, contentType: String?) {
+        _state.update {
+            it.copy(
+                addressDocumentUri = uri,
+                addressDocumentName = name,
+                addressDocumentContentType = contentType,
+                progress = it.progress.copy(addressStatus = VerificationStatus.InProgress)
+            )
+        }
+    }
+
+    private fun buildAddressRequestOrNull(): AddressVerificationRequest? {
+        val current = _state.value
+        if (!current.isAddressReady) return null
+
+        return AddressVerificationRequest(
+            documentType = current.addressDocumentType.name,
+            fileName = current.addressDocumentName,
+            contentType = current.addressDocumentContentType,
+            localUri = current.addressDocumentUri
+        )
+    }
+
+    fun submitAddressDocument(onSubmitted: () -> Unit) {
+        val request = buildAddressRequestOrNull() ?: return
+        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            when (val result = kycRepository.submitAddressDocument(request)) {
+                is AppResult.Success -> {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            progress = it.progress.copy(addressStatus = VerificationStatus.PendingReview)
+                        )
+                    }
+                    onSubmitted()
+                }
+                is AppResult.Failure -> _state.update {
+                    it.copy(isLoading = false, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
+    fun onEmergencyFullNameChanged(value: String) {
+        _state.update { it.copy(emergencyFullName = value).validated() }
+    }
+
+    fun onEmergencyRelationshipChanged(value: EmergencyRelationship) {
+        _state.update { it.copy(emergencyRelationship = value).validated() }
+    }
+
+    fun onEmergencyPhoneChanged(value: String) {
+        _state.update { it.copy(emergencyPhone = value.filter(Char::isDigit).take(11)).validated() }
+    }
+
+    fun onEmergencyAlternatePhoneChanged(value: String) {
+        _state.update { it.copy(emergencyAlternatePhone = value.filter(Char::isDigit).take(11)).validated() }
+    }
+
+    private fun buildEmergencyContactRequestOrNull(): EmergencyContactRequest? {
+        val current = _state.value.validated()
+        _state.value = current
+        if (!current.isEmergencyContactReady) return null
+
+        return EmergencyContactRequest(
+            fullName = current.emergencyFullName.trim(),
+            relationship = current.emergencyRelationship.name,
+            phoneNumber = current.emergencyPhone,
+            alternatePhone = current.emergencyAlternatePhone.ifBlank { null }
+        )
+    }
+
+    fun submitEmergencyContact(onSubmitted: () -> Unit) {
+        val request = buildEmergencyContactRequestOrNull() ?: return
+        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            when (val result = kycRepository.submitEmergencyContact(request)) {
+                is AppResult.Success -> {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            progress = it.progress.copy(emergencyContactStatus = VerificationStatus.PendingReview)
+                        )
+                    }
+                    onSubmitted()
+                }
+                is AppResult.Failure -> _state.update {
+                    it.copy(isLoading = false, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
+    private fun VerificationUiState.validated(): VerificationUiState {
+        val alternateDigits = emergencyAlternatePhone.filter(Char::isDigit)
+        return copy(
+            errors = VerificationErrors(
+                emergencyFullName = when {
+                    emergencyFullName.isBlank() -> "Full name is required."
+                    emergencyFullName.trim().length < 2 -> "Enter the contact's full name."
+                    else -> null
+                },
+                emergencyPhone = when {
+                    emergencyPhone.isBlank() -> "Phone number is required."
+                    emergencyPhone.filter(Char::isDigit).length < 10 -> "Enter a valid phone number."
+                    else -> null
+                },
+                emergencyAlternatePhone = when {
+                    emergencyAlternatePhone.isBlank() -> null
+                    alternateDigits.length < 10 -> "Enter a valid alternate phone number."
+                    else -> null
+                }
+            )
+        )
+    }
+}
+
+private fun String?.toVerificationStatus(): VerificationStatus = when (this?.lowercase()) {
+    "in_progress", "in-progress", "progress" -> VerificationStatus.InProgress
+    "pending", "pending_review", "pending-review" -> VerificationStatus.PendingReview
+    "approved" -> VerificationStatus.Approved
+    "rejected" -> VerificationStatus.Rejected
+    else -> VerificationStatus.NotStarted
+}

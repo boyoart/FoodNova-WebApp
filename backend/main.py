@@ -480,6 +480,23 @@ class FCMTokenPayload(BaseModel):
     platform: Optional[str] = ""
 
 
+class DeliveryAuthCheckPhonePayload(BaseModel):
+    phone_number: str
+
+
+class DeliveryAuthRegisterPayload(BaseModel):
+    full_name: str
+    phone_number: str
+    country_code: Optional[str] = "+234"
+    password: str
+    worker_type: str
+
+
+class DeliveryAuthLoginPayload(BaseModel):
+    phone_number: str
+    password: str
+
+
 class CancellationRequestPayload(BaseModel):
     request_type: Optional[str] = "cancellation"
     reason: str
@@ -2282,6 +2299,44 @@ def get_db_user_by_phone(db, phone: str):
     return db.query(DBUser).filter(DBUser.phone == normalized).first()
 
 
+def normalize_delivery_phone(phone: str) -> str:
+    digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
+    if not digits:
+        return ""
+    if digits.startswith("234"):
+        national = digits[3:]
+    elif digits.startswith("0"):
+        national = digits[1:]
+    else:
+        national = digits
+    national = national[:10]
+    if len(national) != 10 or national[0] not in ["7", "8", "9"]:
+        return ""
+    return f"+234{national}"
+
+
+def get_delivery_worker_by_phone(db, phone: str):
+    normalized = normalize_delivery_phone(phone)
+    if not normalized:
+        return None
+    return db.query(DBDeliveryWorker).filter(DBDeliveryWorker.phone == normalized).first()
+
+
+def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker) -> dict:
+    token = create_access_token(user)
+    requires_verification = (worker.kyc_status or "") != "APPROVED"
+    return {
+        "success": True,
+        "worker_id": str(worker.id),
+        "access_token": token,
+        "token": token,
+        "requires_verification": requires_verification,
+        "approval_status": worker.kyc_status or "KYC_PENDING",
+        "worker": worker_to_dict(worker),
+        "message": "Authenticated successfully.",
+    }
+
+
 def ensure_profile(db, user: DBUser) -> DBProfile:
     profile = db.query(DBProfile).filter(DBProfile.user_id == user.id).first()
     if profile:
@@ -2982,6 +3037,116 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             "phone": data.get("phone") or "",
         },
     }
+
+
+@app.post("/delivery/auth/check-phone")
+def delivery_auth_check_phone(payload: DeliveryAuthCheckPhonePayload):
+    phone = normalize_delivery_phone(payload.phone_number)
+    if not phone:
+        raise HTTPException(status_code=422, detail="Enter a valid Nigerian phone number.")
+    db = SessionLocal()
+    try:
+        worker = get_delivery_worker_by_phone(db, phone)
+        return {
+            "success": True,
+            "exists": bool(worker),
+            "phone_number": phone,
+            "requires_verification": bool(worker and (worker.kyc_status or "") != "APPROVED"),
+            "approval_status": worker.kyc_status if worker else None,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/delivery/auth/register", status_code=201)
+def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Request):
+    phone = normalize_delivery_phone(payload.phone_number)
+    full_name = (payload.full_name or "").strip()
+    worker_type = (payload.worker_type or "").strip().lower()
+    password = payload.password or ""
+
+    if not phone:
+        raise HTTPException(status_code=422, detail="Enter a valid Nigerian phone number.")
+    if len(full_name) < 2:
+        raise HTTPException(status_code=422, detail="Full name is required.")
+    if worker_type not in ["messenger", "rider"]:
+        raise HTTPException(status_code=422, detail="Worker type must be rider or messenger.")
+    if len(password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+
+    db = SessionLocal()
+    try:
+        if get_delivery_worker_by_phone(db, phone):
+            raise HTTPException(status_code=409, detail="Delivery account already exists. Please log in.")
+        if get_db_user_by_phone(db, phone):
+            raise HTTPException(status_code=409, detail="This phone number is already registered.")
+
+        digits = "".join(ch for ch in phone if ch.isdigit())
+        account_email = f"delivery+{digits}@foodnova.local"
+        if get_db_user_by_email(db, account_email):
+            raise HTTPException(status_code=409, detail="Delivery account already exists. Please log in.")
+
+        user = DBUser(
+            full_name=full_name,
+            email=account_email,
+            phone=phone,
+            password=_hash_new_password(password),
+            role=worker_type,
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+        ensure_profile(db, user)
+
+        worker = DBDeliveryWorker(
+            user_id=user.id,
+            worker_type=worker_type,
+            full_name=full_name,
+            phone=phone,
+            email="",
+            kyc_status="KYC_PENDING",
+            operational_status="OFFLINE",
+        )
+        db.add(worker)
+        db.commit()
+        db.refresh(user)
+        db.refresh(worker)
+        create_admin_audit_log(
+            request,
+            db_user_to_dict(user),
+            "delivery_auth_register",
+            "delivery_worker",
+            worker.id,
+            f"{worker_type.title()} created FoodNova Delivery account",
+            {"worker_id": worker.id, "worker_type": worker_type},
+        )
+        response = delivery_worker_auth_response(user, worker)
+        response["message"] = "Delivery account created successfully."
+        return response
+    finally:
+        db.close()
+
+
+@app.post("/delivery/auth/login")
+def delivery_auth_login(payload: DeliveryAuthLoginPayload):
+    phone = normalize_delivery_phone(payload.phone_number)
+    if not phone:
+        raise HTTPException(status_code=422, detail="Enter a valid Nigerian phone number.")
+    db = SessionLocal()
+    try:
+        worker = get_delivery_worker_by_phone(db, phone)
+        if not worker:
+            raise HTTPException(status_code=404, detail="Delivery account not found.")
+        user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+        if not user or (user.role or "") not in ["messenger", "rider"]:
+            raise HTTPException(status_code=404, detail="Delivery account not found.")
+        if not getattr(user, "is_active", True):
+            raise HTTPException(status_code=403, detail="Delivery account is disabled.")
+        if not _password_matches(payload.password or "", user.password):
+            raise HTTPException(status_code=401, detail="Invalid phone number or password.")
+        return delivery_worker_auth_response(user, worker)
+    finally:
+        db.close()
 
 
 @app.post("/auth/login")
