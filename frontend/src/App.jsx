@@ -28,8 +28,6 @@ import AdminCustomers from './pages/AdminCustomers'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminUsers from './pages/AdminUsers'
 import AdminRiders from './pages/AdminRiders'
-import AdminWorkforce from './pages/AdminWorkforce'
-import AdminDeliveryZone from './pages/AdminDeliveryZone'
 import AdminCancellations from './pages/AdminCancellations'
 import AdminExports from './pages/AdminExports'
 import AdminReports from './pages/AdminReports'
@@ -43,8 +41,7 @@ import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
 import InboxPage from './pages/InboxPage'
 import InvoicePage from './pages/InvoicePage'
-import DeliveryWorkerSignup from './pages/DeliveryWorkerSignup'
-import DeliveryWorkerDashboard from './pages/DeliveryWorkerDashboard'
+import DeliveryAppComingSoon from './pages/DeliveryAppComingSoon'
 import { useAuthStore } from './store/authStore'
 import {
   enforceSessionTimeout,
@@ -70,11 +67,11 @@ function RootEntry() {
   }
 
   if (user?.role === 'messenger' || user?.delivery_worker_type === 'messenger') {
-    return <Navigate to="/messenger/dashboard" replace />
+    return <Navigate to="/delivery-app-coming-soon" replace />
   }
 
   if (user?.role === 'rider' || user?.delivery_worker_type === 'rider') {
-    return <Navigate to="/rider/dashboard" replace />
+    return <Navigate to="/delivery-app-coming-soon" replace />
   }
 
   return <HomePage />
@@ -84,16 +81,8 @@ function RequireCustomerAuth({ children }) {
   const hasToken = !!(localStorage.getItem('token') || localStorage.getItem('foodnova_token'))
   const user = useAuthStore((state) => state.user)
   if (!hasToken) return <Navigate to="/auth" replace />
-  if (user?.role === 'messenger') return <Navigate to="/messenger/dashboard" replace />
-  if (user?.role === 'rider') return <Navigate to="/rider/dashboard" replace />
-  return children
-}
-
-function RequireWorkerAuth({ children, workerType }) {
-  const user = useAuthStore((state) => state.user)
-  const hasToken = !!(localStorage.getItem('token') || localStorage.getItem('foodnova_token'))
-  if (!hasToken) return <Navigate to="/login" replace />
-  if (workerType && user?.role !== workerType && user?.delivery_worker_type !== workerType) return <Navigate to="/" replace />
+  if (user?.role === 'messenger') return <Navigate to="/delivery-app-coming-soon" replace />
+  if (user?.role === 'rider') return <Navigate to="/delivery-app-coming-soon" replace />
   return children
 }
 
@@ -163,10 +152,11 @@ function App() {
               <Route path="/checkout" element={<RequireCustomerAuth><CheckoutPage /></RequireCustomerAuth>} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/messenger/signup" element={<DeliveryWorkerSignup workerType="messenger" />} />
-              <Route path="/rider/signup" element={<DeliveryWorkerSignup workerType="rider" />} />
-              <Route path="/messenger/dashboard" element={<RequireWorkerAuth workerType="messenger"><DeliveryWorkerDashboard workerType="messenger" /></RequireWorkerAuth>} />
-              <Route path="/rider/dashboard" element={<RequireWorkerAuth workerType="rider"><DeliveryWorkerDashboard workerType="rider" /></RequireWorkerAuth>} />
+              <Route path="/delivery-app-coming-soon" element={<DeliveryAppComingSoon />} />
+              <Route path="/messenger/signup" element={<DeliveryAppComingSoon />} />
+              <Route path="/rider/signup" element={<DeliveryAppComingSoon />} />
+              <Route path="/messenger/dashboard" element={<DeliveryAppComingSoon />} />
+              <Route path="/rider/dashboard" element={<DeliveryAppComingSoon />} />
               <Route path="/orders" element={<RequireCustomerAuth><OrderHistoryPage /></RequireCustomerAuth>} />
               <Route path="/orders/:orderId/invoice" element={<RequireCustomerAuth><InvoicePage /></RequireCustomerAuth>} />
               <Route path="/profile" element={<RequireCustomerAuth><ProfilePage /></RequireCustomerAuth>} />
@@ -179,8 +169,6 @@ function App() {
               <Route path="/admin/orders" element={<AdminOrders />} />
               <Route path="/admin/cancellations" element={<AdminCancellations />} />
               <Route path="/admin/riders" element={<AdminRiders />} />
-              <Route path="/admin/workforce" element={<AdminWorkforce />} />
-              <Route path="/admin/delivery-zone" element={<AdminDeliveryZone />} />
               <Route path="/admin/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/admin/stock" element={<AdminStock />} />
               <Route path="/admin/payments" element={<AdminPayments />} />

@@ -32,7 +32,7 @@ export async function requestDeliveryPushToken() {
   if (Capacitor.isNativePlatform?.()) {
     PushNotifications.addListener('pushNotificationActionPerformed', (event) => {
       const data = event.notification?.data || {}
-      const target = data.click_action || (data.worker_type === 'messenger' ? '/messenger/dashboard' : '/rider/dashboard')
+      const target = data.click_action || '/delivery-app-coming-soon'
       window.location.assign(target)
     })
     const permission = await PushNotifications.requestPermissions()

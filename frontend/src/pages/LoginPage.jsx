@@ -37,11 +37,11 @@ export default function LoginPage() {
       login(user, token)
       toast.success('Login successful!')
       if (user.role === 'messenger' || user.delivery_worker_type === 'messenger') {
-        navigate('/messenger/dashboard')
+        navigate('/delivery-app-coming-soon')
         return
       }
       if (user.role === 'rider' || user.delivery_worker_type === 'rider') {
-        navigate('/rider/dashboard')
+        navigate('/delivery-app-coming-soon')
         return
       }
       navigate('/')

@@ -29,7 +29,6 @@ if (firebaseConfig.apiKey && firebaseConfig.projectId) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const data = event.notification.data || {}
-  const targetUrl = data.click_action || (data.worker_type === 'messenger' ? '/messenger/dashboard' : '/rider/dashboard')
+  const targetUrl = data.click_action || '/delivery-app-coming-soon'
   event.waitUntil(clients.openWindow(targetUrl))
 })
-
