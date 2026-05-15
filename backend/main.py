@@ -497,6 +497,13 @@ class DeliveryAuthLoginPayload(BaseModel):
     password: str
 
 
+class DeliveryEmergencyContactPayload(BaseModel):
+    full_name: str
+    relationship: str
+    phone_number: str
+    alternate_phone: Optional[str] = None
+
+
 class CancellationRequestPayload(BaseModel):
     request_type: Optional[str] = "cancellation"
     reason: str
@@ -2337,6 +2344,56 @@ def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker) -> dic
     }
 
 
+def get_delivery_worker_record_for_request(request: Request):
+    user = require_user(request)
+    if user.get("role") not in ["messenger", "rider"]:
+        raise HTTPException(status_code=403, detail="Delivery worker access required.")
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
+        return db, user, worker
+    except Exception:
+        db.close()
+        raise
+
+
+def delivery_worker_review_meta(worker: DBDeliveryWorker) -> dict:
+    existing = json_load(worker.review_note, {}) if worker and worker.review_note else {}
+    return existing if isinstance(existing, dict) else {}
+
+
+def set_delivery_worker_review_meta(worker: DBDeliveryWorker, key: str, value: dict) -> None:
+    meta = delivery_worker_review_meta(worker)
+    meta[key] = value
+    worker.review_note = json_dump(meta)
+
+
+def verification_status_response(worker: DBDeliveryWorker) -> dict:
+    meta = delivery_worker_review_meta(worker)
+    address = meta.get("address_verification") or {}
+    emergency = meta.get("emergency_contact") or {}
+    worker_approved = (worker.kyc_status or "") == "APPROVED"
+    return {
+        "success": True,
+        "identity_status": "approved" if worker_approved else "not_started",
+        "address_status": address.get("status") or "not_started",
+        "emergency_contact_status": emergency.get("status") or "not_started",
+        "admin_approval_status": "approved" if worker_approved else "pending_review",
+        "can_activate_deliveries": worker_approved
+            and address.get("status") == "approved"
+            and emergency.get("status") == "approved",
+        "data": {
+            "worker_id": worker.id,
+            "worker_type": worker.worker_type or "",
+            "kyc_status": worker.kyc_status or "KYC_PENDING",
+            "address_verification": address,
+            "emergency_contact": emergency,
+        },
+    }
+
+
 def ensure_profile(db, user: DBUser) -> DBProfile:
     profile = db.query(DBProfile).filter(DBProfile.user_id == user.id).first()
     if profile:
@@ -3145,6 +3202,123 @@ def delivery_auth_login(payload: DeliveryAuthLoginPayload):
         if not _password_matches(payload.password or "", user.password):
             raise HTTPException(status_code=401, detail="Invalid phone number or password.")
         return delivery_worker_auth_response(user, worker)
+    finally:
+        db.close()
+
+
+@app.get("/delivery/me")
+def delivery_me(request: Request):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        return {
+            "success": True,
+            "worker_id": str(worker.id),
+            "full_name": worker.full_name or "",
+            "phone_number": worker.phone or "",
+            "worker_type": worker.worker_type or "",
+            "approval_status": worker.kyc_status or "KYC_PENDING",
+            "kyc_status": worker.kyc_status or "KYC_PENDING",
+            "worker": worker_to_dict(worker),
+        }
+    finally:
+        db.close()
+
+
+@app.get("/delivery/verification-status")
+def delivery_verification_status(request: Request):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        return verification_status_response(worker)
+    finally:
+        db.close()
+
+
+@app.post("/delivery/emergency-contact", status_code=201)
+def delivery_emergency_contact(payload: DeliveryEmergencyContactPayload, request: Request):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        full_name = (payload.full_name or "").strip()
+        relationship = (payload.relationship or "").strip()
+        phone = (payload.phone_number or "").strip()
+        alternate_phone = (payload.alternate_phone or "").strip()
+        valid_relationships = {"spouse", "parent", "sibling", "friend", "guardian", "other"}
+
+        if len(full_name) < 2:
+            raise HTTPException(status_code=422, detail="Emergency contact full name is required.")
+        if relationship.lower() not in valid_relationships:
+            raise HTTPException(status_code=422, detail="Select a valid emergency contact relationship.")
+        if len("".join(ch for ch in phone if ch.isdigit())) < 10:
+            raise HTTPException(status_code=422, detail="Enter a valid emergency contact phone number.")
+        if alternate_phone and len("".join(ch for ch in alternate_phone if ch.isdigit())) < 10:
+            raise HTTPException(status_code=422, detail="Enter a valid alternate phone number.")
+
+        worker.emergency_contact_name = full_name
+        worker.emergency_contact_phone = phone
+        set_delivery_worker_review_meta(worker, "emergency_contact", {
+            "status": "pending_review",
+            "full_name": full_name,
+            "relationship": relationship,
+            "phone_number": phone,
+            "alternate_phone": alternate_phone,
+            "submitted_at": iso(datetime.utcnow()),
+        })
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        print(f"DELIVERY EMERGENCY CONTACT SUBMITTED worker_id={worker.id} relationship={relationship}")
+        return {
+            "success": True,
+            "status": "pending_review",
+            "pending_review": True,
+            "message": "Emergency contact submitted for review.",
+            "verification": verification_status_response(worker),
+        }
+    finally:
+        db.close()
+
+
+@app.post("/delivery/address-verification", status_code=201)
+async def delivery_address_verification(
+    request: Request,
+    document_type: str = Form(...),
+    document: UploadFile = File(...),
+):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        clean_type = (document_type or "").strip().lower()
+        accepted_types = {
+            "utilitybill", "utility_bill",
+            "bankstatement", "bank_statement",
+            "internetbill", "internet_bill",
+            "waterorelectricitybill", "water_or_electricity_bill", "water_electricity_bill",
+        }
+        if clean_type not in accepted_types:
+            raise HTTPException(status_code=422, detail="Accepted documents: utility bill, bank statement, internet bill, water/electricity bill.")
+        if not document or not document.filename:
+            raise HTTPException(status_code=422, detail="Address verification document is required.")
+
+        document_url = await save_workforce_upload(document, True, "foodnova/workforce/address-documents")
+        if not document_url:
+            raise HTTPException(status_code=400, detail="Unable to upload address verification document.")
+
+        set_delivery_worker_review_meta(worker, "address_verification", {
+            "status": "pending_review",
+            "document_type": clean_type,
+            "document_url": document_url,
+            "filename": document.filename,
+            "content_type": document.content_type or "",
+            "submitted_at": iso(datetime.utcnow()),
+        })
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        print(f"DELIVERY ADDRESS VERIFICATION SUBMITTED worker_id={worker.id} document_type={clean_type}")
+        return {
+            "success": True,
+            "status": "pending_review",
+            "pending_review": True,
+            "message": "Address verification document submitted for review.",
+            "document_url": document_url,
+            "verification": verification_status_response(worker),
+        }
     finally:
         db.close()
 
