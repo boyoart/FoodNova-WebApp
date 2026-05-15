@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.foodnova.delivery.core.AppResult
 import com.foodnova.delivery.kyc.data.remote.dto.AddressVerificationRequest
 import com.foodnova.delivery.kyc.data.remote.dto.EmergencyContactRequest
+import com.foodnova.delivery.kyc.data.remote.dto.KycSubmissionRequest
 import com.foodnova.delivery.kyc.domain.AddressDocumentType
 import com.foodnova.delivery.kyc.domain.EmergencyRelationship
 import com.foodnova.delivery.kyc.domain.KycRepository
@@ -59,6 +60,42 @@ class VerificationViewModel @Inject constructor(
                 addressDocumentContentType = contentType,
                 progress = it.progress.copy(addressStatus = VerificationStatus.InProgress)
             )
+        }
+    }
+
+    fun onNinChanged(value: String) {
+        _state.update { it.copy(nin = value.filter(Char::isDigit).take(11)) }
+    }
+
+    fun onSelfieCaptured(reference: String) {
+        _state.update {
+            it.copy(
+                selfieReference = reference,
+                progress = it.progress.copy(identityStatus = VerificationStatus.InProgress)
+            )
+        }
+    }
+
+    fun submitIdentityVerification(onSubmitted: () -> Unit) {
+        val current = _state.value
+        if (!current.isIdentityReady) return
+        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            val request = KycSubmissionRequest(nin = current.nin, selfieUri = current.selfieReference)
+            when (val result = kycRepository.submitKyc(request)) {
+                is AppResult.Success -> {
+                    _state.update {
+                        it.copy(
+                            isLoading = false,
+                            progress = it.progress.copy(identityStatus = VerificationStatus.PendingReview)
+                        )
+                    }
+                    onSubmitted()
+                }
+                is AppResult.Failure -> _state.update {
+                    it.copy(isLoading = false, errorMessage = result.message)
+                }
+            }
         }
     }
 

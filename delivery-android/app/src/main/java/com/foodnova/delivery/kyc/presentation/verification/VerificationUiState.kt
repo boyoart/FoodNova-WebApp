@@ -10,6 +10,8 @@ data class VerificationUiState(
     val addressDocumentUri: String = "",
     val addressDocumentName: String = "",
     val addressDocumentContentType: String? = null,
+    val nin: String = "",
+    val selfieReference: String = "",
     val emergencyFullName: String = "",
     val emergencyRelationship: EmergencyRelationship = EmergencyRelationship.Parent,
     val emergencyPhone: String = "",
@@ -20,6 +22,9 @@ data class VerificationUiState(
 ) {
     val isAddressReady: Boolean
         get() = addressDocumentUri.isNotBlank() && addressDocumentName.isNotBlank()
+
+    val isIdentityReady: Boolean
+        get() = nin.length == 11 && selfieReference.isNotBlank()
 
     val isEmergencyContactReady: Boolean
         get() = errors == VerificationErrors() &&

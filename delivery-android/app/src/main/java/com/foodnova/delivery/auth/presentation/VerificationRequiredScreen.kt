@@ -14,6 +14,7 @@ import com.foodnova.delivery.ui.components.FoodNovaScreen
 @Composable
 fun VerificationRequiredScreen(
     progress: VerificationProgress,
+    onIdentityVerification: () -> Unit,
     onAddressVerification: () -> Unit,
     onEmergencyContact: () -> Unit,
     onContinueToDashboard: () -> Unit
@@ -26,6 +27,11 @@ fun VerificationRequiredScreen(
         Spacer(modifier = Modifier.height(18.dp))
         Text(text = "Complete verification after login to unlock delivery operations.")
         Spacer(modifier = Modifier.height(16.dp))
+        FoodNovaPrimaryButton(
+            text = "Complete Identity Verification",
+            onClick = onIdentityVerification
+        )
+        Spacer(modifier = Modifier.height(12.dp))
         FoodNovaPrimaryButton(
             text = "Verify address",
             onClick = onAddressVerification

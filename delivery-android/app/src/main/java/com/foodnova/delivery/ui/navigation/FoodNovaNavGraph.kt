@@ -14,6 +14,10 @@ import com.foodnova.delivery.auth.presentation.RegistrationScreen
 import com.foodnova.delivery.auth.presentation.VerificationRequiredScreen
 import com.foodnova.delivery.auth.presentation.onboarding.OnboardingViewModel
 import com.foodnova.delivery.delivery.presentation.DeliveryDashboardScreen
+import com.foodnova.delivery.kyc.presentation.identity.IdentityVerificationIntroScreen
+import com.foodnova.delivery.kyc.presentation.identity.NinEntryScreen
+import com.foodnova.delivery.kyc.presentation.identity.SelfieCaptureScreen
+import com.foodnova.delivery.kyc.presentation.identity.VerificationSubmittedScreen
 import com.foodnova.delivery.kyc.presentation.verification.AddressVerificationScreen
 import com.foodnova.delivery.kyc.presentation.verification.EmergencyContactScreen
 import com.foodnova.delivery.kyc.presentation.verification.VerificationViewModel
@@ -24,6 +28,7 @@ fun FoodNovaNavGraph() {
     val navController = rememberNavController()
     val onboardingViewModel: OnboardingViewModel = hiltViewModel()
     val verificationViewModel: VerificationViewModel = hiltViewModel()
+    val onboardingState by onboardingViewModel.state.collectAsStateWithLifecycle()
     val verificationState by verificationViewModel.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(Unit) {
@@ -75,11 +80,42 @@ fun FoodNovaNavGraph() {
         composable(DeliveryRoute.VerificationRequired.route) {
             VerificationRequiredScreen(
                 progress = verificationState.progress,
+                onIdentityVerification = { navController.navigate(DeliveryRoute.IdentityIntro.route) },
                 onAddressVerification = { navController.navigate(DeliveryRoute.AddressVerification.route) },
                 onEmergencyContact = { navController.navigate(DeliveryRoute.EmergencyContact.route) },
                 onContinueToDashboard = {
                     navController.navigate(DeliveryRoute.Dashboard.route) {
                         popUpTo(DeliveryRoute.VerificationRequired.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        composable(DeliveryRoute.IdentityIntro.route) {
+            IdentityVerificationIntroScreen(
+                onContinue = { navController.navigate(DeliveryRoute.NinEntry.route) }
+            )
+        }
+        composable(DeliveryRoute.NinEntry.route) {
+            NinEntryScreen(
+                viewModel = verificationViewModel,
+                onContinue = { navController.navigate(DeliveryRoute.SelfieCapture.route) }
+            )
+        }
+        composable(DeliveryRoute.SelfieCapture.route) {
+            SelfieCaptureScreen(
+                viewModel = verificationViewModel,
+                onSubmitted = {
+                    navController.navigate(DeliveryRoute.VerificationSubmitted.route) {
+                        popUpTo(DeliveryRoute.IdentityIntro.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        composable(DeliveryRoute.VerificationSubmitted.route) {
+            VerificationSubmittedScreen(
+                onDone = {
+                    navController.navigate(DeliveryRoute.Dashboard.route) {
+                        popUpTo(DeliveryRoute.VerificationSubmitted.route) { inclusive = true }
                     }
                 }
             )
@@ -97,7 +133,12 @@ fun FoodNovaNavGraph() {
             )
         }
         composable(DeliveryRoute.Dashboard.route) {
-            DeliveryDashboardScreen(progress = verificationState.progress)
+            DeliveryDashboardScreen(
+                progress = verificationState.progress,
+                workerName = onboardingState.fullName.ifBlank { "FoodNova Partner" },
+                workerType = onboardingState.workerType.name.lowercase().replaceFirstChar { it.titlecase() },
+                onIdentityVerification = { navController.navigate(DeliveryRoute.IdentityIntro.route) }
+            )
         }
     }
 }
