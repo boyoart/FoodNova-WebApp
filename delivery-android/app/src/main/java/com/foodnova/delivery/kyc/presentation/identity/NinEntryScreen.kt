@@ -10,12 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -30,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foodnova.delivery.kyc.presentation.verification.VerificationViewModel
 import com.foodnova.delivery.ui.components.FoodNovaPrimaryButton
+import com.foodnova.delivery.ui.components.FoodNovaStatusMark
 import com.foodnova.delivery.ui.components.FoodNovaTextField
 
 @Composable
@@ -64,7 +61,7 @@ fun NinEntryScreen(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        FoodNovaStatusMark(label = "ID", color = MaterialTheme.colorScheme.primary)
                         Text("Secure worker verification", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     }
                     FoodNovaTextField(
@@ -90,7 +87,7 @@ fun NinEntryScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    FoodNovaStatusMark(label = "OK", color = MaterialTheme.colorScheme.primary)
                     Text("NIN format looks ready for submission.", style = MaterialTheme.typography.bodyMedium)
                 }
             }

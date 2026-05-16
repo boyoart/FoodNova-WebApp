@@ -10,19 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,7 +21,9 @@ import com.foodnova.delivery.kyc.domain.VerificationProgress
 import com.foodnova.delivery.kyc.domain.VerificationStatus
 import com.foodnova.delivery.kyc.presentation.verification.VerificationChecklist
 import com.foodnova.delivery.ui.components.FoodNovaPrimaryButton
+import com.foodnova.delivery.ui.components.FoodNovaStatusMark
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeliveryDashboardScreen(
     progress: VerificationProgress,
@@ -97,7 +87,7 @@ private fun ActivationCard(progress: VerificationProgress, onIdentityVerificatio
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(progress.activationIcon(), contentDescription = null, tint = progress.activationColor())
+                FoodNovaStatusMark(label = progress.activationMarkLabel(), color = progress.activationColor())
                 Column {
                     Text("Verification & Activation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(progress.dashboardStatusLabel(), style = MaterialTheme.typography.labelLarge, color = progress.activationColor())
@@ -135,7 +125,7 @@ private fun LockedFeatureCard(title: String, subtitle: String) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+            FoodNovaStatusMark(label = "L", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
             Column {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall)
@@ -181,11 +171,12 @@ private fun VerificationProgress.hasRejectedStep(): Boolean =
     listOf(identityStatus, addressStatus, emergencyContactStatus, adminApprovalStatus)
         .any { it == VerificationStatus.Rejected }
 
-private fun VerificationProgress.activationIcon() = when (dashboardStatusLabel()) {
-    "Approved" -> Icons.Default.CheckCircle
-    "Rejected" -> Icons.Default.Warning
-    "Pending Review", "Submitted" -> Icons.Default.HourglassTop
-    else -> Icons.Default.Lock
+private fun VerificationProgress.activationMarkLabel(): String = when (dashboardStatusLabel()) {
+    "Approved" -> "OK"
+    "Rejected" -> "!"
+    "Pending Review" -> "PR"
+    "Submitted" -> "S"
+    else -> "L"
 }
 
 @Composable

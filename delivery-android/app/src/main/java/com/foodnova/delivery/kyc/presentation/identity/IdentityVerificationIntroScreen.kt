@@ -10,24 +10,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Badge
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foodnova.delivery.ui.components.FoodNovaPrimaryButton
+import com.foodnova.delivery.ui.components.FoodNovaStatusMark
 
 @Composable
 fun IdentityVerificationIntroScreen(onContinue: () -> Unit) {
@@ -61,7 +55,7 @@ fun IdentityVerificationIntroScreen(onContinue: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.AccessTime, contentDescription = null)
+                        FoodNovaStatusMark(label = "3M", color = MaterialTheme.colorScheme.primary)
                         Column {
                             Text("Estimated time", style = MaterialTheme.typography.labelLarge)
                             Text("3 to 5 minutes", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -70,9 +64,9 @@ fun IdentityVerificationIntroScreen(onContinue: () -> Unit) {
                 }
             }
 
-            item { RequirementCard(Icons.Default.Badge, "NIN verification", "Enter your 11-digit National Identification Number for identity review.") }
-            item { RequirementCard(Icons.Default.VerifiedUser, "Selfie confirmation", "Take a clear front-camera selfie so reviewers can match your profile safely.") }
-            item { RequirementCard(Icons.Default.Security, "Protected operations", "Your dashboard stays available while going online, offers, and earnings activation remain locked until approval.") }
+            item { RequirementCard("ID", "NIN verification", "Enter your 11-digit National Identification Number for identity review.") }
+            item { RequirementCard("SF", "Selfie confirmation", "Take a clear front-camera selfie so reviewers can match your profile safely.") }
+            item { RequirementCard("SC", "Protected operations", "Your dashboard stays available while going online, offers, and earnings activation remain locked until approval.") }
 
             item {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -98,7 +92,7 @@ private fun StatusLabel() {
 }
 
 @Composable
-private fun RequirementCard(icon: ImageVector, title: String, body: String) {
+private fun RequirementCard(mark: String, title: String, body: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
@@ -107,7 +101,7 @@ private fun RequirementCard(icon: ImageVector, title: String, body: String) {
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            FoodNovaStatusMark(label = mark, color = MaterialTheme.colorScheme.primary)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -29,16 +29,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -70,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.foodnova.delivery.auth.presentation.FieldError
 import com.foodnova.delivery.kyc.presentation.verification.VerificationViewModel
 import com.foodnova.delivery.ui.components.FoodNovaPrimaryButton
+import com.foodnova.delivery.ui.components.FoodNovaStatusMark
 import java.io.File
 
 @Composable
@@ -287,7 +282,7 @@ private fun PermissionPrompt(onRequestPermission: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(42.dp), tint = MaterialTheme.colorScheme.primary)
+        FoodNovaStatusMark(label = "CA", color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(42.dp))
         Text("Camera permission is required", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Text("FoodNova needs one front-camera selfie for KYC review.", style = MaterialTheme.typography.bodyMedium)
         Spacer(modifier = Modifier.height(14.dp))
@@ -337,12 +332,16 @@ private fun SelfieReviewCard(selfieReference: String, onRetake: () -> Unit) {
                         .background(MaterialTheme.colorScheme.primary)
                         .padding(8.dp)
                 ) {
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary)
+                    FoodNovaStatusMark(
+                        label = "OK",
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                FoodNovaStatusMark(label = "SC", color = MaterialTheme.colorScheme.primary)
                 Text("Selfie ready for secure review", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             OutlinedButton(
@@ -350,7 +349,6 @@ private fun SelfieReviewCard(selfieReference: String, onRetake: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
                 Text("Retake")
             }
         }

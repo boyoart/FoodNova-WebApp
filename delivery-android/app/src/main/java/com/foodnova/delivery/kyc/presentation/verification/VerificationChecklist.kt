@@ -7,15 +7,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.HourglassTop
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,11 +16,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foodnova.delivery.kyc.domain.VerificationProgress
 import com.foodnova.delivery.kyc.domain.VerificationStatus
+import com.foodnova.delivery.ui.components.FoodNovaStatusMark
 
 @Composable
 fun VerificationChecklist(progress: VerificationProgress, modifier: Modifier = Modifier) {
@@ -67,7 +60,7 @@ private fun VerificationChip(label: String, status: VerificationStatus) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(status.icon(), contentDescription = null, tint = status.color(), modifier = Modifier)
+        FoodNovaStatusMark(label = status.markLabel(), color = status.color())
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(status.helperText(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -94,13 +87,13 @@ private fun VerificationStatus.helperText(): String = when (this) {
     VerificationStatus.Rejected -> "Needs update before approval."
 }
 
-private fun VerificationStatus.icon(): ImageVector = when (this) {
-    VerificationStatus.NotStarted -> Icons.Default.RadioButtonUnchecked
-    VerificationStatus.InProgress -> Icons.Default.Sync
-    VerificationStatus.Submitted -> Icons.Default.HourglassTop
-    VerificationStatus.PendingReview -> Icons.Default.HourglassTop
-    VerificationStatus.Approved -> Icons.Default.CheckCircle
-    VerificationStatus.Rejected -> Icons.Default.Cancel
+private fun VerificationStatus.markLabel(): String = when (this) {
+    VerificationStatus.NotStarted -> "NS"
+    VerificationStatus.InProgress -> "IP"
+    VerificationStatus.Submitted -> "S"
+    VerificationStatus.PendingReview -> "PR"
+    VerificationStatus.Approved -> "OK"
+    VerificationStatus.Rejected -> "!"
 }
 
 @Composable
