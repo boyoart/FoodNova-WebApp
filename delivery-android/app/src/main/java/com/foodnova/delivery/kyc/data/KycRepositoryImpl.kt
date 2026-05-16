@@ -16,6 +16,7 @@ import javax.inject.Singleton
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.FileInputStream
 
 @Singleton
 class KycRepositoryImpl @Inject constructor(
@@ -26,14 +27,19 @@ class KycRepositoryImpl @Inject constructor(
         runCatching { api.getVerificationStatus() }.toAppResult()
 
     override suspend fun submitKyc(request: KycSubmissionRequest): AppResult<VerificationSubmissionResponse> =
-        runCatching { api.submitKyc(request) }.toAppResult()
+        runCatching {
+            val bytes = readLocalBytes(request.localSelfieUri)
+            val mediaType = request.selfieContentType.toMediaTypeOrNull()
+            val selfieBody = bytes.toRequestBody(mediaType)
+            val selfie = MultipartBody.Part.createFormData("selfie", request.selfieFileName, selfieBody)
+            val nin = request.nin.toRequestBody("text/plain".toMediaTypeOrNull())
+            api.submitKyc(nin, selfie)
+        }.toAppResult()
 
     override suspend fun submitAddressDocument(
         request: AddressVerificationRequest
     ): AppResult<VerificationSubmissionResponse> = runCatching {
-        val uri = Uri.parse(request.localUri)
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: error("Unable to read selected document.")
+        val bytes = readLocalBytes(request.localUri)
         val mediaType = request.contentType?.toMediaTypeOrNull()
         val body = bytes.toRequestBody(mediaType)
         val part = MultipartBody.Part.createFormData("document", request.fileName, body)
@@ -45,4 +51,12 @@ class KycRepositoryImpl @Inject constructor(
         request: EmergencyContactRequest
     ): AppResult<VerificationSubmissionResponse> =
         runCatching { api.submitEmergencyContact(request) }.toAppResult()
+
+    private fun readLocalBytes(localUri: String): ByteArray {
+        val uri = Uri.parse(localUri)
+        return when (uri.scheme) {
+            "file" -> FileInputStream(uri.path ?: error("Missing local file path.")).use { it.readBytes() }
+            else -> context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } ?: error("Unable to read selected verification file.")
+    }
 }

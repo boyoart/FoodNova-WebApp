@@ -7,7 +7,6 @@ import com.foodnova.delivery.auth.data.remote.dto.DeliveryWorkerLoginRequest
 import com.foodnova.delivery.auth.data.remote.dto.PhoneLookupRequest
 import com.foodnova.delivery.auth.data.remote.dto.PhoneLookupResponse
 import com.foodnova.delivery.auth.data.remote.dto.DeliveryMeResponse
-import com.foodnova.delivery.kyc.data.remote.dto.KycSubmissionRequest
 import com.foodnova.delivery.kyc.data.remote.dto.EmergencyContactRequest
 import com.foodnova.delivery.kyc.data.remote.dto.VerificationStatusResponse
 import com.foodnova.delivery.kyc.data.remote.dto.VerificationSubmissionResponse
@@ -41,9 +40,11 @@ interface FoodNovaDeliveryApi {
     @GET("delivery/verification-status")
     suspend fun getVerificationStatus(): VerificationStatusResponse
 
+    @Multipart
     @POST("delivery/kyc")
     suspend fun submitKyc(
-        @Body request: KycSubmissionRequest
+        @Part("nin") nin: RequestBody,
+        @Part selfie: MultipartBody.Part
     ): VerificationSubmissionResponse
 
     @Multipart

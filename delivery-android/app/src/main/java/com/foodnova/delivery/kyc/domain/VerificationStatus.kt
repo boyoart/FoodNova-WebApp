@@ -3,6 +3,7 @@ package com.foodnova.delivery.kyc.domain
 enum class VerificationStatus {
     NotStarted,
     InProgress,
+    Submitted,
     PendingReview,
     Approved,
     Rejected
@@ -16,7 +17,11 @@ data class VerificationProgress(
 ) {
     val completedSteps: Int
         get() = listOf(identityStatus, addressStatus, emergencyContactStatus, adminApprovalStatus)
-            .count { it == VerificationStatus.Approved || it == VerificationStatus.PendingReview }
+            .count {
+                it == VerificationStatus.Submitted ||
+                    it == VerificationStatus.PendingReview ||
+                    it == VerificationStatus.Approved
+            }
 
     val totalSteps: Int = 4
 

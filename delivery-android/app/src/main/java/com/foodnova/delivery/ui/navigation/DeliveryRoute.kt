@@ -2,15 +2,21 @@ package com.foodnova.delivery.ui.navigation
 
 sealed class DeliveryRoute(val route: String) {
     data object Splash : DeliveryRoute("splash")
-    data object PhoneEntry : DeliveryRoute("phone-entry")
-    data object Login : DeliveryRoute("login")
-    data object Register : DeliveryRoute("register")
-    data object VerificationRequired : DeliveryRoute("verification-required")
-    data object IdentityIntro : DeliveryRoute("identity-intro")
-    data object NinEntry : DeliveryRoute("nin-entry")
-    data object SelfieCapture : DeliveryRoute("selfie-capture")
-    data object VerificationSubmitted : DeliveryRoute("verification-submitted")
-    data object AddressVerification : DeliveryRoute("address-verification")
-    data object EmergencyContact : DeliveryRoute("emergency-contact")
-    data object Dashboard : DeliveryRoute("dashboard")
+
+    // Auth graph
+    data object AuthPhone : DeliveryRoute("auth/phone")
+    data object AuthLogin : DeliveryRoute("auth/login")
+    data object AuthRegister : DeliveryRoute("auth/register")
+
+    // KYC graph
+    data object KycHub : DeliveryRoute("kyc/hub")
+    data object KycIdentityIntro : DeliveryRoute("kyc/identity-intro")
+    data object KycNinEntry : DeliveryRoute("kyc/nin-entry")
+    data object KycSelfieCapture : DeliveryRoute("kyc/selfie-capture")
+    data object KycSubmitted : DeliveryRoute("kyc/submitted")
+    data object KycAddress : DeliveryRoute("kyc/address")
+    data object KycEmergency : DeliveryRoute("kyc/emergency")
+
+    // Operations graph
+    data object OperationsHome : DeliveryRoute("ops/home")
 }

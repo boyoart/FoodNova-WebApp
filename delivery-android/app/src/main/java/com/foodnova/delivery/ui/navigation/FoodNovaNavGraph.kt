@@ -31,113 +31,74 @@ fun FoodNovaNavGraph() {
     val onboardingState by onboardingViewModel.state.collectAsStateWithLifecycle()
     val verificationState by verificationViewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(Unit) {
-        verificationViewModel.refreshVerificationStatus()
-    }
+    LaunchedEffect(Unit) { verificationViewModel.refreshVerificationStatus() }
 
-    NavHost(
-        navController = navController,
-        startDestination = DeliveryRoute.Splash.route
-    ) {
+    NavHost(navController = navController, startDestination = DeliveryRoute.Splash.route) {
         composable(DeliveryRoute.Splash.route) {
-            SplashScreen(
-                onFinished = {
-                    navController.navigate(DeliveryRoute.PhoneEntry.route) {
-                        popUpTo(DeliveryRoute.Splash.route) { inclusive = true }
-                    }
+            SplashScreen {
+                navController.navigate(DeliveryRoute.AuthPhone.route) {
+                    popUpTo(DeliveryRoute.Splash.route) { inclusive = true }
                 }
-            )
+            }
         }
-        composable(DeliveryRoute.PhoneEntry.route) {
+        composable(DeliveryRoute.AuthPhone.route) {
             PhoneEntryScreen(
                 viewModel = onboardingViewModel,
-                onExistingUser = { navController.navigate(DeliveryRoute.Login.route) },
-                onNewUser = { navController.navigate(DeliveryRoute.Register.route) }
+                onExistingUser = { navController.navigate(DeliveryRoute.AuthLogin.route) },
+                onNewUser = { navController.navigate(DeliveryRoute.AuthRegister.route) }
             )
         }
-        composable(DeliveryRoute.Login.route) {
+        composable(DeliveryRoute.AuthLogin.route) {
             LoginScreen(
                 viewModel = onboardingViewModel,
-                onCreateAccount = { navController.navigate(DeliveryRoute.Register.route) },
+                onCreateAccount = { navController.navigate(DeliveryRoute.AuthRegister.route) },
                 onAuthenticated = {
-                    navController.navigate(DeliveryRoute.VerificationRequired.route) {
-                        popUpTo(DeliveryRoute.PhoneEntry.route) { inclusive = true }
-                    }
+                    navController.navigate(DeliveryRoute.KycHub.route) { popUpTo(DeliveryRoute.AuthPhone.route) { inclusive = true } }
                 }
             )
         }
-        composable(DeliveryRoute.Register.route) {
+        composable(DeliveryRoute.AuthRegister.route) {
             RegistrationScreen(
                 viewModel = onboardingViewModel,
-                onBackToLogin = { navController.navigate(DeliveryRoute.Login.route) },
+                onBackToLogin = { navController.navigate(DeliveryRoute.AuthLogin.route) },
                 onRegistered = {
-                    navController.navigate(DeliveryRoute.VerificationRequired.route) {
-                        popUpTo(DeliveryRoute.PhoneEntry.route) { inclusive = true }
-                    }
+                    navController.navigate(DeliveryRoute.KycHub.route) { popUpTo(DeliveryRoute.AuthPhone.route) { inclusive = true } }
                 }
             )
         }
-        composable(DeliveryRoute.VerificationRequired.route) {
+        composable(DeliveryRoute.KycHub.route) {
             VerificationRequiredScreen(
                 progress = verificationState.progress,
-                onIdentityVerification = { navController.navigate(DeliveryRoute.IdentityIntro.route) },
-                onAddressVerification = { navController.navigate(DeliveryRoute.AddressVerification.route) },
-                onEmergencyContact = { navController.navigate(DeliveryRoute.EmergencyContact.route) },
-                onContinueToDashboard = {
-                    navController.navigate(DeliveryRoute.Dashboard.route) {
-                        popUpTo(DeliveryRoute.VerificationRequired.route) { inclusive = true }
-                    }
-                }
+                onIdentityVerification = { navController.navigate(DeliveryRoute.KycIdentityIntro.route) },
+                onAddressVerification = { navController.navigate(DeliveryRoute.KycAddress.route) },
+                onEmergencyContact = { navController.navigate(DeliveryRoute.KycEmergency.route) },
+                onContinueToDashboard = { navController.navigate(DeliveryRoute.OperationsHome.route) }
             )
         }
-        composable(DeliveryRoute.IdentityIntro.route) {
-            IdentityVerificationIntroScreen(
-                onContinue = { navController.navigate(DeliveryRoute.NinEntry.route) }
-            )
+        composable(DeliveryRoute.KycIdentityIntro.route) {
+            IdentityVerificationIntroScreen(onContinue = { navController.navigate(DeliveryRoute.KycNinEntry.route) })
         }
-        composable(DeliveryRoute.NinEntry.route) {
-            NinEntryScreen(
-                viewModel = verificationViewModel,
-                onContinue = { navController.navigate(DeliveryRoute.SelfieCapture.route) }
-            )
+        composable(DeliveryRoute.KycNinEntry.route) {
+            NinEntryScreen(viewModel = verificationViewModel, onContinue = { navController.navigate(DeliveryRoute.KycSelfieCapture.route) })
         }
-        composable(DeliveryRoute.SelfieCapture.route) {
-            SelfieCaptureScreen(
-                viewModel = verificationViewModel,
-                onSubmitted = {
-                    navController.navigate(DeliveryRoute.VerificationSubmitted.route) {
-                        popUpTo(DeliveryRoute.IdentityIntro.route) { inclusive = true }
-                    }
-                }
-            )
+        composable(DeliveryRoute.KycSelfieCapture.route) {
+            SelfieCaptureScreen(viewModel = verificationViewModel, onSubmitted = { navController.navigate(DeliveryRoute.KycSubmitted.route) })
         }
-        composable(DeliveryRoute.VerificationSubmitted.route) {
-            VerificationSubmittedScreen(
-                onDone = {
-                    navController.navigate(DeliveryRoute.Dashboard.route) {
-                        popUpTo(DeliveryRoute.VerificationSubmitted.route) { inclusive = true }
-                    }
-                }
-            )
+        composable(DeliveryRoute.KycSubmitted.route) {
+            VerificationSubmittedScreen(onDone = { navController.navigate(DeliveryRoute.OperationsHome.route) })
         }
-        composable(DeliveryRoute.AddressVerification.route) {
-            AddressVerificationScreen(
-                viewModel = verificationViewModel,
-                onSubmitted = { navController.popBackStack() }
-            )
+        composable(DeliveryRoute.KycAddress.route) {
+            AddressVerificationScreen(viewModel = verificationViewModel, onSubmitted = { navController.popBackStack() })
         }
-        composable(DeliveryRoute.EmergencyContact.route) {
-            EmergencyContactScreen(
-                viewModel = verificationViewModel,
-                onSubmitted = { navController.popBackStack() }
-            )
+        composable(DeliveryRoute.KycEmergency.route) {
+            EmergencyContactScreen(viewModel = verificationViewModel, onSubmitted = { navController.popBackStack() })
         }
-        composable(DeliveryRoute.Dashboard.route) {
+        composable(DeliveryRoute.OperationsHome.route) {
             DeliveryDashboardScreen(
                 progress = verificationState.progress,
                 workerName = onboardingState.fullName.ifBlank { "FoodNova Partner" },
                 workerType = onboardingState.workerType.name.lowercase().replaceFirstChar { it.titlecase() },
-                onIdentityVerification = { navController.navigate(DeliveryRoute.IdentityIntro.route) }
+                onIdentityVerification = { navController.navigate(DeliveryRoute.KycIdentityIntro.route) }
             )
         }
     }

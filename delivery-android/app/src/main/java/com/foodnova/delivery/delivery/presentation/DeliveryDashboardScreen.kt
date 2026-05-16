@@ -1,135 +1,197 @@
 package com.foodnova.delivery.delivery.presentation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.HourglassTop
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Pending
-import com.foodnova.delivery.kyc.domain.VerificationStatus
 import com.foodnova.delivery.kyc.domain.VerificationProgress
+import com.foodnova.delivery.kyc.domain.VerificationStatus
 import com.foodnova.delivery.kyc.presentation.verification.VerificationChecklist
 import com.foodnova.delivery.ui.components.FoodNovaPrimaryButton
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeliveryDashboardScreen(
     progress: VerificationProgress,
-    workerName: String = "FoodNova Partner",
-    workerType: String = "Rider",
+    workerName: String,
+    workerType: String,
     onIdentityVerification: () -> Unit
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("FoodNova Delivery")
-                        Text(workerName, style = MaterialTheme.typography.bodyMedium)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
-                )
+                title = { Text("Operations Hub") },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .padding(padding)
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatusChip(label = workerType, status = VerificationStatus.Approved)
-                StatusChip(
-                    label = if (progress.canActivateDeliveries) "Active" else "Locked",
-                    status = if (progress.canActivateDeliveries) VerificationStatus.Approved else VerificationStatus.PendingReview
-                )
+            item {
+                OperationsHeader(workerName = workerName, workerType = workerType, progress = progress)
             }
-            Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
-                Column(Modifier.padding(18.dp)) {
-                    val percent = (progress.completedSteps * 100) / progress.totalSteps
-                    Text("Verification", style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    LinearProgressIndicator(
-                        progress = { percent / 100f },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("$percent% complete", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(modifier = Modifier.height(14.dp))
-                    FoodNovaPrimaryButton(
-                        text = "Complete Identity Verification",
-                        enabled = progress.identityStatus != VerificationStatus.PendingReview && progress.identityStatus != VerificationStatus.Approved,
-                        onClick = onIdentityVerification
-                    )
+            item {
+                ActivationCard(progress = progress, onIdentityVerification = onIdentityVerification)
+            }
+            item { VerificationChecklist(progress = progress) }
+            item { LockedFeatureCard("Go Online", "Go online mode unlocks after KYC approval.") }
+            item { LockedFeatureCard("Delivery Offers", "Live delivery offers will appear here.") }
+            item { LockedFeatureCard("Earnings", "Daily/weekly earnings summaries coming soon.") }
+            item { LockedFeatureCard("Emergency Alerts", "Emergency trigger and hotline is prepared for production rollout.") }
+        }
+    }
+}
+
+@Composable
+private fun OperationsHeader(workerName: String, workerType: String, progress: VerificationProgress) {
+    val isActivated = progress.canActivateDeliveries
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(text = workerName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                StatusPill(label = workerType)
+                StatusPill(label = progress.dashboardStatusLabel())
+            }
+            Text(
+                text = if (isActivated) {
+                    "Your operations profile is active."
+                } else {
+                    progress.dashboardStatusMessage()
+                },
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun ActivationCard(progress: VerificationProgress, onIdentityVerification: () -> Unit) {
+    Card {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(progress.activationIcon(), contentDescription = null, tint = progress.activationColor())
+                Column {
+                    Text("Verification & Activation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(progress.dashboardStatusLabel(), style = MaterialTheme.typography.labelLarge, color = progress.activationColor())
                 }
             }
-            VerificationChecklist(progress = progress)
-            FeaturePreviewCard("Go online", "Locked until verification and admin approval are complete.")
-            FeaturePreviewCard("Delivery offers", "New requests will appear here after activation.")
-            FeaturePreviewCard("Emergency alerts", "Emergency support unlocks after contact setup.")
+            Text(progress.dashboardStatusMessage(), style = MaterialTheme.typography.bodyMedium)
+            FoodNovaPrimaryButton(
+                text = progress.activationButtonLabel(),
+                enabled = !progress.canActivateDeliveries,
+                onClick = onIdentityVerification
+            )
+            Text("Completed ${progress.completedSteps} of ${progress.totalSteps} checks", style = MaterialTheme.typography.labelMedium)
         }
     }
 }
 
 @Composable
-private fun StatusChip(label: String, status: VerificationStatus) {
-    val color = when (status) {
-        VerificationStatus.Approved -> Color(0xFFE8F5E9)
-        VerificationStatus.PendingReview, VerificationStatus.InProgress -> Color(0xFFFFF8E1)
-        VerificationStatus.Rejected -> Color(0xFFFFEBEE)
-        VerificationStatus.NotStarted -> Color(0xFFF3F4F6)
-    }
-    val icon = when (status) {
-        VerificationStatus.Approved -> Icons.Default.CheckCircle
-        VerificationStatus.PendingReview, VerificationStatus.InProgress -> Icons.Default.Pending
-        else -> Icons.Default.Lock
-    }
-    Surface(color = color, shape = MaterialTheme.shapes.large) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Icon(icon, contentDescription = null)
-            Text(label, style = MaterialTheme.typography.labelLarge)
-        }
+private fun StatusPill(label: String) {
+    Box(
+        modifier = Modifier
+            .background(color = Color.White.copy(alpha = 0.7f), shape = RoundedCornerShape(100))
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+    ) {
+        Text(text = label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
 @Composable
-private fun FeaturePreviewCard(title: String, subtitle: String) {
-    Card(elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
+private fun LockedFeatureCard(title: String, subtitle: String) {
+    Card {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Lock, contentDescription = null)
+            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
             Column {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium)
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
+}
+
+private fun VerificationProgress.dashboardStatusLabel(): String = when {
+    canActivateDeliveries -> "Approved"
+    hasRejectedStep() -> "Rejected"
+    hasPendingStep() -> "Pending Review"
+    hasSubmittedStep() -> "Submitted"
+    completedSteps > 0 -> "Submitted"
+    else -> "Not Started"
+}
+
+private fun VerificationProgress.dashboardStatusMessage(): String = when (dashboardStatusLabel()) {
+    "Approved" -> "You can go online once delivery operations are enabled."
+    "Rejected" -> "One or more verification steps need attention before you can go online."
+    "Pending Review" -> "Your verification is with FoodNova operations. Dashboard access stays open while delivery actions remain locked."
+    "Submitted" -> "Some verification details are submitted. Complete the remaining checks to qualify for activation."
+    else -> "Complete identity, address, emergency contact, and admin approval before receiving delivery jobs."
+}
+
+private fun VerificationProgress.activationButtonLabel(): String = when (dashboardStatusLabel()) {
+    "Rejected" -> "Update KYC"
+    "Pending Review" -> "View KYC Status"
+    "Submitted" -> "Continue KYC"
+    "Not Started" -> "Start KYC"
+    else -> "Activated"
+}
+
+private fun VerificationProgress.hasPendingStep(): Boolean =
+    listOf(identityStatus, addressStatus, emergencyContactStatus, adminApprovalStatus)
+        .any { it == VerificationStatus.PendingReview || it == VerificationStatus.InProgress }
+
+private fun VerificationProgress.hasSubmittedStep(): Boolean =
+    listOf(identityStatus, addressStatus, emergencyContactStatus, adminApprovalStatus)
+        .any { it == VerificationStatus.Submitted }
+
+private fun VerificationProgress.hasRejectedStep(): Boolean =
+    listOf(identityStatus, addressStatus, emergencyContactStatus, adminApprovalStatus)
+        .any { it == VerificationStatus.Rejected }
+
+private fun VerificationProgress.activationIcon() = when (dashboardStatusLabel()) {
+    "Approved" -> Icons.Default.CheckCircle
+    "Rejected" -> Icons.Default.Warning
+    "Pending Review", "Submitted" -> Icons.Default.HourglassTop
+    else -> Icons.Default.Lock
+}
+
+@Composable
+private fun VerificationProgress.activationColor(): Color = when (dashboardStatusLabel()) {
+    "Approved" -> MaterialTheme.colorScheme.primary
+    "Rejected" -> MaterialTheme.colorScheme.error
+    "Pending Review", "Submitted" -> MaterialTheme.colorScheme.secondary
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }

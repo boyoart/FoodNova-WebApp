@@ -67,11 +67,25 @@ class VerificationViewModel @Inject constructor(
         _state.update { it.copy(nin = value.filter(Char::isDigit).take(11)) }
     }
 
-    fun onSelfieCaptured(reference: String) {
+    fun onSelfieCaptured(reference: String, fileName: String, contentType: String = "image/jpeg") {
         _state.update {
             it.copy(
                 selfieReference = reference,
+                selfieFileName = fileName,
+                selfieContentType = contentType,
+                errorMessage = null,
                 progress = it.progress.copy(identityStatus = VerificationStatus.InProgress)
+            )
+        }
+    }
+
+    fun retakeSelfie() {
+        _state.update {
+            it.copy(
+                selfieReference = "",
+                selfieFileName = "",
+                selfieContentType = "image/jpeg",
+                errorMessage = null
             )
         }
     }
@@ -81,13 +95,18 @@ class VerificationViewModel @Inject constructor(
         if (!current.isIdentityReady) return
         _state.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            val request = KycSubmissionRequest(nin = current.nin, selfieUri = current.selfieReference)
+            val request = KycSubmissionRequest(
+                nin = current.nin,
+                selfieFileName = current.selfieFileName,
+                selfieContentType = current.selfieContentType,
+                localSelfieUri = current.selfieReference
+            )
             when (val result = kycRepository.submitKyc(request)) {
                 is AppResult.Success -> {
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            progress = it.progress.copy(identityStatus = VerificationStatus.PendingReview)
+                            progress = it.progress.copy(identityStatus = VerificationStatus.Submitted)
                         )
                     }
                     onSubmitted()
@@ -208,6 +227,7 @@ class VerificationViewModel @Inject constructor(
 
 private fun String?.toVerificationStatus(): VerificationStatus = when (this?.lowercase()) {
     "in_progress", "in-progress", "progress" -> VerificationStatus.InProgress
+    "submitted", "submitted_for_review" -> VerificationStatus.Submitted
     "pending", "pending_review", "pending-review" -> VerificationStatus.PendingReview
     "approved" -> VerificationStatus.Approved
     "rejected" -> VerificationStatus.Rejected
