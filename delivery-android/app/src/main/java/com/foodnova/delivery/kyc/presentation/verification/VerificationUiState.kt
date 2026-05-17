@@ -3,6 +3,7 @@ package com.foodnova.delivery.kyc.presentation.verification
 import com.foodnova.delivery.kyc.domain.AddressDocumentType
 import com.foodnova.delivery.kyc.domain.EmergencyRelationship
 import com.foodnova.delivery.kyc.domain.VerificationProgress
+import com.foodnova.delivery.kyc.domain.VerificationStatus
 
 data class VerificationUiState(
     val progress: VerificationProgress = VerificationProgress(),

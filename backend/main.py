@@ -30,7 +30,7 @@ from email_service import (
     send_customer_order_email,
     send_low_stock_alert,
 )
-from services.ninbvnportal_service import CheckMyNINBVNError, verify_nin
+from services.ninbvnportal_service import CheckMyNINBVNError, validate_checkmyninbvn_config, verify_nin
 
 try:
     import firebase_admin
@@ -79,9 +79,11 @@ except Exception:
     cloudinary = None
 
 load_dotenv()
-print("CHECKMYNINBVN_API_KEY loaded:", bool(os.getenv("CHECKMYNINBVN_API_KEY")))
 
 app = FastAPI(title="FoodNova API")
+nin_provider_config = validate_checkmyninbvn_config()
+if not nin_provider_config.get("configured"):
+    print(f"WARNING: {nin_provider_config.get('message')}")
 UPLOAD_DIR = "uploads"
 AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
 PRODUCT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "products")
@@ -3114,7 +3116,7 @@ async def delivery_worker_signup(
     try:
         nin_result = verify_nin(nin_number, True)
     except CheckMyNINBVNError as error:
-        raise HTTPException(status_code=400, detail=str(error) or "NIN verification failed. Please check the number and try again.")
+        raise HTTPException(status_code=error.status_code, detail=str(error) or "NIN verification failed. Please check the number and try again.")
     if not nin_result.get("verified"):
         raise HTTPException(status_code=400, detail=nin_result.get("message") or "NIN verification failed. Please check the number and try again.")
     nin_data = nin_result.get("data") or {}
@@ -3204,7 +3206,13 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
     try:
         result = verify_nin(payload.nin, payload.consent)
     except CheckMyNINBVNError as error:
-        return {"success": False, "verified": False, "message": str(error) or "NIN verification failed."}
+        return {
+            "success": False,
+            "verified": False,
+            "message": str(error) or "NIN verification failed.",
+            "error_code": error.code,
+            "retryable": error.retryable,
+        }
     if not result.get("verified"):
         return {"success": False, "verified": False, "message": result.get("message") or "NIN verification failed."}
     data = result.get("data") or {}
@@ -3239,6 +3247,9 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
         provider_result = {}
         provider_data = {}
         provider_message = ""
+        provider_error_code = ""
+        provider_retryable = False
+        provider_http_status = None
         try:
             provider_result = verify_nin(clean_nin, True)
             verified = bool(provider_result.get("verified"))
@@ -3246,6 +3257,29 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             provider_message = provider_result.get("message") or ""
         except CheckMyNINBVNError as error:
             provider_message = str(error) or "NIN verification failed."
+            provider_error_code = error.code
+            provider_retryable = error.retryable
+            provider_http_status = error.provider_status
+            print(
+                "NIN_PROVIDER_ERROR",
+                json_dump({
+                    "worker_id": worker.id,
+                    "error_code": error.code,
+                    "retryable": error.retryable,
+                    "provider_status": error.provider_status,
+                    "nin_last4": clean_nin[-4:],
+                    "timestamp": iso(datetime.utcnow()),
+                }),
+            )
+            if error.code in [
+                "provider_not_configured",
+                "invalid_provider_credentials",
+                "provider_unavailable",
+                "provider_rate_limited",
+                "invalid_provider_response",
+                "provider_error",
+            ]:
+                raise HTTPException(status_code=error.status_code, detail=provider_message)
 
         fraud = detect_nin_fraud_flags(db, worker, clean_nin, provider_data, verified)
         manual_review_required = bool(
@@ -3278,6 +3312,9 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 "verified": verified,
                 "message": provider_message,
                 "report_id": provider_result.get("report_id") or "",
+                "error_code": provider_error_code,
+                "retryable": provider_retryable,
+                "provider_http_status": provider_http_status,
             },
             "verified_at": iso(datetime.utcnow()) if status == "verified" else "",
             "checked_at": iso(datetime.utcnow()),
@@ -3304,6 +3341,8 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             "verified": status == "verified",
             "status": status,
             "message": provider_message or ("NIN verified successfully." if status == "verified" else "NIN requires manual review."),
+            "error_code": provider_error_code,
+            "retryable": provider_retryable,
             "manual_review_required": manual_review_required or not verified,
             "confidence_score": fraud.get("confidence_score"),
             "fraud_flags": {
