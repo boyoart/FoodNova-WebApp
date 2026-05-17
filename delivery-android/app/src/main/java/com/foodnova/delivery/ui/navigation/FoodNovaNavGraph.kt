@@ -54,9 +54,18 @@ fun FoodNovaNavGraph() {
     NavHost(navController = navController, startDestination = DeliveryRoute.Splash.route) {
         composable(DeliveryRoute.Splash.route) {
             SplashScreen {
-                navController.navigate(DeliveryRoute.AuthPhone.route) {
-                    popUpTo(DeliveryRoute.Splash.route) { inclusive = true }
-                }
+                onboardingViewModel.restoreSession(
+                    onRestored = {
+                        navController.navigate(DeliveryRoute.OperationsHome.route) {
+                            popUpTo(DeliveryRoute.Splash.route) { inclusive = true }
+                        }
+                    },
+                    onMissing = {
+                        navController.navigate(DeliveryRoute.AuthPhone.route) {
+                            popUpTo(DeliveryRoute.Splash.route) { inclusive = true }
+                        }
+                    }
+                )
             }
         }
         composable(DeliveryRoute.AuthPhone.route) {

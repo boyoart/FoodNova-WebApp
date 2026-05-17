@@ -41,7 +41,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun onPasswordChanged(value: String) {
-        _state.update { it.copy(password = value).validated() }
+        _state.update { it.copy(password = value, errorMessage = null).validated() }
     }
 
     fun onWorkerTypeChanged(value: WorkerType) {
@@ -122,6 +122,22 @@ class OnboardingViewModel @Inject constructor(
                 }
                 is AppResult.Failure -> _state.update {
                     it.copy(isLoading = false, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
+    fun restoreSession(onRestored: () -> Unit, onMissing: () -> Unit) {
+        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            when (val result = authRepository.restoreSession()) {
+                is AppResult.Success -> {
+                    _state.update { it.copy(isLoading = false) }
+                    if (result.value?.accessToken.isNullOrBlank()) onMissing() else onRestored()
+                }
+                is AppResult.Failure -> {
+                    _state.update { it.copy(isLoading = false) }
+                    onMissing()
                 }
             }
         }

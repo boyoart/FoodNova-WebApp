@@ -68,6 +68,11 @@ except Exception:
     pwd_context = None
 
 try:
+    from werkzeug.security import check_password_hash as werkzeug_check_password_hash
+except Exception:
+    werkzeug_check_password_hash = None
+
+try:
     import cloudinary
     import cloudinary.uploader
 except Exception:
@@ -797,23 +802,50 @@ def create_admin_audit_log(
         db.close()
 
 
+def _password_hash_scheme(stored_password: str) -> str:
+    value = str(stored_password or "")
+    if value.startswith("pbkdf2_sha256$"):
+        return "pbkdf2_sha256"
+    if value.startswith("pbkdf2:") or value.startswith("scrypt:"):
+        return "werkzeug"
+    if value.startswith(("$2a$", "$2b$", "$2y$")):
+        return "bcrypt"
+    if value:
+        return "plain_or_unknown"
+    return "empty"
+
+
 def _password_matches(plain_password: str, stored_password: str) -> bool:
     if not stored_password:
         return False
 
     if str(stored_password).startswith("pbkdf2_sha256$"):
+        parts = str(stored_password).split("$", 3)
+        if len(parts) != 4:
+            return False
+        _, iterations_raw, salt_raw, digest_raw = parts
         try:
-            _, iterations, salt_b64, digest_b64 = str(stored_password).split("$", 3)
-            salt = base64.b64decode(salt_b64.encode("utf-8"))
-            expected = base64.b64decode(digest_b64.encode("utf-8"))
-            actual = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, int(iterations))
+            salt = base64.b64decode(salt_raw.encode("utf-8"), validate=True)
+            expected = base64.b64decode(digest_raw.encode("utf-8"), validate=True)
+            actual = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt, int(iterations_raw))
             return hmac.compare_digest(actual, expected)
         except Exception:
-            return False
+            try:
+                expected = base64.b64decode(digest_raw.encode("utf-8"), validate=True)
+                actual = hashlib.pbkdf2_hmac("sha256", plain_password.encode("utf-8"), salt_raw.encode("utf-8"), int(iterations_raw))
+                return hmac.compare_digest(actual, expected)
+            except Exception:
+                return False
 
     if pwd_context and str(stored_password).startswith(("$2a$", "$2b$", "$2y$")):
         try:
             return pwd_context.verify(plain_password, stored_password)
+        except Exception:
+            return False
+
+    if werkzeug_check_password_hash and str(stored_password).startswith(("pbkdf2:", "scrypt:")):
+        try:
+            return werkzeug_check_password_hash(stored_password, plain_password)
         except Exception:
             return False
 
@@ -2344,6 +2376,22 @@ def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker) -> dic
     }
 
 
+def log_delivery_auth_event(event: str, phone: str, reason: str = "", worker_id: Optional[int] = None, user_id: Optional[int] = None, scheme: str = ""):
+    safe_phone = f"***{str(phone or '')[-4:]}" if phone else ""
+    print(
+        "DELIVERY_AUTH",
+        json_dump({
+            "event": event,
+            "phone": safe_phone,
+            "worker_id": worker_id,
+            "user_id": user_id,
+            "reason": reason,
+            "password_scheme": scheme,
+            "timestamp": iso(datetime.utcnow()),
+        }),
+    )
+
+
 def get_delivery_worker_record_for_request(request: Request):
     user = require_user(request)
     if user.get("role") not in ["messenger", "rider"]:
@@ -3345,6 +3393,7 @@ def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Reques
         db.commit()
         db.refresh(user)
         db.refresh(worker)
+        log_delivery_auth_event("register_success", phone, worker_id=worker.id, user_id=user.id, scheme=_password_hash_scheme(user.password))
         create_admin_audit_log(
             request,
             db_user_to_dict(user),
@@ -3365,19 +3414,32 @@ def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Reques
 def delivery_auth_login(payload: DeliveryAuthLoginPayload):
     phone = normalize_delivery_phone(payload.phone_number)
     if not phone:
+        log_delivery_auth_event("login_failed", payload.phone_number, "invalid_phone")
         raise HTTPException(status_code=422, detail="Enter a valid Nigerian phone number.")
     db = SessionLocal()
     try:
+        log_delivery_auth_event("login_attempt", phone)
         worker = get_delivery_worker_by_phone(db, phone)
         if not worker:
+            log_delivery_auth_event("login_failed", phone, "worker_not_found")
             raise HTTPException(status_code=404, detail="Delivery account not found.")
         user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
         if not user or (user.role or "") not in ["messenger", "rider"]:
+            log_delivery_auth_event("login_failed", phone, "user_not_delivery_worker", worker_id=worker.id, user_id=worker.user_id)
             raise HTTPException(status_code=404, detail="Delivery account not found.")
         if not getattr(user, "is_active", True):
+            log_delivery_auth_event("login_failed", phone, "account_disabled", worker_id=worker.id, user_id=user.id)
             raise HTTPException(status_code=403, detail="Delivery account is disabled.")
+        scheme = _password_hash_scheme(user.password)
         if not _password_matches(payload.password or "", user.password):
+            log_delivery_auth_event("password_verification_failed", phone, "invalid_password", worker_id=worker.id, user_id=user.id, scheme=scheme)
             raise HTTPException(status_code=401, detail="Invalid phone number or password.")
+        if scheme in ["plain_or_unknown", "pbkdf2_sha256", "werkzeug"]:
+            user.password = _hash_new_password(payload.password or "")
+            db.commit()
+            db.refresh(user)
+            log_delivery_auth_event("password_rehashed", phone, "legacy_hash_upgraded", worker_id=worker.id, user_id=user.id, scheme=scheme)
+        log_delivery_auth_event("login_success", phone, worker_id=worker.id, user_id=user.id, scheme=_password_hash_scheme(user.password))
         return delivery_worker_auth_response(user, worker)
     finally:
         db.close()
