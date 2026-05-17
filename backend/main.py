@@ -2369,6 +2369,78 @@ def set_delivery_worker_review_meta(worker: DBDeliveryWorker, key: str, value: d
     meta[key] = value
     worker.review_note = json_dump(meta)
 
+def _nin_hash(nin: str) -> str:
+    return hashlib.sha256(str(nin or "").encode("utf-8")).hexdigest()
+
+
+def _name_tokens(value: str) -> set:
+    return {
+        token
+        for token in "".join(ch.lower() if ch.isalpha() else " " for ch in str(value or "")).split()
+        if len(token) > 1
+    }
+
+
+def detect_nin_fraud_flags(db, worker: DBDeliveryWorker, clean_nin: str, provider_data: dict, verified: bool) -> dict:
+    provider_name = " ".join([
+        provider_data.get("first_name") or "",
+        provider_data.get("middle_name") or "",
+        provider_data.get("surname") or "",
+    ]).strip()
+    worker_tokens = _name_tokens(worker.full_name)
+    provider_tokens = _name_tokens(provider_name)
+    name_overlap = len(worker_tokens.intersection(provider_tokens)) if worker_tokens and provider_tokens else 0
+    identity_mismatch = bool(verified and provider_tokens and worker_tokens and name_overlap == 0)
+
+    current_hash = _nin_hash(clean_nin)
+    duplicate_nin = False
+    for other in db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id != worker.id).all():
+        meta = delivery_worker_review_meta(other)
+        other_identity = meta.get("identity_verification") or {}
+        if other_identity.get("nin_hash") == current_hash:
+            duplicate_nin = True
+            break
+
+    fraud_risk_detected = duplicate_nin or identity_mismatch
+    confidence = 0.98 if verified and not fraud_risk_detected else 0.6 if verified else 0.15
+    return {
+        "duplicate_nin": duplicate_nin,
+        "identity_mismatch": identity_mismatch,
+        "suspicious_activity": False,
+        "failed_verification": not verified,
+        "fraud_risk_detected": fraud_risk_detected,
+        "confidence_score": confidence,
+        "provider_name": provider_name,
+    }
+
+
+def maybe_auto_activate_delivery_worker(worker: DBDeliveryWorker) -> bool:
+    meta = delivery_worker_review_meta(worker)
+    identity = meta.get("identity_verification") or {}
+    address = meta.get("address_verification") or {}
+    emergency = meta.get("emergency_contact") or {}
+    submitted_statuses = {"submitted", "pending_review", "verified", "approved", "completed"}
+    clean_identity = identity.get("status") == "verified" and not identity.get("manual_review_required")
+    ready = (
+        clean_identity
+        and (address.get("status") or "") in submitted_statuses
+        and (emergency.get("status") or "") in submitted_statuses
+    )
+    if ready and (worker.worker_type or "").lower() == "messenger":
+        worker.kyc_status = "APPROVED"
+        worker.approved_at = worker.approved_at or datetime.utcnow()
+        worker.approved_by_admin_id = None
+        worker.approved_by_admin_name = "FoodNova Auto Verification"
+        identity["status"] = "verified"
+        address["status"] = "verified"
+        emergency["status"] = "verified"
+        meta["identity_verification"] = identity
+        meta["address_verification"] = address
+        meta["emergency_contact"] = emergency
+        worker.review_note = json_dump(meta)
+        return True
+    return False
+
 
 def verification_status_response(worker: DBDeliveryWorker) -> dict:
     meta = delivery_worker_review_meta(worker)
@@ -2376,10 +2448,10 @@ def verification_status_response(worker: DBDeliveryWorker) -> dict:
     address = meta.get("address_verification") or {}
     emergency = meta.get("emergency_contact") or {}
     worker_approved = (worker.kyc_status or "") == "APPROVED"
-    submitted_statuses = {"submitted", "pending_review", "approved"}
+    submitted_statuses = {"submitted", "pending_review", "verified", "approved", "completed"}
     identity_status = "approved" if worker_approved else identity.get("status") or "not_started"
-    address_status = "approved" if worker_approved else address.get("status") or "not_started"
-    emergency_status = "approved" if worker_approved else emergency.get("status") or "not_started"
+    address_status = "verified" if worker_approved else address.get("status") or "not_started"
+    emergency_status = "verified" if worker_approved else emergency.get("status") or "not_started"
     review_ready = (
         identity_status in submitted_statuses
         and address_status in submitted_statuses
@@ -3105,6 +3177,102 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
     }
 
 
+@app.post("/delivery/kyc/verify-nin")
+def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        clean_nin = "".join(ch for ch in str(payload.nin or "") if ch.isdigit())
+        if len(clean_nin) != 11:
+            raise HTTPException(status_code=422, detail="NIN must be exactly 11 digits.")
+        if not payload.consent:
+            raise HTTPException(status_code=422, detail="Consent is required before NIN verification.")
+
+        verified = False
+        provider_result = {}
+        provider_data = {}
+        provider_message = ""
+        try:
+            provider_result = verify_nin(clean_nin, True)
+            verified = bool(provider_result.get("verified"))
+            provider_data = provider_result.get("data") or {}
+            provider_message = provider_result.get("message") or ""
+        except CheckMyNINBVNError as error:
+            provider_message = str(error) or "NIN verification failed."
+
+        fraud = detect_nin_fraud_flags(db, worker, clean_nin, provider_data, verified)
+        manual_review_required = bool(
+            fraud.get("identity_mismatch")
+            or fraud.get("duplicate_nin")
+            or fraud.get("suspicious_activity")
+            or fraud.get("fraud_risk_detected")
+        )
+        status = "verified" if verified and not manual_review_required else "manual_review" if verified else "failed"
+
+        worker.nin_verified = status == "verified"
+        worker.nin_report_id = provider_result.get("report_id") or worker.nin_report_id or ""
+        worker.nin_last4 = clean_nin[-4:]
+        worker.verified_first_name = provider_data.get("first_name") or worker.verified_first_name or ""
+        worker.verified_middle_name = provider_data.get("middle_name") or worker.verified_middle_name or ""
+        worker.verified_surname = provider_data.get("surname") or worker.verified_surname or ""
+        worker.verified_phone = provider_data.get("phone") or worker.verified_phone or ""
+        worker.verified_gender = provider_data.get("gender") or worker.verified_gender or ""
+        worker.verified_birthdate = provider_data.get("birthdate") or worker.verified_birthdate or ""
+        worker.verified_photo_url = provider_data.get("photo") or worker.verified_photo_url or ""
+        set_delivery_worker_review_meta(worker, "identity_verification", {
+            "status": status,
+            "verification_state": status,
+            "nin_last4": clean_nin[-4:],
+            "nin_hash": _nin_hash(clean_nin),
+            "provider": "checkmyninbvn",
+            "provider_report_id": provider_result.get("report_id") or "",
+            "provider_message": provider_message,
+            "provider_response_log": {
+                "verified": verified,
+                "message": provider_message,
+                "report_id": provider_result.get("report_id") or "",
+            },
+            "verified_at": iso(datetime.utcnow()) if status == "verified" else "",
+            "checked_at": iso(datetime.utcnow()),
+            "confidence_score": fraud.get("confidence_score"),
+            "fraud_flags": {
+                "identity_mismatch": fraud.get("identity_mismatch"),
+                "duplicate_nin": fraud.get("duplicate_nin"),
+                "suspicious_activity": fraud.get("suspicious_activity"),
+                "failed_verification": fraud.get("failed_verification"),
+                "fraud_risk_detected": fraud.get("fraud_risk_detected"),
+            },
+            "manual_review_required": manual_review_required or not verified,
+        })
+        if manual_review_required or not verified:
+            worker.kyc_status = "KYC_PENDING"
+
+        auto_activated = maybe_auto_activate_delivery_worker(worker)
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(worker)
+
+        return {
+            "success": status == "verified",
+            "verified": status == "verified",
+            "status": status,
+            "message": provider_message or ("NIN verified successfully." if status == "verified" else "NIN requires manual review."),
+            "manual_review_required": manual_review_required or not verified,
+            "confidence_score": fraud.get("confidence_score"),
+            "fraud_flags": {
+                "identity_mismatch": fraud.get("identity_mismatch"),
+                "duplicate_nin": fraud.get("duplicate_nin"),
+                "suspicious_activity": fraud.get("suspicious_activity"),
+                "failed_verification": fraud.get("failed_verification"),
+                "fraud_risk_detected": fraud.get("fraud_risk_detected"),
+            },
+            "auto_activated": auto_activated,
+            "verification": verification_status_response(worker),
+            "worker": worker_to_dict(worker),
+        }
+    finally:
+        db.close()
+
+
 @app.post("/delivery/auth/check-phone")
 def delivery_auth_check_phone(payload: DeliveryAuthCheckPhonePayload):
     phone = normalize_delivery_phone(payload.phone_number)
@@ -3269,15 +3437,19 @@ async def delivery_identity_kyc(
         worker.profile_photo_url = worker.profile_photo_url or selfie_url
         if (worker.kyc_status or "") in ["", "NOT_STARTED", "KYC_NOT_STARTED"]:
             worker.kyc_status = "KYC_PENDING"
-        set_delivery_worker_review_meta(worker, "identity_verification", {
-            "status": "pending_review",
+        existing_identity = (delivery_worker_review_meta(worker).get("identity_verification") or {})
+        identity_status = "verified" if worker.nin_verified and existing_identity.get("status") == "verified" else "manual_review"
+        existing_identity.update({
+            "status": identity_status,
+            "verification_state": identity_status,
             "nin_last4": clean_nin[-4:],
             "selfie_url": selfie_url,
             "filename": selfie.filename,
             "content_type": selfie.content_type or "",
-            "submitted_at": iso(datetime.utcnow()),
-            "manual_review": True,
+            "selfie_submitted_at": iso(datetime.utcnow()),
+            "manual_review_required": identity_status != "verified",
         })
+        set_delivery_worker_review_meta(worker, "identity_verification", existing_identity)
         worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(worker)
@@ -3317,20 +3489,22 @@ def delivery_emergency_contact(payload: DeliveryEmergencyContactPayload, request
         worker.emergency_contact_name = full_name
         worker.emergency_contact_phone = phone
         set_delivery_worker_review_meta(worker, "emergency_contact", {
-            "status": "pending_review",
+            "status": "completed",
             "full_name": full_name,
             "relationship": relationship,
             "phone_number": phone,
             "alternate_phone": alternate_phone,
             "submitted_at": iso(datetime.utcnow()),
         })
+        auto_activated = maybe_auto_activate_delivery_worker(worker)
         worker.updated_at = datetime.utcnow()
         db.commit()
         print(f"DELIVERY EMERGENCY CONTACT SUBMITTED worker_id={worker.id} relationship={relationship}")
         return {
             "success": True,
-            "status": "pending_review",
-            "pending_review": True,
+            "status": "completed",
+            "pending_review": False,
+            "auto_activated": auto_activated,
             "message": "Emergency contact submitted for review.",
             "verification": verification_status_response(worker),
         }
@@ -3363,20 +3537,22 @@ async def delivery_address_verification(
             raise HTTPException(status_code=400, detail="Unable to upload address verification document.")
 
         set_delivery_worker_review_meta(worker, "address_verification", {
-            "status": "pending_review",
+            "status": "submitted",
             "document_type": clean_type,
             "document_url": document_url,
             "filename": document.filename,
             "content_type": document.content_type or "",
             "submitted_at": iso(datetime.utcnow()),
         })
+        auto_activated = maybe_auto_activate_delivery_worker(worker)
         worker.updated_at = datetime.utcnow()
         db.commit()
         print(f"DELIVERY ADDRESS VERIFICATION SUBMITTED worker_id={worker.id} document_type={clean_type}")
         return {
             "success": True,
-            "status": "pending_review",
-            "pending_review": True,
+            "status": "submitted",
+            "pending_review": False,
+            "auto_activated": auto_activated,
             "message": "Address verification document submitted for review.",
             "document_url": document_url,
             "verification": verification_status_response(worker),
@@ -4521,8 +4697,17 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
         if not worker:
             raise HTTPException(status_code=404, detail="Delivery worker not found")
         old_data = worker_to_dict(worker)
+        review_meta = delivery_worker_review_meta(worker)
+        if payload.review_note is not None:
+            review_meta["admin_override"] = {
+                "status": new_status,
+                "note": (payload.review_note or "").strip(),
+                "admin_id": admin.get("id"),
+                "admin_name": admin.get("full_name") or admin.get("email") or "Admin",
+                "updated_at": iso(datetime.utcnow()),
+            }
         worker.kyc_status = new_status
-        worker.review_note = (payload.review_note or "").strip()
+        worker.review_note = json_dump(review_meta)
         if new_status == "APPROVED":
             worker.approved_at = datetime.utcnow()
             worker.approved_by_admin_id = admin.get("id")

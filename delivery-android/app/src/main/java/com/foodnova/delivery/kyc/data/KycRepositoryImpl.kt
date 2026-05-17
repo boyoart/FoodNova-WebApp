@@ -7,6 +7,8 @@ import com.foodnova.delivery.core.toAppResult
 import com.foodnova.delivery.kyc.data.remote.dto.AddressVerificationRequest
 import com.foodnova.delivery.kyc.data.remote.dto.EmergencyContactRequest
 import com.foodnova.delivery.kyc.data.remote.dto.KycSubmissionRequest
+import com.foodnova.delivery.kyc.data.remote.dto.NinVerificationRequest
+import com.foodnova.delivery.kyc.data.remote.dto.NinVerificationResponse
 import com.foodnova.delivery.kyc.data.remote.dto.VerificationStatusResponse
 import com.foodnova.delivery.kyc.data.remote.dto.VerificationSubmissionResponse
 import com.foodnova.delivery.network.FoodNovaDeliveryApi
@@ -25,6 +27,9 @@ class KycRepositoryImpl @Inject constructor(
 ) : com.foodnova.delivery.kyc.domain.KycRepository {
     override suspend fun verificationStatus(): AppResult<VerificationStatusResponse> =
         runCatching { api.getVerificationStatus() }.toAppResult()
+
+    override suspend fun verifyNin(request: NinVerificationRequest): AppResult<NinVerificationResponse> =
+        runCatching { api.verifyKycNin(request) }.toAppResult()
 
     override suspend fun submitKyc(request: KycSubmissionRequest): AppResult<VerificationSubmissionResponse> =
         runCatching {

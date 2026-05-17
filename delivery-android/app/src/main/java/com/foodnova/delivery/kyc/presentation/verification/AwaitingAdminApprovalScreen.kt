@@ -54,10 +54,21 @@ fun AwaitingAdminApprovalScreen(
             ) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        FoodNovaStatusMark(label = "PR", color = MaterialTheme.colorScheme.primary)
-                        Text("Awaiting admin approval", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                        FoodNovaStatusMark(
+                            label = if (state.progress.canActivateDeliveries) "OK" else "PR",
+                            color = MaterialTheme.colorScheme.primary
+                        )
                         Text(
-                            "Identity, address, and emergency contact details are submitted. FoodNova operations will approve your account before Go Online unlocks.",
+                            if (state.progress.canActivateDeliveries) "Activation complete" else "Smart verification in progress",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            if (state.progress.canActivateDeliveries) {
+                                "Your partner account is verified. Go Online is now unlocked on the operations dashboard."
+                            } else {
+                                "Clean NIN checks activate automatically after address and emergency contact are complete. Flagged profiles remain available for admin override."
+                            },
                             style = MaterialTheme.typography.bodyLarge
                         )
                     }

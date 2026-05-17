@@ -159,7 +159,7 @@ private fun VerificationProgress.dashboardStatusLabel(): String = when {
 }
 
 private fun VerificationProgress.dashboardStatusMessage(): String = when (dashboardStatusLabel()) {
-    "Approved" -> "You can go online once delivery operations are enabled."
+    "Approved" -> "Your account is verified. Go Online is unlocked."
     "Rejected" -> "One or more verification steps need attention before you can go online."
     "Pending Review" -> "Your verification is with FoodNova operations. Dashboard access stays open while delivery actions remain locked."
     "Submitted" -> "Some verification details are submitted. Complete the remaining checks to qualify for activation."

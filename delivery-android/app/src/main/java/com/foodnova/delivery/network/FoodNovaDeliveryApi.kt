@@ -8,6 +8,8 @@ import com.foodnova.delivery.auth.data.remote.dto.PhoneLookupRequest
 import com.foodnova.delivery.auth.data.remote.dto.PhoneLookupResponse
 import com.foodnova.delivery.auth.data.remote.dto.DeliveryMeResponse
 import com.foodnova.delivery.kyc.data.remote.dto.EmergencyContactRequest
+import com.foodnova.delivery.kyc.data.remote.dto.NinVerificationRequest
+import com.foodnova.delivery.kyc.data.remote.dto.NinVerificationResponse
 import com.foodnova.delivery.kyc.data.remote.dto.VerificationStatusResponse
 import com.foodnova.delivery.kyc.data.remote.dto.VerificationSubmissionResponse
 import okhttp3.MultipartBody
@@ -39,6 +41,11 @@ interface FoodNovaDeliveryApi {
 
     @GET("delivery/verification-status")
     suspend fun getVerificationStatus(): VerificationStatusResponse
+
+    @POST("delivery/kyc/verify-nin")
+    suspend fun verifyKycNin(
+        @Body request: NinVerificationRequest
+    ): NinVerificationResponse
 
     @Multipart
     @POST("delivery/kyc")

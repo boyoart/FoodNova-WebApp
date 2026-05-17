@@ -6,6 +6,8 @@ import com.foodnova.delivery.core.AppResult
 import com.foodnova.delivery.kyc.data.remote.dto.AddressVerificationRequest
 import com.foodnova.delivery.kyc.data.remote.dto.EmergencyContactRequest
 import com.foodnova.delivery.kyc.data.remote.dto.KycSubmissionRequest
+import com.foodnova.delivery.kyc.data.remote.dto.NinVerificationRequest
+import com.foodnova.delivery.kyc.data.remote.dto.VerificationStatusResponse
 import com.foodnova.delivery.kyc.domain.AddressDocumentType
 import com.foodnova.delivery.kyc.domain.EmergencyRelationship
 import com.foodnova.delivery.kyc.domain.KycRepository
@@ -64,7 +66,54 @@ class VerificationViewModel @Inject constructor(
     }
 
     fun onNinChanged(value: String) {
-        _state.update { it.copy(nin = value.filter(Char::isDigit).take(11)) }
+        _state.update {
+            it.copy(
+                nin = value.filter(Char::isDigit).take(11),
+                ninVerificationState = VerificationStatus.NotStarted,
+                ninVerificationMessage = null,
+                ninConfidenceScore = null
+            )
+        }
+    }
+
+    fun verifyNin(onVerified: () -> Unit) {
+        val current = _state.value
+        if (!current.isNinValid || current.isVerifyingNin) return
+        _state.update {
+            it.copy(
+                isVerifyingNin = true,
+                errorMessage = null,
+                ninVerificationState = VerificationStatus.InProgress,
+                ninVerificationMessage = "Checking NIN..."
+            )
+        }
+        viewModelScope.launch {
+            when (val result = kycRepository.verifyNin(NinVerificationRequest(nin = current.nin))) {
+                is AppResult.Success -> {
+                    val response = result.value
+                    val status = response.status.toVerificationStatus()
+                    val progress = response.verification?.toProgress() ?: _state.value.progress.copy(identityStatus = status)
+                    _state.update {
+                        it.copy(
+                            isVerifyingNin = false,
+                            ninVerificationState = status,
+                            ninVerificationMessage = response.message,
+                            ninConfidenceScore = response.confidenceScore,
+                            progress = progress
+                        )
+                    }
+                    if (status == VerificationStatus.Approved) onVerified()
+                }
+                is AppResult.Failure -> _state.update {
+                    it.copy(
+                        isVerifyingNin = false,
+                        ninVerificationState = VerificationStatus.Rejected,
+                        ninVerificationMessage = result.message,
+                        errorMessage = result.message
+                    )
+                }
+            }
+        }
     }
 
     fun onSelfieCaptured(reference: String, fileName: String, contentType: String = "image/jpeg") {
@@ -106,7 +155,8 @@ class VerificationViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            progress = it.progress.copy(identityStatus = VerificationStatus.Submitted)
+                            progress = result.value.verification?.toProgress()
+                                ?: it.progress.copy(identityStatus = VerificationStatus.PendingReview)
                         )
                     }
                     onSubmitted()
@@ -139,7 +189,8 @@ class VerificationViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            progress = it.progress.copy(addressStatus = VerificationStatus.PendingReview)
+                            progress = result.value.verification?.toProgress()
+                                ?: it.progress.copy(addressStatus = VerificationStatus.Submitted)
                         )
                     }
                     onSubmitted()
@@ -189,7 +240,8 @@ class VerificationViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             isLoading = false,
-                            progress = it.progress.copy(emergencyContactStatus = VerificationStatus.PendingReview)
+                            progress = result.value.verification?.toProgress()
+                                ?: it.progress.copy(emergencyContactStatus = VerificationStatus.Submitted)
                         )
                     }
                     onSubmitted()
@@ -225,11 +277,18 @@ class VerificationViewModel @Inject constructor(
     }
 }
 
+private fun VerificationStatusResponse.toProgress(): VerificationProgress = VerificationProgress(
+    identityStatus = identityStatus.toVerificationStatus(),
+    addressStatus = addressStatus.toVerificationStatus(),
+    emergencyContactStatus = emergencyContactStatus.toVerificationStatus(),
+    adminApprovalStatus = adminApprovalStatus.toVerificationStatus()
+)
+
 private fun String?.toVerificationStatus(): VerificationStatus = when (this?.lowercase()) {
-    "in_progress", "in-progress", "progress" -> VerificationStatus.InProgress
-    "submitted", "submitted_for_review" -> VerificationStatus.Submitted
-    "pending", "pending_review", "pending-review" -> VerificationStatus.PendingReview
-    "approved" -> VerificationStatus.Approved
-    "rejected" -> VerificationStatus.Rejected
+    "pending", "in_progress", "in-progress", "progress" -> VerificationStatus.InProgress
+    "submitted", "submitted_for_review", "completed" -> VerificationStatus.Submitted
+    "manual_review", "pending_review", "pending-review" -> VerificationStatus.PendingReview
+    "verified", "approved" -> VerificationStatus.Approved
+    "failed", "rejected" -> VerificationStatus.Rejected
     else -> VerificationStatus.NotStarted
 }

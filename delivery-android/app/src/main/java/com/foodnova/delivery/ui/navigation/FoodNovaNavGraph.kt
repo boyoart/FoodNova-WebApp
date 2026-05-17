@@ -99,7 +99,15 @@ fun FoodNovaNavGraph() {
             IdentityVerificationIntroScreen(onContinue = { navController.navigate(DeliveryRoute.KycNinEntry.route) })
         }
         composable(DeliveryRoute.KycNinEntry.route) {
-            NinEntryScreen(viewModel = verificationViewModel, onContinue = { navController.navigate(DeliveryRoute.KycSelfieCapture.route) })
+            NinEntryScreen(
+                viewModel = verificationViewModel,
+                onContinue = {
+                    lastCompletedStep.value = "Identity/KYC"
+                    navController.navigate(DeliveryRoute.KycSubmitted.route) {
+                        popUpTo(DeliveryRoute.KycNinEntry.route) { inclusive = true }
+                    }
+                }
+            )
         }
         composable(DeliveryRoute.KycSelfieCapture.route) {
             SelfieCaptureScreen(
