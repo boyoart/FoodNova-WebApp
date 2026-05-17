@@ -524,6 +524,53 @@
   gap: 0.75rem;
 }
 
+.worker-search-box {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #d7e3da;
+  border-radius: 8px;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+}
+
+.worker-search-box input,
+.worker-review-actions textarea {
+  border: 0;
+  outline: 0;
+  width: 100%;
+}
+
+.worker-detail-drawer {
+  background: rgba(18, 53, 31, 0.3);
+  inset: 0;
+  overflow: auto;
+  padding: 6rem 1rem 2rem;
+  position: fixed;
+  z-index: 30;
+}
+
+.worker-detail-drawer .workforce-card {
+  margin: 0 auto;
+  max-width: 980px;
+}
+
+.document-link-row,
+.status-log-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.document-link-row a {
+  background: #edf7ef;
+  border-radius: 999px;
+  color: #12351f;
+  font-weight: 700;
+  padding: 0.5rem 0.75rem;
+  text-decoration: none;
+}
+
 .worker-review-actions button:nth-child(2),
 .worker-review-actions button:nth-child(3) {
   background: #b3261e;

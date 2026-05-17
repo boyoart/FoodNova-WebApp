@@ -369,6 +369,13 @@ export const adminAPI = {
     return { data: workers, raw: response.data };
   },
   updateWorkerStatus: async (id, payload) => (await api.patch(`/admin/workforce/${id}/status`, payload)).data,
+  getRiderVerificationQueue: async (params = {}) => {
+    const response = await api.get("/admin/rider-verification-queue", { params });
+    const riders = normalizeList(response.data, ["riders"]);
+    return { data: riders, raw: response.data };
+  },
+  getRiderVerificationDetail: async (id) => (await api.get(`/admin/rider-verification-queue/${id}`)).data,
+  reviewRiderVerification: async (id, action, payload = {}) => (await api.post(`/admin/rider-verification-queue/${id}/${action}`, payload)).data,
   getDeliveryOffers: async (params = {}) => {
     const response = await api.get("/admin/delivery-offers", { params });
     const offers = normalizeList(response.data, ["offers"]);

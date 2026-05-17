@@ -57,6 +57,11 @@ from models import (
     DeliveryOffer as DBDeliveryOffer,
     DeliveryWorker as DBDeliveryWorker,
     DeliveryAssignmentLog as DBDeliveryAssignmentLog,
+    Rider as DBRider,
+    RiderKyc as DBRiderKyc,
+    RiderDocument as DBRiderDocument,
+    RiderStatusLog as DBRiderStatusLog,
+    AdminReview as DBAdminReview,
     OperationalZone as DBOperationalZone,
     User as DBUser,
 )
@@ -1621,6 +1626,14 @@ def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
 
 def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     assignment_policy = worker_assignment_policy(worker)
+    review_meta = delivery_worker_review_meta(worker)
+    identity_meta = review_meta.get("identity_verification") or {}
+    address_meta = review_meta.get("address_verification") or {}
+    emergency_meta = review_meta.get("emergency_contact") or {}
+    admin_override = review_meta.get("admin_override") or {}
+    rejection_reason = admin_override.get("note") or identity_meta.get("rejection_reason") or review_meta.get("rejection_reason") or ""
+    submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed"}
+    rider_stage = "approved" if (worker.kyc_status or "") == "APPROVED" else "rejected" if (worker.kyc_status or "") == "REJECTED" else "suspended" if (worker.kyc_status or "") == "SUSPENDED" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
     return {
         "id": worker.id,
         "user_id": worker.user_id,
@@ -1656,6 +1669,8 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "driver_license_number": worker.driver_license_number or "",
         "vehicle_photo_url": worker.vehicle_photo_url or "",
         "kyc_status": worker.kyc_status or "KYC_PENDING",
+        "onboarding_stage": rider_stage,
+        "rejection_reason": rejection_reason,
         "operational_status": worker.operational_status or "OFFLINE",
         "review_note": worker.review_note or "",
         "trust_score": worker.trust_score or 100,
@@ -1680,6 +1695,8 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "assignment_eligibility_reason": assignment_policy["reason"],
         "can_receive_delivery_notifications": assignment_policy["can_receive_delivery_notifications"],
         "can_accept_delivery_requests": assignment_policy["can_accept_delivery_requests"],
+        "can_go_online": (worker.kyc_status or "") == "APPROVED",
+        "wallet_enabled": (worker.kyc_status or "") == "APPROVED",
         "gps_ping_interval_seconds": assignment_policy["gps_ping_interval_seconds"],
         "active_delivery_ping_interval_seconds": assignment_policy["active_delivery_ping_interval_seconds"],
         "approved_at": iso(worker.approved_at),
@@ -2419,6 +2436,200 @@ def set_delivery_worker_review_meta(worker: DBDeliveryWorker, key: str, value: d
     meta[key] = value
     worker.review_note = json_dump(meta)
 
+
+RIDER_ONBOARDING_STAGES = [
+    "account_created", "identity_submitted", "address_uploaded", "emergency_contact_added",
+    "selfie_verified", "admin_review", "approved", "rejected", "suspended",
+]
+
+
+def ensure_rider_records(db, worker: DBDeliveryWorker) -> tuple[Optional[DBRider], Optional[DBRiderKyc]]:
+    if (worker.worker_type or "").lower() != "rider":
+        return None, None
+    rider = db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).first()
+    if not rider:
+        rider = DBRider(delivery_worker_id=worker.id, user_id=worker.user_id, full_name=worker.full_name or "", phone=worker.phone or "", email=worker.email or "")
+        db.add(rider)
+    kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
+    if not kyc:
+        kyc = DBRiderKyc(delivery_worker_id=worker.id)
+        db.add(kyc)
+    db.flush()
+    return rider, kyc
+
+
+def rider_document_upsert(db, worker: DBDeliveryWorker, document_type: str, file_url: str, metadata: dict = None, checksum: str = "") -> None:
+    if (worker.worker_type or "").lower() != "rider" or not file_url:
+        return
+    document = db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id, DBRiderDocument.document_type == document_type).order_by(DBRiderDocument.id.desc()).first()
+    if not document:
+        document = DBRiderDocument(delivery_worker_id=worker.id, document_type=document_type)
+        db.add(document)
+    document.file_url = file_url
+    document.file_name = os.path.basename(str(file_url))
+    document.content_type = (metadata or {}).get("content_type", "")
+    document.checksum = checksum or document.checksum or ""
+    document.status = "submitted"
+    document.metadata_json = json_dump(metadata or {})
+    document.updated_at = datetime.utcnow()
+
+
+def log_rider_status_change(db, worker: DBDeliveryWorker, old_stage: str, new_stage: str, old_status: str, new_status: str, actor: dict = None, note: str = "", metadata: dict = None) -> None:
+    if (worker.worker_type or "").lower() != "rider":
+        return
+    db.add(DBRiderStatusLog(
+        delivery_worker_id=worker.id,
+        old_stage=old_stage or "",
+        new_stage=new_stage or "",
+        old_status=old_status or "",
+        new_status=new_status or "",
+        actor_type="admin" if actor else "system",
+        actor_id=(actor or {}).get("id"),
+        actor_name=(actor or {}).get("full_name") or (actor or {}).get("email") or "FoodNova System",
+        note=note or "",
+        metadata_json=json_dump(metadata or {}),
+    ))
+
+
+def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None, note: str = "") -> str:
+    rider, kyc = ensure_rider_records(db, worker)
+    if not kyc:
+        return ""
+    meta = delivery_worker_review_meta(worker)
+    identity = meta.get("identity_verification") or {}
+    address = meta.get("address_verification") or {}
+    emergency = meta.get("emergency_contact") or {}
+    submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed"}
+    old_stage = kyc.onboarding_stage or "account_created"
+    old_status = worker.kyc_status or "KYC_PENDING"
+    kyc.identity_status = identity.get("status") or kyc.identity_status or "not_started"
+    kyc.address_status = address.get("status") or kyc.address_status or "not_started"
+    kyc.emergency_status = emergency.get("status") or kyc.emergency_status or "not_started"
+    kyc.selfie_status = "verified" if worker.selfie_url and kyc.identity_status in submitted_statuses else "not_started"
+    kyc.nin_last4 = worker.nin_last4 or kyc.nin_last4 or ""
+    kyc.nin_verified = bool(worker.nin_verified)
+    kyc.nin_provider_report_id = worker.nin_report_id or kyc.nin_provider_report_id or ""
+    kyc.nin_provider_message = identity.get("provider_message") or kyc.nin_provider_message or ""
+    kyc.nin_hash = identity.get("nin_hash") or kyc.nin_hash or ""
+    kyc.fraud_flags_json = json_dump(identity.get("fraud_flags") or json_load(kyc.fraud_flags_json, {}))
+    kyc.duplicate_nin = bool((identity.get("fraud_flags") or {}).get("duplicate_nin") or kyc.duplicate_nin)
+    kyc.submitted_at = kyc.submitted_at or (datetime.utcnow() if any((identity, address, emergency)) else None)
+    if kyc.identity_status in submitted_statuses:
+        kyc.identity_verified_at = kyc.identity_verified_at or datetime.utcnow()
+    if kyc.address_status in submitted_statuses:
+        kyc.address_uploaded_at = kyc.address_uploaded_at or datetime.utcnow()
+    if kyc.emergency_status in submitted_statuses:
+        kyc.emergency_contact_added_at = kyc.emergency_contact_added_at or datetime.utcnow()
+    if kyc.selfie_status == "verified":
+        kyc.selfie_verified_at = kyc.selfie_verified_at or datetime.utcnow()
+    if (worker.kyc_status or "") == "APPROVED":
+        stage = "approved"
+    elif (worker.kyc_status or "") == "REJECTED":
+        stage = "rejected"
+    elif (worker.kyc_status or "") == "SUSPENDED":
+        stage = "suspended"
+    elif all([kyc.identity_status in submitted_statuses, kyc.address_status in submitted_statuses, kyc.emergency_status in submitted_statuses, kyc.selfie_status in submitted_statuses]):
+        stage = "admin_review"
+    elif kyc.selfie_status in submitted_statuses:
+        stage = "selfie_verified"
+    elif kyc.emergency_status in submitted_statuses:
+        stage = "emergency_contact_added"
+    elif kyc.address_status in submitted_statuses:
+        stage = "address_uploaded"
+    elif kyc.identity_status in submitted_statuses:
+        stage = "identity_submitted"
+    else:
+        stage = "account_created"
+    kyc.onboarding_stage = stage
+    kyc.admin_review_status = "approved" if stage == "approved" else "rejected" if stage == "rejected" else "suspended" if stage == "suspended" else "pending"
+    kyc.updated_at = datetime.utcnow()
+    if rider:
+        rider.full_name = worker.full_name or rider.full_name
+        rider.phone = worker.phone or rider.phone
+        rider.email = worker.email or rider.email
+        rider.status = "approved" if stage == "approved" else "rejected" if stage == "rejected" else "suspended" if stage == "suspended" else "pending"
+        rider.onboarding_stage = stage
+        rider.can_go_online = stage == "approved"
+        rider.can_accept_orders = stage == "approved"
+        rider.wallet_enabled = stage == "approved"
+        rider.updated_at = datetime.utcnow()
+    if old_stage != stage or old_status != (worker.kyc_status or ""):
+        log_rider_status_change(db, worker, old_stage, stage, old_status, worker.kyc_status or "KYC_PENDING", actor, note)
+    return stage
+
+
+def rider_approval_blockers(db, worker: DBDeliveryWorker) -> List[str]:
+    if (worker.worker_type or "").lower() != "rider":
+        return []
+    sync_rider_onboarding_state(db, worker)
+    kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
+    blockers = []
+    if not kyc or not kyc.nin_verified or kyc.identity_status not in {"verified", "approved"}:
+        blockers.append("NIN must be verified by the provider before approval.")
+    if kyc and kyc.duplicate_nin:
+        blockers.append("Duplicate NIN usage must be cleared before approval.")
+    if kyc and kyc.duplicate_selfie:
+        blockers.append("Duplicate selfie flag must be cleared before approval.")
+    if not worker.selfie_url:
+        blockers.append("Selfie submission is required.")
+    if not worker.id_document_url:
+        blockers.append("Identity document is required.")
+    if not worker.home_address:
+        blockers.append("Address verification is required.")
+    if not worker.emergency_contact_name or not worker.emergency_contact_phone:
+        blockers.append("Emergency contact is required.")
+    if not worker.vehicle_type or not worker.plate_number or not worker.driver_license_number:
+        blockers.append("Vehicle and driver licence details are required.")
+    return blockers
+
+
+def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
+    sync_rider_onboarding_state(db, worker)
+    rider = db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).first()
+    kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
+    documents = db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id).order_by(DBRiderDocument.created_at.desc()).all()
+    logs = db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker.id).order_by(DBRiderStatusLog.created_at.desc()).limit(50).all()
+    reviews = db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).order_by(DBAdminReview.created_at.desc()).limit(30).all()
+    return {
+        "worker": worker_to_dict(worker),
+        "rider": {
+            "id": rider.id if rider else None,
+            "status": rider.status if rider else "pending",
+            "onboarding_stage": rider.onboarding_stage if rider else "account_created",
+            "wallet_enabled": bool(rider.wallet_enabled) if rider else False,
+            "can_go_online": bool(rider.can_go_online) if rider else False,
+            "can_accept_orders": bool(rider.can_accept_orders) if rider else False,
+        },
+        "kyc": {
+            "onboarding_stage": kyc.onboarding_stage if kyc else "account_created",
+            "identity_status": kyc.identity_status if kyc else "not_started",
+            "address_status": kyc.address_status if kyc else "not_started",
+            "emergency_status": kyc.emergency_status if kyc else "not_started",
+            "selfie_status": kyc.selfie_status if kyc else "not_started",
+            "admin_review_status": kyc.admin_review_status if kyc else "pending",
+            "nin_last4": kyc.nin_last4 if kyc else "",
+            "nin_verified": bool(kyc.nin_verified) if kyc else False,
+            "provider_report_id": kyc.nin_provider_report_id if kyc else "",
+            "provider_message": kyc.nin_provider_message if kyc else "",
+            "confidence_score": kyc.confidence_score if kyc else 0,
+            "fraud_flags": json_load(kyc.fraud_flags_json, {}) if kyc else {},
+            "rejection_reason": kyc.rejection_reason if kyc else "",
+            "timestamps": {
+                "submitted_at": iso(kyc.submitted_at) if kyc else "",
+                "identity_verified_at": iso(kyc.identity_verified_at) if kyc else "",
+                "address_uploaded_at": iso(kyc.address_uploaded_at) if kyc else "",
+                "emergency_contact_added_at": iso(kyc.emergency_contact_added_at) if kyc else "",
+                "selfie_verified_at": iso(kyc.selfie_verified_at) if kyc else "",
+                "admin_reviewed_at": iso(kyc.admin_reviewed_at) if kyc else "",
+            },
+        },
+        "documents": [{"id": doc.id, "type": doc.document_type, "url": doc.file_url or "", "file_name": doc.file_name or "", "status": doc.status or "submitted", "metadata": json_load(doc.metadata_json, {}), "created_at": iso(doc.created_at)} for doc in documents],
+        "status_logs": [{"id": log.id, "old_stage": log.old_stage or "", "new_stage": log.new_stage or "", "old_status": log.old_status or "", "new_status": log.new_status or "", "actor_type": log.actor_type or "", "actor_name": log.actor_name or "", "note": log.note or "", "created_at": iso(log.created_at)} for log in logs],
+        "admin_reviews": [{"id": review.id, "admin_name": review.admin_name or "", "action": review.action or "", "reason": review.reason or "", "required_changes": json_load(review.required_changes_json, []), "created_at": iso(review.created_at)} for review in reviews],
+        "approval_blockers": rider_approval_blockers(db, worker),
+    }
+
+
 def _nin_hash(nin: str) -> str:
     return hashlib.sha256(str(nin or "").encode("utf-8")).hexdigest()
 
@@ -2518,6 +2729,8 @@ def verification_status_response(worker: DBDeliveryWorker) -> dict:
             "worker_id": worker.id,
             "worker_type": worker.worker_type or "",
             "kyc_status": worker.kyc_status or "KYC_PENDING",
+            "onboarding_stage": "approved" if worker_approved else "rejected" if (worker.kyc_status or "") == "REJECTED" else "suspended" if (worker.kyc_status or "") == "SUSPENDED" else "admin_review" if review_ready else "identity_submitted" if identity_status in submitted_statuses else "account_created",
+            "rejection_reason": (meta.get("admin_override") or {}).get("note") or meta.get("rejection_reason") or "",
             "identity_verification": identity,
             "address_verification": address,
             "emergency_contact": emergency,
@@ -3173,6 +3386,36 @@ async def delivery_worker_signup(
             operational_status="OFFLINE",
         )
         db.add(worker)
+        db.flush()
+        if worker_type == "rider":
+            set_delivery_worker_review_meta(worker, "identity_verification", {
+                "status": "verified",
+                "verification_state": "verified",
+                "nin_last4": worker.nin_last4,
+                "nin_hash": _nin_hash("".join(ch for ch in str(nin_number or "") if ch.isdigit())),
+                "provider": "checkmyninbvn",
+                "provider_report_id": worker.nin_report_id,
+                "provider_message": nin_result.get("message") or "",
+                "manual_review_required": False,
+                "verified_at": iso(datetime.utcnow()),
+            })
+            set_delivery_worker_review_meta(worker, "address_verification", {"status": "submitted", "document_url": id_document_url, "submitted_at": iso(datetime.utcnow())})
+            set_delivery_worker_review_meta(worker, "emergency_contact", {"status": "completed", "full_name": worker.emergency_contact_name, "phone_number": worker.emergency_contact_phone, "submitted_at": iso(datetime.utcnow())})
+            _, rider_kyc = ensure_rider_records(db, worker)
+            if rider_kyc:
+                rider_kyc.identity_status = "verified"
+                rider_kyc.address_status = "submitted"
+                rider_kyc.emergency_status = "completed"
+                rider_kyc.selfie_status = "verified"
+                rider_kyc.nin_hash = _nin_hash("".join(ch for ch in str(nin_number or "") if ch.isdigit()))
+                rider_kyc.nin_last4 = worker.nin_last4
+                rider_kyc.nin_verified = True
+                rider_kyc.nin_provider_report_id = worker.nin_report_id
+                rider_kyc.nin_response_json = json_dump(nin_result)
+            rider_document_upsert(db, worker, "selfie", selfie_url, {"filename": selfie.filename, "content_type": selfie.content_type or ""}, hashlib.sha256(str(selfie_url or "").encode("utf-8")).hexdigest())
+            rider_document_upsert(db, worker, "identity_document", id_document_url, {"filename": id_document.filename, "content_type": id_document.content_type or ""})
+            rider_document_upsert(db, worker, "vehicle_photo", vehicle_photo_url, {"filename": getattr(vehicle_photo, "filename", ""), "content_type": getattr(vehicle_photo, "content_type", "")})
+            sync_rider_onboarding_state(db, worker, note="Rider submitted complete signup KYC")
         db.commit()
         db.refresh(worker)
         worker_data = worker_to_dict(worker)
@@ -3331,6 +3574,31 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             },
             "manual_review_required": manual_review_required or not verified,
         })
+        if (worker.worker_type or "").lower() == "rider":
+            _, rider_kyc = ensure_rider_records(db, worker)
+            if rider_kyc:
+                rider_kyc.identity_status = status
+                rider_kyc.nin_hash = _nin_hash(clean_nin)
+                rider_kyc.nin_last4 = clean_nin[-4:]
+                rider_kyc.nin_verified = status == "verified"
+                rider_kyc.nin_provider = "checkmyninbvn"
+                rider_kyc.nin_provider_report_id = provider_result.get("report_id") or ""
+                rider_kyc.nin_provider_status = provider_result.get("provider_status") or status
+                rider_kyc.nin_provider_message = provider_message or ""
+                rider_kyc.nin_response_json = json_dump(provider_result or {"error_code": provider_error_code, "message": provider_message})
+                rider_kyc.confidence_score = fraud.get("confidence_score") or 0
+                rider_kyc.fraud_flags_json = json_dump({
+                    "identity_mismatch": fraud.get("identity_mismatch"),
+                    "duplicate_nin": fraud.get("duplicate_nin"),
+                    "suspicious_activity": fraud.get("suspicious_activity"),
+                    "failed_verification": fraud.get("failed_verification"),
+                    "fraud_risk_detected": fraud.get("fraud_risk_detected"),
+                    "provider_error_code": provider_error_code,
+                    "provider_retryable": provider_retryable,
+                })
+                rider_kyc.duplicate_nin = bool(fraud.get("duplicate_nin"))
+                rider_kyc.identity_verified_at = datetime.utcnow() if status == "verified" else rider_kyc.identity_verified_at
+            sync_rider_onboarding_state(db, worker, note="Identity NIN verification updated")
         if manual_review_required or not verified:
             worker.kyc_status = "KYC_PENDING"
 
@@ -3432,6 +3700,9 @@ def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Reques
             operational_status="OFFLINE",
         )
         db.add(worker)
+        db.flush()
+        ensure_rider_records(db, worker)
+        sync_rider_onboarding_state(db, worker, note="Rider account created")
         db.commit()
         db.refresh(user)
         db.refresh(worker)
@@ -3509,6 +3780,10 @@ def delivery_me(request: Request):
 def delivery_verification_status(request: Request):
     db, user, worker = get_delivery_worker_record_for_request(request)
     try:
+        if (worker.worker_type or "").lower() == "rider":
+            sync_rider_onboarding_state(db, worker)
+            db.commit()
+            db.refresh(worker)
         return verification_status_response(worker)
     finally:
         db.close()
@@ -3554,6 +3829,19 @@ async def delivery_identity_kyc(
             "manual_review_required": identity_status != "verified",
         })
         set_delivery_worker_review_meta(worker, "identity_verification", existing_identity)
+        if (worker.worker_type or "").lower() == "rider":
+            selfie_hash = hashlib.sha256(str(selfie_url or "").encode("utf-8")).hexdigest()
+            duplicate_selfie = bool(db.query(DBRiderDocument).filter(DBRiderDocument.document_type == "selfie", DBRiderDocument.checksum == selfie_hash, DBRiderDocument.delivery_worker_id != worker.id).first())
+            _, rider_kyc = ensure_rider_records(db, worker)
+            rider_document_upsert(db, worker, "selfie", selfie_url, {"filename": selfie.filename, "content_type": selfie.content_type or ""}, selfie_hash)
+            if rider_kyc:
+                rider_kyc.selfie_status = "verified"
+                rider_kyc.duplicate_selfie = duplicate_selfie
+                rider_kyc.selfie_verified_at = datetime.utcnow()
+                flags = json_load(rider_kyc.fraud_flags_json, {})
+                flags["duplicate_selfie"] = duplicate_selfie
+                rider_kyc.fraud_flags_json = json_dump(flags)
+            sync_rider_onboarding_state(db, worker, note="Rider selfie submitted")
         worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(worker)
@@ -3601,6 +3889,7 @@ def delivery_emergency_contact(payload: DeliveryEmergencyContactPayload, request
             "submitted_at": iso(datetime.utcnow()),
         })
         auto_activated = maybe_auto_activate_delivery_worker(worker)
+        sync_rider_onboarding_state(db, worker, note="Rider emergency contact added")
         worker.updated_at = datetime.utcnow()
         db.commit()
         print(f"DELIVERY EMERGENCY CONTACT SUBMITTED worker_id={worker.id} relationship={relationship}")
@@ -3649,6 +3938,9 @@ async def delivery_address_verification(
             "submitted_at": iso(datetime.utcnow()),
         })
         auto_activated = maybe_auto_activate_delivery_worker(worker)
+        if (worker.worker_type or "").lower() == "rider":
+            rider_document_upsert(db, worker, "address_proof", document_url, {"document_type": clean_type, "filename": document.filename, "content_type": document.content_type or ""})
+        sync_rider_onboarding_state(db, worker, note="Rider address proof uploaded")
         worker.updated_at = datetime.utcnow()
         db.commit()
         print(f"DELIVERY ADDRESS VERIFICATION SUBMITTED worker_id={worker.id} document_type={clean_type}")
@@ -4789,6 +5081,115 @@ def get_eligible_delivery_workforce(request: Request, delivery_type: Optional[st
         db.close()
 
 
+@app.get("/admin/rider-verification-queue")
+def get_rider_verification_queue(
+    request: Request,
+    status: Optional[str] = None,
+    stage: Optional[str] = None,
+    search: Optional[str] = None,
+):
+    require_workforce_view(request)
+    db = SessionLocal()
+    try:
+        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type == "rider")
+        if status:
+            wanted = status.strip().upper()
+            if wanted in ["PENDING", "ADMIN_REVIEW"]:
+                query = query.filter(DBDeliveryWorker.kyc_status == "KYC_PENDING")
+            elif wanted in ["APPROVED", "REJECTED", "SUSPENDED"]:
+                query = query.filter(DBDeliveryWorker.kyc_status == wanted)
+        if search:
+            term = f"%{search.strip()}%"
+            query = query.filter(or_(DBDeliveryWorker.full_name.ilike(term), DBDeliveryWorker.phone.ilike(term), DBDeliveryWorker.email.ilike(term), DBDeliveryWorker.plate_number.ilike(term)))
+        riders = []
+        for worker in query.order_by(DBDeliveryWorker.updated_at.desc(), DBDeliveryWorker.created_at.desc()).all():
+            detail = rider_detail_payload(db, worker)
+            if stage and detail["kyc"].get("onboarding_stage") != stage:
+                continue
+            riders.append(detail)
+        return {"success": True, "riders": riders, "data": riders, "stages": RIDER_ONBOARDING_STAGES}
+    finally:
+        db.close()
+
+
+@app.get("/admin/rider-verification-queue/{worker_id}")
+def get_rider_verification_detail(worker_id: int, request: Request):
+    require_workforce_view(request)
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type == "rider").first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Rider verification profile not found")
+        return {"success": True, "rider": rider_detail_payload(db, worker)}
+    finally:
+        db.close()
+
+
+@app.post("/admin/rider-verification-queue/{worker_id}/{action}")
+def review_rider_verification(worker_id: int, action: str, payload: WorkerReviewPayload, request: Request):
+    admin = require_workforce_manage(request)
+    action = (action or "").strip().lower().replace("-", "_")
+    action_map = {
+        "approve": "APPROVED",
+        "reject": "REJECTED",
+        "request_resubmission": "KYC_PENDING",
+        "suspend": "SUSPENDED",
+    }
+    if action not in action_map:
+        raise HTTPException(status_code=400, detail="Action must be approve, reject, request_resubmission, or suspend.")
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type == "rider").first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Rider verification profile not found")
+        new_status = action_map[action]
+        if new_status == "APPROVED":
+            blockers = rider_approval_blockers(db, worker)
+            if blockers:
+                raise HTTPException(status_code=422, detail="Rider cannot be approved yet: " + " ".join(blockers))
+        old_data = rider_detail_payload(db, worker)
+        review_note = (payload.review_note or "").strip()
+        worker.kyc_status = new_status
+        if new_status == "APPROVED":
+            worker.operational_status = "OFFLINE"
+            worker.approved_at = datetime.utcnow()
+            worker.approved_by_admin_id = admin.get("id")
+            worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
+            worker.suspended_at = None
+        elif new_status == "SUSPENDED":
+            worker.operational_status = "OFFLINE"
+            worker.suspended_at = datetime.utcnow()
+        else:
+            worker.operational_status = "OFFLINE"
+        meta = delivery_worker_review_meta(worker)
+        meta["admin_override"] = {"status": new_status, "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}
+        if new_status == "REJECTED":
+            meta["rejection_reason"] = review_note
+        worker.review_note = json_dump(meta)
+        worker.updated_at = datetime.utcnow()
+        _, rider_kyc = ensure_rider_records(db, worker)
+        if rider_kyc:
+            rider_kyc.rejection_reason = review_note if new_status == "REJECTED" else rider_kyc.rejection_reason
+            rider_kyc.resubmission_requested = new_status == "KYC_PENDING"
+            rider_kyc.admin_reviewed_at = datetime.utcnow()
+        db.add(DBAdminReview(
+            delivery_worker_id=worker.id,
+            admin_id=admin.get("id"),
+            admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+            action=action,
+            reason=review_note,
+            metadata_json=json_dump({"status": new_status}),
+        ))
+        sync_rider_onboarding_state(db, worker, admin, f"Rider verification {action}")
+        db.commit()
+        db.refresh(worker)
+        data = rider_detail_payload(db, worker)
+        create_admin_audit_log(request, admin, f"rider_verification_{action}", "delivery_worker", worker.id, f"Admin {action.replace('_', ' ')} for rider {worker.full_name}", {"before": old_data, "after": data})
+        return {"success": True, "rider": data, "data": data}
+    finally:
+        db.close()
+
+
 @app.patch("/admin/workforce/{worker_id}/status")
 def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request: Request):
     admin = require_workforce_manage(request)
@@ -4801,6 +5202,10 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
         if not worker:
             raise HTTPException(status_code=404, detail="Delivery worker not found")
         old_data = worker_to_dict(worker)
+        if (worker.worker_type or "").lower() == "rider" and new_status == "APPROVED":
+            blockers = rider_approval_blockers(db, worker)
+            if blockers:
+                raise HTTPException(status_code=422, detail="Rider cannot be approved yet: " + " ".join(blockers))
         review_meta = delivery_worker_review_meta(worker)
         if payload.review_note is not None:
             review_meta["admin_override"] = {
@@ -4823,6 +5228,21 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
         if new_status in ["REJECTED", "KYC_PENDING"]:
             worker.operational_status = "OFFLINE"
         worker.updated_at = datetime.utcnow()
+        if (worker.worker_type or "").lower() == "rider":
+            _, rider_kyc = ensure_rider_records(db, worker)
+            if rider_kyc:
+                rider_kyc.rejection_reason = (payload.review_note or "").strip() if new_status == "REJECTED" else rider_kyc.rejection_reason
+                rider_kyc.resubmission_requested = new_status == "KYC_PENDING"
+                rider_kyc.admin_reviewed_at = datetime.utcnow()
+            db.add(DBAdminReview(
+                delivery_worker_id=worker.id,
+                admin_id=admin.get("id"),
+                admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+                action=new_status.lower(),
+                reason=(payload.review_note or "").strip(),
+                metadata_json=json_dump({"previous": old_data.get("kyc_status"), "new": new_status}),
+            ))
+            sync_rider_onboarding_state(db, worker, admin, f"Admin set rider to {new_status}")
         db.commit()
         db.refresh(worker)
         data = worker_to_dict(worker)

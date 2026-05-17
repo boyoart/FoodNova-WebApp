@@ -11,6 +11,7 @@ const adminTools = [
   { path: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.', icon: ClipboardList, permission: 'orders:view' },
   { path: '/admin/cancellations', title: 'Cancellation Requests', description: 'Review cancellation and refund requests.', icon: Undo2, permissions: ['cancellations:view', 'cancellations:manage'] },
   { path: '/admin/riders', title: 'Delivery Riders', description: 'Manage riders and assign deliveries.', icon: Truck, permissions: ['orders:delivery', 'delivery:manage'] },
+  { path: '/admin/rider-verification', title: 'Rider Verification Queue', description: 'Approve KYC, documents, selfie, and fraud checks.', icon: ShieldCheck, permissions: ['workforce:view', 'workforce:manage', 'delivery:manage', 'riders:manage'] },
   { path: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.', icon: Package, permission: 'stock:view' },
   { path: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.', icon: CreditCard, permission: 'payments:view' },
   { path: '/admin/broadcasts', title: 'Broadcasts', description: 'Send announcements to customers.', icon: BellRing, permission: 'broadcasts:view' },

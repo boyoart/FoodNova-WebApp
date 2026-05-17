@@ -185,6 +185,117 @@ class DeliveryWorker(Base):
     user = relationship("User")
 
 
+class Rider(Base):
+    __tablename__ = "riders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, unique=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    full_name = Column(String(150), default="", index=True)
+    phone = Column(String(50), default="", index=True)
+    email = Column(String(150), default="", index=True)
+    status = Column(String(30), default="pending", index=True)
+    onboarding_stage = Column(String(50), default="account_created", index=True)
+    wallet_enabled = Column(Boolean, default=False)
+    can_go_online = Column(Boolean, default=False)
+    can_accept_orders = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    worker = relationship("DeliveryWorker")
+    user = relationship("User")
+
+
+class RiderKyc(Base):
+    __tablename__ = "rider_kyc"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, unique=True, index=True)
+    onboarding_stage = Column(String(50), default="account_created", index=True)
+    identity_status = Column(String(30), default="not_started", index=True)
+    address_status = Column(String(30), default="not_started", index=True)
+    emergency_status = Column(String(30), default="not_started", index=True)
+    selfie_status = Column(String(30), default="not_started", index=True)
+    admin_review_status = Column(String(30), default="pending", index=True)
+    nin_hash = Column(String(80), default="", index=True)
+    nin_last4 = Column(String(4), default="")
+    nin_verified = Column(Boolean, default=False)
+    nin_provider = Column(String(80), default="checkmyninbvn")
+    nin_provider_report_id = Column(String(120), default="")
+    nin_provider_status = Column(String(80), default="")
+    nin_provider_message = Column(Text, default="")
+    nin_response_json = Column(Text, default="{}")
+    confidence_score = Column(Float, default=0)
+    fraud_flags_json = Column(Text, default="{}")
+    duplicate_nin = Column(Boolean, default=False)
+    duplicate_selfie = Column(Boolean, default=False)
+    rejection_reason = Column(Text, default="")
+    resubmission_requested = Column(Boolean, default=False)
+    submitted_at = Column(DateTime, nullable=True)
+    identity_verified_at = Column(DateTime, nullable=True)
+    address_uploaded_at = Column(DateTime, nullable=True)
+    emergency_contact_added_at = Column(DateTime, nullable=True)
+    selfie_verified_at = Column(DateTime, nullable=True)
+    admin_reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    worker = relationship("DeliveryWorker")
+
+
+class RiderDocument(Base):
+    __tablename__ = "rider_documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, index=True)
+    document_type = Column(String(60), nullable=False, index=True)
+    file_url = Column(Text, default="")
+    file_name = Column(String(255), default="")
+    content_type = Column(String(120), default="")
+    checksum = Column(String(80), default="", index=True)
+    status = Column(String(30), default="submitted", index=True)
+    metadata_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    worker = relationship("DeliveryWorker")
+
+
+class RiderStatusLog(Base):
+    __tablename__ = "rider_status_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, index=True)
+    old_stage = Column(String(50), default="")
+    new_stage = Column(String(50), default="")
+    old_status = Column(String(30), default="")
+    new_status = Column(String(30), default="")
+    actor_type = Column(String(30), default="system")
+    actor_id = Column(Integer, nullable=True)
+    actor_name = Column(String(150), default="")
+    note = Column(Text, default="")
+    metadata_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    worker = relationship("DeliveryWorker")
+
+
+class AdminReview(Base):
+    __tablename__ = "admin_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, index=True)
+    admin_id = Column(Integer, nullable=True, index=True)
+    admin_name = Column(String(150), default="")
+    action = Column(String(50), nullable=False, index=True)
+    reason = Column(Text, default="")
+    required_changes_json = Column(Text, default="[]")
+    metadata_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    worker = relationship("DeliveryWorker")
+
+
 class OperationalZone(Base):
     __tablename__ = "operational_zones"
 

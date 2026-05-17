@@ -28,6 +28,7 @@ import AdminCustomers from './pages/AdminCustomers'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminUsers from './pages/AdminUsers'
 import AdminRiders from './pages/AdminRiders'
+import AdminRiderVerificationQueue from './pages/AdminRiderVerificationQueue'
 import AdminCancellations from './pages/AdminCancellations'
 import AdminExports from './pages/AdminExports'
 import AdminReports from './pages/AdminReports'
@@ -169,6 +170,7 @@ function App() {
               <Route path="/admin/orders" element={<AdminOrders />} />
               <Route path="/admin/cancellations" element={<AdminCancellations />} />
               <Route path="/admin/riders" element={<AdminRiders />} />
+              <Route path="/admin/rider-verification" element={<AdminRiderVerificationQueue />} />
               <Route path="/admin/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/admin/stock" element={<AdminStock />} />
               <Route path="/admin/payments" element={<AdminPayments />} />
