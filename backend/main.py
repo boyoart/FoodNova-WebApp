@@ -2376,15 +2376,22 @@ def verification_status_response(worker: DBDeliveryWorker) -> dict:
     address = meta.get("address_verification") or {}
     emergency = meta.get("emergency_contact") or {}
     worker_approved = (worker.kyc_status or "") == "APPROVED"
+    submitted_statuses = {"submitted", "pending_review", "approved"}
+    identity_status = "approved" if worker_approved else identity.get("status") or "not_started"
+    address_status = "approved" if worker_approved else address.get("status") or "not_started"
+    emergency_status = "approved" if worker_approved else emergency.get("status") or "not_started"
+    review_ready = (
+        identity_status in submitted_statuses
+        and address_status in submitted_statuses
+        and emergency_status in submitted_statuses
+    )
     return {
         "success": True,
-        "identity_status": "approved" if worker_approved else identity.get("status") or "not_started",
-        "address_status": address.get("status") or "not_started",
-        "emergency_contact_status": emergency.get("status") or "not_started",
-        "admin_approval_status": "approved" if worker_approved else "pending_review",
-        "can_activate_deliveries": worker_approved
-            and address.get("status") == "approved"
-            and emergency.get("status") == "approved",
+        "identity_status": identity_status,
+        "address_status": address_status,
+        "emergency_contact_status": emergency_status,
+        "admin_approval_status": "approved" if worker_approved else "pending_review" if review_ready else "not_started",
+        "can_activate_deliveries": worker_approved,
         "data": {
             "worker_id": worker.id,
             "worker_type": worker.worker_type or "",

@@ -16,6 +16,7 @@ sealed class DeliveryRoute(val route: String) {
     data object KycSubmitted : DeliveryRoute("kyc/submitted")
     data object KycAddress : DeliveryRoute("kyc/address")
     data object KycEmergency : DeliveryRoute("kyc/emergency")
+    data object KycAwaitingApproval : DeliveryRoute("kyc/awaiting-approval")
 
     // Operations graph
     data object OperationsHome : DeliveryRoute("ops/home")

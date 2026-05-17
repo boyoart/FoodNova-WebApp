@@ -3,6 +3,8 @@ package com.foodnova.delivery.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -19,8 +21,10 @@ import com.foodnova.delivery.kyc.presentation.identity.NinEntryScreen
 import com.foodnova.delivery.kyc.presentation.identity.SelfieCaptureScreen
 import com.foodnova.delivery.kyc.presentation.identity.VerificationSubmittedScreen
 import com.foodnova.delivery.kyc.presentation.verification.AddressVerificationScreen
+import com.foodnova.delivery.kyc.presentation.verification.AwaitingAdminApprovalScreen
 import com.foodnova.delivery.kyc.presentation.verification.EmergencyContactScreen
 import com.foodnova.delivery.kyc.presentation.verification.VerificationViewModel
+import com.foodnova.delivery.kyc.presentation.verification.nextKycRoute
 import com.foodnova.delivery.ui.splash.SplashScreen
 
 @Composable
@@ -30,8 +34,22 @@ fun FoodNovaNavGraph() {
     val verificationViewModel: VerificationViewModel = hiltViewModel()
     val onboardingState by onboardingViewModel.state.collectAsStateWithLifecycle()
     val verificationState by verificationViewModel.state.collectAsStateWithLifecycle()
+    val lastCompletedStep = remember { mutableStateOf("KYC step") }
 
     LaunchedEffect(Unit) { verificationViewModel.refreshVerificationStatus() }
+
+    fun navigateToNextKycStep() {
+        navController.navigate(verificationViewModel.state.value.progress.nextKycRoute()) {
+            popUpTo(DeliveryRoute.KycSubmitted.route) { inclusive = true }
+            launchSingleTop = true
+        }
+    }
+
+    fun navigateToOperationsHome() {
+        navController.navigate(DeliveryRoute.OperationsHome.route) {
+            popUpTo(DeliveryRoute.KycHub.route) { inclusive = false }
+        }
+    }
 
     NavHost(navController = navController, startDestination = DeliveryRoute.Splash.route) {
         composable(DeliveryRoute.Splash.route) {
@@ -69,9 +87,11 @@ fun FoodNovaNavGraph() {
         composable(DeliveryRoute.KycHub.route) {
             VerificationRequiredScreen(
                 progress = verificationState.progress,
-                onIdentityVerification = { navController.navigate(DeliveryRoute.KycIdentityIntro.route) },
-                onAddressVerification = { navController.navigate(DeliveryRoute.KycAddress.route) },
-                onEmergencyContact = { navController.navigate(DeliveryRoute.KycEmergency.route) },
+                isLoading = verificationState.isLoading,
+                onContinueKyc = { navigateToNextKycStep() },
+                onEditIdentity = { navController.navigate(DeliveryRoute.KycIdentityIntro.route) },
+                onEditAddress = { navController.navigate(DeliveryRoute.KycAddress.route) },
+                onEditEmergencyContact = { navController.navigate(DeliveryRoute.KycEmergency.route) },
                 onContinueToDashboard = { navController.navigate(DeliveryRoute.OperationsHome.route) }
             )
         }
@@ -82,23 +102,58 @@ fun FoodNovaNavGraph() {
             NinEntryScreen(viewModel = verificationViewModel, onContinue = { navController.navigate(DeliveryRoute.KycSelfieCapture.route) })
         }
         composable(DeliveryRoute.KycSelfieCapture.route) {
-            SelfieCaptureScreen(viewModel = verificationViewModel, onSubmitted = { navController.navigate(DeliveryRoute.KycSubmitted.route) })
+            SelfieCaptureScreen(
+                viewModel = verificationViewModel,
+                onSubmitted = {
+                    lastCompletedStep.value = "Identity/KYC"
+                    navController.navigate(DeliveryRoute.KycSubmitted.route) {
+                        popUpTo(DeliveryRoute.KycSelfieCapture.route) { inclusive = true }
+                    }
+                }
+            )
         }
         composable(DeliveryRoute.KycSubmitted.route) {
-            VerificationSubmittedScreen(onDone = { navController.navigate(DeliveryRoute.OperationsHome.route) })
+            VerificationSubmittedScreen(
+                completedStep = lastCompletedStep.value,
+                nextStep = verificationState.progress.nextStep,
+                onDone = { navigateToNextKycStep() }
+            )
         }
         composable(DeliveryRoute.KycAddress.route) {
-            AddressVerificationScreen(viewModel = verificationViewModel, onSubmitted = { navController.popBackStack() })
+            AddressVerificationScreen(
+                viewModel = verificationViewModel,
+                onSubmitted = {
+                    lastCompletedStep.value = "Address document"
+                    navController.navigate(DeliveryRoute.KycSubmitted.route) {
+                        popUpTo(DeliveryRoute.KycAddress.route) { inclusive = true }
+                    }
+                }
+            )
         }
         composable(DeliveryRoute.KycEmergency.route) {
-            EmergencyContactScreen(viewModel = verificationViewModel, onSubmitted = { navController.popBackStack() })
+            EmergencyContactScreen(
+                viewModel = verificationViewModel,
+                onSubmitted = {
+                    lastCompletedStep.value = "Emergency contact"
+                    navController.navigate(DeliveryRoute.KycSubmitted.route) {
+                        popUpTo(DeliveryRoute.KycEmergency.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+        composable(DeliveryRoute.KycAwaitingApproval.route) {
+            AwaitingAdminApprovalScreen(
+                viewModel = verificationViewModel,
+                onDashboard = { navigateToOperationsHome() }
+            )
         }
         composable(DeliveryRoute.OperationsHome.route) {
+            LaunchedEffect(Unit) { verificationViewModel.refreshVerificationStatus() }
             DeliveryDashboardScreen(
                 progress = verificationState.progress,
                 workerName = onboardingState.fullName.ifBlank { "FoodNova Partner" },
                 workerType = onboardingState.workerType.name.lowercase().replaceFirstChar { it.titlecase() },
-                onIdentityVerification = { navController.navigate(DeliveryRoute.KycIdentityIntro.route) }
+                onContinueKyc = { navigateToNextKycStep() }
             )
         }
     }

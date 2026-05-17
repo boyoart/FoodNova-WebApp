@@ -9,6 +9,14 @@ enum class VerificationStatus {
     Rejected
 }
 
+enum class KycStep {
+    Identity,
+    Address,
+    EmergencyContact,
+    AdminApproval,
+    ActivationComplete
+}
+
 data class VerificationProgress(
     val identityStatus: VerificationStatus = VerificationStatus.NotStarted,
     val addressStatus: VerificationStatus = VerificationStatus.NotStarted,
@@ -26,8 +34,22 @@ data class VerificationProgress(
     val totalSteps: Int = 4
 
     val canActivateDeliveries: Boolean
-        get() = identityStatus == VerificationStatus.Approved &&
-            addressStatus == VerificationStatus.Approved &&
-            emergencyContactStatus == VerificationStatus.Approved &&
-            adminApprovalStatus == VerificationStatus.Approved
+        get() = adminApprovalStatus == VerificationStatus.Approved
+
+    val nextStep: KycStep
+        get() = when {
+            !identityStatus.isSubmittedOrApproved -> KycStep.Identity
+            !addressStatus.isSubmittedOrApproved -> KycStep.Address
+            !emergencyContactStatus.isSubmittedOrApproved -> KycStep.EmergencyContact
+            adminApprovalStatus != VerificationStatus.Approved -> KycStep.AdminApproval
+            else -> KycStep.ActivationComplete
+        }
 }
+
+val VerificationStatus.isSubmittedOrApproved: Boolean
+    get() = this == VerificationStatus.Submitted ||
+        this == VerificationStatus.PendingReview ||
+        this == VerificationStatus.Approved
+
+val VerificationStatus.isLockedComplete: Boolean
+    get() = isSubmittedOrApproved

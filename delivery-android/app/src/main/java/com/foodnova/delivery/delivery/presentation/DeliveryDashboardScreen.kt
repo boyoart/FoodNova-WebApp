@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.foodnova.delivery.kyc.domain.VerificationProgress
 import com.foodnova.delivery.kyc.domain.VerificationStatus
+import com.foodnova.delivery.kyc.presentation.verification.title
 import com.foodnova.delivery.kyc.presentation.verification.VerificationChecklist
 import com.foodnova.delivery.ui.components.FoodNovaPrimaryButton
 import com.foodnova.delivery.ui.components.FoodNovaStatusMark
@@ -29,7 +30,7 @@ fun DeliveryDashboardScreen(
     progress: VerificationProgress,
     workerName: String,
     workerType: String,
-    onIdentityVerification: () -> Unit
+    onContinueKyc: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -49,10 +50,20 @@ fun DeliveryDashboardScreen(
                 OperationsHeader(workerName = workerName, workerType = workerType, progress = progress)
             }
             item {
-                ActivationCard(progress = progress, onIdentityVerification = onIdentityVerification)
+                ActivationCard(progress = progress, onContinueKyc = onContinueKyc)
             }
             item { VerificationChecklist(progress = progress) }
-            item { LockedFeatureCard("Go Online", "Go online mode unlocks after KYC approval.") }
+            item {
+                LockedFeatureCard(
+                    title = if (progress.canActivateDeliveries) "Go Online" else "Go Online",
+                    subtitle = if (progress.canActivateDeliveries) {
+                        "Unlocked. Online mode is ready for the next operations rollout."
+                    } else {
+                        "Go online mode unlocks after admin approval."
+                    },
+                    locked = !progress.canActivateDeliveries
+                )
+            }
             item { LockedFeatureCard("Delivery Offers", "Live delivery offers will appear here.") }
             item { LockedFeatureCard("Earnings", "Daily/weekly earnings summaries coming soon.") }
             item { LockedFeatureCard("Emergency Alerts", "Emergency trigger and hotline is prepared for production rollout.") }
@@ -83,7 +94,7 @@ private fun OperationsHeader(workerName: String, workerType: String, progress: V
 }
 
 @Composable
-private fun ActivationCard(progress: VerificationProgress, onIdentityVerification: () -> Unit) {
+private fun ActivationCard(progress: VerificationProgress, onContinueKyc: () -> Unit) {
     Card {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -97,7 +108,7 @@ private fun ActivationCard(progress: VerificationProgress, onIdentityVerificatio
             FoodNovaPrimaryButton(
                 text = progress.activationButtonLabel(),
                 enabled = !progress.canActivateDeliveries,
-                onClick = onIdentityVerification
+                onClick = onContinueKyc
             )
             Text("Completed ${progress.completedSteps} of ${progress.totalSteps} checks", style = MaterialTheme.typography.labelMedium)
         }
@@ -116,7 +127,7 @@ private fun StatusPill(label: String) {
 }
 
 @Composable
-private fun LockedFeatureCard(title: String, subtitle: String) {
+private fun LockedFeatureCard(title: String, subtitle: String, locked: Boolean = true) {
     Card {
         Row(
             modifier = Modifier
@@ -125,7 +136,11 @@ private fun LockedFeatureCard(title: String, subtitle: String) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FoodNovaStatusMark(label = "L", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
+            FoodNovaStatusMark(
+                label = if (locked) "L" else "OK",
+                color = if (locked) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(24.dp)
+            )
             Column {
                 Text(title, style = MaterialTheme.typography.titleSmall)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall)
@@ -154,7 +169,7 @@ private fun VerificationProgress.dashboardStatusMessage(): String = when (dashbo
 private fun VerificationProgress.activationButtonLabel(): String = when (dashboardStatusLabel()) {
     "Rejected" -> "Update KYC"
     "Pending Review" -> "View KYC Status"
-    "Submitted" -> "Continue KYC"
+    "Submitted" -> "Continue KYC: ${nextStep.title()}"
     "Not Started" -> "Start KYC"
     else -> "Activated"
 }
