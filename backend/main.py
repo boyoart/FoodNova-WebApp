@@ -2372,12 +2372,13 @@ def set_delivery_worker_review_meta(worker: DBDeliveryWorker, key: str, value: d
 
 def verification_status_response(worker: DBDeliveryWorker) -> dict:
     meta = delivery_worker_review_meta(worker)
+    identity = meta.get("identity_verification") or {}
     address = meta.get("address_verification") or {}
     emergency = meta.get("emergency_contact") or {}
     worker_approved = (worker.kyc_status or "") == "APPROVED"
     return {
         "success": True,
-        "identity_status": "approved" if worker_approved else "not_started",
+        "identity_status": "approved" if worker_approved else identity.get("status") or "not_started",
         "address_status": address.get("status") or "not_started",
         "emergency_contact_status": emergency.get("status") or "not_started",
         "admin_approval_status": "approved" if worker_approved else "pending_review",
@@ -2388,6 +2389,7 @@ def verification_status_response(worker: DBDeliveryWorker) -> dict:
             "worker_id": worker.id,
             "worker_type": worker.worker_type or "",
             "kyc_status": worker.kyc_status or "KYC_PENDING",
+            "identity_verification": identity,
             "address_verification": address,
             "emergency_contact": emergency,
         },
@@ -3229,6 +3231,59 @@ def delivery_verification_status(request: Request):
     db, user, worker = get_delivery_worker_record_for_request(request)
     try:
         return verification_status_response(worker)
+    finally:
+        db.close()
+
+
+@app.post("/delivery/kyc", status_code=201)
+async def delivery_identity_kyc(
+    request: Request,
+    nin: str = Form(...),
+    selfie: UploadFile = File(...),
+):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        clean_nin = "".join(ch for ch in str(nin or "") if ch.isdigit())
+        if len(clean_nin) != 11:
+            raise HTTPException(status_code=422, detail="NIN must be exactly 11 digits.")
+        if not selfie or not selfie.filename:
+            raise HTTPException(status_code=422, detail="Selfie image is required.")
+        if not str(selfie.content_type or "").startswith("image/"):
+            raise HTTPException(status_code=422, detail="Selfie must be a JPG, PNG, or WEBP image.")
+
+        selfie_url = await save_workforce_upload(selfie, False, "foodnova/workforce/selfies")
+        if not selfie_url:
+            raise HTTPException(status_code=400, detail="Unable to upload selfie image.")
+
+        worker.id_type = worker.id_type or "NIN"
+        worker.id_number = worker.id_number or clean_nin[-4:]
+        worker.nin_last4 = clean_nin[-4:]
+        worker.selfie_url = selfie_url
+        worker.profile_photo_url = worker.profile_photo_url or selfie_url
+        if (worker.kyc_status or "") in ["", "NOT_STARTED", "KYC_NOT_STARTED"]:
+            worker.kyc_status = "KYC_PENDING"
+        set_delivery_worker_review_meta(worker, "identity_verification", {
+            "status": "pending_review",
+            "nin_last4": clean_nin[-4:],
+            "selfie_url": selfie_url,
+            "filename": selfie.filename,
+            "content_type": selfie.content_type or "",
+            "submitted_at": iso(datetime.utcnow()),
+            "manual_review": True,
+        })
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(worker)
+        print(f"DELIVERY IDENTITY KYC SUBMITTED worker_id={worker.id} nin_last4={worker.nin_last4}")
+        return {
+            "success": True,
+            "status": "pending_review",
+            "pending_review": True,
+            "message": "Identity verification submitted for review.",
+            "selfie_url": selfie_url,
+            "verification": verification_status_response(worker),
+            "worker": worker_to_dict(worker),
+        }
     finally:
         db.close()
 

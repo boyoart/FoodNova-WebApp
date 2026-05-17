@@ -3,8 +3,12 @@ package com.foodnova.delivery.kyc.presentation.identity
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.net.Uri
+import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -66,6 +70,7 @@ import com.foodnova.delivery.kyc.presentation.verification.VerificationViewModel
 import com.foodnova.delivery.ui.components.FoodNovaPrimaryButton
 import com.foodnova.delivery.ui.components.FoodNovaStatusMark
 import java.io.File
+import java.io.FileOutputStream
 
 @Composable
 fun SelfieCaptureScreen(
@@ -129,6 +134,7 @@ fun SelfieCaptureScreen(
                                 object : ImageCapture.OnImageSavedCallback {
                                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                                         isCapturing = false
+                                        runCatching { normalizeSelfieOrientation(file) }
                                         viewModel.onSelfieCaptured(
                                             reference = Uri.fromFile(file).toString(),
                                             fileName = file.name
@@ -196,7 +202,7 @@ private fun CameraCaptureCard(
             }
 
             Text(
-                text = captureError ?: "Remove sunglasses, face a light source, and keep your head inside the circle.",
+                text = captureError ?: "Hold the phone upright, face a light source, and keep your head inside the guide.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -213,10 +219,15 @@ private fun CameraCaptureCard(
 private fun CameraPreview(onImageCaptureReady: (ImageCapture) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    val previewView = remember { PreviewView(context) }
+    val previewView = remember {
+        PreviewView(context).apply {
+            scaleType = PreviewView.ScaleType.FILL_CENTER
+        }
+    }
     val imageCapture = remember {
         ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+            .setTargetRotation(Surface.ROTATION_0)
             .build()
     }
 
@@ -228,6 +239,7 @@ private fun CameraPreview(onImageCaptureReady: (ImageCapture) -> Unit) {
             val preview = Preview.Builder().build().also {
                 it.surfaceProvider = previewView.surfaceProvider
             }
+            imageCapture.targetRotation = previewView.display?.rotation ?: Surface.ROTATION_0
             cameraProvider.unbindAll()
             cameraProvider.bindToLifecycle(
                 lifecycleOwner,
@@ -284,7 +296,7 @@ private fun PermissionPrompt(onRequestPermission: () -> Unit) {
     ) {
         FoodNovaStatusMark(label = "CA", color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(42.dp))
         Text("Camera permission is required", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text("FoodNova needs one front-camera selfie for KYC review.", style = MaterialTheme.typography.bodyMedium)
+        Text("FoodNova needs one upright front-camera selfie for KYC review.", style = MaterialTheme.typography.bodyMedium)
         Spacer(modifier = Modifier.height(14.dp))
         OutlinedButton(onClick = onRequestPermission) {
             Text("Allow camera")
@@ -342,7 +354,10 @@ private fun SelfieReviewCard(selfieReference: String, onRetake: () -> Unit) {
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 FoodNovaStatusMark(label = "SC", color = MaterialTheme.colorScheme.primary)
-                Text("Selfie ready for secure review", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Column {
+                    Text("Selfie ready for secure review", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Portrait orientation confirmed", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             OutlinedButton(
                 onClick = onRetake,
@@ -358,4 +373,31 @@ private fun SelfieReviewCard(selfieReference: String, onRetake: () -> Unit) {
 private fun Context.createSelfieFile(): File {
     val directory = File(cacheDir, "kyc-selfies").apply { mkdirs() }
     return File(directory, "foodnova-selfie-${System.currentTimeMillis()}.jpg")
+}
+
+private fun normalizeSelfieOrientation(file: File) {
+    val exif = runCatching { ExifInterface(file.absolutePath) }.getOrNull() ?: return
+    val rotation = when (exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)) {
+        ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+        ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+        ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+        else -> 0f
+    }
+    if (rotation == 0f) return
+
+    val source = BitmapFactory.decodeFile(file.absolutePath) ?: return
+    val matrix = Matrix().apply { postRotate(rotation) }
+    val rotated = Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
+    FileOutputStream(file, false).use { output ->
+        rotated.compress(Bitmap.CompressFormat.JPEG, 92, output)
+    }
+    if (rotated != source) source.recycle()
+    rotated.recycle()
+
+    runCatching {
+        ExifInterface(file.absolutePath).apply {
+            setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+            saveAttributes()
+        }
+    }
 }
