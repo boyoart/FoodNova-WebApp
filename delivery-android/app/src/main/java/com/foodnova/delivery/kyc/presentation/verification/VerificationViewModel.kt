@@ -102,7 +102,7 @@ class VerificationViewModel @Inject constructor(
                             progress = progress
                         )
                     }
-                    if (status == VerificationStatus.Approved) onVerified()
+                    if (status == VerificationStatus.Approved || status == VerificationStatus.PendingReview) onVerified()
                 }
                 is AppResult.Failure -> _state.update {
                     it.copy(

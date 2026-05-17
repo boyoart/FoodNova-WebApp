@@ -30,7 +30,7 @@ from email_service import (
     send_customer_order_email,
     send_low_stock_alert,
 )
-from services.ninbvnportal_service import CheckMyNINBVNError, validate_checkmyninbvn_config, verify_nin
+from services.ninbvnportal_service import CheckMyNINBVNError, checkmyninbvn_config, validate_checkmyninbvn_config, verify_nin
 
 try:
     import firebase_admin
@@ -3250,6 +3250,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
         provider_error_code = ""
         provider_retryable = False
         provider_http_status = None
+        provider_fallback_manual_review = False
         try:
             provider_result = verify_nin(clean_nin, True)
             verified = bool(provider_result.get("verified"))
@@ -3279,7 +3280,8 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 "invalid_provider_response",
                 "provider_error",
             ]:
-                raise HTTPException(status_code=error.status_code, detail=provider_message)
+                provider_message = "Automatic NIN verification is temporarily unavailable. Continue with manual review."
+                provider_fallback_manual_review = True
 
         fraud = detect_nin_fraud_flags(db, worker, clean_nin, provider_data, verified)
         manual_review_required = bool(
@@ -3288,7 +3290,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             or fraud.get("suspicious_activity")
             or fraud.get("fraud_risk_detected")
         )
-        status = "verified" if verified and not manual_review_required else "manual_review" if verified else "failed"
+        status = "verified" if verified and not manual_review_required else "manual_review" if verified or provider_fallback_manual_review else "failed"
 
         worker.nin_verified = status == "verified"
         worker.nin_report_id = provider_result.get("report_id") or worker.nin_report_id or ""
@@ -3315,6 +3317,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 "error_code": provider_error_code,
                 "retryable": provider_retryable,
                 "provider_http_status": provider_http_status,
+                "fallback_manual_review": provider_fallback_manual_review,
             },
             "verified_at": iso(datetime.utcnow()) if status == "verified" else "",
             "checked_at": iso(datetime.utcnow()),
@@ -6531,6 +6534,60 @@ def get_admin_audit_logs(
         return {"success": True, "logs": [], "data": []}
     finally:
         db.close()
+
+
+@app.get("/admin/diagnostics/nin-provider")
+def get_nin_provider_diagnostics(request: Request):
+    admin = require_permission(request, "audit:view")
+    config = checkmyninbvn_config()
+    validation = validate_checkmyninbvn_config()
+    endpoint_url = f"{config.get('base_url')}/nin-verification"
+    diagnostics = {
+        "success": True,
+        "provider": "checkmyninbvn",
+        "configured": bool(validation.get("configured")),
+        "message": validation.get("message"),
+        "render_environment": {
+            "api_key_present": bool(config.get("api_key")),
+            "api_base_url_present": bool(os.getenv("CHECKMYNINBVN_API_BASE_URL")),
+            "legacy_base_url_present": bool(os.getenv("CHECKMYNINBVN_BASE_URL")),
+            "timeout_seconds": os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "25"),
+        },
+        "request_contract": {
+            "method": "POST",
+            "url": endpoint_url,
+            "body_keys": ["nin", "consent"],
+            "headers": {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "x-api-key": "present" if config.get("api_key") else "missing",
+                "Authorization": "Bearer token present" if config.get("api_key") else "missing",
+            },
+        },
+        "retry_policy": {
+            "automatic_retries": 0,
+            "reason": "NIN verification can affect wallet billing, so provider POST calls are not replayed automatically after ambiguous failures.",
+            "retryable_errors": ["provider_unavailable", "provider_rate_limited", "invalid_provider_response", "provider_error"],
+        },
+        "worker_fallback": {
+            "provider_unavailable": "identity step moves to manual_review so delivery workers can continue KYC submission.",
+            "invalid_nin": "worker is asked to check the NIN and retry.",
+        },
+    }
+    create_admin_audit_log(
+        request,
+        admin,
+        "nin_provider_diagnostics_viewed",
+        "diagnostic",
+        "checkmyninbvn",
+        "Admin viewed CheckMyNINBVN provider diagnostics",
+        {
+            "configured": diagnostics["configured"],
+            "api_key_present": diagnostics["render_environment"]["api_key_present"],
+            "url": endpoint_url,
+        },
+    )
+    return diagnostics
 
 
 @app.patch("/admin/broadcasts/{broadcast_id}")
