@@ -18,6 +18,16 @@ class AuthInterceptor @Inject constructor(
                 .addHeader("Authorization", "Bearer $token")
                 .build()
         }
-        return chain.proceed(request)
+        val response = chain.proceed(request)
+        if (response.code == 401) {
+            val body = response.peekBody(2048).string()
+            val blockedAccount = body.contains("removed", ignoreCase = true) ||
+                body.contains("deactivated", ignoreCase = true) ||
+                body.contains("suspended", ignoreCase = true)
+            if (blockedAccount) {
+                runBlocking { sessionManager.clearSession() }
+            }
+        }
+        return response
     }
 }

@@ -30,6 +30,14 @@ const getTokenForRequest = (url = "") => {
   return localStorage.getItem("token") || localStorage.getItem("foodnova_token");
 };
 
+const clearDeliverySessionForAccountRemoval = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("foodnova_token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("foodnova_user");
+  localStorage.setItem("foodnova_auth_notice", "This account has been removed or deactivated.");
+};
+
 api.interceptors.request.use((config) => {
   const token = getTokenForRequest(config.url);
 
@@ -53,6 +61,14 @@ api.interceptors.response.use(
     });
     if (error?.response?.status === 401) {
       console.warn("FoodNova API session expired or unauthorized", error.config?.url);
+      const detail = String(error?.response?.data?.detail || "");
+      if (/removed|deactivated|suspended/i.test(detail) && !String(error?.config?.url || "").startsWith("/admin")) {
+        clearDeliverySessionForAccountRemoval();
+        if (typeof window !== "undefined" && !window.location.pathname.includes("/auth")) {
+          window.alert("This account has been removed or deactivated.");
+          window.location.assign("/auth");
+        }
+      }
     }
     return Promise.reject(error);
   }
@@ -354,8 +370,8 @@ export const adminAPI = {
   updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   updateStock: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   deleteProduct: async (id) => (await api.delete(`/admin/products/${id}`)).data,
-  getRiders: async () => {
-    const response = await api.get("/admin/riders");
+  getRiders: async (params = {}) => {
+    const response = await api.get("/admin/riders", { params });
     const riders = normalizeList(response.data, ["riders"]);
     return { data: riders, raw: response.data };
   },

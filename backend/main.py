@@ -696,6 +696,18 @@ def revoke_rider_sessions(db, worker: DBDeliveryWorker, admin: dict = None, reas
     return len(sessions)
 
 
+def delivery_worker_access_block_reason(worker: Optional[DBDeliveryWorker]) -> str:
+    if not worker:
+        return "This account has been removed or deactivated."
+    if getattr(worker, "deleted_at", None) or (worker.kyc_status or "").upper() == "DELETED":
+        return "This account has been removed or deactivated."
+    if (worker.kyc_status or "").upper() == "SUSPENDED":
+        return "This account has been suspended."
+    if (worker.kyc_status or "").upper() == "DEACTIVATED":
+        return "This account has been removed or deactivated."
+    return ""
+
+
 def is_delivery_token_revoked(token: str, user_id: int, payload: dict = None) -> bool:
     if not token or not user_id:
         return False
@@ -703,6 +715,8 @@ def is_delivery_token_revoked(token: str, user_id: int, payload: dict = None) ->
     try:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user_id).first()
         if not worker or (worker.worker_type or "") != "rider":
+            return False
+        if delivery_worker_access_block_reason(worker):
             return False
         force_logout_at = getattr(worker, "force_logout_at", None)
         if force_logout_at:
@@ -742,6 +756,11 @@ def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
             return None
         if (user.role or "") == "admin" and not getattr(user, "is_active", True):
             return None
+        if (user.role or "") in ["rider", "messenger"]:
+            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
+            reason = delivery_worker_access_block_reason(worker)
+            if reason:
+                raise HTTPException(status_code=401, detail=reason)
         return db_user_to_dict(user) if user else None
     finally:
         db.close()
@@ -1177,6 +1196,8 @@ def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) ->
 
 
 def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -> None:
+    if delivery_worker_access_block_reason(worker):
+        return
     tokens = []
     if worker.fcm_token:
         tokens.append(worker.fcm_token)
@@ -1622,6 +1643,9 @@ def rider_to_dict(rider: DBDeliveryRider) -> dict:
         "vehicle_number": rider.vehicle_number or "",
         "status": rider.status or "active",
         "notes": rider.notes or "",
+        "deleted_at": iso(getattr(rider, "deleted_at", None)),
+        "deleted_by_admin_id": getattr(rider, "deleted_by_admin_id", None),
+        "deleted_reason": getattr(rider, "deleted_reason", "") or "",
         "created_at": iso(rider.created_at),
         "updated_at": iso(rider.updated_at),
     }
@@ -1706,7 +1730,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     admin_override = review_meta.get("admin_override") or {}
     rejection_reason = admin_override.get("note") or identity_meta.get("rejection_reason") or review_meta.get("rejection_reason") or ""
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed"}
-    rider_stage = "approved" if (worker.kyc_status or "") == "APPROVED" else "rejected" if (worker.kyc_status or "") == "REJECTED" else "suspended" if (worker.kyc_status or "") == "SUSPENDED" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
+    rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if (worker.kyc_status or "") == "APPROVED" else "rejected" if (worker.kyc_status or "") == "REJECTED" else "suspended" if (worker.kyc_status or "") == "SUSPENDED" else "deactivated" if (worker.kyc_status or "") == "DEACTIVATED" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
     return {
         "id": worker.id,
         "user_id": worker.user_id,
@@ -1775,6 +1799,10 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "approved_at": iso(worker.approved_at),
         "approved_by_admin_name": worker.approved_by_admin_name or "",
         "suspended_at": iso(worker.suspended_at),
+        "deactivated_at": iso(getattr(worker, "deactivated_at", None)),
+        "deleted_at": iso(getattr(worker, "deleted_at", None)),
+        "deleted_by_admin_id": getattr(worker, "deleted_by_admin_id", None),
+        "deleted_reason": getattr(worker, "deleted_reason", "") or "",
         "created_at": iso(worker.created_at),
         "updated_at": iso(worker.updated_at),
     }
@@ -2494,8 +2522,9 @@ def get_delivery_worker_record_for_request(request: Request):
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
         if not worker:
             raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
-        if getattr(worker, "deleted_at", None):
-            raise HTTPException(status_code=403, detail="Delivery account is no longer active.")
+        blocked_reason = delivery_worker_access_block_reason(worker)
+        if blocked_reason:
+            raise HTTPException(status_code=401, detail=blocked_reason)
         return db, user, worker
     except Exception:
         db.close()
@@ -2515,7 +2544,7 @@ def set_delivery_worker_review_meta(worker: DBDeliveryWorker, key: str, value: d
 
 RIDER_ONBOARDING_STAGES = [
     "account_created", "identity_submitted", "address_uploaded", "emergency_contact_added",
-    "selfie_verified", "admin_review", "approved", "rejected", "suspended",
+    "selfie_verified", "admin_review", "approved", "rejected", "suspended", "deactivated", "deleted",
 ]
 
 
@@ -2606,6 +2635,7 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
     if getattr(worker, "deleted_at", None):
         stage = "deleted"
         kyc.onboarding_stage = stage
+        kyc.admin_review_status = "deleted"
         if rider:
             rider.status = "deleted"
             rider.onboarding_stage = stage
@@ -2640,7 +2670,9 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
     elif (worker.kyc_status or "") == "SUSPENDED":
         stage = "suspended"
     elif (worker.kyc_status or "") == "DEACTIVATED":
-        stage = "suspended"
+        stage = "deactivated"
+    elif (worker.kyc_status or "") == "DELETED":
+        stage = "deleted"
     elif all([kyc.identity_status in submitted_statuses, kyc.address_status in submitted_statuses, kyc.emergency_status in submitted_statuses, kyc.selfie_status in submitted_statuses]):
         stage = "admin_review"
     elif kyc.selfie_status in submitted_statuses:
@@ -2654,13 +2686,13 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
     else:
         stage = "account_created"
     kyc.onboarding_stage = stage
-    kyc.admin_review_status = "approved" if stage == "approved" else "rejected" if stage == "rejected" else "suspended" if stage == "suspended" else "pending"
+    kyc.admin_review_status = "approved" if stage == "approved" else "rejected" if stage == "rejected" else "suspended" if stage == "suspended" else "deactivated" if stage == "deactivated" else "deleted" if stage == "deleted" else "pending"
     kyc.updated_at = datetime.utcnow()
     if rider:
         rider.full_name = worker.full_name or rider.full_name
         rider.phone = worker.phone or rider.phone
         rider.email = worker.email or rider.email
-        rider.status = "approved" if stage == "approved" else "rejected" if stage == "rejected" else "suspended" if stage == "suspended" else "pending"
+        rider.status = "approved" if stage == "approved" else "rejected" if stage == "rejected" else "suspended" if stage == "suspended" else "deactivated" if stage == "deactivated" else "deleted" if stage == "deleted" else "pending"
         rider.onboarding_stage = stage
         rider.can_go_online = stage == "approved"
         rider.can_accept_orders = stage == "approved"
@@ -3072,6 +3104,20 @@ def ensure_database_compatibility():
             "suspended_at": "TIMESTAMP",
             "deactivated_at": "TIMESTAMP",
             "force_logout_at": "TIMESTAMP",
+            "deleted_at": "TIMESTAMP",
+            "deleted_by_admin_id": "INTEGER",
+            "deleted_reason": "TEXT DEFAULT ''",
+            "created_at": "TIMESTAMP",
+            "updated_at": "TIMESTAMP",
+        },
+        "delivery_riders": {
+            "full_name": "VARCHAR(150) DEFAULT ''",
+            "phone": "VARCHAR(50) DEFAULT ''",
+            "email": "VARCHAR(150) DEFAULT ''",
+            "vehicle_type": "VARCHAR(80) DEFAULT ''",
+            "vehicle_number": "VARCHAR(80) DEFAULT ''",
+            "status": "VARCHAR(30) DEFAULT 'active'",
+            "notes": "TEXT DEFAULT ''",
             "deleted_at": "TIMESTAMP",
             "deleted_by_admin_id": "INTEGER",
             "deleted_reason": "TEXT DEFAULT ''",
@@ -3990,6 +4036,10 @@ def delivery_auth_login(payload: DeliveryAuthLoginPayload, request: Request):
         if not getattr(user, "is_active", True):
             log_delivery_auth_event("login_failed", phone, "account_disabled", worker_id=worker.id, user_id=user.id)
             raise HTTPException(status_code=403, detail="Delivery account is disabled.")
+        blocked_reason = delivery_worker_access_block_reason(worker)
+        if blocked_reason:
+            log_delivery_auth_event("login_failed", phone, "account_removed_or_blocked", worker_id=worker.id, user_id=user.id)
+            raise HTTPException(status_code=401, detail=blocked_reason)
         scheme = _password_hash_scheme(user.password)
         if not _password_matches(payload.password or "", user.password):
             log_delivery_auth_event("password_verification_failed", phone, "invalid_password", worker_id=worker.id, user_id=user.id, scheme=scheme)
@@ -5324,7 +5374,10 @@ def get_eligible_delivery_workforce(request: Request, delivery_type: Optional[st
     requested_type = (delivery_type or "local").strip().lower()
     db = SessionLocal()
     try:
-        workers = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.kyc_status == "APPROVED").all()
+        workers = db.query(DBDeliveryWorker).filter(
+            DBDeliveryWorker.kyc_status == "APPROVED",
+            DBDeliveryWorker.deleted_at.is_(None),
+        ).all()
         eligible_workers = []
         for worker in workers:
             policy = worker_assignment_policy(worker)
@@ -5358,12 +5411,17 @@ def get_rider_verification_queue(
     require_workforce_view(request)
     db = SessionLocal()
     try:
-        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type == "rider", DBDeliveryWorker.deleted_at.is_(None))
+        deleted_requested = (status or "").strip().upper() == "DELETED" or (stage or "").strip().lower() == "deleted"
+        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type == "rider")
+        if deleted_requested:
+            query = query.filter(or_(DBDeliveryWorker.deleted_at.isnot(None), DBDeliveryWorker.kyc_status == "DELETED"))
+        else:
+            query = query.filter(DBDeliveryWorker.deleted_at.is_(None), DBDeliveryWorker.kyc_status != "DELETED")
         if status:
             wanted = status.strip().upper()
             if wanted in ["PENDING", "ADMIN_REVIEW"]:
                 query = query.filter(DBDeliveryWorker.kyc_status == "KYC_PENDING")
-            elif wanted in ["APPROVED", "REJECTED", "SUSPENDED"]:
+            elif wanted in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED"]:
                 query = query.filter(DBDeliveryWorker.kyc_status == wanted)
         if search:
             term = f"%{search.strip()}%"
@@ -5438,18 +5496,27 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             return {"success": True, "rider": data, "data": data, "revoked_sessions": revoked}
 
         if new_status == "DELETED":
-            revoke_rider_sessions(db, worker, admin, review_note or "Rider deleted")
+            revoked = revoke_rider_sessions(db, worker, admin, review_note or "Rider deleted")
             worker.operational_status = "OFFLINE"
-            worker.kyc_status = "DEACTIVATED"
+            worker.kyc_status = "DELETED"
             worker.deleted_at = datetime.utcnow()
             worker.deleted_by_admin_id = admin.get("id")
             worker.deleted_reason = review_note
+            worker.fcm_token = ""
+            worker.fcm_tokens_json = "[]"
             db.add(DBDeletedRiderLog(
                 delivery_worker_id=worker.id,
                 admin_id=admin.get("id"),
                 admin_name=admin.get("full_name") or admin.get("email") or "Admin",
                 reason=review_note,
-                snapshot_json=json_dump(old_data),
+                snapshot_json=json_dump({
+                    "rider": old_data,
+                    "deleted_at": iso(worker.deleted_at),
+                    "deleted_by": admin.get("id"),
+                    "revoked_sessions": revoked,
+                    "ip": get_request_ip(request),
+                    "device": parse_user_agent(request.headers.get("user-agent", "")),
+                }),
                 hard_deleted=False,
             ))
         elif action == "reset_onboarding":
@@ -5509,6 +5576,9 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             rider_kyc.rejection_reason = review_note if new_status == "REJECTED" else rider_kyc.rejection_reason
             rider_kyc.resubmission_requested = new_status == "KYC_PENDING"
             rider_kyc.admin_reviewed_at = datetime.utcnow()
+            if new_status == "DELETED":
+                rider_kyc.onboarding_stage = "deleted"
+                rider_kyc.admin_review_status = "deleted"
         db.add(DBAdminReview(
             delivery_worker_id=worker.id,
             admin_id=admin.get("id"),
@@ -5531,7 +5601,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
 def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request: Request):
     admin = require_workforce_manage(request)
     new_status = (payload.status or "").strip().upper()
-    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "KYC_PENDING"]:
+    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED", "KYC_PENDING"]:
         raise HTTPException(status_code=400, detail="Invalid worker status")
     db = SessionLocal()
     try:
@@ -5559,14 +5629,36 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
             worker.approved_by_admin_id = admin.get("id")
             worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
             worker.suspended_at = None
-        if new_status in ["SUSPENDED", "DEACTIVATED"]:
+        if new_status in ["SUSPENDED", "DEACTIVATED", "DELETED"]:
             worker.operational_status = "OFFLINE"
             if new_status == "SUSPENDED":
                 worker.suspended_at = datetime.utcnow()
             if new_status == "DEACTIVATED":
                 worker.deactivated_at = datetime.utcnow()
+            if new_status == "DELETED":
+                worker.deleted_at = datetime.utcnow()
+                worker.deleted_by_admin_id = admin.get("id")
+                worker.deleted_reason = (payload.review_note or "").strip()
+                worker.fcm_token = ""
+                worker.fcm_tokens_json = "[]"
             if (worker.worker_type or "").lower() == "rider":
-                revoke_rider_sessions(db, worker, admin, f"Rider {new_status.lower()}")
+                revoked = revoke_rider_sessions(db, worker, admin, f"Rider {new_status.lower()}")
+                if new_status == "DELETED":
+                    db.add(DBDeletedRiderLog(
+                        delivery_worker_id=worker.id,
+                        admin_id=admin.get("id"),
+                        admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+                        reason=(payload.review_note or "").strip(),
+                        snapshot_json=json_dump({
+                            "rider": old_data,
+                            "deleted_at": iso(worker.deleted_at),
+                            "deleted_by": admin.get("id"),
+                            "revoked_sessions": revoked,
+                            "ip": get_request_ip(request),
+                            "device": parse_user_agent(request.headers.get("user-agent", "")),
+                        }),
+                        hard_deleted=False,
+                    ))
         if new_status in ["REJECTED", "KYC_PENDING"]:
             worker.operational_status = "OFFLINE"
         worker.updated_at = datetime.utcnow()
@@ -5576,6 +5668,9 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
                 rider_kyc.rejection_reason = (payload.review_note or "").strip() if new_status == "REJECTED" else rider_kyc.rejection_reason
                 rider_kyc.resubmission_requested = new_status == "KYC_PENDING"
                 rider_kyc.admin_reviewed_at = datetime.utcnow()
+                if new_status == "DELETED":
+                    rider_kyc.onboarding_stage = "deleted"
+                    rider_kyc.admin_review_status = "deleted"
             db.add(DBAdminReview(
                 delivery_worker_id=worker.id,
                 admin_id=admin.get("id"),
@@ -5592,6 +5687,8 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
             "APPROVED": "worker_approved",
             "REJECTED": "worker_rejected",
             "SUSPENDED": "worker_suspended",
+            "DEACTIVATED": "worker_deactivated",
+            "DELETED": "worker_deleted",
             "KYC_PENDING": "worker_reactivated",
         }.get(new_status, "worker_status_updated")
         create_admin_audit_log(request, admin, action, "delivery_worker", worker.id, f"Admin set {worker.full_name} to {new_status}", {"before": old_data, "after": data})
@@ -5665,13 +5762,20 @@ def delete_admin_order(order_id: int, request: Request):
 
 
 @app.get("/admin/riders")
-def get_riders(request: Request):
+def get_riders(request: Request, include_deleted: bool = False, status: Optional[str] = None):
     require_any_permission(request, ["delivery:manage", "orders:delivery"])
     db = SessionLocal()
     try:
+        query = db.query(DBDeliveryRider)
+        if include_deleted or (status or "").lower() == "deleted":
+            query = query.filter(DBDeliveryRider.deleted_at.isnot(None))
+        else:
+            query = query.filter(DBDeliveryRider.deleted_at.is_(None), DBDeliveryRider.status != "deleted")
+        if status and (status or "").lower() not in ["all", "deleted"]:
+            query = query.filter(DBDeliveryRider.status == status.lower())
         riders = [
             rider_to_dict(rider)
-            for rider in db.query(DBDeliveryRider).order_by(DBDeliveryRider.status.asc(), DBDeliveryRider.full_name.asc()).all()
+            for rider in query.order_by(DBDeliveryRider.status.asc(), DBDeliveryRider.full_name.asc()).all()
         ]
         return {"success": True, "riders": riders, "data": riders}
     finally:
@@ -5727,7 +5831,7 @@ def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
                     raise HTTPException(status_code=400, detail="Rider name and phone are required")
                 if field == "status":
                     value = str(value or "active").lower()
-                    if value not in ["active", "inactive"]:
+                    if value not in ["active", "inactive", "suspended", "deactivated"]:
                         value = "active"
                 setattr(rider, field, value)
         rider.updated_at = datetime.utcnow()
@@ -5748,13 +5852,17 @@ def deactivate_rider(rider_id: int, request: Request):
         rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == rider_id).first()
         if not rider:
             raise HTTPException(status_code=404, detail="Rider not found")
-        rider.status = "inactive"
+        old_data = rider_to_dict(rider)
+        rider.status = "deleted"
+        rider.deleted_at = datetime.utcnow()
+        rider.deleted_by_admin_id = admin.get("id")
+        rider.deleted_reason = "Deleted from admin rider management"
         rider.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(rider)
         data = rider_to_dict(rider)
-        create_admin_audit_log(request, admin, "rider_deactivated", "rider", rider.id, f"Admin deactivated rider {rider.full_name}", {"rider": data})
-        return {"success": True, "message": "Rider deactivated successfully", "rider": data, "data": data}
+        create_admin_audit_log(request, admin, "rider_deleted", "rider", rider.id, f"Admin deleted rider {rider.full_name}", {"before": old_data, "after": data, "ip": get_request_ip(request), "device": parse_user_agent(request.headers.get("user-agent", ""))})
+        return {"success": True, "message": "Rider deleted successfully", "rider": data, "data": data}
     finally:
         db.close()
 
@@ -5767,7 +5875,7 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == payload.rider_id).first()
+        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == payload.rider_id, DBDeliveryRider.deleted_at.is_(None)).first()
         if not rider:
             raise HTTPException(status_code=404, detail="Rider not found")
         if rider.status != "active":

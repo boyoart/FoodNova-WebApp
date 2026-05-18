@@ -1,9 +1,15 @@
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { Mail, Phone, UserPlus, User } from 'lucide-react'
 import './AuthPages.css'
 
 export default function AuthLandingPage() {
   const navigate = useNavigate()
+  const [accountNotice] = useState(() => {
+    const notice = localStorage.getItem('foodnova_auth_notice')
+    if (notice) localStorage.removeItem('foodnova_auth_notice')
+    return notice
+  })
 
   const enterGuestMode = () => {
     localStorage.setItem('guestMode', 'true')
@@ -16,6 +22,7 @@ export default function AuthLandingPage() {
         <div className="auth-card auth-landing-card">
           <h1>Welcome to FoodNova</h1>
           <p className="auth-subtitle">Choose how you want to continue</p>
+          {accountNotice && <div className="auth-account-notice">{accountNotice}</div>}
 
           <div className="auth-landing-actions">
             <button className="btn btn-primary" onClick={() => navigate('/login')}>

@@ -121,6 +121,9 @@ class DeliveryRider(Base):
     vehicle_number = Column(String(80), default="")
     status = Column(String(30), default="active", index=True)
     notes = Column(Text, default="")
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_by_admin_id = Column(Integer, nullable=True)
+    deleted_reason = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

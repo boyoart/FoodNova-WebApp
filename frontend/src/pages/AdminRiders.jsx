@@ -33,7 +33,7 @@ export default function AdminRiders() {
   const loadRiders = async () => {
     try {
       setLoading(true)
-      const response = await adminAPI.getRiders()
+      const response = await adminAPI.getRiders(statusFilter === 'deleted' ? { include_deleted: true } : {})
       setRiders(response.data || [])
     } catch (error) {
       toast.error([401, 403].includes(error?.response?.status) ? 'Access denied for rider management.' : 'Failed to load riders')
@@ -46,7 +46,7 @@ export default function AdminRiders() {
   useEffect(() => {
     if (isAdmin && canManageDelivery) loadRiders()
     else setLoading(false)
-  }, [isAdmin, canManageDelivery])
+  }, [isAdmin, canManageDelivery, statusFilter])
 
   const filteredRiders = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -111,10 +111,10 @@ export default function AdminRiders() {
   }
 
   const deactivateRider = async (rider) => {
-    if (!window.confirm(`Deactivate ${rider.full_name || rider.name}?`)) return
+    if (!window.confirm(`Delete ${rider.full_name || rider.name}? This will move the rider to the deleted archive.`)) return
     try {
       await adminAPI.deactivateRider(rider.id)
-      toast.success('Rider deactivated')
+      toast.success('Rider deleted')
       await loadRiders()
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to deactivate rider')
@@ -140,7 +140,7 @@ export default function AdminRiders() {
       <div className="rider-toolbar">
         <label className="rider-search"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, phone, vehicle" /></label>
         <div className="rider-status-tabs">
-          {['all', 'active', 'inactive'].map((status) => (
+          {['all', 'active', 'inactive', 'suspended', 'deactivated', 'deleted'].map((status) => (
             <button key={status} type="button" className={statusFilter === status ? 'active' : ''} onClick={() => setStatusFilter(status)}>
               {status}
             </button>
@@ -172,7 +172,7 @@ export default function AdminRiders() {
                   <td>
                     <div className="rider-actions">
                       <button type="button" className="btn-view" onClick={() => openEdit(rider)}>Edit</button>
-                      {rider.status !== 'inactive' && <button type="button" className="btn-delete" onClick={() => deactivateRider(rider)}>Deactivate</button>}
+                      {rider.status !== 'deleted' && <button type="button" className="btn-delete" onClick={() => deactivateRider(rider)}>Delete</button>}
                     </div>
                   </td>
                 </tr>

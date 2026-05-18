@@ -5,8 +5,8 @@ import { adminAPI, resolveMediaUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './WorkerPages.css'
 
-const statuses = ['all', 'pending', 'approved', 'rejected', 'suspended']
-const stages = ['all', 'account_created', 'identity_submitted', 'address_uploaded', 'emergency_contact_added', 'admin_review', 'approved', 'rejected', 'suspended']
+const statuses = ['all', 'pending', 'approved', 'rejected', 'suspended', 'deactivated', 'deleted']
+const stages = ['all', 'account_created', 'identity_submitted', 'address_uploaded', 'emergency_contact_added', 'admin_review', 'approved', 'rejected', 'suspended', 'deactivated', 'deleted']
 
 function label(value) {
   return String(value || '').replace(/_/g, ' ') || 'N/A'
@@ -17,6 +17,7 @@ function chip(value) {
   if (text.includes('approved') || text.includes('verified')) return 'APPROVED'
   if (text.includes('rejected')) return 'REJECTED'
   if (text.includes('suspended')) return 'SUSPENDED'
+  if (text.includes('deleted') || text.includes('deactivated')) return 'REJECTED'
   return 'KYC_PENDING'
 }
 
@@ -76,10 +77,11 @@ export default function AdminRiderVerificationQueue() {
   }, [isAdmin, canView, filters.status, filters.stage])
 
   const counts = useMemo(() => ({
-    pending: riders.filter((item) => !['APPROVED', 'REJECTED', 'SUSPENDED'].includes(item.worker?.kyc_status)).length,
+    pending: riders.filter((item) => !['APPROVED', 'REJECTED', 'SUSPENDED', 'DEACTIVATED', 'DELETED'].includes(item.worker?.kyc_status)).length,
     approved: riders.filter((item) => item.worker?.kyc_status === 'APPROVED').length,
     rejected: riders.filter((item) => item.worker?.kyc_status === 'REJECTED').length,
     suspended: riders.filter((item) => item.worker?.kyc_status === 'SUSPENDED').length,
+    deleted: riders.filter((item) => item.worker?.kyc_status === 'DELETED' || item.worker?.deleted_at).length,
   }), [riders])
 
   const submitReview = async () => {
