@@ -249,6 +249,7 @@ export const workerAPI = {
     return (await api.post("/delivery-workers/signup", formData, multipartConfig)).data;
   },
   me: async () => (await api.get("/delivery/me")).data,
+  logout: async () => (await api.post("/delivery/auth/logout")).data,
   goOnline: async (workerType, payload) => (await api.post(workerType === "messenger" ? "/messenger/go-online" : "/rider/go-online", payload)).data,
   goOffline: async () => (await api.post("/delivery/go-offline")).data,
   locationPing: async (payload) => (await api.post("/delivery/location-ping", payload)).data,

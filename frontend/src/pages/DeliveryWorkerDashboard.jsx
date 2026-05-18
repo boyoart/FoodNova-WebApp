@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlertTriangle, MapPin, Power, RefreshCw, Settings, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, LogOut, MapPin, PhoneCall, Power, RefreshCw, Settings, ShieldCheck, X } from 'lucide-react'
 import { Capacitor } from '@capacitor/core'
 import { Geolocation } from '@capacitor/geolocation'
 import { workerAPI } from '../services/api'
@@ -78,7 +78,7 @@ function isLocationPermissionDenied(error) {
 }
 
 export default function DeliveryWorkerDashboard({ workerType }) {
-  const { user, updateUser } = useAuthStore()
+  const { user, updateUser, logout } = useAuthStore()
   const [worker, setWorker] = useState(user?.delivery_worker || null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -372,6 +372,17 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     }
   }
 
+  const logoutWorker = async () => {
+    try {
+      await workerAPI.logout()
+    } catch {
+      // Local logout still clears a stale or already revoked token.
+    } finally {
+      logout()
+      window.location.assign('/login')
+    }
+  }
+
   if (loading) return <div className="worker-dashboard"><div className="worker-panel">Loading delivery account...</div></div>
 
   if (!worker) return <div className="worker-dashboard"><div className="worker-panel">Delivery account not found.</div></div>
@@ -394,11 +405,14 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     <div className="worker-dashboard">
       <section className="worker-panel worker-hero-panel">
         <div>
-          <p>FoodNova Delivery Workforce</p>
+          <p>FoodNova Rider Operations</p>
           <h1>{title}</h1>
-          <span>{type === 'messenger' ? 'Hyperlocal: local zone required before going online' : 'You are online and available for wider delivery requests.'}</span>
+          <span>{worker.full_name} - {worker.phone}</span>
         </div>
-        <strong>{worker.operational_status}</strong>
+        <div className="worker-hero-actions">
+          <strong>{worker.operational_status}</strong>
+          <button type="button" className="secondary-worker-button compact" onClick={logoutWorker}><LogOut size={16} /> Logout</button>
+        </div>
       </section>
 
       <section className="worker-actions-grid">
@@ -411,6 +425,16 @@ export default function DeliveryWorkerDashboard({ workerType }) {
         <button type="button" className="panic-button" onClick={sendPanic} disabled={busy}>
           <AlertTriangle size={20} /> Emergency Alert
         </button>
+        <a className="secondary-worker-button support-shortcut" href="tel:+2340000000000">
+          <PhoneCall size={20} /> Operations Support
+        </a>
+      </section>
+
+      <section className="worker-panel worker-ops-summary">
+        <div><strong>Profile</strong><span>{worker.vehicle_type || 'Rider'} {worker.plate_number ? `- ${worker.plate_number}` : ''}</span></div>
+        <div><strong>KYC</strong><span>{worker.kyc_status}</span></div>
+        <div><strong>Wallet</strong><span>{worker.wallet_enabled ? 'Active' : 'Locked'}</span></div>
+        <div><strong>Orders</strong><span>{worker.can_accept_delivery_requests ? 'Enabled' : 'Locked'}</span></div>
       </section>
 
       <section className="worker-panel">

@@ -124,6 +124,7 @@ export default function AdminRiderVerificationQueue() {
                   <th>Phone</th>
                   <th>Registered</th>
                   <th>KYC</th>
+                  <th>Verification</th>
                   <th>Risk</th>
                   <th>Actions</th>
                 </tr>
@@ -143,12 +144,13 @@ export default function AdminRiderVerificationQueue() {
                       <td>{worker.phone}</td>
                       <td>{worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</td>
                       <td><span className={`worker-status ${chip(worker.kyc_status)}`}>{label(item.kyc?.onboarding_stage)}</span></td>
+                      <td>{item.kyc?.nin_verified ? 'NIN verified' : 'NIN not verified'}</td>
                       <td><span className={`risk-chip risk-${risk.toLowerCase()}`}>{risk}</span></td>
                       <td><button type="button" onClick={() => setSelected(item)}>Review</button></td>
                     </tr>
                   )
                 })}
-                {!riders.length && <tr><td colSpan="6" className="verification-empty">No riders match this queue.</td></tr>}
+                {!riders.length && <tr><td colSpan="7" className="verification-empty">No riders match this queue.</td></tr>}
               </tbody>
             </table>
           )}
@@ -187,6 +189,11 @@ export default function AdminRiderVerificationQueue() {
               <div className="status-log-list">
                 {(selected.status_logs || []).slice(0, 5).map((log) => <p key={log.id}><strong>{label(log.new_stage)}</strong> by {log.actor_name} - {log.created_at ? new Date(log.created_at).toLocaleString() : ''}</p>)}
               </div>
+              <h3>Login history</h3>
+              <div className="status-log-list">
+                {(selected.login_history || []).slice(0, 4).map((session) => <p key={session.id}><strong>{session.active ? 'Active' : 'Revoked'}</strong> {session.device?.device_type || 'Device'} - {session.ip_address || 'No IP'} - {session.created_at ? new Date(session.created_at).toLocaleString() : ''}</p>)}
+                {!selected.login_history?.length && <p>No rider session history yet.</p>}
+              </div>
               {canManage && (
                 <div className="worker-review-actions">
                   <select value={reviewAction} onChange={(event) => setReviewAction(event.target.value)}>
@@ -195,6 +202,10 @@ export default function AdminRiderVerificationQueue() {
                     <option value="request_resubmission">Request resubmission</option>
                     <option value="reject">Reject</option>
                     <option value="suspend">Suspend</option>
+                    <option value="deactivate">Deactivate</option>
+                    <option value="force_logout">Force logout</option>
+                    <option value="reset_onboarding">Reset onboarding</option>
+                    <option value="delete">Delete rider</option>
                   </select>
                   <textarea rows="3" placeholder="Reason or resubmission instructions" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} />
                   <button type="button" disabled={!reviewAction} onClick={submitReview}>Submit review</button>

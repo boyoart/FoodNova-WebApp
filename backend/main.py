@@ -62,6 +62,8 @@ from models import (
     RiderDocument as DBRiderDocument,
     RiderStatusLog as DBRiderStatusLog,
     VerificationLog as DBVerificationLog,
+    RiderSession as DBRiderSession,
+    DeletedRiderLog as DBDeletedRiderLog,
     AdminReview as DBAdminReview,
     OperationalZone as DBOperationalZone,
     User as DBUser,
@@ -643,6 +645,7 @@ def create_access_token(user) -> str:
         "admin_role": normalize_admin_role(admin_role) if (role or "") == "admin" else "",
         "permissions": get_admin_permissions(user) if (role or "") == "admin" else [],
         "name": full_name or "",
+        "iat": int(datetime.utcnow().timestamp()),
         "exp": expiry,
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -655,6 +658,73 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def record_rider_session(token: str, user: DBUser, worker: DBDeliveryWorker, request: Optional[Request] = None) -> None:
+    if not token or not worker or (worker.worker_type or "") != "rider":
+        return
+    db = SessionLocal()
+    try:
+        session = DBRiderSession(
+            delivery_worker_id=worker.id,
+            user_id=user.id,
+            token_hash=_token_hash(token),
+            device_info_json=json_dump(parse_user_agent(request.headers.get("user-agent", "")) if request else {}),
+            ip_address=get_request_ip(request),
+            is_active=True,
+        )
+        db.add(session)
+        db.commit()
+    except Exception as error:
+        print("RIDER SESSION LOG ERROR:", repr(error))
+    finally:
+        db.close()
+
+
+def revoke_rider_sessions(db, worker: DBDeliveryWorker, admin: dict = None, reason: str = "") -> int:
+    sessions = db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker.id, DBRiderSession.is_active == True).all()
+    for session in sessions:
+        session.is_active = False
+        session.revoked_at = datetime.utcnow()
+        session.revoked_by_admin_id = (admin or {}).get("id")
+        session.revoked_reason = reason or "Session revoked"
+    worker.fcm_token = ""
+    worker.fcm_tokens_json = "[]"
+    worker.force_logout_at = datetime.utcnow()
+    return len(sessions)
+
+
+def is_delivery_token_revoked(token: str, user_id: int, payload: dict = None) -> bool:
+    if not token or not user_id:
+        return False
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user_id).first()
+        if not worker or (worker.worker_type or "") != "rider":
+            return False
+        force_logout_at = getattr(worker, "force_logout_at", None)
+        if force_logout_at:
+            issued_at = (payload or {}).get("iat")
+            if not issued_at:
+                return True
+            try:
+                issued_dt = datetime.fromtimestamp(float(issued_at), tz=timezone.utc).replace(tzinfo=None) if isinstance(issued_at, (int, float)) else as_naive_utc(datetime.fromisoformat(str(issued_at).replace("Z", "+00:00")))
+                if issued_dt <= as_naive_utc(force_logout_at):
+                    return True
+            except Exception:
+                return True
+        session = db.query(DBRiderSession).filter(DBRiderSession.token_hash == _token_hash(token)).first()
+        if not session:
+            return False
+        session.last_seen_at = datetime.utcnow()
+        db.commit()
+        return not bool(session.is_active)
+    finally:
+        db.close()
+
+
 def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
     if not authorization:
         return None
@@ -662,6 +732,8 @@ def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
     payload = decode_access_token(token)
     email = payload.get("sub") if payload else None
     if not email:
+        return None
+    if is_delivery_token_revoked(token, payload.get("user_id"), payload):
         return None
     db = SessionLocal()
     try:
@@ -2381,8 +2453,9 @@ def get_delivery_worker_by_phone(db, phone: str):
     return db.query(DBDeliveryWorker).filter(DBDeliveryWorker.phone == normalized).first()
 
 
-def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker) -> dict:
+def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker, request: Optional[Request] = None) -> dict:
     token = create_access_token(user)
+    record_rider_session(token, user, worker, request)
     requires_verification = (worker.kyc_status or "") != "APPROVED"
     return {
         "success": True,
@@ -2421,6 +2494,8 @@ def get_delivery_worker_record_for_request(request: Request):
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
         if not worker:
             raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
+        if getattr(worker, "deleted_at", None):
+            raise HTTPException(status_code=403, detail="Delivery account is no longer active.")
         return db, user, worker
     except Exception:
         db.close()
@@ -2525,6 +2600,16 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed"}
     old_stage = kyc.onboarding_stage or "account_created"
     old_status = worker.kyc_status or "KYC_PENDING"
+    if getattr(worker, "deleted_at", None):
+        stage = "deleted"
+        kyc.onboarding_stage = stage
+        if rider:
+            rider.status = "deleted"
+            rider.onboarding_stage = stage
+            rider.can_go_online = False
+            rider.can_accept_orders = False
+            rider.wallet_enabled = False
+        return stage
     kyc.identity_status = identity.get("status") or kyc.identity_status or "not_started"
     kyc.address_status = address.get("status") or kyc.address_status or "not_started"
     kyc.emergency_status = emergency.get("status") or kyc.emergency_status or "not_started"
@@ -2550,6 +2635,8 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
     elif (worker.kyc_status or "") == "REJECTED":
         stage = "rejected"
     elif (worker.kyc_status or "") == "SUSPENDED":
+        stage = "suspended"
+    elif (worker.kyc_status or "") == "DEACTIVATED":
         stage = "suspended"
     elif all([kyc.identity_status in submitted_statuses, kyc.address_status in submitted_statuses, kyc.emergency_status in submitted_statuses, kyc.selfie_status in submitted_statuses]):
         stage = "admin_review"
@@ -2615,6 +2702,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
     documents = db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id).order_by(DBRiderDocument.created_at.desc()).all()
     logs = db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker.id).order_by(DBRiderStatusLog.created_at.desc()).limit(50).all()
     verification_logs = db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker.id).order_by(DBVerificationLog.created_at.desc()).limit(30).all()
+    sessions = db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker.id).order_by(DBRiderSession.created_at.desc()).limit(20).all()
     reviews = db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).order_by(DBAdminReview.created_at.desc()).limit(30).all()
     return {
         "worker": worker_to_dict(worker),
@@ -2652,6 +2740,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
         "documents": [{"id": doc.id, "type": doc.document_type, "url": doc.file_url or "", "file_name": doc.file_name or "", "status": doc.status or "submitted", "metadata": json_load(doc.metadata_json, {}), "created_at": iso(doc.created_at)} for doc in documents],
         "status_logs": [{"id": log.id, "old_stage": log.old_stage or "", "new_stage": log.new_stage or "", "old_status": log.old_status or "", "new_status": log.new_status or "", "actor_type": log.actor_type or "", "actor_name": log.actor_name or "", "note": log.note or "", "created_at": iso(log.created_at)} for log in logs],
         "verification_logs": [{"id": log.id, "type": log.verification_type or "", "provider": log.provider or "", "status": log.status or "", "success": bool(log.success), "error_code": log.error_code or "", "message": log.message or "", "created_at": iso(log.created_at)} for log in verification_logs],
+        "login_history": [{"id": session.id, "active": bool(session.is_active), "ip_address": session.ip_address or "", "device": json_load(session.device_info_json, {}), "created_at": iso(session.created_at), "last_seen_at": iso(session.last_seen_at), "revoked_at": iso(session.revoked_at), "revoked_reason": session.revoked_reason or ""} for session in sessions],
         "admin_reviews": [{"id": review.id, "admin_name": review.admin_name or "", "action": review.action or "", "reason": review.reason or "", "required_changes": json_load(review.required_changes_json, []), "created_at": iso(review.created_at)} for review in reviews],
         "approval_blockers": rider_approval_blockers(db, worker),
     }
@@ -2696,6 +2785,7 @@ def detect_nin_fraud_flags(db, worker: DBDeliveryWorker, clean_nin: str, provide
         "identity_mismatch": identity_mismatch,
         "suspicious_activity": False,
         "failed_verification": not verified,
+        "fake_nin": not verified,
         "fraud_risk_detected": fraud_risk_detected,
         "confidence_score": confidence,
         "provider_name": provider_name,
@@ -2966,6 +3056,11 @@ def ensure_database_compatibility():
             "approved_by_admin_id": "INTEGER",
             "approved_by_admin_name": "VARCHAR(150) DEFAULT ''",
             "suspended_at": "TIMESTAMP",
+            "deactivated_at": "TIMESTAMP",
+            "force_logout_at": "TIMESTAMP",
+            "deleted_at": "TIMESTAMP",
+            "deleted_by_admin_id": "INTEGER",
+            "deleted_reason": "TEXT DEFAULT ''",
             "created_at": "TIMESTAMP",
             "updated_at": "TIMESTAMP",
         },
@@ -3553,10 +3648,12 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 "invalid_provider_response",
                 "provider_error",
             ]:
-                provider_message = "Automatic NIN verification is temporarily unavailable. Continue with manual review."
-                provider_fallback_manual_review = True
+                raise HTTPException(status_code=error.status_code, detail=provider_message)
 
         fraud = detect_nin_fraud_flags(db, worker, clean_nin, provider_data, verified)
+        if fraud.get("duplicate_nin"):
+            verified = False
+            provider_message = "This NIN is already linked to another delivery account."
         manual_review_required = bool(
             fraud.get("identity_mismatch")
             or fraud.get("duplicate_nin")
@@ -3600,6 +3697,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 "duplicate_nin": fraud.get("duplicate_nin"),
                 "suspicious_activity": fraud.get("suspicious_activity"),
                 "failed_verification": fraud.get("failed_verification"),
+                "fake_nin": fraud.get("fake_nin"),
                 "fraud_risk_detected": fraud.get("fraud_risk_detected"),
             },
             "manual_review_required": manual_review_required or not verified,
@@ -3617,14 +3715,18 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 rider_kyc.nin_provider_message = provider_message or ""
                 rider_kyc.nin_response_json = json_dump(provider_result or {"error_code": provider_error_code, "message": provider_message})
                 rider_kyc.confidence_score = fraud.get("confidence_score") or 0
+                existing_flags = json_load(rider_kyc.fraud_flags_json, {})
+                failed_attempts = int(existing_flags.get("failed_kyc_attempts") or 0) + (0 if status == "verified" else 1)
                 rider_kyc.fraud_flags_json = json_dump({
                     "identity_mismatch": fraud.get("identity_mismatch"),
                     "duplicate_nin": fraud.get("duplicate_nin"),
-                    "suspicious_activity": fraud.get("suspicious_activity"),
+                    "suspicious_activity": bool(fraud.get("suspicious_activity") or failed_attempts >= 3),
                     "failed_verification": fraud.get("failed_verification"),
+                    "fake_nin": fraud.get("fake_nin"),
                     "fraud_risk_detected": fraud.get("fraud_risk_detected"),
                     "provider_error_code": provider_error_code,
                     "provider_retryable": provider_retryable,
+                    "failed_kyc_attempts": failed_attempts,
                 })
                 rider_kyc.duplicate_nin = bool(fraud.get("duplicate_nin"))
                 rider_kyc.identity_verified_at = datetime.utcnow() if status == "verified" else rider_kyc.identity_verified_at
@@ -3651,6 +3753,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 "duplicate_nin": fraud.get("duplicate_nin"),
                 "suspicious_activity": fraud.get("suspicious_activity"),
                 "failed_verification": fraud.get("failed_verification"),
+                "fake_nin": fraud.get("fake_nin"),
                 "fraud_risk_detected": fraud.get("fraud_risk_detected"),
             },
             "auto_activated": auto_activated,
@@ -3746,7 +3849,7 @@ def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Reques
             f"{worker_type.title()} created FoodNova Delivery account",
             {"worker_id": worker.id, "worker_type": worker_type},
         )
-        response = delivery_worker_auth_response(user, worker)
+        response = delivery_worker_auth_response(user, worker, request)
         response["message"] = "Delivery account created successfully."
         return response
     finally:
@@ -3754,7 +3857,7 @@ def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Reques
 
 
 @app.post("/delivery/auth/login")
-def delivery_auth_login(payload: DeliveryAuthLoginPayload):
+def delivery_auth_login(payload: DeliveryAuthLoginPayload, request: Request):
     phone = normalize_delivery_phone(payload.phone_number)
     if not phone:
         log_delivery_auth_event("login_failed", payload.phone_number, "invalid_phone")
@@ -3783,7 +3886,7 @@ def delivery_auth_login(payload: DeliveryAuthLoginPayload):
             db.refresh(user)
             log_delivery_auth_event("password_rehashed", phone, "legacy_hash_upgraded", worker_id=worker.id, user_id=user.id, scheme=scheme)
         log_delivery_auth_event("login_success", phone, worker_id=worker.id, user_id=user.id, scheme=_password_hash_scheme(user.password))
-        return delivery_worker_auth_response(user, worker)
+        return delivery_worker_auth_response(user, worker, request)
     finally:
         db.close()
 
@@ -3802,6 +3905,26 @@ def delivery_me(request: Request):
             "kyc_status": worker.kyc_status or "KYC_PENDING",
             "worker": worker_to_dict(worker),
         }
+    finally:
+        db.close()
+
+
+@app.post("/delivery/auth/logout")
+def delivery_auth_logout(request: Request):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        token = request.headers.get("authorization", "").replace("Bearer ", "").strip()
+        if token:
+            session = db.query(DBRiderSession).filter(DBRiderSession.token_hash == _token_hash(token)).first()
+            if session:
+                session.is_active = False
+                session.revoked_at = datetime.utcnow()
+                session.revoked_reason = "Rider logout"
+        worker.fcm_token = ""
+        worker.fcm_tokens_json = "[]"
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        return {"success": True, "message": "Logged out successfully."}
     finally:
         db.close()
 
@@ -4958,7 +5081,7 @@ def get_delivery_workforce(request: Request, worker_type: Optional[str] = None, 
     require_workforce_view(request)
     db = SessionLocal()
     try:
-        query = db.query(DBDeliveryWorker)
+        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.deleted_at.is_(None))
         if worker_type in ["messenger", "rider"]:
             query = query.filter(DBDeliveryWorker.worker_type == worker_type)
         if status:
@@ -5121,7 +5244,7 @@ def get_rider_verification_queue(
     require_workforce_view(request)
     db = SessionLocal()
     try:
-        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type == "rider")
+        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type == "rider", DBDeliveryWorker.deleted_at.is_(None))
         if status:
             wanted = status.strip().upper()
             if wanted in ["PENDING", "ADMIN_REVIEW"]:
@@ -5164,9 +5287,13 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         "reject": "REJECTED",
         "request_resubmission": "KYC_PENDING",
         "suspend": "SUSPENDED",
+        "deactivate": "DEACTIVATED",
+        "delete": "DELETED",
+        "reset_onboarding": "KYC_PENDING",
+        "force_logout": "FORCE_LOGOUT",
     }
     if action not in action_map:
-        raise HTTPException(status_code=400, detail="Action must be approve, reject, request_resubmission, or suspend.")
+        raise HTTPException(status_code=400, detail="Action must be approve, reject, request_resubmission, suspend, deactivate, delete, reset_onboarding, or force_logout.")
     db = SessionLocal()
     try:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type == "rider").first()
@@ -5179,7 +5306,61 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
                 raise HTTPException(status_code=422, detail="Rider cannot be approved yet: " + " ".join(blockers))
         old_data = rider_detail_payload(db, worker)
         review_note = (payload.review_note or "").strip()
-        worker.kyc_status = new_status
+        if new_status == "FORCE_LOGOUT":
+            revoked = revoke_rider_sessions(db, worker, admin, review_note or "Admin forced logout")
+            db.add(DBAdminReview(
+                delivery_worker_id=worker.id,
+                admin_id=admin.get("id"),
+                admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+                action=action,
+                reason=review_note,
+                metadata_json=json_dump({"revoked_sessions": revoked}),
+            ))
+            worker.operational_status = "OFFLINE"
+            worker.updated_at = datetime.utcnow()
+            db.commit()
+            data = rider_detail_payload(db, worker)
+            create_admin_audit_log(request, admin, "rider_force_logout", "delivery_worker", worker.id, f"Admin forced logout for rider {worker.full_name}", {"revoked_sessions": revoked})
+            return {"success": True, "rider": data, "data": data, "revoked_sessions": revoked}
+
+        if new_status == "DELETED":
+            revoke_rider_sessions(db, worker, admin, review_note or "Rider deleted")
+            worker.operational_status = "OFFLINE"
+            worker.kyc_status = "DEACTIVATED"
+            worker.deleted_at = datetime.utcnow()
+            worker.deleted_by_admin_id = admin.get("id")
+            worker.deleted_reason = review_note
+            db.add(DBDeletedRiderLog(
+                delivery_worker_id=worker.id,
+                admin_id=admin.get("id"),
+                admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+                reason=review_note,
+                snapshot_json=json_dump(old_data),
+                hard_deleted=False,
+            ))
+        elif action == "reset_onboarding":
+            revoke_rider_sessions(db, worker, admin, review_note or "KYC reset")
+            worker.kyc_status = "KYC_PENDING"
+            worker.operational_status = "OFFLINE"
+            worker.nin_verified = False
+            worker.nin_report_id = ""
+            worker.nin_last4 = ""
+            worker.review_note = json_dump({"admin_override": {"status": "KYC_PENDING", "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}})
+            kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
+            if kyc:
+                kyc.onboarding_stage = "account_created"
+                kyc.identity_status = "not_started"
+                kyc.address_status = "not_started"
+                kyc.emergency_status = "not_started"
+                kyc.selfie_status = "not_started"
+                kyc.admin_review_status = "pending"
+                kyc.nin_hash = ""
+                kyc.nin_last4 = ""
+                kyc.nin_verified = False
+                kyc.rejection_reason = ""
+                kyc.resubmission_requested = True
+        else:
+            worker.kyc_status = new_status
         if new_status == "APPROVED":
             worker.operational_status = "OFFLINE"
             worker.approved_at = datetime.utcnow()
@@ -5187,8 +5368,13 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
             worker.suspended_at = None
         elif new_status == "SUSPENDED":
+            revoke_rider_sessions(db, worker, admin, review_note or "Rider suspended")
             worker.operational_status = "OFFLINE"
             worker.suspended_at = datetime.utcnow()
+        elif new_status == "DEACTIVATED":
+            revoke_rider_sessions(db, worker, admin, review_note or "Rider deactivated")
+            worker.operational_status = "OFFLINE"
+            worker.deactivated_at = datetime.utcnow()
         else:
             worker.operational_status = "OFFLINE"
         meta = delivery_worker_review_meta(worker)
@@ -5224,7 +5410,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
 def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request: Request):
     admin = require_workforce_manage(request)
     new_status = (payload.status or "").strip().upper()
-    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "KYC_PENDING"]:
+    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "KYC_PENDING"]:
         raise HTTPException(status_code=400, detail="Invalid worker status")
     db = SessionLocal()
     try:
@@ -5252,9 +5438,14 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
             worker.approved_by_admin_id = admin.get("id")
             worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
             worker.suspended_at = None
-        if new_status == "SUSPENDED":
+        if new_status in ["SUSPENDED", "DEACTIVATED"]:
             worker.operational_status = "OFFLINE"
-            worker.suspended_at = datetime.utcnow()
+            if new_status == "SUSPENDED":
+                worker.suspended_at = datetime.utcnow()
+            if new_status == "DEACTIVATED":
+                worker.deactivated_at = datetime.utcnow()
+            if (worker.worker_type or "").lower() == "rider":
+                revoke_rider_sessions(db, worker, admin, f"Rider {new_status.lower()}")
         if new_status in ["REJECTED", "KYC_PENDING"]:
             worker.operational_status = "OFFLINE"
         worker.updated_at = datetime.utcnow()

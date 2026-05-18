@@ -179,6 +179,11 @@ class DeliveryWorker(Base):
     approved_by_admin_id = Column(Integer, nullable=True)
     approved_by_admin_name = Column(String(150), default="")
     suspended_at = Column(DateTime, nullable=True)
+    deactivated_at = Column(DateTime, nullable=True)
+    force_logout_at = Column(DateTime, nullable=True)
+    deleted_at = Column(DateTime, nullable=True, index=True)
+    deleted_by_admin_id = Column(Integer, nullable=True)
+    deleted_reason = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -297,6 +302,39 @@ class VerificationLog(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     worker = relationship("DeliveryWorker")
+
+
+class RiderSession(Base):
+    __tablename__ = "rider_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(80), nullable=False, unique=True, index=True)
+    device_info_json = Column(Text, default="{}")
+    ip_address = Column(String(80), default="")
+    is_active = Column(Boolean, default=True, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revoked_by_admin_id = Column(Integer, nullable=True)
+    revoked_reason = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_seen_at = Column(DateTime, default=datetime.utcnow)
+
+    worker = relationship("DeliveryWorker")
+    user = relationship("User")
+
+
+class DeletedRiderLog(Base):
+    __tablename__ = "deleted_rider_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, nullable=False, index=True)
+    admin_id = Column(Integer, nullable=True, index=True)
+    admin_name = Column(String(150), default="")
+    reason = Column(Text, default="")
+    snapshot_json = Column(Text, default="{}")
+    hard_deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class AdminReview(Base):
