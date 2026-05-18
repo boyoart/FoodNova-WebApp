@@ -694,6 +694,27 @@
   white-space: nowrap;
 }
 
+.verification-api-health {
+  border-left: 1px solid #d7e3da;
+  display: grid;
+  gap: 0.1rem;
+  min-width: 220px;
+  padding-left: 1rem;
+}
+
+.verification-api-health.healthy strong {
+  color: #146c2e;
+}
+
+.verification-api-health.down strong {
+  color: #b3261e;
+}
+
+.verification-api-health small {
+  color: #5d6b62;
+  font-size: 0.76rem;
+}
+
 .verification-workbench {
   align-items: start;
   display: grid;

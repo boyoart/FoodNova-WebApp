@@ -7493,6 +7493,65 @@ def get_nin_provider_diagnostics(request: Request):
     return diagnostics
 
 
+def nin_provider_health_payload(db=None) -> dict:
+    config = checkmyninbvn_config()
+    validation = validate_checkmyninbvn_config()
+    last_status = "not_checked"
+    provider_reachable = False
+    balance = None
+    last_error = ""
+    started = datetime.utcnow()
+    if validation.get("configured"):
+        try:
+            balance = check_balance()
+            provider_reachable = bool(balance.get("success"))
+            last_status = "success" if provider_reachable else "unhealthy"
+        except CheckMyNINBVNError as error:
+            last_status = error.code
+            last_error = str(error)
+
+    failed_requests_count = 0
+    last_successful_verification_at = ""
+    if db is not None:
+        failed_requests_count = db.query(DBVerificationLog).filter(
+            DBVerificationLog.provider == "checkmyninbvn",
+            DBVerificationLog.success == False,
+        ).count()
+        last_success = db.query(DBVerificationLog).filter(
+            DBVerificationLog.provider == "checkmyninbvn",
+            DBVerificationLog.success == True,
+        ).order_by(DBVerificationLog.created_at.desc()).first()
+        last_successful_verification_at = iso(last_success.created_at) if last_success else ""
+
+    return {
+        "apiKeyLoaded": bool(config.get("api_key")),
+        "providerReachable": provider_reachable,
+        "lastStatus": last_status,
+        "lastError": last_error,
+        "endpoint": f"{config.get('base_url')}/nin-verification",
+        "balanceEndpoint": f"{config.get('base_url')}/balance",
+        "timeoutSeconds": os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "10"),
+        "latencyCheckedAt": iso(started),
+        "balance": balance,
+        "failedRequestsCount": failed_requests_count,
+        "lastSuccessfulVerificationAt": last_successful_verification_at,
+    }
+
+
+@app.get("/api/debug/nin-health")
+def get_public_nin_health():
+    db = SessionLocal()
+    try:
+        health = nin_provider_health_payload(db)
+        return {
+            "apiKeyLoaded": health["apiKeyLoaded"],
+            "providerReachable": health["providerReachable"],
+            "lastStatus": health["lastStatus"],
+        }
+    finally:
+        db.close()
+
+
 @app.get("/admin/diagnostics/nin-provider/balance")
 def get_nin_provider_balance(request: Request):
     require_workforce_view(request)
@@ -7512,6 +7571,17 @@ def get_nin_provider_balance(request: Request):
                 "message": str(error) or "Verification service unavailable. Please retry shortly.",
             },
         }
+
+
+@app.get("/admin/diagnostics/nin-provider/health")
+def get_admin_nin_provider_health(request: Request):
+    require_workforce_view(request)
+    db = SessionLocal()
+    try:
+        health = nin_provider_health_payload(db)
+        return {"success": True, "provider": "checkmyninbvn", "health": health, "data": health}
+    finally:
+        db.close()
 
 
 @app.patch("/admin/broadcasts/{broadcast_id}")

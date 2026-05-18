@@ -394,6 +394,7 @@ export const adminAPI = {
   getRiderVerificationDetail: async (id) => (await api.get(`/admin/rider-verification-queue/${id}`)).data,
   reviewRiderVerification: async (id, action, payload = {}) => (await api.post(`/admin/rider-verification-queue/${id}/${action}`, payload)).data,
   getNinProviderBalance: async () => (await api.get("/admin/diagnostics/nin-provider/balance")).data,
+  getNinProviderHealth: async () => (await api.get("/admin/diagnostics/nin-provider/health")).data,
   getDeliveryOffers: async (params = {}) => {
     const response = await api.get("/admin/delivery-offers", { params });
     const offers = normalizeList(response.data, ["offers"]);

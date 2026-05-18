@@ -44,6 +44,7 @@ export default function AdminRiderVerificationQueue() {
   const [reviewAction, setReviewAction] = useState('')
   const [reviewNote, setReviewNote] = useState('')
   const [balance, setBalance] = useState(null)
+  const [providerHealth, setProviderHealth] = useState(null)
 
   const permissions = Array.isArray(admin?.permissions) ? admin.permissions : []
   const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || permissions.length === 0))
@@ -62,8 +63,11 @@ export default function AdminRiderVerificationQueue() {
       try {
         const balanceResponse = await adminAPI.getNinProviderBalance()
         setBalance(balanceResponse.balance || balanceResponse.data || null)
+        const healthResponse = await adminAPI.getNinProviderHealth()
+        setProviderHealth(healthResponse.health || healthResponse.data || null)
       } catch {
         setBalance({ available: false, message: 'Provider wallet balance unavailable' })
+        setProviderHealth({ providerReachable: false, lastStatus: 'unavailable' })
       }
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to load rider verification queue')
@@ -120,6 +124,11 @@ export default function AdminRiderVerificationQueue() {
           <strong>NIN Verification Balance</strong>
         </div>
         <div className="verification-wallet-balance">{balance ? formatNairaBalance(balance) : 'Checking balance...'}</div>
+        <div className={`verification-api-health ${providerHealth?.providerReachable ? 'healthy' : 'down'}`}>
+          <span>Verification API Health</span>
+          <strong>{providerHealth?.providerReachable ? 'Reachable' : 'Unavailable'}</strong>
+          <small>{providerHealth?.failedRequestsCount || 0} failed requests · last success {providerHealth?.lastSuccessfulVerificationAt ? new Date(providerHealth.lastSuccessfulVerificationAt).toLocaleString() : 'none yet'}</small>
+        </div>
         {balance?.is_low && (
           <div className="verification-wallet-warning">
             <AlertTriangle size={18} />
