@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -60,9 +62,9 @@ fun VerificationRequiredScreen(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Partner activation", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    Text("Rider activation", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Complete each step once. Submitted steps stay locked unless you choose Edit.",
+                        "Track the checks required before Go Online, orders, and wallet access unlock.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -79,16 +81,12 @@ fun VerificationRequiredScreen(
             }
 
             item {
-                KycStepCard(KycStep.Identity, progress.identityStatus, progress.nextStep == KycStep.Identity, onEditIdentity)
-            }
-            item {
-                KycStepCard(KycStep.Address, progress.addressStatus, progress.nextStep == KycStep.Address, onEditAddress)
-            }
-            item {
-                KycStepCard(KycStep.EmergencyContact, progress.emergencyContactStatus, progress.nextStep == KycStep.EmergencyContact, onEditEmergencyContact)
-            }
-            item {
-                KycStepCard(KycStep.AdminApproval, progress.adminApprovalStatus, progress.nextStep == KycStep.AdminApproval, onEdit = null)
+                ActivationTimeline(
+                    progress = progress,
+                    onEditIdentity = onEditIdentity,
+                    onEditAddress = onEditAddress,
+                    onEditEmergencyContact = onEditEmergencyContact
+                )
             }
 
             item {
@@ -115,35 +113,62 @@ fun VerificationRequiredScreen(
 }
 
 @Composable
-private fun KycStepCard(
+private fun ActivationTimeline(
+    progress: VerificationProgress,
+    onEditIdentity: () -> Unit,
+    onEditAddress: () -> Unit,
+    onEditEmergencyContact: () -> Unit
+) {
+    val completed = listOf(
+        progress.identityStatus,
+        progress.addressStatus,
+        progress.emergencyContactStatus,
+        progress.adminApprovalStatus
+    ).count { it.isLockedComplete }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text("Onboarding timeline", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("$completed/4", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+            LinearProgressIndicator(progress = { completed / 4f }, modifier = Modifier.fillMaxWidth())
+            KycStepRow(KycStep.Identity, progress.identityStatus, progress.nextStep == KycStep.Identity, onEditIdentity)
+            HorizontalDivider()
+            KycStepRow(KycStep.Address, progress.addressStatus, progress.nextStep == KycStep.Address, onEditAddress)
+            HorizontalDivider()
+            KycStepRow(KycStep.EmergencyContact, progress.emergencyContactStatus, progress.nextStep == KycStep.EmergencyContact, onEditEmergencyContact)
+            HorizontalDivider()
+            KycStepRow(KycStep.AdminApproval, progress.adminApprovalStatus, progress.nextStep == KycStep.AdminApproval, onEdit = null)
+        }
+    }
+}
+
+@Composable
+private fun KycStepRow(
     step: KycStep,
     status: VerificationStatus,
     active: Boolean,
     onEdit: (() -> Unit)?
 ) {
     val complete = status.isLockedComplete
-    Card(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
-        )
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FoodNovaStatusMark(
-                label = if (complete) "OK" else if (active) "NX" else "--",
-                color = if (complete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Column(Modifier.weight(1f)) {
-                Text(step.title(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(status.stepCopy(active), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (complete && onEdit != null) {
-                TextButton(onClick = onEdit) { Text("Edit") }
-            }
+        FoodNovaStatusMark(
+            label = if (complete) "OK" else if (active) "NX" else "--",
+            color = if (complete) MaterialTheme.colorScheme.primary else if (active) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Column(Modifier.weight(1f)) {
+            Text(step.title(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(status.stepCopy(active), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (complete && onEdit != null) {
+            TextButton(onClick = onEdit) { Text("Edit") }
         }
     }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Plus, Search, X } from 'lucide-react'
+import { Plus, Search, ShieldCheck, X } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './AdminRiders.css'
@@ -131,7 +131,10 @@ export default function AdminRiders() {
           <h1>Delivery Riders</h1>
           <p>Manage riders and assign deliveries across FoodNova orders.</p>
         </div>
-        <button type="button" className="btn-primary" onClick={openCreate}><Plus size={18} /> Add Rider</button>
+        <div className="rider-header-actions">
+          <button type="button" className="btn-view" onClick={() => window.location.assign('/admin/rider-verification')}><ShieldCheck size={18} /> Verification Queue</button>
+          <button type="button" className="btn-primary" onClick={openCreate}><Plus size={18} /> Add Rider</button>
+        </div>
       </div>
 
       <div className="rider-toolbar">

@@ -61,6 +61,7 @@ from models import (
     RiderKyc as DBRiderKyc,
     RiderDocument as DBRiderDocument,
     RiderStatusLog as DBRiderStatusLog,
+    VerificationLog as DBVerificationLog,
     AdminReview as DBAdminReview,
     OperationalZone as DBOperationalZone,
     User as DBUser,
@@ -2465,6 +2466,12 @@ def rider_document_upsert(db, worker: DBDeliveryWorker, document_type: str, file
     if not document:
         document = DBRiderDocument(delivery_worker_id=worker.id, document_type=document_type)
         db.add(document)
+    elif document.file_url and document.file_url != file_url:
+        kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
+        if kyc:
+            flags = json_load(kyc.fraud_flags_json, {})
+            flags["edited_documents"] = True
+            kyc.fraud_flags_json = json_dump(flags)
     document.file_url = file_url
     document.file_name = os.path.basename(str(file_url))
     document.content_type = (metadata or {}).get("content_type", "")
@@ -2488,6 +2495,22 @@ def log_rider_status_change(db, worker: DBDeliveryWorker, old_stage: str, new_st
         actor_name=(actor or {}).get("full_name") or (actor or {}).get("email") or "FoodNova System",
         note=note or "",
         metadata_json=json_dump(metadata or {}),
+    ))
+
+
+def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str, provider_result: dict = None, error: CheckMyNINBVNError = None, message: str = "") -> None:
+    provider_result = provider_result or {}
+    db.add(DBVerificationLog(
+        delivery_worker_id=worker.id,
+        verification_type=verification_type,
+        provider=provider_result.get("provider") or "checkmyninbvn",
+        request_id=provider_result.get("request_id") or "",
+        status=provider_result.get("provider_status") or ("error" if error else ""),
+        success=bool(provider_result.get("verified")) and error is None,
+        http_status=error.provider_status if error else None,
+        error_code=error.code if error else "",
+        message=message or provider_result.get("message") or (str(error) if error else ""),
+        response_json=json_dump(provider_result or {"error_code": error.code if error else "", "message": str(error) if error else message}),
     ))
 
 
@@ -2570,6 +2593,8 @@ def rider_approval_blockers(db, worker: DBDeliveryWorker) -> List[str]:
         blockers.append("Duplicate NIN usage must be cleared before approval.")
     if kyc and kyc.duplicate_selfie:
         blockers.append("Duplicate selfie flag must be cleared before approval.")
+    if kyc and json_load(kyc.fraud_flags_json, {}).get("edited_documents"):
+        blockers.append("Edited document flag must be reviewed before approval.")
     if not worker.selfie_url:
         blockers.append("Selfie submission is required.")
     if not worker.id_document_url:
@@ -2589,6 +2614,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
     kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
     documents = db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id).order_by(DBRiderDocument.created_at.desc()).all()
     logs = db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker.id).order_by(DBRiderStatusLog.created_at.desc()).limit(50).all()
+    verification_logs = db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker.id).order_by(DBVerificationLog.created_at.desc()).limit(30).all()
     reviews = db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).order_by(DBAdminReview.created_at.desc()).limit(30).all()
     return {
         "worker": worker_to_dict(worker),
@@ -2625,6 +2651,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
         },
         "documents": [{"id": doc.id, "type": doc.document_type, "url": doc.file_url or "", "file_name": doc.file_name or "", "status": doc.status or "submitted", "metadata": json_load(doc.metadata_json, {}), "created_at": iso(doc.created_at)} for doc in documents],
         "status_logs": [{"id": log.id, "old_stage": log.old_stage or "", "new_stage": log.new_stage or "", "old_status": log.old_status or "", "new_status": log.new_status or "", "actor_type": log.actor_type or "", "actor_name": log.actor_name or "", "note": log.note or "", "created_at": iso(log.created_at)} for log in logs],
+        "verification_logs": [{"id": log.id, "type": log.verification_type or "", "provider": log.provider or "", "status": log.status or "", "success": bool(log.success), "error_code": log.error_code or "", "message": log.message or "", "created_at": iso(log.created_at)} for log in verification_logs],
         "admin_reviews": [{"id": review.id, "admin_name": review.admin_name or "", "action": review.action or "", "reason": review.reason or "", "required_changes": json_load(review.required_changes_json, []), "created_at": iso(review.created_at)} for review in reviews],
         "approval_blockers": rider_approval_blockers(db, worker),
     }
@@ -3387,6 +3414,7 @@ async def delivery_worker_signup(
         )
         db.add(worker)
         db.flush()
+        log_verification_event(db, worker, "nin", nin_result, message=nin_result.get("message") or "")
         if worker_type == "rider":
             set_delivery_worker_review_meta(worker, "identity_verification", {
                 "status": "verified",
@@ -3499,11 +3527,13 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             verified = bool(provider_result.get("verified"))
             provider_data = provider_result.get("data") or {}
             provider_message = provider_result.get("message") or ""
+            log_verification_event(db, worker, "nin", provider_result, message=provider_message)
         except CheckMyNINBVNError as error:
             provider_message = str(error) or "NIN verification failed."
             provider_error_code = error.code
             provider_retryable = error.retryable
             provider_http_status = error.provider_status
+            log_verification_event(db, worker, "nin", {}, error, provider_message)
             print(
                 "NIN_PROVIDER_ERROR",
                 json_dump({

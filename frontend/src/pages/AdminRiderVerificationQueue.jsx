@@ -1,23 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { RefreshCw, Search } from 'lucide-react'
+import { RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import { adminAPI, resolveMediaUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './WorkerPages.css'
 
 const statuses = ['all', 'pending', 'approved', 'rejected', 'suspended']
-const stages = ['all', 'account_created', 'identity_submitted', 'address_uploaded', 'emergency_contact_added', 'selfie_verified', 'admin_review', 'approved', 'rejected', 'suspended']
+const stages = ['all', 'account_created', 'identity_submitted', 'address_uploaded', 'emergency_contact_added', 'admin_review', 'approved', 'rejected', 'suspended']
 
-function chipClass(status) {
-  const value = String(status || 'pending').toLowerCase()
-  if (value.includes('approved') || value.includes('verified')) return 'APPROVED'
-  if (value.includes('rejected')) return 'REJECTED'
-  if (value.includes('suspended')) return 'SUSPENDED'
+function label(value) {
+  return String(value || '').replace(/_/g, ' ') || 'N/A'
+}
+
+function chip(value) {
+  const text = String(value || '').toLowerCase()
+  if (text.includes('approved') || text.includes('verified')) return 'APPROVED'
+  if (text.includes('rejected')) return 'REJECTED'
+  if (text.includes('suspended')) return 'SUSPENDED'
   return 'KYC_PENDING'
 }
 
-function stageLabel(value) {
-  return String(value || 'account_created').replace(/_/g, ' ')
+function riskLevel(item) {
+  const flags = item?.kyc?.fraud_flags || {}
+  const blockers = item?.approval_blockers || []
+  if (flags.duplicate_nin || flags.duplicate_selfie || flags.identity_mismatch) return 'High'
+  if (blockers.length || !item?.kyc?.nin_verified) return 'Medium'
+  return 'Low'
 }
 
 export default function AdminRiderVerificationQueue() {
@@ -26,6 +34,7 @@ export default function AdminRiderVerificationQueue() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [filters, setFilters] = useState({ status: 'pending', stage: 'all', search: '' })
+  const [reviewAction, setReviewAction] = useState('')
   const [reviewNote, setReviewNote] = useState('')
 
   const permissions = Array.isArray(admin?.permissions) ? admin.permissions : []
@@ -42,10 +51,6 @@ export default function AdminRiderVerificationQueue() {
       if (filters.search.trim()) params.search = filters.search.trim()
       const response = await adminAPI.getRiderVerificationQueue(params)
       setRiders(response.data || [])
-      if (selected) {
-        const fresh = (response.data || []).find((item) => item.worker?.id === selected.worker?.id)
-        if (fresh) setSelected(fresh)
-      }
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to load rider verification queue')
     } finally {
@@ -57,15 +62,21 @@ export default function AdminRiderVerificationQueue() {
     if (isAdmin && canView) loadQueue()
   }, [isAdmin, canView, filters.status, filters.stage])
 
-  const filteredRiders = useMemo(() => riders, [riders])
+  const counts = useMemo(() => ({
+    pending: riders.filter((item) => !['APPROVED', 'REJECTED', 'SUSPENDED'].includes(item.worker?.kyc_status)).length,
+    approved: riders.filter((item) => item.worker?.kyc_status === 'APPROVED').length,
+    rejected: riders.filter((item) => item.worker?.kyc_status === 'REJECTED').length,
+    suspended: riders.filter((item) => item.worker?.kyc_status === 'SUSPENDED').length,
+  }), [riders])
 
-  const review = async (action) => {
-    if (!selected || !canManage) return
+  const submitReview = async () => {
+    if (!selected || !reviewAction || !canManage) return
     try {
-      const response = await adminAPI.reviewRiderVerification(selected.worker.id, action, { status: action, review_note: reviewNote })
+      const response = await adminAPI.reviewRiderVerification(selected.worker.id, reviewAction, { status: reviewAction, review_note: reviewNote })
       setSelected(response.rider || response.data)
+      setReviewAction('')
       setReviewNote('')
-      toast.success(`Rider ${stageLabel(action)}`)
+      toast.success(`Rider ${label(reviewAction)}`)
       await loadQueue()
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to update rider verification')
@@ -80,17 +91,21 @@ export default function AdminRiderVerificationQueue() {
       <div className="workforce-header">
         <div>
           <h1>Rider Verification Queue</h1>
-          <p>Review identity, NIN checks, documents, selfie, GPS, device context, and admin decisions before unlocking delivery operations.</p>
+          <p>Operations review for KYC, fraud checks, documents, and activation readiness.</p>
         </div>
         <button type="button" onClick={loadQueue}><RefreshCw size={16} /> Refresh</button>
       </div>
 
+      <section className="verification-summary-strip">
+        {Object.entries(counts).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{label(key)}</span></div>)}
+      </section>
+
       <div className="workforce-filters">
         <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
-          {statuses.map((status) => <option key={status} value={status}>{stageLabel(status)}</option>)}
+          {statuses.map((status) => <option key={status} value={status}>{label(status)}</option>)}
         </select>
         <select value={filters.stage} onChange={(event) => setFilters({ ...filters, stage: event.target.value })}>
-          {stages.map((stage) => <option key={stage} value={stage}>{stageLabel(stage)}</option>)}
+          {stages.map((stage) => <option key={stage} value={stage}>{label(stage)}</option>)}
         </select>
         <div className="worker-search-box">
           <Search size={16} />
@@ -99,77 +114,96 @@ export default function AdminRiderVerificationQueue() {
         <button type="button" onClick={loadQueue}>Search</button>
       </div>
 
-      {loading ? <div className="worker-panel">Loading rider verification queue...</div> : (
-        <div className="workforce-grid">
-          {filteredRiders.map((item) => {
-            const worker = item.worker || {}
-            const kyc = item.kyc || {}
-            return (
-              <article className="workforce-card" key={worker.id}>
-                <div className="workforce-card-head">
-                  <div>
-                    <h2>{worker.full_name}</h2>
-                    <p>{worker.phone} - {worker.plate_number || 'No plate yet'}</p>
-                  </div>
-                  <span className={`worker-status ${chipClass(worker.kyc_status)}`}>{stageLabel(kyc.onboarding_stage)}</span>
-                </div>
-                <div className="worker-detail-grid">
-                  <div><strong>NIN</strong><span>{kyc.nin_verified ? 'Verified' : 'Not verified'} {kyc.nin_last4 ? `...${kyc.nin_last4}` : ''}</span></div>
-                  <div><strong>Identity</strong><span>{stageLabel(kyc.identity_status)}</span></div>
-                  <div><strong>Address</strong><span>{stageLabel(kyc.address_status)}</span></div>
-                  <div><strong>Emergency</strong><span>{stageLabel(kyc.emergency_status)}</span></div>
-                  <div><strong>Selfie</strong><span>{stageLabel(kyc.selfie_status)}</span></div>
-                  <div><strong>GPS</strong><span>{worker.latest_latitude ? `${worker.latest_latitude}, ${worker.latest_longitude}` : 'No GPS yet'}</span></div>
-                </div>
-                {item.approval_blockers?.length > 0 && <p><strong>Blockers:</strong> {item.approval_blockers.join(' ')}</p>}
-                <button type="button" onClick={() => setSelected(item)}>Open rider detail</button>
-              </article>
-            )
-          })}
-          {!filteredRiders.length && <div className="worker-panel">No riders match this queue.</div>}
-        </div>
-      )}
+      <div className="verification-workbench">
+        <section className="verification-table-panel">
+          {loading ? <div className="worker-panel">Loading rider queue...</div> : (
+            <table className="verification-table">
+              <thead>
+                <tr>
+                  <th>Rider</th>
+                  <th>Phone</th>
+                  <th>Registered</th>
+                  <th>KYC</th>
+                  <th>Risk</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {riders.map((item) => {
+                  const worker = item.worker || {}
+                  const risk = riskLevel(item)
+                  return (
+                    <tr key={worker.id} className={selected?.worker?.id === worker.id ? 'selected' : ''}>
+                      <td>
+                        <div className="rider-cell">
+                          <span className="rider-avatar">{worker.profile_photo_url ? <img src={resolveMediaUrl(worker.profile_photo_url)} alt="" /> : (worker.full_name || 'R').slice(0, 1)}</span>
+                          <div><strong>{worker.full_name}</strong><small>{worker.plate_number || 'No plate'}</small></div>
+                        </div>
+                      </td>
+                      <td>{worker.phone}</td>
+                      <td>{worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</td>
+                      <td><span className={`worker-status ${chip(worker.kyc_status)}`}>{label(item.kyc?.onboarding_stage)}</span></td>
+                      <td><span className={`risk-chip risk-${risk.toLowerCase()}`}>{risk}</span></td>
+                      <td><button type="button" onClick={() => setSelected(item)}>Review</button></td>
+                    </tr>
+                  )
+                })}
+                {!riders.length && <tr><td colSpan="6" className="verification-empty">No riders match this queue.</td></tr>}
+              </tbody>
+            </table>
+          )}
+        </section>
 
-      {selected && (
-        <div className="worker-detail-drawer">
-          <div className="workforce-card">
-            <div className="workforce-card-head">
-              <div>
-                <h2>{selected.worker.full_name}</h2>
-                <p>{selected.worker.email || selected.worker.phone}</p>
-              </div>
-              <button type="button" className="secondary-worker-button" onClick={() => setSelected(null)}>Close</button>
-            </div>
-            <div className="worker-detail-grid">
-              <div><strong>Registration</strong><span>{selected.worker.created_at ? new Date(selected.worker.created_at).toLocaleString() : 'N/A'}</span></div>
-              <div><strong>Vehicle</strong><span>{selected.worker.vehicle_type || 'N/A'} - {selected.worker.plate_number || 'N/A'}</span></div>
-              <div><strong>Emergency</strong><span>{selected.worker.emergency_contact_name || 'N/A'} - {selected.worker.emergency_contact_phone || 'N/A'}</span></div>
-              <div><strong>Provider</strong><span>{selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
-              <div><strong>Fraud Flags</strong><span>{Object.entries(selected.kyc.fraud_flags || {}).filter(([, value]) => value).map(([key]) => stageLabel(key)).join(', ') || 'Clear'}</span></div>
-              <div><strong>Device/GPS</strong><span>{selected.worker.latest_latitude ? `${selected.worker.latest_latitude}, ${selected.worker.latest_longitude}` : 'No GPS ping'}</span></div>
-            </div>
-            <div className="document-link-row">
-              {(selected.documents || []).map((doc) => <a key={doc.id} href={resolveMediaUrl(doc.url)} target="_blank" rel="noopener noreferrer">{stageLabel(doc.type)}</a>)}
-            </div>
-            {selected.kyc.rejection_reason && <p><strong>Rejected reason:</strong> {selected.kyc.rejection_reason}</p>}
-            <h3>Activity logs</h3>
-            <div className="status-log-list">
-              {(selected.status_logs || []).map((log) => <p key={log.id}><strong>{stageLabel(log.new_stage)}</strong> by {log.actor_name} - {log.created_at ? new Date(log.created_at).toLocaleString() : ''}</p>)}
-            </div>
-            {canManage && (
-              <div className="worker-review-actions">
-                <textarea rows="3" placeholder="Reason or resubmission instructions" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} />
+        <aside className="verification-detail-panel">
+          {!selected ? (
+            <div className="empty-detail"><ShieldCheck size={28} /><p>Select a rider to review profile, NIN result, documents, selfie, and activity history.</p></div>
+          ) : (
+            <>
+              <div className="workforce-card-head">
                 <div>
-                  <button type="button" onClick={() => review('approve')}>Approve</button>
-                  <button type="button" onClick={() => review('request_resubmission')}>Request resubmission</button>
-                  <button type="button" onClick={() => review('reject')}>Reject</button>
-                  <button type="button" onClick={() => review('suspend')}>Suspend</button>
+                  <h2>{selected.worker.full_name}</h2>
+                  <p>{label(selected.kyc?.onboarding_stage)} - {selected.worker.phone}</p>
                 </div>
+                <span className={`worker-status ${chip(selected.worker.kyc_status)}`}>{selected.worker.kyc_status}</span>
               </div>
-            )}
-          </div>
-        </div>
-      )}
+              <div className="worker-detail-grid">
+                <div><strong>NIN</strong><span>{selected.kyc.nin_verified ? 'Verified' : 'Not verified'} {selected.kyc.nin_last4 ? `...${selected.kyc.nin_last4}` : ''}</span></div>
+                <div><strong>Provider</strong><span>{selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
+                <div><strong>Address</strong><span>{label(selected.kyc.address_status)}</span></div>
+                <div><strong>Emergency</strong><span>{selected.worker.emergency_contact_name || 'Missing'}</span></div>
+                <div><strong>GPS</strong><span>{selected.worker.latest_latitude ? `${selected.worker.latest_latitude}, ${selected.worker.latest_longitude}` : 'No GPS ping'}</span></div>
+                <div><strong>Risk</strong><span>{riskLevel(selected)}</span></div>
+              </div>
+              {selected.approval_blockers?.length > 0 && <p className="verification-warning"><strong>Blockers:</strong> {selected.approval_blockers.join(' ')}</p>}
+              <div className="document-link-row">
+                {(selected.documents || []).map((doc) => <a key={doc.id} href={resolveMediaUrl(doc.url)} target="_blank" rel="noopener noreferrer">{label(doc.type)}</a>)}
+              </div>
+              <h3>Verification response</h3>
+              <div className="status-log-list">
+                {(selected.verification_logs || []).slice(0, 4).map((log) => <p key={log.id}><strong>{log.provider}</strong> {log.success ? 'verified' : log.error_code || log.status} - {log.message || 'No message'}</p>)}
+                {!selected.verification_logs?.length && <p>No provider log yet.</p>}
+              </div>
+              <h3>Activity history</h3>
+              <div className="status-log-list">
+                {(selected.status_logs || []).slice(0, 5).map((log) => <p key={log.id}><strong>{label(log.new_stage)}</strong> by {log.actor_name} - {log.created_at ? new Date(log.created_at).toLocaleString() : ''}</p>)}
+              </div>
+              {canManage && (
+                <div className="worker-review-actions">
+                  <select value={reviewAction} onChange={(event) => setReviewAction(event.target.value)}>
+                    <option value="">Select action</option>
+                    <option value="approve">Approve</option>
+                    <option value="request_resubmission">Request resubmission</option>
+                    <option value="reject">Reject</option>
+                    <option value="suspend">Suspend</option>
+                  </select>
+                  <textarea rows="3" placeholder="Reason or resubmission instructions" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} />
+                  <button type="button" disabled={!reviewAction} onClick={submitReview}>Submit review</button>
+                </div>
+              )}
+            </>
+          )}
+        </aside>
+      </div>
     </div>
   )
 }

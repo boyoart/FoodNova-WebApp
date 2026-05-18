@@ -280,6 +280,25 @@ class RiderStatusLog(Base):
     worker = relationship("DeliveryWorker")
 
 
+class VerificationLog(Base):
+    __tablename__ = "verification_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, index=True)
+    verification_type = Column(String(60), default="nin", index=True)
+    provider = Column(String(80), default="checkmyninbvn", index=True)
+    request_id = Column(String(120), default="", index=True)
+    status = Column(String(50), default="", index=True)
+    success = Column(Boolean, default=False)
+    http_status = Column(Integer, nullable=True)
+    error_code = Column(String(80), default="")
+    message = Column(Text, default="")
+    response_json = Column(Text, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    worker = relationship("DeliveryWorker")
+
+
 class AdminReview(Base):
     __tablename__ = "admin_reviews"
 

@@ -22,11 +22,16 @@
 }
 
 .admin-riders-header .btn-primary,
+.rider-header-actions,
 .rider-modal-footer .btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
+}
+
+.rider-header-actions {
+  flex-wrap: wrap;
 }
 
 .admin-riders-page .btn-primary,

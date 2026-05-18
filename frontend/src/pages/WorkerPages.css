@@ -571,6 +571,156 @@
   text-decoration: none;
 }
 
+.verification-summary-strip {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  margin-bottom: 1rem;
+}
+
+.verification-summary-strip div,
+.verification-table-panel,
+.verification-detail-panel {
+  background: #fff;
+  border: 1px solid #d7e3da;
+  border-radius: 8px;
+}
+
+.verification-summary-strip div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.9rem;
+}
+
+.verification-summary-strip strong {
+  color: #12351f;
+  font-size: 1.35rem;
+}
+
+.verification-summary-strip span {
+  color: #5d6b62;
+  text-transform: capitalize;
+}
+
+.verification-workbench {
+  align-items: start;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.9fr);
+}
+
+.verification-table-panel {
+  overflow-x: auto;
+}
+
+.verification-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.verification-table th,
+.verification-table td {
+  border-bottom: 1px solid #edf2ee;
+  padding: 0.8rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.verification-table th {
+  color: #5d6b62;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.verification-table tr.selected {
+  background: #f2fbf4;
+}
+
+.rider-cell {
+  align-items: center;
+  display: flex;
+  gap: 0.7rem;
+}
+
+.rider-cell small {
+  color: #5d6b62;
+  display: block;
+}
+
+.rider-avatar {
+  align-items: center;
+  background: #12351f;
+  border-radius: 50%;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 800;
+  height: 38px;
+  justify-content: center;
+  overflow: hidden;
+  width: 38px;
+}
+
+.rider-avatar img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+
+.risk-chip {
+  border-radius: 999px;
+  display: inline-flex;
+  font-weight: 800;
+  padding: 0.35rem 0.65rem;
+}
+
+.risk-low {
+  background: #e7f6ec;
+  color: #146c2e;
+}
+
+.risk-medium {
+  background: #fff6d7;
+  color: #8a6500;
+}
+
+.risk-high {
+  background: #fee9e7;
+  color: #b3261e;
+}
+
+.verification-detail-panel {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  position: sticky;
+  top: 82px;
+}
+
+.verification-warning {
+  background: #fff6d7;
+  border-radius: 8px;
+  color: #5f4900 !important;
+  padding: 0.75rem;
+}
+
+.verification-empty,
+.empty-detail {
+  color: #5d6b62;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+@media (max-width: 980px) {
+  .verification-summary-strip,
+  .verification-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .verification-detail-panel {
+    position: static;
+  }
+}
+
 .worker-review-actions button:nth-child(2),
 .worker-review-actions button:nth-child(3) {
   background: #b3261e;
