@@ -24,6 +24,7 @@ class CheckMyNINBVNError(Exception):
     status_code: int = 400
     retryable: bool = False
     provider_status: Optional[int] = None
+    provider_body: Optional[dict] = None
 
     def __str__(self) -> str:
         return self.message
@@ -46,10 +47,9 @@ def _timeout_seconds() -> int:
 
 def checkmyninbvn_config() -> dict:
     api_key = _env_value("CHECKMYNINBVN_API_KEY")
-    base_url = _env_value("CHECKMYNINBVN_API_BASE_URL", "CHECKMYNINBVN_BASE_URL") or DEFAULT_CHECKMYNINBVN_BASE_URL
     return {
         "api_key": api_key,
-        "base_url": base_url.rstrip("/"),
+        "base_url": DEFAULT_CHECKMYNINBVN_BASE_URL,
         "configured": bool(api_key),
     }
 
@@ -61,10 +61,10 @@ def validate_checkmyninbvn_config() -> dict:
             "configured": False,
             "message": "CHECKMYNINBVN_API_KEY is missing. Add it to the Render environment before enabling live NIN checks.",
         }
-    if not config["base_url"].startswith("https://"):
+    if config["base_url"] != DEFAULT_CHECKMYNINBVN_BASE_URL:
         return {
             "configured": False,
-            "message": "CHECKMYNINBVN_API_BASE_URL must be an HTTPS URL.",
+            "message": "CheckMyNINBVN provider URL must be https://checkmyninbvn.com.ng/api.",
         }
     return {
         "configured": True,
@@ -78,6 +78,7 @@ def _raise_config_error(message: str) -> None:
         code="provider_not_configured",
         status_code=503,
         retryable=False,
+        provider_status=None,
     )
 
 
@@ -115,6 +116,12 @@ def _redact_provider_body(data):
     return data
 
 
+def _provider_message_from_body(data: dict, fallback: str = "") -> str:
+    if not isinstance(data, dict):
+        return fallback
+    return str(data.get("message") or data.get("detail") or data.get("error") or fallback)
+
+
 def _parse_provider_body(raw_body: str) -> dict:
     try:
         parsed = json.loads(raw_body or "{}")
@@ -145,6 +152,8 @@ def _is_insufficient_balance(message: str) -> bool:
 def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, duration_ms: int) -> CheckMyNINBVNError:
     try:
         body = error.read().decode("utf-8")
+        print("CHECKMYNINBVN_RAW_STATUS", error.code)
+        print("CHECKMYNINBVN_RAW_BODY", body)
         data = _parse_provider_body(body)
     except Exception:
         data = {}
@@ -174,6 +183,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             status_code=503,
             retryable=False,
             provider_status=error.code,
+            provider_body=data,
         )
     if _is_insufficient_balance(lower_message):
         return CheckMyNINBVNError(
@@ -182,6 +192,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             status_code=503,
             retryable=False,
             provider_status=error.code,
+            provider_body=data,
         )
     if error.code == 400 and ("invalid" in lower_message or "nin" in lower_message or "number" in lower_message):
         return CheckMyNINBVNError(
@@ -190,6 +201,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             status_code=422,
             retryable=False,
             provider_status=error.code,
+            provider_body=data,
         )
     if error.code == 429:
         return CheckMyNINBVNError(
@@ -198,6 +210,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             status_code=503,
             retryable=True,
             provider_status=error.code,
+            provider_body=data,
         )
     if error.code >= 500:
         return CheckMyNINBVNError(
@@ -206,6 +219,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             status_code=503,
             retryable=True,
             provider_status=error.code,
+            provider_body=data,
         )
     if "internal" in lower_message or "unauthorized" in lower_message:
         return CheckMyNINBVNError(
@@ -214,6 +228,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             status_code=503,
             retryable=True,
             provider_status=error.code,
+            provider_body=data,
         )
     return CheckMyNINBVNError(
         message=provider_message or "The NIN could not be verified. Please check the number and try again.",
@@ -221,6 +236,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         status_code=400,
         retryable=False,
         provider_status=error.code,
+        provider_body=data,
     )
 
 
@@ -228,8 +244,28 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
     request_id = f"nin_{uuid4().hex[:12]}"
     nin = "".join(ch for ch in str(nin_number or "") if ch.isdigit())
     if len(nin) != 11:
+        _log_provider_event(
+            "invalid_payload",
+            request_id,
+            {
+                "reason": "nin_must_be_11_digits",
+                "body": {"nin": f"*******{nin[-4:]}" if nin else "", "consent": bool(consent)},
+                "body_keys": ["nin", "consent"],
+                "env_api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
+            },
+        )
         raise CheckMyNINBVNError("NIN must be exactly 11 digits.", code="invalid_nin", status_code=422)
     if consent is not True:
+        _log_provider_event(
+            "invalid_payload",
+            request_id,
+            {
+                "reason": "consent_required",
+                "body": {"nin": f"*******{nin[-4:]}", "consent": bool(consent)},
+                "body_keys": ["nin", "consent"],
+                "env_api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
+            },
+        )
         raise CheckMyNINBVNError("Consent is required before NIN verification.", code="consent_required", status_code=422)
     with _ACTIVE_NIN_REQUESTS_LOCK:
         if nin in _ACTIVE_NIN_REQUESTS:
@@ -304,6 +340,8 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
                 response_status = response.status
                 raw_body = response.read().decode("utf-8")
+                print("CHECKMYNINBVN_RAW_STATUS", response_status)
+                print("CHECKMYNINBVN_RAW_BODY", raw_body)
         except urllib.error.HTTPError as error:
             duration_ms = int((time.monotonic() - started) * 1000)
             raise _map_provider_http_error(error, request_id, duration_ms) from error
@@ -487,6 +525,7 @@ def check_balance() -> dict:
     return {
         "success": str(result.get("status", "")).lower() == "success",
         "message": result.get("message") or "",
+        "provider_http_status": response.status,
         "report_id": result.get("reportID") or result.get("reportId") or result.get("report_id") or "",
         "balance": balance,
         "formatted_balance": data.get("formatted_balance") or "",
@@ -498,3 +537,65 @@ def check_balance() -> dict:
         "duration_ms": duration_ms,
         "raw_response": result,
     }
+
+
+def check_provider_connectivity() -> dict:
+    request_id = f"health_{uuid4().hex[:12]}"
+    config = checkmyninbvn_config()
+    api_key_loaded = bool(config.get("api_key"))
+    url = f"{config.get('base_url')}/balance"
+    if not api_key_loaded:
+        _log_provider_event(
+            "startup_configuration_failure",
+            request_id,
+            {
+                "url": url,
+                "api_key_present": False,
+                "env_api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
+            },
+        )
+        return {
+            "apiKeyLoaded": False,
+            "endpointReachable": False,
+            "lastProviderStatus": None,
+            "lastProviderMessage": "CHECKMYNINBVN_API_KEY is missing.",
+            "providerUrl": f"{config.get('base_url')}/nin-verification",
+            "balanceUrl": url,
+            "latencyMs": None,
+        }
+    started = time.monotonic()
+    try:
+        balance = check_balance()
+        return {
+            "apiKeyLoaded": True,
+            "endpointReachable": bool(balance.get("success")),
+            "lastProviderStatus": balance.get("provider_http_status") or 200,
+            "lastProviderMessage": balance.get("message") or "Provider reachable.",
+            "providerUrl": f"{config.get('base_url')}/nin-verification",
+            "balanceUrl": url,
+            "latencyMs": balance.get("duration_ms"),
+        }
+    except CheckMyNINBVNError as error:
+        duration_ms = int((time.monotonic() - started) * 1000)
+        body_message = _provider_message_from_body(error.provider_body or {}, str(error))
+        _log_provider_event(
+            "health_failure",
+            request_id,
+            {
+                "url": url,
+                "duration_ms": duration_ms,
+                "error_code": error.code,
+                "provider_status": error.provider_status,
+                "provider_message": body_message,
+                "response_body": _redact_provider_body(error.provider_body or {}),
+            },
+        )
+        return {
+            "apiKeyLoaded": True,
+            "endpointReachable": False,
+            "lastProviderStatus": error.provider_status,
+            "lastProviderMessage": body_message,
+            "providerUrl": f"{config.get('base_url')}/nin-verification",
+            "balanceUrl": url,
+            "latencyMs": duration_ms,
+        }

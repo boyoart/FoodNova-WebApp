@@ -30,7 +30,7 @@ from email_service import (
     send_customer_order_email,
     send_low_stock_alert,
 )
-from services.ninbvnportal_service import CheckMyNINBVNError, check_balance, checkmyninbvn_config, validate_checkmyninbvn_config, verify_nin
+from services.ninbvnportal_service import CheckMyNINBVNError, check_balance, check_provider_connectivity, checkmyninbvn_config, validate_checkmyninbvn_config, verify_nin
 
 try:
     import firebase_admin
@@ -3321,6 +3321,25 @@ def seed_database():
 @app.on_event("startup")
 def on_startup():
     seed_database()
+    validation = validate_checkmyninbvn_config()
+    if not validation.get("configured"):
+        print("CHECKMYNINBVN_STARTUP_FAILURE", json_dump({
+            "api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
+            "provider_url": f"{checkmyninbvn_config().get('base_url')}/nin-verification",
+            "message": validation.get("message"),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        raise RuntimeError(validation.get("message") or "CHECKMYNINBVN_API_KEY is missing.")
+    health = check_provider_connectivity()
+    print("CHECKMYNINBVN_STARTUP_HEALTH", json_dump({
+        "api_key_loaded": health.get("apiKeyLoaded"),
+        "endpoint_reachable": health.get("endpointReachable"),
+        "last_provider_status": health.get("lastProviderStatus"),
+        "last_provider_message": health.get("lastProviderMessage"),
+        "provider_url": health.get("providerUrl"),
+        "latency_ms": health.get("latencyMs"),
+        "timestamp": iso(datetime.utcnow()),
+    }))
 
 
 @app.get("/")
@@ -7495,23 +7514,17 @@ def get_nin_provider_diagnostics(request: Request):
 
 def nin_provider_health_payload(db=None) -> dict:
     config = checkmyninbvn_config()
-    validation = validate_checkmyninbvn_config()
-    last_status = "not_checked"
-    provider_reachable = False
+    connectivity = check_provider_connectivity()
     balance = None
-    last_error = ""
-    started = datetime.utcnow()
-    if validation.get("configured"):
+    if connectivity.get("endpointReachable"):
         try:
             balance = check_balance()
-            provider_reachable = bool(balance.get("success"))
-            last_status = "success" if provider_reachable else "unhealthy"
-        except CheckMyNINBVNError as error:
-            last_status = error.code
-            last_error = str(error)
+        except CheckMyNINBVNError:
+            balance = None
 
     failed_requests_count = 0
     last_successful_verification_at = ""
+    average_latency_ms = None
     if db is not None:
         failed_requests_count = db.query(DBVerificationLog).filter(
             DBVerificationLog.provider == "checkmyninbvn",
@@ -7522,19 +7535,29 @@ def nin_provider_health_payload(db=None) -> dict:
             DBVerificationLog.success == True,
         ).order_by(DBVerificationLog.created_at.desc()).first()
         last_successful_verification_at = iso(last_success.created_at) if last_success else ""
+        average_latency_ms = db.query(func.avg(DBVerificationLog.latency_ms)).filter(
+            DBVerificationLog.provider == "checkmyninbvn",
+            DBVerificationLog.latency_ms.isnot(None),
+        ).scalar()
 
     return {
-        "apiKeyLoaded": bool(config.get("api_key")),
-        "providerReachable": provider_reachable,
-        "lastStatus": last_status,
-        "lastError": last_error,
+        "apiKeyLoaded": connectivity.get("apiKeyLoaded"),
+        "endpointReachable": connectivity.get("endpointReachable"),
+        "providerReachable": connectivity.get("endpointReachable"),
+        "lastProviderStatus": connectivity.get("lastProviderStatus"),
+        "lastProviderMessage": connectivity.get("lastProviderMessage"),
+        "lastStatus": connectivity.get("lastProviderStatus"),
+        "lastError": connectivity.get("lastProviderMessage") if not connectivity.get("endpointReachable") else "",
+        "renderEnvironment": "production",
+        "providerUrl": f"{config.get('base_url')}/nin-verification",
         "endpoint": f"{config.get('base_url')}/nin-verification",
         "balanceEndpoint": f"{config.get('base_url')}/balance",
         "timeoutSeconds": os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "10"),
-        "latencyCheckedAt": iso(started),
+        "latencyCheckedAt": iso(datetime.utcnow()),
         "balance": balance,
         "failedRequestsCount": failed_requests_count,
         "lastSuccessfulVerificationAt": last_successful_verification_at,
+        "averageLatencyMs": round(float(average_latency_ms), 2) if average_latency_ms is not None else None,
     }
 
 
@@ -7545,8 +7568,11 @@ def get_public_nin_health():
         health = nin_provider_health_payload(db)
         return {
             "apiKeyLoaded": health["apiKeyLoaded"],
-            "providerReachable": health["providerReachable"],
-            "lastStatus": health["lastStatus"],
+            "endpointReachable": health["endpointReachable"],
+            "lastProviderStatus": health["lastProviderStatus"],
+            "lastProviderMessage": health["lastProviderMessage"],
+            "renderEnvironment": health["renderEnvironment"],
+            "providerUrl": health["providerUrl"],
         }
     finally:
         db.close()
