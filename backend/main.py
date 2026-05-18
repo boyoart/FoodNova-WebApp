@@ -30,7 +30,7 @@ from email_service import (
     send_customer_order_email,
     send_low_stock_alert,
 )
-from services.ninbvnportal_service import CheckMyNINBVNError, checkmyninbvn_config, validate_checkmyninbvn_config, verify_nin
+from services.ninbvnportal_service import CheckMyNINBVNError, check_balance, checkmyninbvn_config, validate_checkmyninbvn_config, verify_nin
 
 try:
     import firebase_admin
@@ -2573,7 +2573,7 @@ def log_rider_status_change(db, worker: DBDeliveryWorker, old_stage: str, new_st
     ))
 
 
-def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str, provider_result: dict = None, error: CheckMyNINBVNError = None, message: str = "") -> None:
+def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str, provider_result: dict = None, error: CheckMyNINBVNError = None, message: str = "", nin_last4: str = "", attempt_number: int = 0) -> None:
     provider_result = provider_result or {}
     db.add(DBVerificationLog(
         delivery_worker_id=worker.id,
@@ -2586,6 +2586,9 @@ def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str,
         error_code=error.code if error else "",
         message=message or provider_result.get("message") or (str(error) if error else ""),
         response_json=json_dump(provider_result or {"error_code": error.code if error else "", "message": str(error) if error else message}),
+        nin_last4=nin_last4 or provider_result.get("nin_last4") or "",
+        attempt_number=attempt_number or int(provider_result.get("attempt_number") or 0),
+        latency_ms=provider_result.get("duration_ms") if provider_result else None,
     ))
 
 
@@ -2721,15 +2724,21 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
             "emergency_status": kyc.emergency_status if kyc else "not_started",
             "selfie_status": kyc.selfie_status if kyc else "not_started",
             "admin_review_status": kyc.admin_review_status if kyc else "pending",
+            "submitted_nin": kyc.submitted_nin if kyc else "",
             "nin_last4": kyc.nin_last4 if kyc else "",
             "nin_verified": bool(kyc.nin_verified) if kyc else False,
+            "verification_status": kyc.nin_provider_status if kyc else "",
             "provider_report_id": kyc.nin_provider_report_id if kyc else "",
             "provider_message": kyc.nin_provider_message if kyc else "",
+            "verification_attempt_count": kyc.verification_attempt_count if kyc else 0,
+            "failed_verification_attempts": int((json_load(kyc.fraud_flags_json, {}) if kyc else {}).get("failed_kyc_attempts") or 0),
             "confidence_score": kyc.confidence_score if kyc else 0,
             "fraud_flags": json_load(kyc.fraud_flags_json, {}) if kyc else {},
+            "provider_response": json_load(kyc.nin_response_json, {}) if kyc else {},
             "rejection_reason": kyc.rejection_reason if kyc else "",
             "timestamps": {
                 "submitted_at": iso(kyc.submitted_at) if kyc else "",
+                "last_verification_at": iso(kyc.last_verification_at) if kyc else "",
                 "identity_verified_at": iso(kyc.identity_verified_at) if kyc else "",
                 "address_uploaded_at": iso(kyc.address_uploaded_at) if kyc else "",
                 "emergency_contact_added_at": iso(kyc.emergency_contact_added_at) if kyc else "",
@@ -2739,7 +2748,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
         },
         "documents": [{"id": doc.id, "type": doc.document_type, "url": doc.file_url or "", "file_name": doc.file_name or "", "status": doc.status or "submitted", "metadata": json_load(doc.metadata_json, {}), "created_at": iso(doc.created_at)} for doc in documents],
         "status_logs": [{"id": log.id, "old_stage": log.old_stage or "", "new_stage": log.new_stage or "", "old_status": log.old_status or "", "new_status": log.new_status or "", "actor_type": log.actor_type or "", "actor_name": log.actor_name or "", "note": log.note or "", "created_at": iso(log.created_at)} for log in logs],
-        "verification_logs": [{"id": log.id, "type": log.verification_type or "", "provider": log.provider or "", "status": log.status or "", "success": bool(log.success), "error_code": log.error_code or "", "message": log.message or "", "created_at": iso(log.created_at)} for log in verification_logs],
+        "verification_logs": [{"id": log.id, "type": log.verification_type or "", "provider": log.provider or "", "status": log.status or "", "success": bool(log.success), "error_code": log.error_code or "", "message": log.message or "", "nin_last4": log.nin_last4 or "", "attempt_number": log.attempt_number or 0, "latency_ms": log.latency_ms, "response": json_load(log.response_json, {}), "created_at": iso(log.created_at)} for log in verification_logs],
         "login_history": [{"id": session.id, "active": bool(session.is_active), "ip_address": session.ip_address or "", "device": json_load(session.device_info_json, {}), "created_at": iso(session.created_at), "last_seen_at": iso(session.last_seen_at), "revoked_at": iso(session.revoked_at), "revoked_reason": session.revoked_reason or ""} for session in sessions],
         "admin_reviews": [{"id": review.id, "admin_name": review.admin_name or "", "action": review.action or "", "reason": review.reason or "", "required_changes": json_load(review.required_changes_json, []), "created_at": iso(review.created_at)} for review in reviews],
         "approval_blockers": rider_approval_blockers(db, worker),
@@ -2777,6 +2786,11 @@ def detect_nin_fraud_flags(db, worker: DBDeliveryWorker, clean_nin: str, provide
         if other_identity.get("nin_hash") == current_hash:
             duplicate_nin = True
             break
+    if not duplicate_nin:
+        duplicate_nin = db.query(DBRiderKyc).filter(
+            DBRiderKyc.delivery_worker_id != worker.id,
+            DBRiderKyc.nin_hash == current_hash,
+        ).first() is not None
 
     fraud_risk_detected = duplicate_nin or identity_mismatch
     confidence = 0.98 if verified and not fraud_risk_detected else 0.6 if verified else 0.15
@@ -3063,6 +3077,56 @@ def ensure_database_compatibility():
             "deleted_reason": "TEXT DEFAULT ''",
             "created_at": "TIMESTAMP",
             "updated_at": "TIMESTAMP",
+        },
+        "rider_kyc": {
+            "delivery_worker_id": "INTEGER",
+            "onboarding_stage": "VARCHAR(50) DEFAULT 'account_created'",
+            "identity_status": "VARCHAR(30) DEFAULT 'not_started'",
+            "address_status": "VARCHAR(30) DEFAULT 'not_started'",
+            "emergency_status": "VARCHAR(30) DEFAULT 'not_started'",
+            "selfie_status": "VARCHAR(30) DEFAULT 'not_started'",
+            "admin_review_status": "VARCHAR(30) DEFAULT 'pending'",
+            "nin_hash": "VARCHAR(80) DEFAULT ''",
+            "submitted_nin": "VARCHAR(20) DEFAULT ''",
+            "nin_last4": "VARCHAR(4) DEFAULT ''",
+            "nin_verified": "BOOLEAN DEFAULT FALSE",
+            "nin_provider": "VARCHAR(80) DEFAULT 'checkmyninbvn'",
+            "nin_provider_report_id": "VARCHAR(120) DEFAULT ''",
+            "nin_provider_status": "VARCHAR(80) DEFAULT ''",
+            "nin_provider_message": "TEXT DEFAULT ''",
+            "nin_response_json": "TEXT DEFAULT '{}'",
+            "verification_attempt_count": "INTEGER DEFAULT 0",
+            "last_verification_at": "TIMESTAMP",
+            "confidence_score": "FLOAT DEFAULT 0",
+            "fraud_flags_json": "TEXT DEFAULT '{}'",
+            "duplicate_nin": "BOOLEAN DEFAULT FALSE",
+            "duplicate_selfie": "BOOLEAN DEFAULT FALSE",
+            "rejection_reason": "TEXT DEFAULT ''",
+            "resubmission_requested": "BOOLEAN DEFAULT FALSE",
+            "submitted_at": "TIMESTAMP",
+            "identity_verified_at": "TIMESTAMP",
+            "address_uploaded_at": "TIMESTAMP",
+            "emergency_contact_added_at": "TIMESTAMP",
+            "selfie_verified_at": "TIMESTAMP",
+            "admin_reviewed_at": "TIMESTAMP",
+            "created_at": "TIMESTAMP",
+            "updated_at": "TIMESTAMP",
+        },
+        "verification_logs": {
+            "delivery_worker_id": "INTEGER",
+            "verification_type": "VARCHAR(60) DEFAULT 'nin'",
+            "provider": "VARCHAR(80) DEFAULT 'checkmyninbvn'",
+            "request_id": "VARCHAR(120) DEFAULT ''",
+            "status": "VARCHAR(50) DEFAULT ''",
+            "success": "BOOLEAN DEFAULT FALSE",
+            "http_status": "INTEGER",
+            "error_code": "VARCHAR(80) DEFAULT ''",
+            "message": "TEXT DEFAULT ''",
+            "response_json": "TEXT DEFAULT '{}'",
+            "nin_last4": "VARCHAR(4) DEFAULT ''",
+            "attempt_number": "INTEGER DEFAULT 0",
+            "latency_ms": "INTEGER",
+            "created_at": "TIMESTAMP",
         },
         "operational_zones": {
             "zone_name": "VARCHAR(150) DEFAULT 'FoodNova Local Zone'",
@@ -3595,6 +3659,7 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             "date_of_birth": data.get("birthdate") or "",
             "gender": data.get("gender") or "",
             "phone": data.get("phone") or "",
+            "address": data.get("address") or "",
         },
     }
 
@@ -3608,6 +3673,27 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             raise HTTPException(status_code=422, detail="NIN must be exactly 11 digits.")
         if not payload.consent:
             raise HTTPException(status_code=422, detail="Consent is required before NIN verification.")
+        rider_kyc = None
+        attempt_number = 1
+        if (worker.worker_type or "").lower() == "rider":
+            _, rider_kyc = ensure_rider_records(db, worker)
+            attempt_number = int(rider_kyc.verification_attempt_count or 0) + 1
+            recent_cutoff = datetime.utcnow() - timedelta(minutes=15)
+            if (
+                int(rider_kyc.verification_attempt_count or 0) >= 5
+                and rider_kyc.last_verification_at
+                and rider_kyc.last_verification_at >= recent_cutoff
+            ):
+                flags = json_load(rider_kyc.fraud_flags_json, {})
+                flags["rate_limited_verification"] = True
+                flags["suspicious_activity"] = True
+                rider_kyc.fraud_flags_json = json_dump(flags)
+                db.commit()
+                raise HTTPException(status_code=429, detail="Too many failed verification attempts. Please retry shortly.")
+            rider_kyc.verification_attempt_count = attempt_number
+            rider_kyc.last_verification_at = datetime.utcnow()
+            rider_kyc.submitted_nin = clean_nin
+            rider_kyc.nin_last4 = clean_nin[-4:]
 
         verified = False
         provider_result = {}
@@ -3622,13 +3708,36 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             verified = bool(provider_result.get("verified"))
             provider_data = provider_result.get("data") or {}
             provider_message = provider_result.get("message") or ""
-            log_verification_event(db, worker, "nin", provider_result, message=provider_message)
+            provider_result["attempt_number"] = attempt_number
+            provider_result["nin_last4"] = clean_nin[-4:]
+            log_verification_event(db, worker, "nin", provider_result, message=provider_message, nin_last4=clean_nin[-4:], attempt_number=attempt_number)
         except CheckMyNINBVNError as error:
             provider_message = str(error) or "NIN verification failed."
             provider_error_code = error.code
             provider_retryable = error.retryable
             provider_http_status = error.provider_status
-            log_verification_event(db, worker, "nin", {}, error, provider_message)
+            log_verification_event(db, worker, "nin", {"attempt_number": attempt_number, "nin_last4": clean_nin[-4:]}, error, provider_message, nin_last4=clean_nin[-4:], attempt_number=attempt_number)
+            if rider_kyc:
+                rider_kyc.identity_status = "failed"
+                rider_kyc.nin_hash = _nin_hash(clean_nin)
+                rider_kyc.submitted_nin = clean_nin
+                rider_kyc.nin_last4 = clean_nin[-4:]
+                rider_kyc.nin_verified = False
+                rider_kyc.nin_provider = "checkmyninbvn"
+                rider_kyc.nin_provider_status = "error"
+                rider_kyc.nin_provider_message = provider_message
+                rider_kyc.nin_response_json = json_dump({"error_code": provider_error_code, "message": provider_message, "provider_status": provider_http_status})
+                existing_flags = json_load(rider_kyc.fraud_flags_json, {})
+                failed_attempts = int(existing_flags.get("failed_kyc_attempts") or 0) + 1
+                existing_flags.update({
+                    "failed_verification": True,
+                    "fake_nin": provider_error_code == "invalid_nin",
+                    "provider_error_code": provider_error_code,
+                    "provider_retryable": provider_retryable,
+                    "failed_kyc_attempts": failed_attempts,
+                    "suspicious_activity": bool(existing_flags.get("suspicious_activity") or failed_attempts >= 3),
+                })
+                rider_kyc.fraud_flags_json = json_dump(existing_flags)
             print(
                 "NIN_PROVIDER_ERROR",
                 json_dump({
@@ -3647,7 +3756,9 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 "provider_rate_limited",
                 "invalid_provider_response",
                 "provider_error",
+                "insufficient_wallet_balance",
             ]:
+                db.commit()
                 raise HTTPException(status_code=error.status_code, detail=provider_message)
 
         fraud = detect_nin_fraud_flags(db, worker, clean_nin, provider_data, verified)
@@ -3707,6 +3818,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             if rider_kyc:
                 rider_kyc.identity_status = status
                 rider_kyc.nin_hash = _nin_hash(clean_nin)
+                rider_kyc.submitted_nin = clean_nin
                 rider_kyc.nin_last4 = clean_nin[-4:]
                 rider_kyc.nin_verified = status == "verified"
                 rider_kyc.nin_provider = "checkmyninbvn"
@@ -3714,6 +3826,8 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 rider_kyc.nin_provider_status = provider_result.get("provider_status") or status
                 rider_kyc.nin_provider_message = provider_message or ""
                 rider_kyc.nin_response_json = json_dump(provider_result or {"error_code": provider_error_code, "message": provider_message})
+                rider_kyc.verification_attempt_count = attempt_number
+                rider_kyc.last_verification_at = datetime.utcnow()
                 rider_kyc.confidence_score = fraud.get("confidence_score") or 0
                 existing_flags = json_load(rider_kyc.fraud_flags_json, {})
                 failed_attempts = int(existing_flags.get("failed_kyc_attempts") or 0) + (0 if status == "verified" else 1)
@@ -5355,8 +5469,15 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
                 kyc.selfie_status = "not_started"
                 kyc.admin_review_status = "pending"
                 kyc.nin_hash = ""
+                kyc.submitted_nin = ""
                 kyc.nin_last4 = ""
                 kyc.nin_verified = False
+                kyc.nin_provider_report_id = ""
+                kyc.nin_provider_status = ""
+                kyc.nin_provider_message = ""
+                kyc.nin_response_json = "{}"
+                kyc.verification_attempt_count = 0
+                kyc.last_verification_at = None
                 kyc.rejection_reason = ""
                 kyc.resubmission_requested = True
         else:
@@ -7183,6 +7304,30 @@ def get_nin_provider_diagnostics(request: Request):
     config = checkmyninbvn_config()
     validation = validate_checkmyninbvn_config()
     endpoint_url = f"{config.get('base_url')}/nin-verification"
+    balance_url = f"{config.get('base_url')}/balance"
+    balance_status = {"checked": False, "available": False, "message": "Balance not checked."}
+    if validation.get("configured"):
+        try:
+            balance = check_balance()
+            balance_status = {
+                "checked": True,
+                "available": True,
+                "balance": balance.get("balance"),
+                "formatted_balance": balance.get("formatted_balance"),
+                "is_low": balance.get("is_low"),
+                "low_balance_threshold": balance.get("low_balance_threshold"),
+                "api_requests_today": balance.get("api_requests_today"),
+                "api_limit": balance.get("api_limit"),
+                "message": balance.get("message"),
+            }
+        except CheckMyNINBVNError as error:
+            balance_status = {
+                "checked": True,
+                "available": False,
+                "message": str(error) or "Verification service unavailable. Please retry shortly.",
+                "error_code": error.code,
+                "retryable": error.retryable,
+            }
     diagnostics = {
         "success": True,
         "provider": "checkmyninbvn",
@@ -7205,13 +7350,22 @@ def get_nin_provider_diagnostics(request: Request):
                 "Authorization": "Bearer token present" if config.get("api_key") else "missing",
             },
         },
+        "balance_contract": {
+            "method": "GET",
+            "url": balance_url,
+            "headers": {
+                "x-api-key": "present" if config.get("api_key") else "missing",
+                "Authorization": "Bearer token present" if config.get("api_key") else "missing",
+            },
+        },
+        "balance": balance_status,
         "retry_policy": {
             "automatic_retries": 0,
             "reason": "NIN verification can affect wallet billing, so provider POST calls are not replayed automatically after ambiguous failures.",
             "retryable_errors": ["provider_unavailable", "provider_rate_limited", "invalid_provider_response", "provider_error"],
         },
         "worker_fallback": {
-            "provider_unavailable": "identity step moves to manual_review so delivery workers can continue KYC submission.",
+            "provider_unavailable": "worker sees a retry-safe unavailable message and onboarding does not advance.",
             "invalid_nin": "worker is asked to check the NIN and retry.",
         },
     }
@@ -7229,6 +7383,27 @@ def get_nin_provider_diagnostics(request: Request):
         },
     )
     return diagnostics
+
+
+@app.get("/admin/diagnostics/nin-provider/balance")
+def get_nin_provider_balance(request: Request):
+    require_workforce_view(request)
+    try:
+        balance = check_balance()
+        return {"success": True, "provider": "checkmyninbvn", "balance": balance, "data": balance}
+    except CheckMyNINBVNError as error:
+        return {
+            "success": False,
+            "provider": "checkmyninbvn",
+            "message": str(error) or "Verification service unavailable. Please retry shortly.",
+            "error_code": error.code,
+            "retryable": error.retryable,
+            "data": {
+                "available": False,
+                "is_low": False,
+                "message": str(error) or "Verification service unavailable. Please retry shortly.",
+            },
+        }
 
 
 @app.patch("/admin/broadcasts/{broadcast_id}")

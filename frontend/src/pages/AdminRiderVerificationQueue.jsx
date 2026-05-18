@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import { adminAPI, resolveMediaUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './WorkerPages.css'
@@ -20,6 +20,12 @@ function chip(value) {
   return 'KYC_PENDING'
 }
 
+function formatNairaBalance(balance) {
+  if (balance?.formatted_balance) return balance.formatted_balance
+  const value = Number(balance?.balance ?? 0)
+  return `₦${value.toLocaleString('en-NG', { maximumFractionDigits: 0 })} remaining`
+}
+
 function riskLevel(item) {
   const flags = item?.kyc?.fraud_flags || {}
   const blockers = item?.approval_blockers || []
@@ -36,6 +42,7 @@ export default function AdminRiderVerificationQueue() {
   const [filters, setFilters] = useState({ status: 'pending', stage: 'all', search: '' })
   const [reviewAction, setReviewAction] = useState('')
   const [reviewNote, setReviewNote] = useState('')
+  const [balance, setBalance] = useState(null)
 
   const permissions = Array.isArray(admin?.permissions) ? admin.permissions : []
   const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || permissions.length === 0))
@@ -51,6 +58,12 @@ export default function AdminRiderVerificationQueue() {
       if (filters.search.trim()) params.search = filters.search.trim()
       const response = await adminAPI.getRiderVerificationQueue(params)
       setRiders(response.data || [])
+      try {
+        const balanceResponse = await adminAPI.getNinProviderBalance()
+        setBalance(balanceResponse.balance || balanceResponse.data || null)
+      } catch {
+        setBalance({ available: false, message: 'Provider wallet balance unavailable' })
+      }
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to load rider verification queue')
     } finally {
@@ -99,6 +112,19 @@ export default function AdminRiderVerificationQueue() {
       <section className="verification-summary-strip">
         {Object.entries(counts).map(([key, value]) => <div key={key}><strong>{value}</strong><span>{label(key)}</span></div>)}
       </section>
+      <section className={`verification-wallet-monitor ${balance?.is_low ? 'low' : ''}`}>
+        <div>
+          <span>Verification Wallet Monitor</span>
+          <strong>NIN Verification Balance</strong>
+        </div>
+        <div className="verification-wallet-balance">{balance ? formatNairaBalance(balance) : 'Checking balance...'}</div>
+        {balance?.is_low && (
+          <div className="verification-wallet-warning">
+            <AlertTriangle size={18} />
+            <span>⚠ Low verification balance</span>
+          </div>
+        )}
+      </section>
 
       <div className="workforce-filters">
         <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
@@ -144,7 +170,12 @@ export default function AdminRiderVerificationQueue() {
                       <td>{worker.phone}</td>
                       <td>{worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</td>
                       <td><span className={`worker-status ${chip(worker.kyc_status)}`}>{label(item.kyc?.onboarding_stage)}</span></td>
-                      <td>{item.kyc?.nin_verified ? 'NIN verified' : 'NIN not verified'}</td>
+                      <td>
+                        <div className="verification-result-cell">
+                          <span className={`worker-status ${item.kyc?.nin_verified ? 'approved' : chip(item.kyc?.identity_status)}`}>{item.kyc?.nin_verified ? 'Verified' : label(item.kyc?.identity_status || 'not_started')}</span>
+                          <small>{item.kyc?.failed_verification_attempts ? `${item.kyc.failed_verification_attempts} failed attempt${item.kyc.failed_verification_attempts === 1 ? '' : 's'}` : item.kyc?.provider_report_id || 'No report yet'}</small>
+                        </div>
+                      </td>
                       <td><span className={`risk-chip risk-${risk.toLowerCase()}`}>{risk}</span></td>
                       <td><button type="button" onClick={() => setSelected(item)}>Review</button></td>
                     </tr>
@@ -169,13 +200,23 @@ export default function AdminRiderVerificationQueue() {
                 <span className={`worker-status ${chip(selected.worker.kyc_status)}`}>{selected.worker.kyc_status}</span>
               </div>
               <div className="worker-detail-grid">
-                <div><strong>NIN</strong><span>{selected.kyc.nin_verified ? 'Verified' : 'Not verified'} {selected.kyc.nin_last4 ? `...${selected.kyc.nin_last4}` : ''}</span></div>
-                <div><strong>Provider</strong><span>{selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
+                <div><strong>Submitted NIN</strong><span>{selected.kyc.submitted_nin || (selected.kyc.nin_last4 ? `*******${selected.kyc.nin_last4}` : 'Not submitted')}</span></div>
+                <div><strong>Verification</strong><span>{selected.kyc.nin_verified ? 'Verified' : label(selected.kyc.identity_status)} {selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
+                <div><strong>Verified name</strong><span>{[selected.worker.verified_first_name, selected.worker.verified_middle_name, selected.worker.verified_surname].filter(Boolean).join(' ') || 'No provider name'}</span></div>
+                <div><strong>Provider phone</strong><span>{selected.worker.verified_phone || 'No provider phone'}</span></div>
+                <div><strong>Verified at</strong><span>{selected.kyc.timestamps?.identity_verified_at ? new Date(selected.kyc.timestamps.identity_verified_at).toLocaleString() : selected.kyc.timestamps?.last_verification_at ? new Date(selected.kyc.timestamps.last_verification_at).toLocaleString() : 'No verification timestamp'}</span></div>
+                <div><strong>Failed attempts</strong><span>{selected.kyc.failed_verification_attempts || 0}</span></div>
                 <div><strong>Address</strong><span>{label(selected.kyc.address_status)}</span></div>
                 <div><strong>Emergency</strong><span>{selected.worker.emergency_contact_name || 'Missing'}</span></div>
                 <div><strong>GPS</strong><span>{selected.worker.latest_latitude ? `${selected.worker.latest_latitude}, ${selected.worker.latest_longitude}` : 'No GPS ping'}</span></div>
                 <div><strong>Risk</strong><span>{riskLevel(selected)}</span></div>
               </div>
+              {selected.worker.verified_photo_url && (
+                <div className="verified-photo-strip">
+                  <img src={resolveMediaUrl(selected.worker.verified_photo_url)} alt="" />
+                  <div><strong>Provider profile photo</strong><span>Returned by CheckMyNINBVN after successful verification.</span></div>
+                </div>
+              )}
               {selected.approval_blockers?.length > 0 && <p className="verification-warning"><strong>Blockers:</strong> {selected.approval_blockers.join(' ')}</p>}
               <div className="document-link-row">
                 {(selected.documents || []).map((doc) => <a key={doc.id} href={resolveMediaUrl(doc.url)} target="_blank" rel="noopener noreferrer">{label(doc.type)}</a>)}

@@ -11,6 +11,7 @@ from uuid import uuid4
 
 
 DEFAULT_CHECKMYNINBVN_BASE_URL = "https://checkmyninbvn.com.ng/api"
+LOW_BALANCE_THRESHOLD = 500
 
 
 @dataclass
@@ -112,6 +113,15 @@ def _provider_response_log(data: dict) -> dict:
     }
 
 
+def _sanitized_unavailable_message() -> str:
+    return "Verification service unavailable. Please retry shortly."
+
+
+def _is_insufficient_balance(message: str) -> bool:
+    lower_message = str(message or "").lower()
+    return "insufficient" in lower_message and ("balance" in lower_message or "wallet" in lower_message)
+
+
 def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, duration_ms: int) -> CheckMyNINBVNError:
     try:
         body = error.read().decode("utf-8")
@@ -131,15 +141,23 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         },
     )
 
-    if error.code in (401, 403) or "api key" in lower_message or "credential" in lower_message:
+    if error.code in (401, 403) or "api key" in lower_message or "credential" in lower_message or "unauthorized" in lower_message:
         _log_provider_event(
             "invalid_api_key",
             request_id,
             {"http_status": error.code, "duration_ms": duration_ms},
         )
         return CheckMyNINBVNError(
-            message="NIN verification is temporarily unavailable. FoodNova support has been notified.",
+            message=_sanitized_unavailable_message(),
             code="invalid_provider_credentials",
+            status_code=503,
+            retryable=False,
+            provider_status=error.code,
+        )
+    if _is_insufficient_balance(lower_message):
+        return CheckMyNINBVNError(
+            message="Unable to verify NIN currently. Please retry shortly.",
+            code="insufficient_wallet_balance",
             status_code=503,
             retryable=False,
             provider_status=error.code,
@@ -154,7 +172,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if error.code == 429:
         return CheckMyNINBVNError(
-            message="NIN verification is busy right now. Please retry in a few minutes.",
+            message="Unable to verify NIN currently. Please retry shortly.",
             code="provider_rate_limited",
             status_code=503,
             retryable=True,
@@ -162,14 +180,22 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if error.code >= 500:
         return CheckMyNINBVNError(
-            message="NIN verification provider is unavailable. Please try again shortly.",
+            message="Unable to verify NIN currently. Please retry shortly.",
             code="provider_unavailable",
             status_code=503,
             retryable=True,
             provider_status=error.code,
         )
+    if "internal" in lower_message or "unauthorized" in lower_message:
+        return CheckMyNINBVNError(
+            message="Unable to verify NIN currently. Please retry shortly.",
+            code="provider_error",
+            status_code=503,
+            retryable=True,
+            provider_status=error.code,
+        )
     return CheckMyNINBVNError(
-        message=provider_message or "NIN verification failed. Please check the number and try again.",
+        message=provider_message or "The NIN could not be verified. Please check the number and try again.",
         code="provider_rejected_request",
         status_code=400,
         retryable=False,
@@ -228,6 +254,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "x_api_key_present": bool(config["api_key"]),
                 "authorization_bearer_present": bool(config["api_key"]),
             },
+            "body": {"nin": f"*******{nin[-4:]}", "consent": True},
             "body_keys": ["nin", "consent"],
             "nin_last4": nin[-4:],
             "timeout_seconds": _timeout_seconds(),
@@ -256,7 +283,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             },
         )
         raise CheckMyNINBVNError(
-            message="NIN verification provider is unavailable. Please try again shortly.",
+            message=_sanitized_unavailable_message(),
             code="provider_unavailable",
             status_code=503,
             retryable=True,
@@ -274,7 +301,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             },
         )
         raise CheckMyNINBVNError(
-            message="NIN verification could not be completed right now. Please try again shortly.",
+            message="Unable to verify NIN currently. Please retry shortly.",
             code="provider_error",
             status_code=503,
             retryable=True,
@@ -300,14 +327,35 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         )
 
     status = str(result.get("status", "")).lower()
+    provider_message = result.get("message") or ""
+    if status != "success" and _is_insufficient_balance(provider_message):
+        raise CheckMyNINBVNError(
+            message="Unable to verify NIN currently. Please retry shortly.",
+            code="insufficient_wallet_balance",
+            status_code=503,
+            retryable=False,
+            provider_status=200,
+        )
+    if status != "success" and ("internal" in provider_message.lower() or "unauthorized" in provider_message.lower() or "api key" in provider_message.lower()):
+        raise CheckMyNINBVNError(
+            message="Unable to verify NIN currently. Please retry shortly.",
+            code="provider_error",
+            status_code=503,
+            retryable=True,
+            provider_status=200,
+        )
     verified = status == "success"
     data = result.get("data") or {}
+    address = data.get("residence_address") or data.get("address") or data.get("residential_address") or ""
     return {
         "verified": verified,
         "message": result.get("message") or ("NIN verified successfully." if verified else "NIN verification failed."),
-        "report_id": result.get("reportID") or result.get("report_id") or "",
+        "report_id": result.get("reportID") or result.get("reportId") or result.get("report_id") or "",
         "provider_status": status,
         "request_id": request_id,
+        "duration_ms": duration_ms,
+        "provider": "checkmyninbvn",
+        "raw_response": result,
         "data": {
             "first_name": data.get("firstname") or data.get("first_name") or "",
             "middle_name": data.get("middlename") or data.get("middle_name") or "",
@@ -315,6 +363,94 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             "phone": data.get("telephoneno") or data.get("phone") or "",
             "gender": data.get("gender") or "",
             "birthdate": data.get("birthdate") or data.get("dob") or "",
+            "dob": data.get("birthdate") or data.get("dob") or "",
+            "address": address,
+            "residence_state": data.get("residence_state") or "",
+            "residence_town": data.get("residence_town") or "",
+            "residence_lga": data.get("residence_lga") or "",
             "photo": data.get("photo") or "",
         },
+    }
+
+
+def check_balance() -> dict:
+    request_id = f"balance_{uuid4().hex[:12]}"
+    validation = validate_checkmyninbvn_config()
+    if not validation["configured"]:
+        _log_provider_event(
+            "balance_configuration_failure",
+            request_id,
+            {"configured": False, "reason": validation["message"], "api_key_present": bool(checkmyninbvn_config().get("api_key"))},
+        )
+        _raise_config_error(validation["message"])
+
+    config = checkmyninbvn_config()
+    url = f"{config['base_url']}/balance"
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "x-api-key": config["api_key"],
+            "Authorization": f"Bearer {config['api_key']}",
+        },
+        method="GET",
+    )
+    _log_provider_event(
+        "balance_request",
+        request_id,
+        {
+            "url": url,
+            "method": "GET",
+            "api_key_present": bool(config["api_key"]),
+            "headers": {"x_api_key_present": True, "authorization_bearer_present": True},
+            "timeout_seconds": _timeout_seconds(),
+        },
+    )
+    started = time.monotonic()
+    try:
+        with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+            raw_body = response.read().decode("utf-8")
+    except urllib.error.HTTPError as error:
+        duration_ms = int((time.monotonic() - started) * 1000)
+        raise _map_provider_http_error(error, request_id, duration_ms) from error
+    except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
+        duration_ms = int((time.monotonic() - started) * 1000)
+        _log_provider_event("balance_network_failure", request_id, {"duration_ms": duration_ms, "retryable": True, "error_type": type(error).__name__})
+        raise CheckMyNINBVNError(
+            message=_sanitized_unavailable_message(),
+            code="provider_unavailable",
+            status_code=503,
+            retryable=True,
+        ) from error
+
+    result = _parse_provider_body(raw_body)
+    duration_ms = int((time.monotonic() - started) * 1000)
+    _log_provider_event("balance_response", request_id, {"http_status": 200, "duration_ms": duration_ms, "response": _provider_response_log(result)})
+    if "raw_text_preview" in result:
+        raise CheckMyNINBVNError(
+            message="Unable to verify NIN currently. Please retry shortly.",
+            code="invalid_provider_response",
+            status_code=503,
+            retryable=True,
+        )
+
+    data = result.get("data") or {}
+    balance_value = data.get("balance") if isinstance(data, dict) else None
+    try:
+        balance = float(balance_value or 0)
+    except (TypeError, ValueError):
+        balance = 0
+    return {
+        "success": str(result.get("status", "")).lower() == "success",
+        "message": result.get("message") or "",
+        "report_id": result.get("reportID") or result.get("reportId") or result.get("report_id") or "",
+        "balance": balance,
+        "formatted_balance": data.get("formatted_balance") or "",
+        "api_requests_today": data.get("api_requests_today"),
+        "api_limit": data.get("api_limit"),
+        "is_low": balance < LOW_BALANCE_THRESHOLD,
+        "low_balance_threshold": LOW_BALANCE_THRESHOLD,
+        "request_id": request_id,
+        "duration_ms": duration_ms,
+        "raw_response": result,
     }
