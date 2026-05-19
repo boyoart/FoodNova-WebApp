@@ -24,4 +24,6 @@ Build an Android APK with:
 flutter build apk --release --dart-define=FOODNOVA_API_BASE_URL=https://foodnova-webapp.onrender.com
 ```
 
+The app rejects non-HTTPS API base URLs. On Render, keep backend environment variables current and redeploy after updates. Optional backend CORS additions can be supplied as a comma-separated `CORS_ORIGINS` value.
+
 Flutter is not installed in this workspace, so this scaffold has not been compiled locally.

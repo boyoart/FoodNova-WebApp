@@ -23,6 +23,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   late final AnimationController _shakeController;
   bool _loading = false;
   String _error = '';
+  String _loadingLabel = 'Sign in';
 
   @override
   void initState() {
@@ -39,16 +40,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   }
 
   Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
     setState(() {
       _loading = true;
+      _loadingLabel = 'Checking FoodNova...';
       _error = '';
     });
     try {
-      await ref.read(authRepositoryProvider).login(email: _email.text, password: _password.text);
+      await ref.read(authRepositoryProvider).checkHealth();
+      if (mounted) setState(() => _loadingLabel = 'Signing in...');
+      await ref.read(authRepositoryProvider).login(email: _email.text, password: _password.text, preflight: false);
       if (mounted) context.go('/home');
     } catch (error) {
       _shakeController.forward(from: 0);
-      setState(() => _error = error.toString().replaceFirst('Exception: ', ''));
+      final message = error.toString().replaceFirst('Exception: ', '');
+      setState(() => _error = message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            action: SnackBarAction(label: 'Retry', onPressed: _submit),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -120,7 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                         ),
                       ],
                       const SizedBox(height: 22),
-                      PrimaryButton(label: _loading ? 'Signing in...' : 'Sign in', loading: _loading, onPressed: _loading ? null : _submit),
+                      PrimaryButton(label: _loading ? _loadingLabel : 'Sign in', loading: _loading, onPressed: _loading ? null : _submit),
                       const SizedBox(height: 10),
                       SecondaryButton(label: 'Retry', icon: Icons.refresh_rounded, onPressed: _loading ? null : _submit),
                       TextButton(onPressed: _loading ? null : () => context.go('/otp'), child: const Text('Continue with OTP')),

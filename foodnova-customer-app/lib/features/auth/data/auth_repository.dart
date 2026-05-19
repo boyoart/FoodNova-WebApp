@@ -14,8 +14,19 @@ class AuthRepository {
   final Dio _dio;
   final Ref _ref;
 
-  Future<void> login({required String email, required String password}) async {
+  Future<void> checkHealth() async {
     try {
+      final response = await _dio.get('/health');
+      final ok = response.statusCode == 200 && response.data is Map && response.data['success'] == true;
+      if (!ok) throw ApiFailure('FoodNova backend health check failed.');
+    } catch (error) {
+      throw ApiFailure(apiMessage(error));
+    }
+  }
+
+  Future<void> login({required String email, required String password, bool preflight = true}) async {
+    try {
+      if (preflight) await checkHealth();
       final response = await _dio.post('/auth/login', data: {
         'email': email.trim().toLowerCase(),
         'password': password,

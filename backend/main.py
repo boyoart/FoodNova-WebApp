@@ -128,10 +128,15 @@ if CLOUDINARY_ENABLED:
 elif any([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
     print("Cloudinary is not fully configured. Falling back to local uploads.")
 
+def csv_env_values(name: str) -> List[str]:
+    return [value.strip().rstrip("/") for value in os.environ.get(name, "").split(",") if value.strip()]
+
+
 allowed_origins = [
     "capacitor://localhost",
     "ionic://localhost",
     "http://localhost",
+    "https://foodnova-webapp.onrender.com",
     "https://foodnova.com.ng",
     "https://www.foodnova.com.ng",
     "https://food-nova-web-app.vercel.app",
@@ -143,13 +148,18 @@ for origin in [os.environ.get("FRONTEND_URL"), os.environ.get("FRONTEND_ORIGIN")
     clean_origin = str(origin or "").strip().rstrip("/")
     if clean_origin and clean_origin not in allowed_origins:
         allowed_origins.append(clean_origin)
+for origin in csv_env_values("CORS_ORIGINS"):
+    if origin not in allowed_origins:
+        allowed_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"^https://([a-z0-9-]+\.)?(vercel\.app|netlify\.app|web\.app|firebaseapp\.com|pages\.dev)$|^http://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["x-request-id"],
 )
 
 if not any(getattr(route, "path", None) == "/uploads" for route in app.routes):
