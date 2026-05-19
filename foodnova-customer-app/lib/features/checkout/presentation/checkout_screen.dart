@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
@@ -21,6 +22,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _phone = TextEditingController();
   bool _loading = false;
   String _error = '';
+  String _paymentMethod = 'bank_transfer';
 
   @override
   void dispose() {
@@ -40,6 +42,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             items: ref.read(cartControllerProvider),
             address: _address.text,
             phone: _phone.text,
+            deliveryFee: _deliveryFee(ref.read(cartControllerProvider).fold<double>(0, (sum, item) => sum + item.lineTotal)),
+            paymentMethod: _paymentMethod,
           );
       ref.read(cartControllerProvider.notifier).clear();
       if (mounted) context.go('/tracking/${order['id']}');
@@ -54,6 +58,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final items = ref.watch(cartControllerProvider);
+    final subtotal = items.fold<double>(0, (sum, item) => sum + item.lineTotal);
+    final deliveryFee = _deliveryFee(subtotal);
+    final currency = NumberFormat.currency(locale: 'en_NG', symbol: 'NGN ', decimalDigits: 0);
     return Scaffold(
       appBar: AppBar(title: const Text('Checkout')),
       body: SafeArea(
@@ -78,6 +86,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   InputField(controller: _address, label: 'Delivery address', icon: Icons.location_on_outlined),
                   const SizedBox(height: 12),
                   InputField(controller: _phone, label: 'Phone number', icon: Icons.phone_outlined, keyboardType: TextInputType.phone),
+                  const SizedBox(height: 18),
+                  Text('Payment', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 10),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'bank_transfer', label: Text('Transfer'), icon: Icon(Icons.account_balance_rounded)),
+                      ButtonSegment(value: 'paystack', label: Text('Card'), icon: Icon(Icons.credit_card_rounded)),
+                    ],
+                    selected: {_paymentMethod},
+                    onSelectionChanged: (value) => setState(() => _paymentMethod = value.first),
+                  ),
+                  const SizedBox(height: 18),
+                  _CheckoutRow(label: 'Subtotal', value: currency.format(subtotal)),
+                  _CheckoutRow(label: 'FoodNova delivery fee', value: currency.format(deliveryFee)),
+                  const Divider(height: 24),
+                  _CheckoutRow(label: 'Total', value: currency.format(subtotal + deliveryFee), strong: true),
                   if (_error.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     Text(_error, style: const TextStyle(color: FoodNovaColors.danger, fontWeight: FontWeight.w800)),
@@ -89,6 +113,35 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+double _deliveryFee(double subtotal) {
+  if (subtotal <= 0) return 0;
+  if (subtotal >= 50000) return 0;
+  if (subtotal >= 20000) return 500;
+  return 900;
+}
+
+class _CheckoutRow extends StatelessWidget {
+  const _CheckoutRow({required this.label, required this.value, this.strong = false});
+
+  final String label;
+  final String value;
+  final bool strong;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(label, style: TextStyle(color: strong ? FoodNovaColors.text : FoodNovaColors.muted, fontWeight: strong ? FontWeight.w900 : FontWeight.w700)),
+          const Spacer(),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w900, color: strong ? FoodNovaColors.primary : FoodNovaColors.text)),
+        ],
       ),
     );
   }

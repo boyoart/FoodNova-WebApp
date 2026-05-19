@@ -17,4 +17,11 @@ class OrdersRepository {
     final items = response.data['orders'] ?? response.data['data'] ?? [];
     return (items as List).map((item) => OrderSummary.fromJson(Map<String, dynamic>.from(item))).toList();
   }
+
+  Future<OrderSummary> order(int id) async {
+    final response = await _dio.get('/orders/$id');
+    final body = response.data;
+    final item = body is Map ? (body['order'] ?? body['data'] ?? body) : body;
+    return OrderSummary.fromJson(Map<String, dynamic>.from(item));
+  }
 }

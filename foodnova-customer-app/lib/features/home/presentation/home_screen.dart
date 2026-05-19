@@ -8,9 +8,9 @@ import '../../../shared/models/product.dart';
 import '../../../widgets/app_header.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/floating_nav_bar.dart';
+import '../../../widgets/fulfillment_card.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../../../widgets/status_badge.dart';
-import '../../../widgets/vendor_card.dart';
 import '../../cart/data/cart_controller.dart';
 import '../../products/data/product_repository.dart';
 import '../../products/presentation/product_card.dart';
@@ -79,14 +79,14 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SliverPadding(
                 padding: EdgeInsets.fromLTRB(20, 24, 0, 0),
-                sliver: SliverToBoxAdapter(child: _VendorRail()),
+                sliver: SliverToBoxAdapter(child: _FulfillmentRail()),
               ),
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 24, 0, 0),
                 sliver: SliverToBoxAdapter(
                   child: products.when(
                     data: (items) => _ProductCarousel(
-                      title: 'Popular today',
+                      title: 'Featured by FoodNova',
                       products: items.take(8).toList(),
                       onTap: (product) => context.go('/products/${product.id}'),
                       onAdd: (product) => ref.read(cartControllerProvider.notifier).add(product),
@@ -100,10 +100,22 @@ class HomeScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 112),
                 sliver: SliverToBoxAdapter(
                   child: products.when(
-                    data: (items) => _ProductGridPreview(
-                      products: items.skip(2).take(4).toList(),
-                      onTap: (product) => context.go('/products/${product.id}'),
-                      onAdd: (product) => ref.read(cartControllerProvider.notifier).add(product),
+                    data: (items) => Column(
+                      children: [
+                        _ProductCarousel(
+                          title: 'Quick delivery essentials',
+                          products: items.skip(4).take(8).toList(),
+                          onTap: (product) => context.go('/products/${product.id}'),
+                          onAdd: (product) => ref.read(cartControllerProvider.notifier).add(product),
+                        ),
+                        const SizedBox(height: 24),
+                        _ProductGridPreview(
+                          title: 'Trending products',
+                          products: items.skip(2).take(4).toList(),
+                          onTap: (product) => context.go('/products/${product.id}'),
+                          onAdd: (product) => ref.read(cartControllerProvider.notifier).add(product),
+                        ),
+                      ],
                     ),
                     loading: () => const _ProductSkeletonGrid(),
                     error: (_, __) => const SizedBox.shrink(),
@@ -234,8 +246,8 @@ class _CategoryCard extends StatelessWidget {
   }
 }
 
-class _VendorRail extends StatelessWidget {
-  const _VendorRail();
+class _FulfillmentRail extends StatelessWidget {
+  const _FulfillmentRail();
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +255,7 @@ class _VendorRail extends StatelessWidget {
       children: const [
         Padding(
           padding: EdgeInsets.only(right: 20),
-          child: _SectionTitle(title: 'Nearby vendors'),
+          child: _SectionTitle(title: 'FoodNova fulfillment'),
         ),
         SizedBox(height: 12),
         SizedBox(
@@ -253,9 +265,9 @@ class _VendorRail extends StatelessWidget {
             physics: BouncingScrollPhysics(),
             child: Row(
               children: [
-                VendorCard(name: 'FoodNova Market Hub', caption: 'Core pantry fulfillment', rating: '4.9', eta: '18-25 min', fee: 'NGN 700'),
+                FulfillmentCard(title: 'FoodNova dispatch', subtitle: 'Walking dispatchers for nearby drops', icon: Icons.directions_walk_rounded, badges: ['Fast ETA', 'Low fee']),
                 SizedBox(width: 12),
-                VendorCard(name: 'Local Fresh Desk', caption: 'Fast neighborhood dispatch', rating: '4.8', eta: '12-20 min', fee: 'NGN 500'),
+                FulfillmentCard(title: 'Rider delivery', subtitle: 'Riders and delivery partners for wider coverage', icon: Icons.delivery_dining_rounded, badges: ['Tracked', 'Assigned']),
                 SizedBox(width: 20),
               ],
             ),
@@ -285,9 +297,9 @@ class _ProductCarousel extends StatelessWidget {
 
     return Column(
       children: [
-        const Padding(
+        Padding(
           padding: EdgeInsets.only(right: 20),
-          child: _SectionTitle(title: 'Popular today'),
+          child: _SectionTitle(title: title),
         ),
         const SizedBox(height: 12),
         SizedBox(
@@ -309,8 +321,9 @@ class _ProductCarousel extends StatelessWidget {
 }
 
 class _ProductGridPreview extends StatelessWidget {
-  const _ProductGridPreview({required this.products, required this.onTap, required this.onAdd});
+  const _ProductGridPreview({required this.title, required this.products, required this.onTap, required this.onAdd});
 
+  final String title;
   final List<Product> products;
   final ValueChanged<Product> onTap;
   final ValueChanged<Product> onAdd;
@@ -320,7 +333,7 @@ class _ProductGridPreview extends StatelessWidget {
     if (products.isEmpty) return const SizedBox.shrink();
     return Column(
       children: [
-        const _SectionTitle(title: 'More to add'),
+        _SectionTitle(title: title),
         const SizedBox(height: 12),
         GridView.builder(
           shrinkWrap: true,
@@ -364,7 +377,7 @@ class _HorizontalProductSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Column(
       children: [
-        Padding(padding: EdgeInsets.only(right: 20), child: _SectionTitle(title: 'Popular today')),
+        Padding(padding: EdgeInsets.only(right: 20), child: _SectionTitle(title: 'Featured by FoodNova')),
         SizedBox(height: 12),
         SizedBox(height: 284, child: Row(children: [SkeletonBox(width: 174, height: 270, radius: 24), SizedBox(width: 14), SkeletonBox(width: 174, height: 270, radius: 24)])),
       ],

@@ -15,6 +15,8 @@ class CheckoutRepository {
     required List<CartItem> items,
     required String address,
     required String phone,
+    required double deliveryFee,
+    required String paymentMethod,
     String notes = '',
   }) async {
     final total = items.fold<double>(0, (sum, item) => sum + item.lineTotal);
@@ -25,11 +27,13 @@ class CheckoutRepository {
             'price': item.product.price,
             'quantity': item.quantity,
           }).toList(),
-      'total_amount': total,
+      'subtotal_amount': total,
+      'delivery_fee': deliveryFee,
+      'total_amount': total + deliveryFee,
       'delivery_address': address,
       'phone': phone,
       'delivery_notes': notes,
-      'payment_method': 'bank_transfer',
+      'payment_method': paymentMethod,
       'delivery_method': 'delivery',
     });
     return Map<String, dynamic>.from(response.data['order'] ?? response.data['data'] ?? {});
