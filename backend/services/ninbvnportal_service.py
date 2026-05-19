@@ -141,7 +141,11 @@ def _provider_response_log(data: dict) -> dict:
 
 
 def _sanitized_unavailable_message() -> str:
-    return "Verification service unavailable. Please retry shortly."
+    return "Identity verification currently unavailable."
+
+
+def _timeout_message() -> str:
+    return "Verification service is taking too long to respond."
 
 
 def _is_insufficient_balance(message: str) -> bool:
@@ -152,8 +156,6 @@ def _is_insufficient_balance(message: str) -> bool:
 def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, duration_ms: int) -> CheckMyNINBVNError:
     try:
         body = error.read().decode("utf-8")
-        print("CHECKMYNINBVN_RAW_STATUS", error.code)
-        print("CHECKMYNINBVN_RAW_BODY", body)
         data = _parse_provider_body(body)
     except Exception:
         data = {}
@@ -178,7 +180,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             {"http_status": error.code, "duration_ms": duration_ms},
         )
         return CheckMyNINBVNError(
-            message=_sanitized_unavailable_message(),
+            message="Verification provider authentication failed.",
             code="invalid_provider_credentials",
             status_code=503,
             retryable=False,
@@ -187,7 +189,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if _is_insufficient_balance(lower_message):
         return CheckMyNINBVNError(
-            message="Unable to verify NIN currently. Please retry shortly.",
+            message="Verification service temporarily unavailable.",
             code="insufficient_wallet_balance",
             status_code=503,
             retryable=False,
@@ -196,7 +198,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if error.code == 400 and ("invalid" in lower_message or "nin" in lower_message or "number" in lower_message):
         return CheckMyNINBVNError(
-            message="The NIN could not be verified. Please check the number and try again.",
+            message="Invalid NIN detected.",
             code="invalid_nin",
             status_code=422,
             retryable=False,
@@ -205,7 +207,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if error.code == 429:
         return CheckMyNINBVNError(
-            message="Unable to verify NIN currently. Please retry shortly.",
+            message="Identity verification currently unavailable.",
             code="provider_rate_limited",
             status_code=503,
             retryable=True,
@@ -214,7 +216,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if error.code >= 500:
         return CheckMyNINBVNError(
-            message="Unable to verify NIN currently. Please retry shortly.",
+            message="Identity verification currently unavailable.",
             code="provider_unavailable",
             status_code=503,
             retryable=True,
@@ -223,7 +225,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if "internal" in lower_message or "unauthorized" in lower_message:
         return CheckMyNINBVNError(
-            message="Unable to verify NIN currently. Please retry shortly.",
+            message="Identity verification currently unavailable.",
             code="provider_error",
             status_code=503,
             retryable=True,
@@ -231,7 +233,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             provider_body=data,
         )
     return CheckMyNINBVNError(
-        message=provider_message or "The NIN could not be verified. Please check the number and try again.",
+        message="Invalid NIN detected.",
         code="provider_rejected_request",
         status_code=400,
         retryable=False,
@@ -308,7 +310,6 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "x-api-key": config["api_key"],
-                "Authorization": f"Bearer {config['api_key']}",
             },
             method="POST",
         )
@@ -326,7 +327,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                     "content_type": "application/json",
                     "accept": "application/json",
                     "x_api_key_present": bool(config["api_key"]),
-                    "authorization_bearer_present": bool(config["api_key"]),
+                    "authorization_bearer_present": False,
                 },
                 "body": {"nin": f"*******{nin[-4:]}", "consent": True},
                 "body_keys": ["nin", "consent"],
@@ -340,8 +341,6 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
                 response_status = response.status
                 raw_body = response.read().decode("utf-8")
-                print("CHECKMYNINBVN_RAW_STATUS", response_status)
-                print("CHECKMYNINBVN_RAW_BODY", raw_body)
         except urllib.error.HTTPError as error:
             duration_ms = int((time.monotonic() - started) * 1000)
             raise _map_provider_http_error(error, request_id, duration_ms) from error
@@ -360,8 +359,8 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 },
             )
             raise CheckMyNINBVNError(
-                message=_sanitized_unavailable_message(),
-                code="provider_unavailable",
+                message=_timeout_message() if event == "timeout_failure" else _sanitized_unavailable_message(),
+                code="provider_timeout" if event == "timeout_failure" else "provider_unavailable",
                 status_code=503,
                 retryable=True,
             ) from error
@@ -378,7 +377,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 },
             )
             raise CheckMyNINBVNError(
-                message="Unable to verify NIN currently. Please retry shortly.",
+                message="Identity verification currently unavailable.",
                 code="provider_error",
                 status_code=503,
                 retryable=True,
@@ -408,7 +407,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         provider_message = result.get("message") or ""
         if status != "success" and _is_insufficient_balance(provider_message):
             raise CheckMyNINBVNError(
-                message="Unable to verify NIN currently. Please retry shortly.",
+                message="Verification service temporarily unavailable.",
                 code="insufficient_wallet_balance",
                 status_code=503,
                 retryable=False,
@@ -416,8 +415,8 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             )
         if status != "success" and ("internal" in provider_message.lower() or "unauthorized" in provider_message.lower() or "api key" in provider_message.lower()):
             raise CheckMyNINBVNError(
-                message="Unable to verify NIN currently. Please retry shortly.",
-                code="provider_error",
+                message="Verification provider authentication failed." if ("unauthorized" in provider_message.lower() or "api key" in provider_message.lower()) else "Identity verification currently unavailable.",
+                code="invalid_provider_credentials" if ("unauthorized" in provider_message.lower() or "api key" in provider_message.lower()) else "provider_error",
                 status_code=503,
                 retryable=True,
                 provider_status=response_status,
@@ -444,6 +443,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "birthdate": data.get("birthdate") or data.get("dob") or "",
                 "dob": data.get("birthdate") or data.get("dob") or "",
                 "address": address,
+                "full_name": " ".join([data.get("firstname") or data.get("first_name") or "", data.get("middlename") or data.get("middle_name") or "", data.get("surname") or data.get("lastname") or ""]).strip(),
                 "residence_state": data.get("residence_state") or "",
                 "residence_town": data.get("residence_town") or "",
                 "residence_lga": data.get("residence_lga") or "",
@@ -473,7 +473,6 @@ def check_balance() -> dict:
         headers={
             "Accept": "application/json",
             "x-api-key": config["api_key"],
-            "Authorization": f"Bearer {config['api_key']}",
         },
         method="GET",
     )
@@ -484,7 +483,7 @@ def check_balance() -> dict:
             "url": url,
             "method": "GET",
             "api_key_present": bool(config["api_key"]),
-            "headers": {"x_api_key_present": True, "authorization_bearer_present": True},
+            "headers": {"x_api_key_present": True, "authorization_bearer_present": False},
             "timeout_seconds": _timeout_seconds(),
         },
     )
@@ -510,7 +509,7 @@ def check_balance() -> dict:
     _log_provider_event("balance_response", request_id, {"http_status": response.status, "duration_ms": duration_ms, "response": _provider_response_log(result), "response_body": _redact_provider_body(result)})
     if "raw_text_preview" in result:
         raise CheckMyNINBVNError(
-            message="Unable to verify NIN currently. Please retry shortly.",
+            message="Identity verification currently unavailable.",
             code="invalid_provider_response",
             status_code=503,
             retryable=True,

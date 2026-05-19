@@ -118,14 +118,26 @@ export default function DeliveryWorkerSignup({ workerType }) {
     }
     try {
       setVerifyingNin(true)
-      const result = await workerAPI.verifyNin({ nin, consent: true })
+      const result = await workerAPI.verifyNin({
+        nin,
+        consent: true,
+        consentAccepted: true,
+        consentTimestamp: new Date().toISOString(),
+        deviceMetadata: {
+          userAgent: navigator.userAgent || '',
+          platform: navigator.platform || '',
+          language: navigator.language || '',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+          viewport: `${window.innerWidth}x${window.innerHeight}`,
+        },
+      })
       if (!result.verified) {
         setNinVerification(null)
         toast.error(result.message || 'NIN verification failed. Please check the number and try again.')
         return
       }
       setNinVerification(result)
-      toast.success('NIN verified successfully')
+      toast.success('Identity Verified. Submitted for operational review.')
     } catch (error) {
       setNinVerification(null)
       toast.error(error?.response?.data?.detail || 'NIN verification failed. Please check the number and try again.')
@@ -230,13 +242,13 @@ export default function DeliveryWorkerSignup({ workerType }) {
 
           <label className="worker-consent">
             <input type="checkbox" checked={form.nin_consent} onChange={(event) => update('nin_consent', event.target.checked)} />
-            <span>I consent to FoodNova verifying my NIN for delivery partner onboarding.</span>
+            <span>I consent to FoodNova verifying my identity using my NIN for worker activation and compliance purposes.</span>
           </label>
           <div className="worker-verify-row">
             <button type="button" onClick={verifyNin} disabled={verifyingNin || !form.nin_consent || form.nin_number.length !== 11}>
               <ShieldCheck size={18} /> {verifyingNin ? 'Verifying...' : 'Verify NIN'}
             </button>
-            {ninVerification?.verified && <span>NIN verified - *******{ninVerification.nin_last4}</span>}
+            {ninVerification?.verified && <span>✔ Identity Verified. Submitted for operational review - *******{ninVerification.nin_last4}</span>}
           </div>
 
           <section className="worker-camera-panel">

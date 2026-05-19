@@ -120,14 +120,14 @@ export default function AdminRiderVerificationQueue() {
       </section>
       <section className={`verification-wallet-monitor ${balance?.is_low ? 'low' : ''}`}>
         <div>
-          <span>Verification Wallet Monitor</span>
+          <span>Operations → Verification Health</span>
           <strong>NIN Verification Balance</strong>
         </div>
         <div className="verification-wallet-balance">{balance ? formatNairaBalance(balance) : 'Checking balance...'}</div>
         <div className={`verification-api-health ${providerHealth?.providerReachable ? 'healthy' : 'down'}`}>
           <span>Verification API Health</span>
           <strong>{providerHealth?.providerReachable ? 'Reachable' : 'Unavailable'}</strong>
-          <small>{providerHealth?.failedRequestsCount || 0} failed requests · last success {providerHealth?.lastSuccessfulVerificationAt ? new Date(providerHealth.lastSuccessfulVerificationAt).toLocaleString() : 'none yet'}</small>
+          <small>API key {providerHealth?.apiKeyLoaded ? 'loaded' : 'missing'} · {providerHealth?.failedRequestsCount || 0} failed requests · avg {providerHealth?.averageLatencyMs ?? providerHealth?.latencyMs ?? 'N/A'} ms · last success {providerHealth?.lastSuccessfulVerificationAt ? new Date(providerHealth.lastSuccessfulVerificationAt).toLocaleString() : 'none yet'}</small>
         </div>
         {balance?.is_low && (
           <div className="verification-wallet-warning">

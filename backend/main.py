@@ -92,6 +92,12 @@ app = FastAPI(title="FoodNova API")
 nin_provider_config = validate_checkmyninbvn_config()
 if not nin_provider_config.get("configured"):
     print(f"WARNING: {nin_provider_config.get('message')}")
+NIN_PROVIDER_HEALTH = {
+    "healthy": False,
+    "onboarding_verification_enabled": False,
+    "message": "Provider health has not been checked yet.",
+    "checked_at": None,
+}
 UPLOAD_DIR = "uploads"
 AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
 PRODUCT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "products")
@@ -309,6 +315,9 @@ class LocationPingPayload(BaseModel):
 class NINVerificationPayload(BaseModel):
     nin: str
     consent: bool
+    consentAccepted: Optional[bool] = None
+    consentTimestamp: Optional[str] = None
+    deviceMetadata: Optional[dict] = None
 
 
 class WorkerReviewPayload(BaseModel):
@@ -717,7 +726,7 @@ def is_delivery_token_revoked(token: str, user_id: int, payload: dict = None) ->
         if not worker or (worker.worker_type or "") != "rider":
             return False
         if delivery_worker_access_block_reason(worker):
-            return False
+            return True
         force_logout_at = getattr(worker, "force_logout_at", None)
         if force_logout_at:
             issued_at = (payload or {}).get("iat")
@@ -859,6 +868,19 @@ def parse_user_agent(user_agent: str) -> dict:
         "device_type": device_type,
         "browser": browser,
         "operating_system": operating_system,
+    }
+
+
+def verification_consent_metadata(request: Optional[Request], payload: Optional[NINVerificationPayload] = None) -> dict:
+    device = parse_user_agent(request.headers.get("user-agent", "") if request else "")
+    supplied_device = getattr(payload, "deviceMetadata", None) if payload else None
+    if isinstance(supplied_device, dict):
+        device.update({key: value for key, value in supplied_device.items() if value is not None})
+    return {
+        "consent_accepted": bool(getattr(payload, "consent", False) if payload else False),
+        "consent_timestamp": getattr(payload, "consentTimestamp", None) or iso(datetime.utcnow()),
+        "device": device,
+        "ip_address": get_request_ip(request),
     }
 
 
@@ -1689,13 +1711,16 @@ def as_naive_utc(value: datetime) -> datetime:
 
 def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
     worker_type = (worker.worker_type or "messenger").lower()
-    approved = (worker.kyc_status or "") == "APPROVED"
+    deleted = bool(getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED")
+    approved = (worker.kyc_status or "") == "APPROVED" and not deleted
     online = (worker.operational_status or "") in ["ONLINE", "ASSIGNED", "ON_DELIVERY"]
     gps_recent = worker_has_recent_gps(worker)
     is_messenger = worker_type == "messenger"
     inside_zone = bool(worker.inside_zone)
     eligible = approved and online and gps_recent and (inside_zone if is_messenger else True)
-    if not approved:
+    if deleted:
+        reason = "This account has been removed or deactivated."
+    elif not approved:
         reason = "KYC approval required"
     elif not online:
         reason = "Worker is offline"
@@ -2020,6 +2045,8 @@ def worker_has_active_assignment(db, worker: DBDeliveryWorker, exclude_offer_id:
 
 
 def worker_eligible_for_offer(db, worker: DBDeliveryWorker, delivery_type: str, exclude_offer_id: Optional[int] = None) -> bool:
+    if delivery_worker_access_block_reason(worker):
+        return False
     if worker.kyc_status != "APPROVED" or worker.operational_status != "ONLINE":
         return False
     if worker_has_active_assignment(db, worker, exclude_offer_id):
@@ -2042,6 +2069,7 @@ def find_available_delivery_worker(db, delivery_type: str, excluded_worker_ids: 
             DBDeliveryWorker.worker_type == worker_type,
             DBDeliveryWorker.kyc_status == "APPROVED",
             DBDeliveryWorker.operational_status == "ONLINE",
+            DBDeliveryWorker.deleted_at.is_(None),
         ).order_by(DBDeliveryWorker.last_seen_at.desc(), DBDeliveryWorker.id.asc()).all()
         for worker in workers:
             if worker.id not in excluded_worker_ids and worker_eligible_for_offer(db, worker, delivery_type):
@@ -2474,11 +2502,14 @@ def normalize_delivery_phone(phone: str) -> str:
     return f"+234{national}"
 
 
-def get_delivery_worker_by_phone(db, phone: str):
+def get_delivery_worker_by_phone(db, phone: str, include_deleted: bool = False):
     normalized = normalize_delivery_phone(phone)
     if not normalized:
         return None
-    return db.query(DBDeliveryWorker).filter(DBDeliveryWorker.phone == normalized).first()
+    query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.phone == normalized)
+    if not include_deleted:
+        query = query.filter(DBDeliveryWorker.deleted_at.is_(None), DBDeliveryWorker.kyc_status != "DELETED")
+    return query.first()
 
 
 def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker, request: Optional[Request] = None) -> dict:
@@ -2604,6 +2635,20 @@ def log_rider_status_change(db, worker: DBDeliveryWorker, old_stage: str, new_st
 
 def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str, provider_result: dict = None, error: CheckMyNINBVNError = None, message: str = "", nin_last4: str = "", attempt_number: int = 0) -> None:
     provider_result = provider_result or {}
+    endpoint_url = provider_result.get("endpoint_url") or f"{checkmyninbvn_config().get('base_url')}/nin-verification"
+    print("RIDER_VERIFICATION_ATTEMPT", json_dump({
+        "request_timestamp": iso(datetime.utcnow()),
+        "rider_id": worker.id if worker else None,
+        "endpoint_url": endpoint_url,
+        "provider_status_code": error.provider_status if error else provider_result.get("provider_http_status"),
+        "timeout_error": bool(error and error.code == "provider_timeout"),
+        "auth_error": bool(error and error.code == "invalid_provider_credentials"),
+        "latency_ms": provider_result.get("duration_ms"),
+        "verification_attempt_count": attempt_number or int(provider_result.get("attempt_number") or 0),
+        "success": bool(provider_result.get("verified")) and error is None,
+        "error_code": error.code if error else "",
+        "provider_response_body": provider_result.get("raw_response") or error.provider_body if error else provider_result.get("raw_response"),
+    }))
     db.add(DBVerificationLog(
         delivery_worker_id=worker.id,
         verification_type=verification_type,
@@ -2611,7 +2656,7 @@ def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str,
         request_id=provider_result.get("request_id") or "",
         status=provider_result.get("provider_status") or ("error" if error else ""),
         success=bool(provider_result.get("verified")) and error is None,
-        http_status=error.provider_status if error else None,
+        http_status=error.provider_status if error else provider_result.get("provider_http_status"),
         error_code=error.code if error else "",
         message=message or provider_result.get("message") or (str(error) if error else ""),
         response_json=json_dump(provider_result or {"error_code": error.code if error else "", "message": str(error) if error else message}),
@@ -2762,6 +2807,15 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
             "verification_status": kyc.nin_provider_status if kyc else "",
             "provider_report_id": kyc.nin_provider_report_id if kyc else "",
             "provider_message": kyc.nin_provider_message if kyc else "",
+            "verified_full_name": kyc.verified_full_name if kyc else "",
+            "verified_dob": kyc.verified_dob if kyc else "",
+            "verified_phone": kyc.verified_phone if kyc else "",
+            "verified_gender": kyc.verified_gender if kyc else "",
+            "verified_address": kyc.verified_address if kyc else "",
+            "consent_accepted": bool(kyc.consent_accepted) if kyc else False,
+            "consent_timestamp": iso(kyc.consent_timestamp) if kyc else "",
+            "consent_device": json_load(kyc.consent_device_json, {}) if kyc else {},
+            "consent_ip_address": kyc.consent_ip_address if kyc else "",
             "verification_attempt_count": kyc.verification_attempt_count if kyc else 0,
             "failed_verification_attempts": int((json_load(kyc.fraud_flags_json, {}) if kyc else {}).get("failed_kyc_attempts") or 0),
             "confidence_score": kyc.confidence_score if kyc else 0,
@@ -3141,6 +3195,15 @@ def ensure_database_compatibility():
             "nin_provider_status": "VARCHAR(80) DEFAULT ''",
             "nin_provider_message": "TEXT DEFAULT ''",
             "nin_response_json": "TEXT DEFAULT '{}'",
+            "verified_full_name": "VARCHAR(255) DEFAULT ''",
+            "verified_dob": "VARCHAR(40) DEFAULT ''",
+            "verified_phone": "VARCHAR(50) DEFAULT ''",
+            "verified_gender": "VARCHAR(30) DEFAULT ''",
+            "verified_address": "TEXT DEFAULT ''",
+            "consent_accepted": "BOOLEAN DEFAULT FALSE",
+            "consent_timestamp": "TIMESTAMP",
+            "consent_device_json": "TEXT DEFAULT '{}'",
+            "consent_ip_address": "VARCHAR(80) DEFAULT ''",
             "verification_attempt_count": "INTEGER DEFAULT 0",
             "last_verification_at": "TIMESTAMP",
             "confidence_score": "FLOAT DEFAULT 0",
@@ -3321,16 +3384,41 @@ def seed_database():
 @app.on_event("startup")
 def on_startup():
     seed_database()
+    global NIN_PROVIDER_HEALTH
     validation = validate_checkmyninbvn_config()
     if not validation.get("configured"):
+        NIN_PROVIDER_HEALTH = {
+            "healthy": False,
+            "onboarding_verification_enabled": False,
+            "message": "Identity verification currently unavailable.",
+            "provider_status": None,
+            "provider_message": validation.get("message"),
+            "checked_at": iso(datetime.utcnow()),
+        }
         print("CHECKMYNINBVN_STARTUP_FAILURE", json_dump({
             "api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
             "provider_url": f"{checkmyninbvn_config().get('base_url')}/nin-verification",
             "message": validation.get("message"),
             "timestamp": iso(datetime.utcnow()),
         }))
-        raise RuntimeError(validation.get("message") or "CHECKMYNINBVN_API_KEY is missing.")
+        _create_admin_notifications(
+            "Verification provider unhealthy",
+            "FoodNova NIN verification is disabled until CHECKMYNINBVN_API_KEY is configured and the backend is redeployed.",
+            "verification_health",
+            "operations",
+        )
+        return
     health = check_provider_connectivity()
+    healthy = bool(health.get("apiKeyLoaded") and health.get("endpointReachable"))
+    NIN_PROVIDER_HEALTH = {
+        "healthy": healthy,
+        "onboarding_verification_enabled": healthy,
+        "message": "Provider healthy." if healthy else "Identity verification currently unavailable.",
+        "provider_status": health.get("lastProviderStatus"),
+        "provider_message": health.get("lastProviderMessage"),
+        "latency_ms": health.get("latencyMs"),
+        "checked_at": iso(datetime.utcnow()),
+    }
     print("CHECKMYNINBVN_STARTUP_HEALTH", json_dump({
         "api_key_loaded": health.get("apiKeyLoaded"),
         "endpoint_reachable": health.get("endpointReachable"),
@@ -3340,6 +3428,13 @@ def on_startup():
         "latency_ms": health.get("latencyMs"),
         "timestamp": iso(datetime.utcnow()),
     }))
+    if not healthy:
+        _create_admin_notifications(
+            "Verification provider unhealthy",
+            "FoodNova rider onboarding verification is disabled. Check Operations > Verification Health and redeploy after environment updates.",
+            "verification_health",
+            "operations",
+        )
 
 
 @app.get("/")
@@ -3572,6 +3667,8 @@ async def delivery_worker_signup(
             rider_missing.append("vehicle photo")
         if rider_missing:
             raise HTTPException(status_code=400, detail=f"Missing required rider field: {', '.join(rider_missing)}")
+    if not NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True):
+        raise HTTPException(status_code=503, detail=NIN_PROVIDER_HEALTH.get("message") or "Identity verification currently unavailable.")
 
     clean_phone = (phone or "").strip()
     clean_email = (email or "").strip().lower()
@@ -3584,6 +3681,12 @@ async def delivery_worker_signup(
     if not nin_result.get("verified"):
         raise HTTPException(status_code=400, detail=nin_result.get("message") or "NIN verification failed. Please check the number and try again.")
     nin_data = nin_result.get("data") or {}
+    consent_meta = {
+        "consent_accepted": True,
+        "consent_timestamp": iso(datetime.utcnow()),
+        "device": parse_user_agent(request.headers.get("user-agent", "")),
+        "ip_address": get_request_ip(request),
+    }
 
     db = SessionLocal()
     try:
@@ -3648,6 +3751,12 @@ async def delivery_worker_signup(
                 "provider": "checkmyninbvn",
                 "provider_report_id": worker.nin_report_id,
                 "provider_message": nin_result.get("message") or "",
+                "verified_full_name": nin_data.get("full_name") or " ".join([nin_data.get("first_name") or "", nin_data.get("middle_name") or "", nin_data.get("surname") or ""]).strip(),
+                "verified_dob": nin_data.get("dob") or nin_data.get("birthdate") or "",
+                "verified_phone": nin_data.get("phone") or "",
+                "verified_gender": nin_data.get("gender") or "",
+                "verified_address": nin_data.get("address") or "",
+                "consent": consent_meta,
                 "manual_review_required": False,
                 "verified_at": iso(datetime.utcnow()),
             })
@@ -3664,6 +3773,15 @@ async def delivery_worker_signup(
                 rider_kyc.nin_verified = True
                 rider_kyc.nin_provider_report_id = worker.nin_report_id
                 rider_kyc.nin_response_json = json_dump(nin_result)
+                rider_kyc.verified_full_name = nin_data.get("full_name") or " ".join([nin_data.get("first_name") or "", nin_data.get("middle_name") or "", nin_data.get("surname") or ""]).strip()
+                rider_kyc.verified_dob = nin_data.get("dob") or nin_data.get("birthdate") or ""
+                rider_kyc.verified_phone = nin_data.get("phone") or ""
+                rider_kyc.verified_gender = nin_data.get("gender") or ""
+                rider_kyc.verified_address = nin_data.get("address") or ""
+                rider_kyc.consent_accepted = True
+                rider_kyc.consent_timestamp = datetime.utcnow()
+                rider_kyc.consent_device_json = json_dump(consent_meta.get("device") or {})
+                rider_kyc.consent_ip_address = consent_meta.get("ip_address") or ""
             rider_document_upsert(db, worker, "selfie", selfie_url, {"filename": selfie.filename, "content_type": selfie.content_type or ""}, hashlib.sha256(str(selfie_url or "").encode("utf-8")).hexdigest())
             rider_document_upsert(db, worker, "identity_document", id_document_url, {"filename": id_document.filename, "content_type": id_document.content_type or ""})
             rider_document_upsert(db, worker, "vehicle_photo", vehicle_photo_url, {"filename": getattr(vehicle_photo, "filename", ""), "content_type": getattr(vehicle_photo, "content_type", "")})
@@ -3689,7 +3807,7 @@ async def delivery_worker_signup(
             f"{worker_type.title()} registered for FoodNova delivery workforce",
             {"worker": worker_data},
         )
-        return {"success": True, "message": "Delivery account submitted for review", "worker": worker_data, "data": worker_data}
+        return {"success": True, "message": "Identity Verified. Submitted for operational review.", "worker": worker_data, "data": worker_data}
     finally:
         db.close()
 
@@ -3698,9 +3816,20 @@ async def delivery_worker_signup(
 def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request):
     if not is_mobile_worker_registration_request(request):
         raise HTTPException(status_code=403, detail="NIN verification must be completed on a mobile phone.")
+    if not NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True):
+        raise HTTPException(status_code=503, detail=NIN_PROVIDER_HEALTH.get("message") or "Identity verification currently unavailable.")
     try:
         result = verify_nin(payload.nin, payload.consent)
     except CheckMyNINBVNError as error:
+        if error.code in {"invalid_provider_credentials", "insufficient_wallet_balance", "provider_unavailable", "provider_timeout", "provider_error"}:
+            NIN_PROVIDER_HEALTH.update({
+                "healthy": False,
+                "onboarding_verification_enabled": False,
+                "message": str(error) or "Identity verification currently unavailable.",
+                "provider_status": error.provider_status,
+                "provider_message": str(error),
+                "checked_at": iso(datetime.utcnow()),
+            })
         return {
             "success": False,
             "verified": False,
@@ -3714,7 +3843,7 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
     return {
         "success": True,
         "verified": True,
-        "message": result.get("message") or "NIN verified successfully.",
+        "message": "Identity Verified. Submitted for operational review.",
         "report_id": result.get("report_id") or "",
         "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
         "data": {
@@ -3733,32 +3862,40 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
 def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
     db, user, worker = get_delivery_worker_record_for_request(request)
     try:
+        if not NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True):
+            raise HTTPException(status_code=503, detail=NIN_PROVIDER_HEALTH.get("message") or "Identity verification currently unavailable.")
         clean_nin = "".join(ch for ch in str(payload.nin or "") if ch.isdigit())
         if len(clean_nin) != 11:
             raise HTTPException(status_code=422, detail="NIN must be exactly 11 digits.")
         if not payload.consent:
             raise HTTPException(status_code=422, detail="Consent is required before NIN verification.")
+        consent_meta = verification_consent_metadata(request, payload)
         rider_kyc = None
         attempt_number = 1
         if (worker.worker_type or "").lower() == "rider":
             _, rider_kyc = ensure_rider_records(db, worker)
-            attempt_number = int(rider_kyc.verification_attempt_count or 0) + 1
-            recent_cutoff = datetime.utcnow() - timedelta(minutes=15)
-            if (
-                int(rider_kyc.verification_attempt_count or 0) >= 5
-                and rider_kyc.last_verification_at
-                and rider_kyc.last_verification_at >= recent_cutoff
-            ):
+            recent_cutoff = datetime.utcnow() - timedelta(hours=1)
+            recent_attempts = db.query(DBVerificationLog).filter(
+                DBVerificationLog.delivery_worker_id == worker.id,
+                DBVerificationLog.verification_type == "nin",
+                DBVerificationLog.created_at >= recent_cutoff,
+            ).count()
+            if recent_attempts >= 5:
                 flags = json_load(rider_kyc.fraud_flags_json, {})
                 flags["rate_limited_verification"] = True
                 flags["suspicious_activity"] = True
                 rider_kyc.fraud_flags_json = json_dump(flags)
                 db.commit()
-                raise HTTPException(status_code=429, detail="Too many failed verification attempts. Please retry shortly.")
+                raise HTTPException(status_code=429, detail="Too many verification attempts. Please retry after one hour.")
+            attempt_number = int(rider_kyc.verification_attempt_count or 0) + 1
             rider_kyc.verification_attempt_count = attempt_number
             rider_kyc.last_verification_at = datetime.utcnow()
             rider_kyc.submitted_nin = clean_nin
             rider_kyc.nin_last4 = clean_nin[-4:]
+            rider_kyc.consent_accepted = True
+            rider_kyc.consent_timestamp = datetime.utcnow()
+            rider_kyc.consent_device_json = json_dump(consent_meta.get("device") or {})
+            rider_kyc.consent_ip_address = consent_meta.get("ip_address") or ""
 
         verified = False
         provider_result = {}
@@ -3777,6 +3914,15 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             provider_result["nin_last4"] = clean_nin[-4:]
             log_verification_event(db, worker, "nin", provider_result, message=provider_message, nin_last4=clean_nin[-4:], attempt_number=attempt_number)
         except CheckMyNINBVNError as error:
+            if error.code in {"invalid_provider_credentials", "insufficient_wallet_balance", "provider_unavailable", "provider_timeout", "provider_error"}:
+                NIN_PROVIDER_HEALTH.update({
+                    "healthy": False,
+                    "onboarding_verification_enabled": False,
+                    "message": str(error) or "Identity verification currently unavailable.",
+                    "provider_status": error.provider_status,
+                    "provider_message": str(error),
+                    "checked_at": iso(datetime.utcnow()),
+                })
             provider_message = str(error) or "NIN verification failed."
             provider_error_code = error.code
             provider_retryable = error.retryable
@@ -3891,6 +4037,11 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 rider_kyc.nin_provider_status = provider_result.get("provider_status") or status
                 rider_kyc.nin_provider_message = provider_message or ""
                 rider_kyc.nin_response_json = json_dump(provider_result or {"error_code": provider_error_code, "message": provider_message})
+                rider_kyc.verified_full_name = provider_data.get("full_name") or " ".join([provider_data.get("first_name") or "", provider_data.get("middle_name") or "", provider_data.get("surname") or ""]).strip()
+                rider_kyc.verified_dob = provider_data.get("dob") or provider_data.get("birthdate") or ""
+                rider_kyc.verified_phone = provider_data.get("phone") or ""
+                rider_kyc.verified_gender = provider_data.get("gender") or ""
+                rider_kyc.verified_address = provider_data.get("address") or ""
                 rider_kyc.verification_attempt_count = attempt_number
                 rider_kyc.last_verification_at = datetime.utcnow()
                 rider_kyc.confidence_score = fraud.get("confidence_score") or 0
@@ -3922,7 +4073,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             "success": status == "verified",
             "verified": status == "verified",
             "status": status,
-            "message": provider_message or ("NIN verified successfully." if status == "verified" else "NIN requires manual review."),
+            "message": "Identity Verified. Submitted for operational review." if status == "verified" else (provider_message or "NIN requires manual review."),
             "error_code": provider_error_code,
             "retryable": provider_retryable,
             "manual_review_required": manual_review_required or not verified,
@@ -3950,7 +4101,7 @@ def delivery_auth_check_phone(payload: DeliveryAuthCheckPhonePayload):
         raise HTTPException(status_code=422, detail="Enter a valid Nigerian phone number.")
     db = SessionLocal()
     try:
-        worker = get_delivery_worker_by_phone(db, phone)
+        worker = get_delivery_worker_by_phone(db, phone, include_deleted=True)
         return {
             "success": True,
             "exists": bool(worker),
@@ -4044,7 +4195,7 @@ def delivery_auth_login(payload: DeliveryAuthLoginPayload, request: Request):
     db = SessionLocal()
     try:
         log_delivery_auth_event("login_attempt", phone)
-        worker = get_delivery_worker_by_phone(db, phone)
+        worker = get_delivery_worker_by_phone(db, phone, include_deleted=True)
         if not worker:
             log_delivery_auth_event("login_failed", phone, "worker_not_found")
             raise HTTPException(status_code=404, detail="Delivery account not found.")
@@ -4375,6 +4526,9 @@ def get_current_worker_record(request: Request, expected_type: Optional[str] = N
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
         if not worker:
             raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
+        blocked_reason = delivery_worker_access_block_reason(worker)
+        if blocked_reason:
+            raise HTTPException(status_code=401, detail=blocked_reason)
         return db, user, worker
     except Exception:
         db.close()
@@ -5305,6 +5459,8 @@ def get_admin_delivery_offers(request: Request, status: Optional[str] = None):
         items = []
         for offer in offers:
             worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == offer.worker_id).first()
+            if worker and delivery_worker_access_block_reason(worker) and offer.status in ["PENDING", "ACCEPTED"]:
+                continue
             order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
             item = delivery_offer_to_dict(offer, worker, order)
             if order:
@@ -5523,6 +5679,10 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             worker.deleted_reason = review_note
             worker.fcm_token = ""
             worker.fcm_tokens_json = "[]"
+            db_user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+            if db_user:
+                db_user.is_active = False
+                db_user.updated_at = datetime.utcnow()
             db.add(DBDeletedRiderLog(
                 delivery_worker_id=worker.id,
                 admin_id=admin.get("id"),
@@ -5660,6 +5820,10 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
                 worker.deleted_reason = (payload.review_note or "").strip()
                 worker.fcm_token = ""
                 worker.fcm_tokens_json = "[]"
+                db_user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+                if db_user:
+                    db_user.is_active = False
+                    db_user.updated_at = datetime.utcnow()
             if (worker.worker_type or "").lower() == "rider":
                 revoked = revoke_rider_sessions(db, worker, admin, f"Rider {new_status.lower()}")
                 if new_status == "DELETED":
@@ -7474,7 +7638,7 @@ def get_nin_provider_diagnostics(request: Request):
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "x-api-key": "present" if config.get("api_key") else "missing",
-                "Authorization": "Bearer token present" if config.get("api_key") else "missing",
+                "Authorization": "not sent",
             },
         },
         "balance_contract": {
@@ -7482,7 +7646,7 @@ def get_nin_provider_diagnostics(request: Request):
             "url": balance_url,
             "headers": {
                 "x-api-key": "present" if config.get("api_key") else "missing",
-                "Authorization": "Bearer token present" if config.get("api_key") else "missing",
+                "Authorization": "not sent",
             },
         },
         "balance": balance_status,
@@ -7544,6 +7708,8 @@ def nin_provider_health_payload(db=None) -> dict:
         "apiKeyLoaded": connectivity.get("apiKeyLoaded"),
         "endpointReachable": connectivity.get("endpointReachable"),
         "providerReachable": connectivity.get("endpointReachable"),
+        "providerStatus": connectivity.get("lastProviderStatus"),
+        "providerMessage": connectivity.get("lastProviderMessage"),
         "lastProviderStatus": connectivity.get("lastProviderStatus"),
         "lastProviderMessage": connectivity.get("lastProviderMessage"),
         "lastStatus": connectivity.get("lastProviderStatus"),
@@ -7554,9 +7720,12 @@ def nin_provider_health_payload(db=None) -> dict:
         "balanceEndpoint": f"{config.get('base_url')}/balance",
         "timeoutSeconds": os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "10"),
         "latencyCheckedAt": iso(datetime.utcnow()),
+        "latencyMs": connectivity.get("latencyMs"),
         "balance": balance,
+        "verificationBalance": balance,
         "failedRequestsCount": failed_requests_count,
         "lastSuccessfulVerificationAt": last_successful_verification_at,
+        "lastSuccessfulVerification": last_successful_verification_at,
         "averageLatencyMs": round(float(average_latency_ms), 2) if average_latency_ms is not None else None,
     }
 
@@ -7569,10 +7738,11 @@ def get_public_nin_health():
         return {
             "apiKeyLoaded": health["apiKeyLoaded"],
             "endpointReachable": health["endpointReachable"],
-            "lastProviderStatus": health["lastProviderStatus"],
-            "lastProviderMessage": health["lastProviderMessage"],
-            "renderEnvironment": health["renderEnvironment"],
-            "providerUrl": health["providerUrl"],
+            "providerStatus": health["providerStatus"],
+            "providerMessage": health["providerMessage"],
+            "lastSuccessfulVerification": health["lastSuccessfulVerification"],
+            "verificationBalance": health["verificationBalance"],
+            "latencyMs": health["latencyMs"] if "latencyMs" in health else health.get("averageLatencyMs"),
         }
     finally:
         db.close()
