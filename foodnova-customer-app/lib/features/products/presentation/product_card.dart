@@ -1,4 +1,4 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -24,64 +24,56 @@ class ProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-              Expanded(
-                child: Hero(
-                  tag: 'product-${product.id}',
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: product.imageUrl.isEmpty
-                        ? Container(
-                            color: FoodNovaColors.surface2,
-                            child: const Center(
-                              child: Icon(Icons.shopping_basket_rounded, color: FoodNovaColors.primary),
-                            ),
-                          )
-                        : CachedNetworkImage(
-                            imageUrl: product.imageUrl,
-                            fit: BoxFit.cover,
-                            width: double.infinity,
-                            placeholder: (_, __) => Container(color: FoodNovaColors.surface2),
-                            errorWidget: (_, __, ___) => Container(
-                              color: FoodNovaColors.surface2,
-                              child: const Center(
-                                child: Icon(Icons.image_not_supported_rounded, color: FoodNovaColors.muted),
-                              ),
-                            ),
-                          ),
-                  ),
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: product.imageUrl.isEmpty
+                    ? Container(
+                        color: FoodNovaColors.surface2,
+                        child: const Center(child: Icon(Icons.shopping_basket_rounded, color: FoodNovaColors.primary)),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: product.imageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        placeholder: (_, __) => Container(color: FoodNovaColors.surface2),
+                        errorWidget: (_, __, ___) => Container(
+                          color: FoodNovaColors.surface2,
+                          child: const Center(child: Icon(Icons.image_not_supported_rounded, color: FoodNovaColors.muted)),
+                        ),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              product.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: FoodNovaColors.text, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              currency.format(product.price),
+              style: const TextStyle(color: FoodNovaColors.primary, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: onAdd,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: FoodNovaColors.primary,
+                  foregroundColor: FoodNovaColors.cream,
+                  minimumSize: const Size.fromHeight(42),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                product.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: FoodNovaColors.text, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                currency.format(product.price),
-                style: const TextStyle(color: FoodNovaColors.primary, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: FoodNovaColors.primary,
-                    foregroundColor: FoodNovaColors.cream,
-                    minimumSize: const Size.fromHeight(42),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  ),
-                ),
-              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-

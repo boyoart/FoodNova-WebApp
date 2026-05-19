@@ -26,6 +26,7 @@ class AppTheme {
         foregroundColor: FoodNovaColors.text,
         elevation: 0,
         centerTitle: false,
+        titleTextStyle: TextStyle(color: FoodNovaColors.text, fontSize: 22, fontWeight: FontWeight.w900),
       ),
       cardTheme: CardThemeData(
         color: Colors.white,
@@ -56,6 +57,23 @@ class AppTheme {
           textStyle: FoodNovaTypography.body.copyWith(fontWeight: FontWeight.w800),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusPill)),
           minimumSize: const Size.fromHeight(52),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: FoodNovaColors.primary,
+          textStyle: const TextStyle(fontWeight: FontWeight.w900),
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        backgroundColor: FoodNovaColors.surface,
+        indicatorColor: FoodNovaColors.accent,
+        labelTextStyle: MaterialStateProperty.resolveWith(
+          (states) => TextStyle(
+            color: states.contains(MaterialState.selected) ? FoodNovaColors.primaryDark : FoodNovaColors.muted,
+            fontWeight: FontWeight.w900,
+            fontSize: 12,
+          ),
         ),
       ),
     );

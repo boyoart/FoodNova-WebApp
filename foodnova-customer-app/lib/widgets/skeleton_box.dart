@@ -19,7 +19,7 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
   }
 
   @override
@@ -30,13 +30,38 @@ class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(begin: .45, end: 1.0).animate(_controller),
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              stops: const [.1, .45, .9],
+              colors: const [FoodNovaColors.surface2, Color(0xFFFFFFFF), FoodNovaColors.surface2],
+              transform: _SlidingGradientTransform(_controller.value),
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
       child: Container(
         width: widget.width,
         height: widget.height,
         decoration: BoxDecoration(color: FoodNovaColors.surface2, borderRadius: BorderRadius.circular(widget.radius)),
       ),
     );
+  }
+}
+
+class _SlidingGradientTransform extends GradientTransform {
+  const _SlidingGradientTransform(this.value);
+
+  final double value;
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    return Matrix4.translationValues(bounds.width * (value * 2 - 1), 0, 0);
   }
 }

@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
+import '../../../shared/models/product.dart';
 import '../../../widgets/app_header.dart';
 import '../../../widgets/empty_state.dart';
+import '../../../widgets/floating_nav_bar.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../../../widgets/status_badge.dart';
 import '../../../widgets/vendor_card.dart';
@@ -21,125 +23,318 @@ class HomeScreen extends ConsumerWidget {
     final products = ref.watch(productsProvider);
     final categories = ref.watch(categoriesProvider);
     final cartCount = ref.watch(cartControllerProvider).fold<int>(0, (sum, item) => sum + item.quantity);
+
     return Scaffold(
       body: SafeArea(
+        bottom: false,
         child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(productsProvider);
             ref.invalidate(categoriesProvider);
           },
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 110),
-            children: [
-              AppHeader(
-                greeting: 'Good day',
-                subtitle: 'Fresh essentials near you',
-                actions: [
-                  IconButton(onPressed: () => context.go('/notifications'), icon: const Icon(Icons.notifications_none_rounded)),
-                  Badge(
-                    label: Text('$cartCount'),
-                    isLabelVisible: cartCount > 0,
-                    child: IconButton(onPressed: () => context.go('/cart'), icon: const Icon(Icons.shopping_bag_outlined)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 22),
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [FoodNovaColors.primaryDark, FoodNovaColors.primary]),
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: FoodNovaShadows.nav,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const StatusBadge(label: 'Neighborhood commerce', tone: FoodNovaColors.accent),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Market staples, local fulfillment, calm delivery.',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'FoodNova combines premium grocery shopping with walking-distance dispatch and trusted riders.',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 18),
-              TextField(
-                readOnly: true,
-                onTap: () => context.go('/categories'),
-                decoration: const InputDecoration(
-                  hintText: 'Search rice, oil, garri, packs...',
-                  prefixIcon: Icon(Icons.search_rounded),
-                ),
-              ),
-              const SizedBox(height: 22),
-              _SectionTitle(title: 'Categories', action: 'View all', onTap: () => context.go('/categories')),
-              const SizedBox(height: 12),
-              categories.when(
-                data: (items) => SizedBox(
-                  height: 96,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: items.take(8).length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 10),
-                    itemBuilder: (_, index) => _CategoryChip(label: items[index]),
-                  ),
-                ),
-                loading: () => const Row(children: [SkeletonBox(width: 110, height: 72), SizedBox(width: 10), SkeletonBox(width: 110, height: 72)]),
-                error: (_, __) => const EmptyState(title: 'Categories unavailable', message: 'Pull down to retry.'),
-              ),
-              const SizedBox(height: 22),
-              const _SectionTitle(title: 'Nearby vendors'),
-              const SizedBox(height: 12),
-              const SizedBox(
-                height: 146,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      VendorCard(name: 'FoodNova Market Hub', caption: 'Core pantry fulfillment'),
-                      SizedBox(width: 12),
-                      VendorCard(name: 'Local Fresh Desk', caption: 'Fast neighborhood dispatch'),
+          child: CustomScrollView(
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                sliver: SliverToBoxAdapter(
+                  child: AppHeader(
+                    greeting: _greeting(),
+                    subtitle: 'Fresh essentials near you',
+                    actions: [
+                      IconButton.filledTonal(onPressed: () => context.go('/notifications'), icon: const Icon(Icons.notifications_none_rounded)),
+                      Badge(
+                        label: Text('$cartCount'),
+                        isLabelVisible: cartCount > 0,
+                        child: IconButton.filled(onPressed: () => context.go('/cart'), icon: const Icon(Icons.shopping_bag_rounded)),
+                      ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 22),
-              const _SectionTitle(title: 'Featured products'),
-              const SizedBox(height: 12),
-              products.when(
-                data: (items) {
-                  if (items.isEmpty) return const EmptyState(title: 'No products yet', message: 'Products will appear once the backend catalog is populated.');
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: items.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: .68,
-                      crossAxisSpacing: 14,
-                      mainAxisSpacing: 14,
+              const SliverToBoxAdapter(child: SizedBox(height: 20)),
+              const SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverToBoxAdapter(child: _HeroBanner()),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                sliver: SliverToBoxAdapter(
+                  child: TextField(
+                    readOnly: true,
+                    onTap: () => context.go('/categories'),
+                    decoration: const InputDecoration(
+                      hintText: 'Search rice, oil, garri, fresh packs...',
+                      prefixIcon: Icon(Icons.search_rounded),
+                      suffixIcon: Icon(Icons.tune_rounded),
                     ),
-                    itemBuilder: (context, index) => ProductCard(
-                      product: items[index],
-                      onTap: () => context.go('/products/${items[index].id}'),
-                      onAdd: () => ref.read(cartControllerProvider.notifier).add(items[index]),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 0, 0),
+                sliver: SliverToBoxAdapter(
+                  child: _AsyncCategoryRail(categories: categories, onTapAll: () => context.go('/categories')),
+                ),
+              ),
+              const SliverPadding(
+                padding: EdgeInsets.fromLTRB(20, 24, 0, 0),
+                sliver: SliverToBoxAdapter(child: _VendorRail()),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 0, 0),
+                sliver: SliverToBoxAdapter(
+                  child: products.when(
+                    data: (items) => _ProductCarousel(
+                      title: 'Popular today',
+                      products: items.take(8).toList(),
+                      onTap: (product) => context.go('/products/${product.id}'),
+                      onAdd: (product) => ref.read(cartControllerProvider.notifier).add(product),
                     ),
-                  );
-                },
-                loading: () => const _ProductSkeletonGrid(),
-                error: (error, _) => EmptyState(title: 'Could not load products', message: error.toString()),
+                    loading: () => const _HorizontalProductSkeleton(),
+                    error: (error, _) => EmptyState(title: 'Could not load products', message: error.toString(), icon: Icons.wifi_off_rounded),
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 112),
+                sliver: SliverToBoxAdapter(
+                  child: products.when(
+                    data: (items) => _ProductGridPreview(
+                      products: items.skip(2).take(4).toList(),
+                      onTap: (product) => context.go('/products/${product.id}'),
+                      onAdd: (product) => ref.read(cartControllerProvider.notifier).add(product),
+                    ),
+                    loading: () => const _ProductSkeletonGrid(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+                ),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: const _FloatingNav(),
+      bottomNavigationBar: const FloatingNavBar(selectedIndex: 0),
+    );
+  }
+}
+
+String _greeting() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+class _HeroBanner extends StatelessWidget {
+  const _HeroBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 190,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [FoodNovaColors.primaryDark, FoodNovaColors.primary, FoodNovaColors.success],
+        ),
+        boxShadow: FoodNovaShadows.nav,
+      ),
+      child: Stack(
+        children: [
+          Positioned(right: -8, top: -20, child: Icon(Icons.spa_rounded, size: 138, color: Colors.white.withOpacity(.08))),
+          Positioned(right: 8, bottom: 2, child: Icon(Icons.shopping_basket_rounded, size: 86, color: FoodNovaColors.accent.withOpacity(.92))),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const StatusBadge(label: 'Walking-distance delivery', tone: FoodNovaColors.accent),
+              const Spacer(),
+              Text(
+                'Market-fresh essentials, delivered calmly.',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white, fontWeight: FontWeight.w900, height: 1.02),
+              ),
+              const SizedBox(height: 8),
+              const Text('Curated groceries, local fulfillment, trusted riders.', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AsyncCategoryRail extends StatelessWidget {
+  const _AsyncCategoryRail({required this.categories, required this.onTapAll});
+
+  final AsyncValue<List<String>> categories;
+  final VoidCallback onTapAll;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 20),
+          child: _SectionTitle(title: 'Shop by category', action: 'View all', onTap: onTapAll),
+        ),
+        const SizedBox(height: 12),
+        categories.when(
+          data: (items) => SizedBox(
+            height: 108,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: items.take(10).length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, index) => _CategoryCard(label: items[index], icon: _categoryIcon(items[index])),
+            ),
+          ),
+          loading: () => const SizedBox(height: 108, child: Row(children: [SkeletonBox(width: 128, height: 96), SizedBox(width: 12), SkeletonBox(width: 128, height: 96)])),
+          error: (_, __) => const Padding(
+            padding: EdgeInsets.only(right: 20),
+            child: EmptyState(title: 'Categories unavailable', message: 'Pull down to retry.', icon: Icons.category_outlined),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  const _CategoryCard({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 132,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: FoodNovaColors.surface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: FoodNovaColors.border),
+        boxShadow: FoodNovaShadows.soft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(radius: 20, backgroundColor: FoodNovaColors.surface2, child: Icon(icon, color: FoodNovaColors.primary)),
+          const Spacer(),
+          Text(label, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, height: 1.05)),
+        ],
+      ),
+    );
+  }
+}
+
+class _VendorRail extends StatelessWidget {
+  const _VendorRail();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: const [
+        Padding(
+          padding: EdgeInsets.only(right: 20),
+          child: _SectionTitle(title: 'Nearby vendors'),
+        ),
+        SizedBox(height: 12),
+        SizedBox(
+          height: 184,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: BouncingScrollPhysics(),
+            child: Row(
+              children: [
+                VendorCard(name: 'FoodNova Market Hub', caption: 'Core pantry fulfillment', rating: '4.9', eta: '18-25 min', fee: 'NGN 700'),
+                SizedBox(width: 12),
+                VendorCard(name: 'Local Fresh Desk', caption: 'Fast neighborhood dispatch', rating: '4.8', eta: '12-20 min', fee: 'NGN 500'),
+                SizedBox(width: 20),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductCarousel extends StatelessWidget {
+  const _ProductCarousel({required this.title, required this.products, required this.onTap, required this.onAdd});
+
+  final String title;
+  final List<Product> products;
+  final ValueChanged<Product> onTap;
+  final ValueChanged<Product> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    if (products.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(right: 20),
+        child: EmptyState(title: 'No products yet', message: 'Products will appear once the backend catalog is populated.'),
+      );
+    }
+
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.only(right: 20),
+          child: _SectionTitle(title: 'Popular today'),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 284,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: products.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (_, index) => SizedBox(
+              width: 174,
+              child: ProductCard(product: products[index], onTap: () => onTap(products[index]), onAdd: () => onAdd(products[index])),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductGridPreview extends StatelessWidget {
+  const _ProductGridPreview({required this.products, required this.onTap, required this.onAdd});
+
+  final List<Product> products;
+  final ValueChanged<Product> onTap;
+  final ValueChanged<Product> onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    if (products.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [
+        const _SectionTitle(title: 'More to add'),
+        const SizedBox(height: 12),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: products.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: .64,
+            crossAxisSpacing: 14,
+            mainAxisSpacing: 14,
+          ),
+          itemBuilder: (context, index) => ProductCard(product: products[index], onTap: () => onTap(products[index]), onAdd: () => onAdd(products[index])),
+        ),
+      ],
     );
   }
 }
@@ -162,30 +357,17 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.label});
-
-  final String label;
+class _HorizontalProductSkeleton extends StatelessWidget {
+  const _HorizontalProductSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 124,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: FoodNovaColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: FoodNovaColors.border),
-        boxShadow: FoodNovaShadows.soft,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.eco_rounded, color: FoodNovaColors.primary),
-          const Spacer(),
-          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900)),
-        ],
-      ),
+    return const Column(
+      children: [
+        Padding(padding: EdgeInsets.only(right: 20), child: _SectionTitle(title: 'Popular today')),
+        SizedBox(height: 12),
+        SizedBox(height: 284, child: Row(children: [SkeletonBox(width: 174, height: 270, radius: 24), SizedBox(width: 14), SkeletonBox(width: 174, height: 270, radius: 24)])),
+      ],
     );
   }
 }
@@ -199,36 +381,19 @@ class _ProductSkeletonGrid extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: 2,
-      childAspectRatio: .68,
+      childAspectRatio: .64,
       crossAxisSpacing: 14,
       mainAxisSpacing: 14,
-      children: List.generate(4, (_) => const SkeletonBox(height: 220, radius: 24)),
+      children: List.generate(4, (_) => const SkeletonBox(height: 230, radius: 24)),
     );
   }
 }
 
-class _FloatingNav extends StatelessWidget {
-  const _FloatingNav();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: DecoratedBox(
-        decoration: BoxDecoration(boxShadow: FoodNovaShadows.soft, borderRadius: BorderRadius.circular(24)),
-        child: NavigationBar(
-          selectedIndex: 0,
-          onDestinationSelected: (index) {
-            if (index == 1) context.go('/orders');
-            if (index == 2) context.go('/profile');
-          },
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.receipt_long_rounded), label: 'Orders'),
-            NavigationDestination(icon: Icon(Icons.person_rounded), label: 'Profile'),
-          ],
-        ),
-      ),
-    );
-  }
+IconData _categoryIcon(String label) {
+  final value = label.toLowerCase();
+  if (value.contains('rice') || value.contains('grain')) return Icons.rice_bowl_rounded;
+  if (value.contains('fruit') || value.contains('fresh')) return Icons.eco_rounded;
+  if (value.contains('drink') || value.contains('water')) return Icons.local_drink_rounded;
+  if (value.contains('pack') || value.contains('bundle')) return Icons.inventory_2_rounded;
+  return Icons.local_grocery_store_rounded;
 }
