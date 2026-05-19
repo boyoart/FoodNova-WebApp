@@ -3410,10 +3410,13 @@ def on_startup():
         return
     health = check_provider_connectivity()
     healthy = bool(health.get("apiKeyLoaded") and health.get("endpointReachable"))
+    provider_auth_failed = health.get("providerAuthStatus") == "failed" or health.get("lastProviderStatus") in (401, 403)
+    health_message = "Provider authentication failed. Check API credentials." if provider_auth_failed else ("Provider healthy." if healthy else "Identity verification currently unavailable.")
     NIN_PROVIDER_HEALTH = {
         "healthy": healthy,
         "onboarding_verification_enabled": healthy,
-        "message": "Provider healthy." if healthy else "Identity verification currently unavailable.",
+        "message": health_message,
+        "provider_auth_status": health.get("providerAuthStatus"),
         "provider_status": health.get("lastProviderStatus"),
         "provider_message": health.get("lastProviderMessage"),
         "latency_ms": health.get("latencyMs"),
@@ -3430,8 +3433,8 @@ def on_startup():
     }))
     if not healthy:
         _create_admin_notifications(
-            "Verification provider unhealthy",
-            "FoodNova rider onboarding verification is disabled. Check Operations > Verification Health and redeploy after environment updates.",
+            "Verification provider authentication failed" if provider_auth_failed else "Verification provider unhealthy",
+            "Provider authentication failed. Check API credentials." if provider_auth_failed else "FoodNova rider onboarding verification is disabled. Check Operations > Verification Health and redeploy after environment updates.",
             "verification_health",
             "operations",
         )
@@ -3822,10 +3825,12 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
         result = verify_nin(payload.nin, payload.consent)
     except CheckMyNINBVNError as error:
         if error.code in {"invalid_provider_credentials", "insufficient_wallet_balance", "provider_unavailable", "provider_timeout", "provider_error"}:
+            auth_failed = error.code == "invalid_provider_credentials" or error.provider_status in (401, 403)
             NIN_PROVIDER_HEALTH.update({
                 "healthy": False,
                 "onboarding_verification_enabled": False,
-                "message": str(error) or "Identity verification currently unavailable.",
+                "message": "Provider authentication failed. Check API credentials." if auth_failed else (str(error) or "Identity verification currently unavailable."),
+                "provider_auth_status": "failed" if auth_failed else "unknown",
                 "provider_status": error.provider_status,
                 "provider_message": str(error),
                 "checked_at": iso(datetime.utcnow()),
@@ -3915,10 +3920,12 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             log_verification_event(db, worker, "nin", provider_result, message=provider_message, nin_last4=clean_nin[-4:], attempt_number=attempt_number)
         except CheckMyNINBVNError as error:
             if error.code in {"invalid_provider_credentials", "insufficient_wallet_balance", "provider_unavailable", "provider_timeout", "provider_error"}:
+                auth_failed = error.code == "invalid_provider_credentials" or error.provider_status in (401, 403)
                 NIN_PROVIDER_HEALTH.update({
                     "healthy": False,
                     "onboarding_verification_enabled": False,
-                    "message": str(error) or "Identity verification currently unavailable.",
+                    "message": "Provider authentication failed. Check API credentials." if auth_failed else (str(error) or "Identity verification currently unavailable."),
+                    "provider_auth_status": "failed" if auth_failed else "unknown",
                     "provider_status": error.provider_status,
                     "provider_message": str(error),
                     "checked_at": iso(datetime.utcnow()),
@@ -7617,6 +7624,7 @@ def get_nin_provider_diagnostics(request: Request):
                 "available": False,
                 "message": str(error) or "Verification service unavailable. Please retry shortly.",
                 "error_code": error.code,
+                "provider_http_status": error.provider_status,
                 "retryable": error.retryable,
             }
     diagnostics = {
@@ -7629,14 +7637,17 @@ def get_nin_provider_diagnostics(request: Request):
             "api_base_url_present": bool(os.getenv("CHECKMYNINBVN_API_BASE_URL")),
             "legacy_base_url_present": bool(os.getenv("CHECKMYNINBVN_BASE_URL")),
             "timeout_seconds": os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "25"),
+            "runtime_env_checked_at": iso(datetime.utcnow()),
+            "redeploy_required_after_env_update": True,
+            "redeploy_note": "After changing Render environment variables, redeploy the backend before retesting provider health.",
         },
         "request_contract": {
             "method": "POST",
             "url": endpoint_url,
             "body_keys": ["nin", "consent"],
+            "body": {"nin": "<11-digit-number>", "consent": True},
             "headers": {
                 "Content-Type": "application/json",
-                "Accept": "application/json",
                 "x-api-key": "present" if config.get("api_key") else "missing",
                 "Authorization": "not sent",
             },
@@ -7648,6 +7659,11 @@ def get_nin_provider_diagnostics(request: Request):
                 "x-api-key": "present" if config.get("api_key") else "missing",
                 "Authorization": "not sent",
             },
+        },
+        "provider_auth": {
+            "status": "failed" if balance_status.get("error_code") == "invalid_provider_credentials" else "authenticated" if balance_status.get("available") else "unknown",
+            "response_code": balance_status.get("provider_http_status") or balance_status.get("status_code"),
+            "admin_warning": "Provider authentication failed. Check API credentials." if balance_status.get("error_code") == "invalid_provider_credentials" else "",
         },
         "balance": balance_status,
         "retry_policy": {
@@ -7708,6 +7724,7 @@ def nin_provider_health_payload(db=None) -> dict:
         "apiKeyLoaded": connectivity.get("apiKeyLoaded"),
         "endpointReachable": connectivity.get("endpointReachable"),
         "providerReachable": connectivity.get("endpointReachable"),
+        "providerAuthStatus": connectivity.get("providerAuthStatus"),
         "providerStatus": connectivity.get("lastProviderStatus"),
         "providerMessage": connectivity.get("lastProviderMessage"),
         "lastProviderStatus": connectivity.get("lastProviderStatus"),
@@ -7738,6 +7755,7 @@ def get_public_nin_health():
         return {
             "apiKeyLoaded": health["apiKeyLoaded"],
             "endpointReachable": health["endpointReachable"],
+            "providerAuthStatus": health["providerAuthStatus"],
             "providerStatus": health["providerStatus"],
             "providerMessage": health["providerMessage"],
             "lastSuccessfulVerification": health["lastSuccessfulVerification"],

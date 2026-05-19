@@ -556,6 +556,7 @@ def check_provider_connectivity() -> dict:
         return {
             "apiKeyLoaded": False,
             "endpointReachable": False,
+            "providerAuthStatus": "missing_api_key",
             "lastProviderStatus": None,
             "lastProviderMessage": "CHECKMYNINBVN_API_KEY is missing.",
             "providerUrl": f"{config.get('base_url')}/nin-verification",
@@ -568,6 +569,7 @@ def check_provider_connectivity() -> dict:
         return {
             "apiKeyLoaded": True,
             "endpointReachable": bool(balance.get("success")),
+            "providerAuthStatus": "authenticated" if balance.get("success") else "unknown",
             "lastProviderStatus": balance.get("provider_http_status") or 200,
             "lastProviderMessage": balance.get("message") or "Provider reachable.",
             "providerUrl": f"{config.get('base_url')}/nin-verification",
@@ -576,7 +578,8 @@ def check_provider_connectivity() -> dict:
         }
     except CheckMyNINBVNError as error:
         duration_ms = int((time.monotonic() - started) * 1000)
-        body_message = _provider_message_from_body(error.provider_body or {}, str(error))
+        provider_auth_failed = error.code == "invalid_provider_credentials" or error.provider_status in (401, 403)
+        body_message = "Provider authentication failed. Check API credentials." if provider_auth_failed else _provider_message_from_body(error.provider_body or {}, str(error))
         _log_provider_event(
             "health_failure",
             request_id,
@@ -592,6 +595,7 @@ def check_provider_connectivity() -> dict:
         return {
             "apiKeyLoaded": True,
             "endpointReachable": False,
+            "providerAuthStatus": "failed" if provider_auth_failed else "unknown",
             "lastProviderStatus": error.provider_status,
             "lastProviderMessage": body_message,
             "providerUrl": f"{config.get('base_url')}/nin-verification",
