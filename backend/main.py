@@ -3350,6 +3350,21 @@ def seed_database():
             admin.admin_role = "super_admin"
             admin.permissions_json = json_dump(ADMIN_ROLE_PERMISSIONS["super_admin"])
 
+        demo_email = "demo@foodnova.app"
+        demo_user = get_db_user_by_email(db, demo_email)
+        if not demo_user:
+            demo_user = DBUser(
+                full_name="FoodNova Demo Customer",
+                email=demo_email,
+                phone="+2348000000000",
+                password=_hash_new_password("Password123"),
+                role="customer",
+                is_active=True,
+            )
+            db.add(demo_user)
+            db.flush()
+            ensure_profile(db, demo_user)
+
         if db.query(DBProduct).count() == 0:
             for product in PRODUCTS:
                 db.add(DBProduct(
@@ -4101,6 +4116,132 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
         db.close()
 
 
+def api_success(data=None, message: str = "OK", **extra):
+    response = {"success": True, "message": message, "data": data}
+    response.update(extra)
+    return response
+
+
+@app.get("/api/health")
+def api_health():
+    return api_success({"status": "ok", "service": "foodnova-backend"})
+
+
+@app.post("/api/auth/register")
+def api_auth_register(payload: RegisterPayload):
+    return register(payload)
+
+
+@app.post("/api/auth/login")
+def api_auth_login(payload: LoginPayload, request: Request):
+    return login(payload, request)
+
+
+@app.get("/api/auth/me")
+def api_auth_me(request: Request):
+    return me(request)
+
+
+@app.get("/api/users/me")
+def api_users_me(request: Request):
+    return get_profile(request)
+
+
+@app.patch("/api/users/me")
+def api_update_user_profile(payload: ProfileUpdatePayload, request: Request):
+    return update_profile(request, payload)
+
+
+@app.get("/api/users/addresses")
+def api_user_addresses(request: Request):
+    return get_addresses(request)
+
+
+@app.post("/api/users/addresses")
+def api_create_user_address(payload: AddressPayload, request: Request):
+    return create_address(request, payload)
+
+
+@app.get("/api/categories")
+def api_categories():
+    return api_success(list_categories(), categories=list_categories())
+
+
+@app.get("/api/products")
+def api_products(search: Optional[str] = None):
+    products = list_products(search)
+    return api_success(products, products=products)
+
+
+@app.get("/api/products/{product_id}")
+def api_product_detail(product_id: int):
+    product = get_product(product_id)
+    return api_success(product, product=product)
+
+
+@app.get("/api/cart")
+def api_cart_status(request: Request):
+    require_user(request)
+    return JSONResponse(
+        status_code=501,
+        content={
+            "success": False,
+            "message": "Persistent cart is not enabled yet. Customer app uses local cart until checkout.",
+            "data": None,
+        },
+    )
+
+
+@app.post("/api/orders")
+def api_create_order(payload: OrderPayload, request: Request):
+    return create_order(payload, request)
+
+
+@app.get("/api/orders")
+def api_my_orders(request: Request):
+    return my_orders(request)
+
+
+@app.get("/api/orders/{order_id}")
+def api_order_detail(order_id: int):
+    order = get_order(order_id)
+    return api_success(order, order=order)
+
+
+@app.post("/api/orders/{order_id}/receipt")
+async def api_upload_order_receipt(order_id: int, request: Request, file: UploadFile = File(...)):
+    require_user(request)
+    return await upload_receipt(order_id, file)
+
+
+@app.post("/api/orders/{order_id}/confirm-delivery")
+def api_confirm_delivery(order_id: int, payload: dict):
+    return confirm_delivery(order_id, payload)
+
+
+@app.get("/api/notifications")
+def api_notifications(request: Request):
+    return get_notifications(request)
+
+
+@app.patch("/api/notifications/{notification_id}/read")
+def api_mark_notification_read(notification_id: int, request: Request):
+    return mark_notification_read(notification_id, request)
+
+
+@app.post("/api/payments/initialize")
+def api_initialize_payment(request: Request):
+    require_user(request)
+    return JSONResponse(
+        status_code=501,
+        content={
+            "success": False,
+            "message": "Paystack initialization endpoint is reserved for Phase 2.",
+            "data": None,
+        },
+    )
+
+
 @app.post("/delivery/auth/check-phone")
 def delivery_auth_check_phone(payload: DeliveryAuthCheckPhonePayload):
     phone = normalize_delivery_phone(payload.phone_number)
@@ -4461,8 +4602,16 @@ def login(payload: LoginPayload, request: Request):
 
         if not user or not _password_matches(payload.password, user.password):
             raise HTTPException(status_code=401, detail="Invalid login credentials")
+        if not getattr(user, "is_active", True):
+            raise HTTPException(status_code=403, detail="This account has been removed or deactivated.")
         if (user.role or "customer") == "admin":
             raise HTTPException(status_code=403, detail="Please use the admin login page")
+        if (user.role or "") in ["messenger", "rider"]:
+            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
+            if worker and getattr(worker, "deleted_at", None):
+                raise HTTPException(status_code=403, detail="This account has been removed or deactivated.")
+            if worker and (worker.kyc_status or "").upper() in ["SUSPENDED", "DEACTIVATED", "DELETED"]:
+                raise HTTPException(status_code=403, detail="This account has been removed or deactivated.")
 
         ensure_profile(db, user)
         token = create_access_token(user)
