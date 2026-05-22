@@ -9,6 +9,8 @@ class OrderSummary {
     required this.deliveryAddress,
     required this.dispatcherName,
     required this.dispatcherType,
+    required this.createdAt,
+    required this.raw,
   });
 
   final int id;
@@ -20,6 +22,8 @@ class OrderSummary {
   final String deliveryAddress;
   final String dispatcherName;
   final String dispatcherType;
+  final String createdAt;
+  final Map<String, dynamic> raw;
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
     return OrderSummary(
@@ -32,6 +36,8 @@ class OrderSummary {
       deliveryAddress: '${json['delivery_address'] ?? ''}',
       dispatcherName: '${json['assigned_worker_name'] ?? json['rider_name'] ?? ''}',
       dispatcherType: '${json['assigned_worker_type'] ?? json['delivery_method'] ?? ''}',
+      createdAt: '${json['created_at'] ?? ''}',
+      raw: json,
     );
   }
 }

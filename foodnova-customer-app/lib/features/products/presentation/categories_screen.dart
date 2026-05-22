@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
 import '../../../widgets/empty_state.dart';
+import '../../../widgets/mobile_app_scaffold.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../data/product_repository.dart';
 
@@ -28,56 +29,92 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(categoriesProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Browse FoodNova')),
+    return MobileAppScaffold(
+      selectedIndex: 1,
+      title: 'Categories',
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-          children: [
-            TextField(
-              controller: _search,
-              onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
-              decoration: const InputDecoration(
-                hintText: 'Search FoodNova products and categories',
-                prefixIcon: Icon(Icons.search_rounded),
+        bottom: false,
+        child: CustomScrollView(
+          slivers: [
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SearchHeader(
+                child: TextField(
+                  controller: _search,
+                  onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+                  decoration: const InputDecoration(
+                    hintText: 'Search groceries, packs, categories',
+                    prefixIcon: Icon(Icons.search_rounded),
+                    suffixIcon: Icon(Icons.tune_rounded),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 20),
-            categories.when(
-              data: (items) {
-                final filtered = items.where((item) => _query.isEmpty || item.toLowerCase().contains(_query)).toList();
-                if (filtered.isEmpty) return const EmptyState(title: 'Nothing found', message: 'Try a different FoodNova category or product term.');
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: filtered.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 1.18,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                  ),
-                  itemBuilder: (_, index) => _CategoryTile(
-                    label: filtered[index],
-                    onTap: () => context.go('/home'),
-                  ),
-                );
-              },
-              loading: () => GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                children: List.generate(6, (_) => const SkeletonBox(height: 120, radius: 24)),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 120),
+              sliver: categories.when(
+                data: (items) {
+                  final filtered = items.where((item) => _query.isEmpty || item.toLowerCase().contains(_query)).toList();
+                  if (filtered.isEmpty) {
+                    return const SliverToBoxAdapter(child: EmptyState(title: 'Nothing found', message: 'Try rice, oil, garri, packs, or another FoodNova category.'));
+                  }
+                  return SliverGrid.builder(
+                    itemCount: filtered.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 1.08,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                    ),
+                    itemBuilder: (_, index) => _CategoryTile(
+                      label: filtered[index],
+                      onTap: () => context.go('/home'),
+                    ),
+                  );
+                },
+                loading: () => SliverGrid.count(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  children: List.generate(6, (_) => const SkeletonBox(height: 120, radius: 24)),
+                ),
+                error: (error, _) => SliverToBoxAdapter(child: EmptyState(title: 'Could not load categories', message: error.toString(), icon: Icons.wifi_off_rounded)),
               ),
-              error: (error, _) => EmptyState(title: 'Could not load categories', message: error.toString(), icon: Icons.wifi_off_rounded),
             ),
           ],
         ),
       ),
     );
   }
+}
+
+class _SearchHeader extends SliverPersistentHeaderDelegate {
+  const _SearchHeader({required this.child});
+
+  final Widget child;
+
+  @override
+  double get minExtent => 82;
+
+  @override
+  double get maxExtent => 82;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: FoodNovaColors.bg.withOpacity(.96),
+        boxShadow: overlapsContent ? FoodNovaShadows.soft : null,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _SearchHeader oldDelegate) => oldDelegate.child != child;
 }
 
 class _CategoryTile extends StatelessWidget {

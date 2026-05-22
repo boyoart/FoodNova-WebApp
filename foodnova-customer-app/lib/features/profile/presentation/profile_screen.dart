@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/state/session_controller.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
-import '../../../widgets/floating_nav_bar.dart';
+import '../../../widgets/mobile_app_scaffold.dart';
 import '../../../widgets/primary_button.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -13,8 +13,9 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+    return MobileAppScaffold(
+      selectedIndex: 4,
+      title: 'Profile',
       body: SafeArea(
         bottom: false,
         child: ListView(
@@ -54,9 +55,24 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 18),
-            _ProfileTile(icon: Icons.location_on_outlined, title: 'Delivery addresses', subtitle: 'Manage home and work drop-off points'),
-            _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Notifications', subtitle: 'Order updates, offers, and rider alerts', onTap: () => context.go('/notifications')),
-            _ProfileTile(icon: Icons.help_outline_rounded, title: 'Support', subtitle: 'Get help with orders and payments'),
+            _SettingsSection(
+              title: 'Shopping',
+              children: [
+                _ProfileTile(icon: Icons.location_on_outlined, title: 'Saved addresses', subtitle: 'Manage delivery addresses'),
+                _ProfileTile(icon: Icons.receipt_long_rounded, title: 'Orders', subtitle: 'History, receipts, and tracking', onTap: () => context.go('/orders')),
+                _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Notifications', subtitle: 'Payment, order, and promo updates', onTap: () => context.go('/notifications')),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _SettingsSection(
+              title: 'Account',
+              children: [
+                _ProfileTile(icon: Icons.person_outline_rounded, title: 'Edit profile', subtitle: 'Update your name and phone'),
+                _ProfileTile(icon: Icons.lock_outline_rounded, title: 'Password', subtitle: 'Update account password'),
+                _ProfileTile(icon: Icons.help_outline_rounded, title: 'Support', subtitle: 'Get help with orders and payments'),
+                _ProfileTile(icon: Icons.info_outline_rounded, title: 'About FoodNova', subtitle: 'Policies, contact, and app information'),
+              ],
+            ),
             const SizedBox(height: 24),
             PrimaryButton(
               label: 'Sign out',
@@ -69,7 +85,35 @@ class ProfileScreen extends ConsumerWidget {
           ],
         ),
       ),
-      bottomNavigationBar: const FloatingNavBar(selectedIndex: 3),
+    );
+  }
+}
+
+class _SettingsSection extends StatelessWidget {
+  const _SettingsSection({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: FoodNovaColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: FoodNovaColors.border),
+        boxShadow: FoodNovaShadows.soft,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+            child: Text(title, style: const TextStyle(color: FoodNovaColors.muted, fontWeight: FontWeight.w900, fontSize: 12)),
+          ),
+          ...children,
+        ],
+      ),
     );
   }
 }

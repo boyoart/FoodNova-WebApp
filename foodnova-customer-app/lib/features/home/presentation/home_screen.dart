@@ -7,8 +7,8 @@ import '../../../core/theme/shadows.dart';
 import '../../../shared/models/product.dart';
 import '../../../widgets/app_header.dart';
 import '../../../widgets/empty_state.dart';
-import '../../../widgets/floating_nav_bar.dart';
 import '../../../widgets/fulfillment_card.dart';
+import '../../../widgets/mobile_app_scaffold.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../../../widgets/status_badge.dart';
 import '../../cart/data/cart_controller.dart';
@@ -24,7 +24,9 @@ class HomeScreen extends ConsumerWidget {
     final categories = ref.watch(categoriesProvider);
     final cartCount = ref.watch(cartControllerProvider).fold<int>(0, (sum, item) => sum + item.quantity);
 
-    return Scaffold(
+    return MobileAppScaffold(
+      selectedIndex: 0,
+      title: null,
       body: SafeArea(
         bottom: false,
         child: RefreshIndicator(
@@ -126,7 +128,6 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
-      bottomNavigationBar: const FloatingNavBar(selectedIndex: 0),
     );
   }
 }
@@ -265,9 +266,9 @@ class _FulfillmentRail extends StatelessWidget {
             physics: BouncingScrollPhysics(),
             child: Row(
               children: [
-                FulfillmentCard(title: 'FoodNova dispatch', subtitle: 'Walking dispatchers for nearby drops', icon: Icons.directions_walk_rounded, badges: ['Fast ETA', 'Low fee']),
+                FulfillmentCard(title: 'Fast grocery fulfillment', subtitle: 'Prepared carefully from FoodNova inventory', icon: Icons.inventory_2_rounded, badges: ['Fresh stock', 'Quality checked']),
                 SizedBox(width: 12),
-                FulfillmentCard(title: 'Rider delivery', subtitle: 'Riders and delivery partners for wider coverage', icon: Icons.delivery_dining_rounded, badges: ['Tracked', 'Assigned']),
+                FulfillmentCard(title: 'Order updates', subtitle: 'Follow payment, packing, and delivery progress', icon: Icons.receipt_long_rounded, badges: ['Status sync', 'Alerts']),
                 SizedBox(width: 20),
               ],
             ),
