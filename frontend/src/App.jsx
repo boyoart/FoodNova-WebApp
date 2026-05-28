@@ -47,7 +47,7 @@ import InvoicePage from './pages/InvoicePage'
 import DeliveryAppComingSoon from './pages/DeliveryAppComingSoon'
 import WebSplashScreen from './components/WebSplashScreen'
 import { useAuthStore } from './store/authStore'
-import { WEBSITE_SETTINGS_EVENT, getWebsiteSettings, isAdminPath } from './utils/websiteSettings'
+import { WEBSITE_SETTINGS_EVENT, fetchWebsiteSettings, getWebsiteSettings, isAdminPath } from './utils/websiteSettings'
 import {
   enforceSessionTimeout,
   expireAdminSessionForTesting,
@@ -144,18 +144,25 @@ function WebsiteModeGate() {
   const location = useLocation()
   const navigate = useNavigate()
   const [settings, setSettings] = useState(getWebsiteSettings)
+  const [checkingMode, setCheckingMode] = useState(true)
 
   useEffect(() => {
     const syncSettings = () => setSettings(getWebsiteSettings())
     window.addEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
     window.addEventListener('storage', syncSettings)
+    fetchWebsiteSettings().then(setSettings).finally(() => setCheckingMode(false))
+    const interval = setInterval(() => {
+      fetchWebsiteSettings().then(setSettings).catch(() => null)
+    }, 30000)
     return () => {
       window.removeEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
       window.removeEventListener('storage', syncSettings)
+      clearInterval(interval)
     }
   }, [])
 
   useEffect(() => {
+    if (checkingMode) return
     const isAdminRoute = isAdminPath(location.pathname)
     if (settings.comingSoonEnabled && !isAdminRoute && location.pathname !== '/coming-soon') {
       navigate('/coming-soon', { replace: true })
@@ -163,7 +170,7 @@ function WebsiteModeGate() {
     if (!settings.comingSoonEnabled && location.pathname === '/coming-soon') {
       navigate('/', { replace: true })
     }
-  }, [location.pathname, navigate, settings.comingSoonEnabled])
+  }, [checkingMode, location.pathname, navigate, settings.comingSoonEnabled])
 
   return null
 }
@@ -175,6 +182,7 @@ function App() {
     const syncSettings = () => setSettings(getWebsiteSettings())
     window.addEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
     window.addEventListener('storage', syncSettings)
+    fetchWebsiteSettings().then(setSettings).catch(() => null)
     return () => {
       window.removeEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
       window.removeEventListener('storage', syncSettings)

@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Home, Mail, Lock, User, Phone } from 'lucide-react'
+import FoodNovaLogo from '../components/FoodNovaLogo'
 import './AuthPages.css'
 
 export default function RegisterPage() {
@@ -89,6 +90,7 @@ export default function RegisterPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
+          <div className="auth-logo-wrap"><FoodNovaLogo variant="auth" /></div>
           <h1>Create Account</h1>
           <p className="auth-subtitle">Join FoodNova today</p>
 

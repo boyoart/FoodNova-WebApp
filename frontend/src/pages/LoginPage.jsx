@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Mail, Lock, Phone } from 'lucide-react'
+import FoodNovaLogo from '../components/FoodNovaLogo'
 import './AuthPages.css'
 
 export default function LoginPage() {
@@ -56,8 +57,9 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
-          <h1>{loginMode === 'phone' ? 'Phone Login' : 'Login'}</h1>
-          <p className="auth-subtitle">Welcome back to FoodNova</p>
+          <div className="auth-logo-wrap"><FoodNovaLogo variant="auth" /></div>
+          <h1>{loginMode === 'phone' ? 'Phone Login' : 'Welcome Back'}</h1>
+          <p className="auth-subtitle">Login to continue shopping smarter.</p>
 
           <form onSubmit={handleSubmit}>
             {loginMode === 'phone' ? (

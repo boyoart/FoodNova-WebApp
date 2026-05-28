@@ -515,6 +515,14 @@ export const adminAPI = {
     const announcements = normalizeList(response.data, ["announcements"]);
     return { data: announcements, raw: response.data };
   },
+  getWebsiteSettings: async () => {
+    const response = await api.get("/admin/website-settings");
+    return response.data?.settings || response.data?.data || response.data;
+  },
+  updateWebsiteSettings: async (payload) => {
+    const response = await api.patch("/admin/website-settings", payload);
+    return response.data?.settings || response.data?.data || response.data;
+  },
   getAuditLogs: async (params = {}) => {
     const response = await api.get("/admin/activity-logs", { params });
     const logs = normalizeList(response.data, ["logs"]);
@@ -550,6 +558,17 @@ export const adminAPI = {
     const formData = new FormData();
     formData.append("file", file);
     return (await api.post("/admin/uploads/announcement-image", formData, multipartConfig)).data;
+  },
+};
+
+export const websiteSettingsAPI = {
+  get: async () => {
+    const response = await api.get("/website-settings");
+    return response.data?.settings || response.data?.data || response.data;
+  },
+  subscribeComingSoon: async (email) => {
+    const response = await api.post("/coming-soon/subscribe", { email });
+    return response.data;
   },
 };
 

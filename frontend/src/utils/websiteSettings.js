@@ -1,3 +1,5 @@
+import { websiteSettingsAPI } from '../services/api'
+
 const SETTINGS_KEY = 'foodnova_website_settings'
 export const WEBSITE_SETTINGS_EVENT = 'foodnova-website-settings-updated'
 
@@ -12,7 +14,7 @@ export const defaultWebsiteSettings = {
   comingSoonEnabled: false,
   splashEnabled: true,
   launchDate: defaultLaunchDate(),
-  headline: 'Something Fresh Is Coming',
+  headline: 'Launching Soon',
   subtext: 'FoodNova is preparing a premium grocery experience for your neighborhood.',
   homepageBanners: '',
   featuredPacks: '',
@@ -35,6 +37,15 @@ export function saveWebsiteSettings(nextSettings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
   window.dispatchEvent(new CustomEvent(WEBSITE_SETTINGS_EVENT, { detail: settings }))
   return settings
+}
+
+export async function fetchWebsiteSettings() {
+  try {
+    const remoteSettings = await websiteSettingsAPI.get()
+    return saveWebsiteSettings(remoteSettings)
+  } catch (error) {
+    return getWebsiteSettings()
+  }
 }
 
 export function isAdminPath(pathname = window.location.pathname) {

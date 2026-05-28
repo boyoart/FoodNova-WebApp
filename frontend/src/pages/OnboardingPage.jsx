@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight } from 'lucide-react'
+import FoodNovaLogo from '../components/FoodNovaLogo'
 import './AuthPages.css'
 
 const ONBOARDING_KEY = 'foodnova_onboarding_complete'
@@ -46,6 +47,7 @@ export default function OnboardingPage() {
     <div className="auth-page onboarding-page">
       <div className="auth-container">
         <div className="auth-card onboarding-card">
+          <div className="auth-logo-wrap onboarding-logo-wrap"><FoodNovaLogo variant="onboarding" /></div>
           <div className="onboarding-progress">
             {slides.map((_, idx) => (
               <span key={idx} className={`onboarding-dot ${idx === currentIndex ? 'active' : ''}`} />

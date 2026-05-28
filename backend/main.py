@@ -18,7 +18,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
@@ -161,6 +161,95 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["x-request-id"],
 )
+
+WEBSITE_SETTINGS_KEY = "website_settings"
+COMING_SOON_WHITELIST_PREFIXES = (
+    "/admin",
+    "/api",
+    "/coming-soon",
+    "/website-settings",
+    "/uploads",
+    "/assets",
+    "/favicon",
+    "/manifest",
+    "/robots.txt",
+    "/sitemap.xml",
+    "/foodnova-logo.png",
+    "/logo.png",
+    "/placeholder.png",
+)
+
+
+def default_website_settings() -> dict:
+    launch_date = datetime.utcnow() + timedelta(days=30)
+    launch_date = launch_date.replace(hour=9, minute=0, second=0, microsecond=0)
+    return {
+        "comingSoonEnabled": False,
+        "splashEnabled": True,
+        "launchDate": launch_date.isoformat() + "Z",
+        "headline": "Launching Soon",
+        "subtext": "FoodNova is preparing a premium grocery experience for your neighborhood.",
+        "homepageBanners": "",
+        "featuredPacks": "",
+        "homepageAnnouncement": "",
+        "subscribers": [],
+    }
+
+
+def normalize_website_settings(raw: dict = None) -> dict:
+    settings = default_website_settings()
+    if isinstance(raw, dict):
+        settings.update({key: value for key, value in raw.items() if value is not None})
+    settings["comingSoonEnabled"] = bool(settings.get("comingSoonEnabled"))
+    settings["splashEnabled"] = bool(settings.get("splashEnabled"))
+    if not isinstance(settings.get("subscribers"), list):
+        settings["subscribers"] = []
+    for key in ["headline", "subtext", "launchDate", "homepageBanners", "featuredPacks", "homepageAnnouncement"]:
+        settings[key] = str(settings.get(key) or default_website_settings().get(key, ""))
+    return settings
+
+
+def get_website_settings_from_db(db) -> dict:
+    raw_value = get_app_setting(db, WEBSITE_SETTINGS_KEY, "")
+    if not raw_value:
+        return normalize_website_settings()
+    try:
+        return normalize_website_settings(json.loads(raw_value))
+    except Exception:
+        return normalize_website_settings()
+
+
+def save_website_settings_to_db(db, settings: dict) -> dict:
+    normalized = normalize_website_settings(settings)
+    set_app_setting(db, WEBSITE_SETTINGS_KEY, json.dumps(normalized))
+    db.commit()
+    return normalized
+
+
+def is_coming_soon_whitelisted(path: str) -> bool:
+    clean_path = path or "/"
+    if any(clean_path == prefix or clean_path.startswith(f"{prefix}/") for prefix in COMING_SOON_WHITELIST_PREFIXES):
+        return True
+    filename = clean_path.rsplit("/", 1)[-1]
+    return "." in filename
+
+
+@app.middleware("http")
+async def coming_soon_middleware(request: Request, call_next):
+    path = request.url.path or "/"
+    accepts_html = "text/html" in request.headers.get("accept", "")
+    if request.method not in {"GET", "HEAD"} or not accepts_html or is_coming_soon_whitelisted(path):
+        return await call_next(request)
+
+    db = SessionLocal()
+    try:
+        settings = get_website_settings_from_db(db)
+        if settings.get("comingSoonEnabled"):
+            return RedirectResponse(url="/coming-soon", status_code=307)
+    finally:
+        db.close()
+
+    return await call_next(request)
 
 if not any(getattr(route, "path", None) == "/uploads" for route in app.routes):
     app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -1194,6 +1283,81 @@ def set_app_setting(db, key: str, value: str) -> DBAppSetting:
         setting.updated_at = datetime.utcnow()
     db.flush()
     return setting
+
+
+class WebsiteSettingsPayload(BaseModel):
+    comingSoonEnabled: Optional[bool] = None
+    splashEnabled: Optional[bool] = None
+    launchDate: Optional[str] = None
+    headline: Optional[str] = None
+    subtext: Optional[str] = None
+    homepageBanners: Optional[str] = None
+    featuredPacks: Optional[str] = None
+    homepageAnnouncement: Optional[str] = None
+
+
+class ComingSoonSubscriberPayload(BaseModel):
+    email: EmailStr
+
+
+@app.get("/website-settings")
+def get_public_website_settings():
+    db = SessionLocal()
+    try:
+        settings = get_website_settings_from_db(db)
+        public_settings = {key: value for key, value in settings.items() if key != "subscribers"}
+        return {"success": True, "settings": public_settings, "data": public_settings}
+    finally:
+        db.close()
+
+
+@app.get("/admin/website-settings")
+def get_admin_website_settings(request: Request):
+    require_any_permission(request, ["announcements:view", "announcements:manage", "admins:manage"])
+    db = SessionLocal()
+    try:
+        settings = get_website_settings_from_db(db)
+        return {"success": True, "settings": settings, "data": settings}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/website-settings")
+def update_admin_website_settings(payload: WebsiteSettingsPayload, request: Request):
+    admin = require_any_permission(request, ["announcements:manage", "admins:manage"])
+    db = SessionLocal()
+    try:
+        current = get_website_settings_from_db(db)
+        updates = {key: value for key, value in payload.dict(exclude_unset=True).items() if value is not None}
+        next_settings = save_website_settings_to_db(db, {**current, **updates})
+        create_admin_audit_log(
+            request,
+            admin,
+            "website_settings_updated",
+            "app_setting",
+            WEBSITE_SETTINGS_KEY,
+            "Admin updated website launch mode settings",
+            {"before": current, "after": next_settings},
+        )
+        return {"success": True, "message": "Website settings updated", "settings": next_settings, "data": next_settings}
+    finally:
+        db.close()
+
+
+@app.post("/coming-soon/subscribe")
+def subscribe_coming_soon(payload: ComingSoonSubscriberPayload):
+    db = SessionLocal()
+    try:
+        settings = get_website_settings_from_db(db)
+        subscribers = settings.get("subscribers") if isinstance(settings.get("subscribers"), list) else []
+        email = payload.email.lower()
+        if email not in subscribers:
+            subscribers.append(email)
+        settings["subscribers"] = subscribers
+        save_website_settings_to_db(db, settings)
+        return {"success": True, "message": "You're on the FoodNova launch list."}
+    finally:
+        db.close()
 
 
 def get_delivery_assignment_mode(db) -> str:

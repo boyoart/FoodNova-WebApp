@@ -10,6 +10,19 @@
   position: relative;
 }
 
+.coming-soon-page::after {
+  animation: comingSoonFloat 12s ease-in-out infinite alternate;
+  background:
+    radial-gradient(circle, rgba(255, 210, 63, 0.18), transparent 34%),
+    radial-gradient(circle at 70% 30%, rgba(8, 122, 52, 0.22), transparent 32%);
+  content: '';
+  height: 520px;
+  position: absolute;
+  right: -160px;
+  top: -120px;
+  width: 520px;
+}
+
 .coming-soon-bg {
   background:
     linear-gradient(90deg, rgba(7, 18, 11, 0.72), rgba(7, 18, 11, 0.42)),
@@ -38,8 +51,6 @@
 .coming-soon-logo {
   filter: drop-shadow(0 20px 32px rgba(0,0,0,0.26));
   margin-bottom: 1.2rem;
-  max-width: 230px;
-  width: 42vw;
 }
 
 .coming-soon-kicker {
@@ -117,11 +128,20 @@
   padding: 0 1.3rem;
 }
 
+.coming-soon-form button:disabled {
+  opacity: 0.72;
+}
+
 .coming-soon-socials {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
   justify-content: center;
+}
+
+@keyframes comingSoonFloat {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(-40px, 36px, 0) scale(1.08); }
 }
 
 .coming-soon-socials a {
