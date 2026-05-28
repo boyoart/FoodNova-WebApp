@@ -3,9 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../widgets/brand_auth_scaffold.dart';
-import '../../../widgets/input_field.dart';
 import '../../../widgets/primary_button.dart';
-import '../../../widgets/secondary_button.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -15,15 +13,6 @@ class ForgotPasswordScreen extends StatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final _email = TextEditingController();
-  bool _sent = false;
-
-  @override
-  void dispose() {
-    _email.dispose();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return BrandAuthScaffold(
@@ -32,17 +21,25 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         children: [
           Text('Reset password', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
-          Text(
-            _sent ? 'If the email exists, FoodNova will send reset instructions.' : 'Enter the email attached to your FoodNova account.',
+          const Text(
+            'Password reset is handled by FoodNova support for now so your shopping account stays protected.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: FoodNovaColors.muted),
+            style: TextStyle(color: FoodNovaColors.muted),
           ),
           const SizedBox(height: 24),
-          InputField(controller: _email, label: 'Email', icon: Icons.mail_outline_rounded, keyboardType: TextInputType.emailAddress),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: FoodNovaColors.surface2,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Text(
+              'Contact FoodNova with your account email or phone number. Support will verify your identity before resetting access.',
+              style: TextStyle(color: FoodNovaColors.muted, height: 1.45, fontWeight: FontWeight.w700),
+            ),
+          ),
           const SizedBox(height: 22),
-          PrimaryButton(label: _sent ? 'Sent' : 'Send reset link', icon: Icons.mark_email_read_rounded, onPressed: () => setState(() => _sent = true)),
-          const SizedBox(height: 10),
-          SecondaryButton(label: 'Back to sign in', icon: Icons.arrow_back_rounded, onPressed: () => context.go('/login')),
+          PrimaryButton(label: 'Back to sign in', icon: Icons.arrow_back_rounded, onPressed: () => context.go('/login')),
         ],
       ),
     );

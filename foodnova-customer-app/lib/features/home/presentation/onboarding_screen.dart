@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/state/session_controller.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
 import '../../../widgets/brand_logo.dart';
 import '../../../widgets/primary_button.dart';
 import '../../../widgets/secondary_button.dart';
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final _controller = PageController();
   int _index = 0;
 
@@ -30,17 +32,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _OnboardingPage(
         icon: Icons.shopping_basket_rounded,
         title: 'Premium groceries from trusted neighborhood sources.',
-        body: 'FoodNova brings daily essentials, market staples, and curated packs into one calm shopping experience.',
+        body:
+            'FoodNova brings daily essentials, market staples, and curated packs into one calm shopping experience.',
       ),
       _OnboardingPage(
         icon: Icons.location_on_rounded,
-        title: 'Local fulfillment that understands walking-distance delivery.',
-        body: 'Order from nearby stock points and get better delivery visibility, ETAs, and rider coordination.',
+        title: 'Foodstuff shopping built for real household restocking.',
+        body:
+            'Order from FoodNova inventory, pay securely by transfer, upload your receipt, and follow every order update.',
       ),
       _OnboardingPage(
         icon: Icons.verified_rounded,
         title: 'A modern African commerce app built for real households.',
-        body: 'Clean checkout, thoughtful order tracking, and a brand experience that feels unmistakably FoodNova.',
+        body:
+            'Clean checkout, thoughtful order tracking, and a brand experience that feels unmistakably FoodNova.',
       ),
     ];
 
@@ -51,18 +56,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
           child: Column(
             children: [
-              Row(
+              Column(
                 children: [
-                  const BrandLogo(height: 48),
-                  const Spacer(),
-                  TextButton(onPressed: () => context.go('/home'), child: const Text('Guest')),
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final logoWidth =
+                          constraints.maxWidth.clamp(180.0, 220.0);
+                      return FoodNovaLogo(
+                        width: logoWidth,
+                        height: 96,
+                        tightCrop: true,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                        onPressed: () async {
+                          await ref
+                              .read(sessionControllerProvider.notifier)
+                              .continueAsGuest();
+                          if (context.mounted) context.go('/home');
+                        },
+                        child: const Text('Continue as Guest')),
+                  ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               Expanded(
                 child: PageView.builder(
                   controller: _controller,
-                  onPageChanged: (value) => setState(() => _index = value),
+                  onPageChanged: (value) {
+                    if (!mounted) return;
+                    setState(() => _index = value);
+                  },
                   itemCount: pages.length,
                   itemBuilder: (_, index) => pages[index],
                 ),
@@ -77,7 +105,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     height: 8,
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     decoration: BoxDecoration(
-                      color: _index == index ? FoodNovaColors.primary : FoodNovaColors.border,
+                      color: _index == index
+                          ? FoodNovaColors.primary
+                          : FoodNovaColors.border,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
@@ -85,18 +115,36 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
               const SizedBox(height: 22),
               PrimaryButton(
-                label: _index == pages.length - 1 ? 'Create your FoodNova account' : 'Continue',
+                label: _index == pages.length - 1
+                    ? 'Create your FoodNova account'
+                    : 'Continue',
                 icon: Icons.arrow_forward_rounded,
                 onPressed: () {
                   if (_index == pages.length - 1) {
+                    if (!mounted) return;
                     context.go('/signup');
                   } else {
-                    _controller.nextPage(duration: const Duration(milliseconds: 280), curve: Curves.easeOutCubic);
+                    _controller.nextPage(
+                        duration: const Duration(milliseconds: 280),
+                        curve: Curves.easeOutCubic);
                   }
                 },
               ),
               const SizedBox(height: 10),
-              SecondaryButton(label: 'Sign in', icon: Icons.login_rounded, onPressed: () => context.go('/login')),
+              SecondaryButton(
+                  label: 'Sign in',
+                  icon: Icons.login_rounded,
+                  onPressed: () => context.go('/login')),
+              const SizedBox(height: 10),
+              SecondaryButton(
+                  label: 'Continue as Guest',
+                  icon: Icons.storefront_rounded,
+                  onPressed: () async {
+                    await ref
+                        .read(sessionControllerProvider.notifier)
+                        .continueAsGuest();
+                    if (context.mounted) context.go('/home');
+                  }),
             ],
           ),
         ),
@@ -106,7 +154,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage({required this.icon, required this.title, required this.body});
+  const _OnboardingPage(
+      {required this.icon, required this.title, required this.body});
 
   final IconData icon;
   final String title;
@@ -127,7 +176,11 @@ class _OnboardingPage extends StatelessWidget {
                 gradient: const LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [FoodNovaColors.primaryDark, FoodNovaColors.primary, FoodNovaColors.success],
+                  colors: [
+                    FoodNovaColors.primaryDark,
+                    FoodNovaColors.primary,
+                    FoodNovaColors.success
+                  ],
                 ),
                 boxShadow: FoodNovaShadows.nav,
               ),
@@ -136,7 +189,8 @@ class _OnboardingPage extends StatelessWidget {
                   Positioned(
                     right: -8,
                     top: -10,
-                    child: Icon(Icons.grain_rounded, size: 120, color: Colors.white.withOpacity(.08)),
+                    child: Icon(Icons.grain_rounded,
+                        size: 120, color: Colors.white.withValues(alpha: .08)),
                   ),
                   Positioned(
                     left: 0,
@@ -145,7 +199,7 @@ class _OnboardingPage extends StatelessWidget {
                       width: 126,
                       height: 126,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(.12),
+                        color: Colors.white.withValues(alpha: .12),
                         borderRadius: BorderRadius.circular(32),
                       ),
                       child: Icon(icon, size: 66, color: FoodNovaColors.accent),
@@ -157,7 +211,11 @@ class _OnboardingPage extends StatelessWidget {
                     child: Text(
                       'Fresh\nLocal\nFast',
                       textAlign: TextAlign.right,
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 28, height: .95),
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 28,
+                          height: .95),
                     ),
                   ),
                 ],
@@ -169,13 +227,19 @@ class _OnboardingPage extends StatelessWidget {
         Text(
           title,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: FoodNovaColors.heading, fontWeight: FontWeight.w900, height: 1.05),
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: FoodNovaColors.heading,
+              fontWeight: FontWeight.w900,
+              height: 1.05),
         ),
         const SizedBox(height: 12),
         Text(
           body,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: FoodNovaColors.muted, height: 1.45),
+          style: Theme.of(context)
+              .textTheme
+              .bodyLarge
+              ?.copyWith(color: FoodNovaColors.muted, height: 1.45),
         ),
       ],
     );

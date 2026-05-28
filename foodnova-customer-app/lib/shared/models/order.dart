@@ -25,17 +25,51 @@ class OrderSummary {
   final String createdAt;
   final Map<String, dynamic> raw;
 
+  List<Map<String, dynamic>> get items {
+    final value = raw['items'];
+    if (value is List) {
+      return value.map((item) => Map<String, dynamic>.from(item)).toList();
+    }
+    return const [];
+  }
+
+  String get customerName => '${raw['customer_name'] ?? ''}';
+  String get customerPhone => '${raw['customer_phone'] ?? raw['phone'] ?? ''}';
+  String get customerEmail => '${raw['customer_email'] ?? ''}';
+  String get deliveryMethod => '${raw['delivery_method'] ?? ''}';
+  String get deliveryNotes =>
+      '${raw['delivery_notes'] ?? raw['delivery_note'] ?? ''}';
+  String get cancellationStatus => '${raw['cancellation_status'] ?? 'none'}';
+  String get refundStatus => '${raw['refund_status'] ?? 'none'}';
+  String get cancellationReason => '${raw['cancellation_reason'] ?? ''}';
+  String get refundNote => '${raw['refund_note'] ?? ''}';
+  String get receipt => '${raw['receipt'] ?? ''}';
+  String get deliveryConfirmedAt => '${raw['delivery_confirmed_at'] ?? ''}';
+  bool get isOutForDelivery {
+    final value = '$status $deliveryStatus'.toLowerCase();
+    return value.contains('out_for_delivery') ||
+        value.contains('out for delivery');
+  }
+
+  bool get isDelivered {
+    final value = '$status $deliveryStatus'.toLowerCase();
+    return value.contains('delivered') || deliveryConfirmedAt.isNotEmpty;
+  }
+
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
     return OrderSummary(
       id: int.tryParse('${json['id']}') ?? 0,
       orderCode: '${json['order_code'] ?? ''}',
       totalAmount: double.tryParse('${json['total_amount'] ?? 0}') ?? 0,
       status: '${json['order_status'] ?? json['status'] ?? ''}',
-      deliveryStatus: '${json['delivery_status'] ?? json['fulfillment_status'] ?? ''}',
+      deliveryStatus:
+          '${json['delivery_status'] ?? json['fulfillment_status'] ?? ''}',
       paymentStatus: '${json['payment_status'] ?? ''}',
       deliveryAddress: '${json['delivery_address'] ?? ''}',
-      dispatcherName: '${json['assigned_worker_name'] ?? json['rider_name'] ?? ''}',
-      dispatcherType: '${json['assigned_worker_type'] ?? json['delivery_method'] ?? ''}',
+      dispatcherName:
+          '${json['assigned_worker_name'] ?? json['rider_name'] ?? ''}',
+      dispatcherType:
+          '${json['assigned_worker_type'] ?? json['delivery_method'] ?? ''}',
       createdAt: '${json['created_at'] ?? ''}',
       raw: json,
     );

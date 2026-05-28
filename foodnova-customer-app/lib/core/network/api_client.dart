@@ -5,10 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/app_config.dart';
 import '../state/session_controller.dart';
 
+const bool _apiLogsEnabled =
+    bool.fromEnvironment('FOODNOVA_API_LOGS', defaultValue: false);
+
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
-      baseUrl: '${AppConfig.normalizedApiBaseUrl}/api',
+      baseUrl: AppConfig.normalizedApiBaseUrl,
       connectTimeout: const Duration(seconds: 15),
       sendTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 25),
@@ -19,7 +22,8 @@ final dioProvider = Provider<Dio>((ref) {
   dio.interceptors.add(
     InterceptorsWrapper(
       onRequest: (options, handler) async {
-        final token = await ref.read(sessionControllerProvider.notifier).token();
+        final token =
+            await ref.read(sessionControllerProvider.notifier).token();
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
@@ -29,16 +33,31 @@ final dioProvider = Provider<Dio>((ref) {
         handler.next(options);
       },
       onResponse: (response, handler) {
-        _log('response status=${response.statusCode} url=${response.requestOptions.uri}');
+        _log(
+            'response status=${response.statusCode} url=${response.requestOptions.uri}');
         _log('responseBody=${response.data}');
-        final token = response.data is Map ? (response.data['access_token'] ?? response.data['token']) : null;
-        if (token != null) _log('token returned=${token.toString().isNotEmpty}');
+        final token = response.data is Map
+            ? (response.data['access_token'] ?? response.data['token'])
+            : null;
+        if (token != null) {
+          _log('token returned=${token.toString().isNotEmpty}');
+        }
         handler.next(response);
       },
-      onError: (error, handler) {
+      onError: (error, handler) async {
         _log('error type=${error.type} message=${error.message}');
-        _log('error status=${error.response?.statusCode} url=${error.requestOptions.uri}');
+        _log(
+            'error status=${error.response?.statusCode} url=${error.requestOptions.uri}');
         _log('errorBody=${error.response?.data}');
+        final status = error.response?.statusCode;
+        final detail = error.response?.data is Map
+            ? '${error.response?.data['detail'] ?? error.response?.data['message'] ?? ''}'
+            : '';
+        if ((status == 401 || status == 403) &&
+            RegExp('removed|deactivated|suspended', caseSensitive: false)
+                .hasMatch(detail)) {
+          await ref.read(sessionControllerProvider.notifier).clear();
+        }
         handler.next(error);
       },
     ),
@@ -57,13 +76,16 @@ class ApiFailure implements Exception {
 }
 
 void _log(String message) {
+  if (!_apiLogsEnabled) return;
   debugPrint('[FoodNova API] $message');
 }
 
 Map<String, dynamic> _safeHeaders(Map<String, dynamic> headers) {
   return headers.map((key, value) {
     final lower = key.toLowerCase();
-    if (lower == 'authorization' || lower.contains('token') || lower.contains('key')) {
+    if (lower == 'authorization' ||
+        lower.contains('token') ||
+        lower.contains('key')) {
       return MapEntry(key, '***');
     }
     return MapEntry(key, value);
@@ -73,8 +95,12 @@ Map<String, dynamic> _safeHeaders(Map<String, dynamic> headers) {
 String apiMessage(Object error) {
   if (error is DioException) {
     final data = error.response?.data;
-    if (data is Map && data['detail'] != null) return data['detail'].toString();
-    if (data is Map && data['message'] != null) return data['message'].toString();
+    if (data is Map && data['detail'] != null) {
+      return data['detail'].toString();
+    }
+    if (data is Map && data['message'] != null) {
+      return data['message'].toString();
+    }
     switch (error.type) {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
@@ -90,9 +116,11 @@ String apiMessage(Object error) {
       case DioExceptionType.cancel:
         return 'Request was cancelled. Please try again.';
       case DioExceptionType.badResponse:
-        return error.response?.statusMessage ?? 'FoodNova returned an unexpected response.';
+        return error.response?.statusMessage ??
+            'FoodNova returned an unexpected response.';
       case DioExceptionType.unknown:
-        return error.message ?? 'Network request failed before FoodNova could respond.';
+        return error.message ??
+            'Network request failed before FoodNova could respond.';
     }
   }
   return error.toString();

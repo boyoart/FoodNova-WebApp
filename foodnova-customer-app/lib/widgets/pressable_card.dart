@@ -4,7 +4,11 @@ import '../core/theme/colors.dart';
 import '../core/theme/shadows.dart';
 
 class PressableCard extends StatefulWidget {
-  const PressableCard({required this.child, this.onTap, this.padding = const EdgeInsets.all(16), super.key});
+  const PressableCard(
+      {required this.child,
+      this.onTap,
+      this.padding = const EdgeInsets.all(16),
+      super.key});
 
   final Widget child;
   final VoidCallback? onTap;
@@ -21,9 +25,15 @@ class _PressableCardState extends State<PressableCard> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) => setState(() => _pressed = false),
+      onTapDown: (_) {
+        if (mounted) setState(() => _pressed = true);
+      },
+      onTapCancel: () {
+        if (mounted) setState(() => _pressed = false);
+      },
+      onTapUp: (_) {
+        if (mounted) setState(() => _pressed = false);
+      },
       child: AnimatedScale(
         scale: _pressed ? 0.985 : 1,
         duration: const Duration(milliseconds: 120),

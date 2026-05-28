@@ -3,74 +3,146 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'colors.dart';
 import 'spacing.dart';
-import 'typography.dart';
 
 class AppTheme {
   static ThemeData get light {
-    final textTheme = GoogleFonts.interTextTheme();
+    final textTheme = GoogleFonts.manropeTextTheme();
+    return _base(
+      brightness: Brightness.light,
+      textTheme: textTheme,
+      scaffoldBackgroundColor: FoodNovaColors.bg,
+      surface: FoodNovaColors.surface,
+      surfaceContainer: FoodNovaColors.surface2,
+      text: FoodNovaColors.text,
+      muted: FoodNovaColors.muted,
+      border: FoodNovaColors.border,
+    );
+  }
+
+  static ThemeData get dark {
+    final textTheme = GoogleFonts.manropeTextTheme();
+    return _base(
+      brightness: Brightness.dark,
+      textTheme: textTheme,
+      scaffoldBackgroundColor: FoodNovaColors.darkBg,
+      surface: FoodNovaColors.darkSurface,
+      surfaceContainer: FoodNovaColors.darkSurface2,
+      text: FoodNovaColors.darkText,
+      muted: const Color(0xFFCACACA),
+      border: const Color(0xFF485248),
+    );
+  }
+
+  static ThemeData _base({
+    required Brightness brightness,
+    required TextTheme textTheme,
+    required Color scaffoldBackgroundColor,
+    required Color surface,
+    required Color surfaceContainer,
+    required Color text,
+    required Color muted,
+    required Color border,
+  }) {
+    final isDark = brightness == Brightness.dark;
     return ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: FoodNovaColors.bg,
+      brightness: brightness,
+      scaffoldBackgroundColor: scaffoldBackgroundColor,
       colorScheme: ColorScheme.fromSeed(
         seedColor: FoodNovaColors.primary,
+        brightness: brightness,
         primary: FoodNovaColors.primary,
         secondary: FoodNovaColors.accent,
-        surface: Colors.white,
+        surface: surface,
+        surfaceContainerLow:
+            isDark ? FoodNovaColors.darkSurface : const Color(0xFFF1F3FF),
+        surfaceContainer:
+            isDark ? FoodNovaColors.darkSurface : const Color(0xFFE9EDFF),
+        surfaceContainerHigh:
+            isDark ? FoodNovaColors.darkSurface2 : const Color(0xFFE1E8FD),
+        surfaceContainerHighest: surfaceContainer,
+        onSurface: text,
+        onSurfaceVariant: muted,
+        outline: border,
+        outlineVariant: border.withValues(alpha: isDark ? .7 : .55),
+        onPrimary: const Color(0xFFFFFFFF),
+        primaryContainer: const Color(0xFF14532D),
+        onPrimaryContainer: const Color(0xFF87C695),
       ),
       textTheme: textTheme.apply(
-        bodyColor: FoodNovaColors.text,
-        displayColor: FoodNovaColors.text,
+        bodyColor: text,
+        displayColor: text,
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: FoodNovaColors.bg,
-        foregroundColor: FoodNovaColors.text,
+      appBarTheme: AppBarTheme(
+        backgroundColor: scaffoldBackgroundColor,
+        foregroundColor: text,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: TextStyle(color: FoodNovaColors.text, fontSize: 22, fontWeight: FontWeight.w900),
+        titleTextStyle:
+            TextStyle(color: text, fontSize: 22, fontWeight: FontWeight.w900),
       ),
       cardTheme: CardThemeData(
-        color: Colors.white,
+        color: surface,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusLg)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusLg)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
-        labelStyle: const TextStyle(color: FoodNovaColors.muted, fontWeight: FontWeight.w700),
+        fillColor:
+            isDark ? surface : const Color(0xFFFFFFFF).withValues(alpha: .74),
+        labelStyle: TextStyle(color: muted, fontWeight: FontWeight.w700),
+        hintStyle: TextStyle(color: muted),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusMd),
-          borderSide: const BorderSide(color: FoodNovaColors.border),
+          borderSide: BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusMd),
-          borderSide: const BorderSide(color: FoodNovaColors.border),
+          borderSide: BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusMd),
-          borderSide: const BorderSide(color: FoodNovaColors.primary, width: 1.4),
+          borderSide:
+              const BorderSide(color: FoodNovaColors.primary, width: 1.4),
         ),
+      ),
+      dividerTheme: DividerThemeData(color: border),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor:
+            isDark ? FoodNovaColors.darkSurface2 : FoodNovaColors.text,
+        contentTextStyle:
+            TextStyle(color: isDark ? text : const Color(0xFFFFFFFF)),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: FoodNovaColors.primary,
-          foregroundColor: Colors.white,
-          textStyle: FoodNovaTypography.body.copyWith(fontWeight: FontWeight.w800),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusPill)),
+          foregroundColor: const Color(0xFFFFFFFF),
+          textStyle: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           minimumSize: const Size.fromHeight(52),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: FoodNovaColors.primary,
-          textStyle: const TextStyle(fontWeight: FontWeight.w900),
+          textStyle: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w800),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: FoodNovaColors.surface,
+        backgroundColor: surface,
         indicatorColor: FoodNovaColors.accent,
-        labelTextStyle: MaterialStateProperty.resolveWith(
+        labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
-            color: states.contains(MaterialState.selected) ? FoodNovaColors.primaryDark : FoodNovaColors.muted,
+            color: states.contains(WidgetState.selected)
+                ? FoodNovaColors.primaryDark
+                : muted,
             fontWeight: FontWeight.w900,
             fontSize: 12,
           ),

@@ -16,32 +16,68 @@ import '../features/products/presentation/categories_screen.dart';
 import '../features/products/presentation/product_detail_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/tracking/presentation/tracking_screen.dart';
+import '../core/state/session_controller.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
+    redirect: (_, state) {
+      final authenticated =
+          ref.read(sessionControllerProvider).valueOrNull == true;
+      final path = state.uri.path;
+      final authRoute = path == '/login' ||
+          path == '/signup' ||
+          path == '/forgot-password' ||
+          path == '/otp' ||
+          path == '/onboarding';
+      if (authenticated && authRoute) return '/home';
+      if (!authenticated && _requiresSession(path)) return '/login';
+      return null;
+    },
     routes: [
       GoRoute(path: '/', builder: (_, __) => const SplashScreen()),
-      GoRoute(path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
+      GoRoute(
+          path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
-      GoRoute(path: '/forgot-password', builder: (_, __) => const ForgotPasswordScreen()),
+      GoRoute(
+          path: '/forgot-password',
+          builder: (_, __) => const ForgotPasswordScreen()),
       GoRoute(path: '/otp', builder: (_, __) => const OtpScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
-      GoRoute(path: '/categories', builder: (_, __) => const CategoriesScreen()),
+      GoRoute(path: '/categories', redirect: (_, __) => '/discover'),
+      GoRoute(path: '/discover', builder: (_, __) => const DiscoverScreen()),
       GoRoute(
         path: '/products/:id',
-        builder: (_, state) => ProductDetailScreen(productId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
+        builder: (_, state) => ProductDetailScreen(
+            productId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
+      ),
+      GoRoute(
+        path: '/packs/:id',
+        builder: (_, state) => ProductDetailScreen(
+            productId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0,
+            isPack: true),
       ),
       GoRoute(path: '/cart', builder: (_, __) => const CartScreen()),
       GoRoute(path: '/checkout', builder: (_, __) => const CheckoutScreen()),
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
       GoRoute(
         path: '/tracking/:id',
-        builder: (_, state) => TrackingScreen(orderId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
+        builder: (_, state) => TrackingScreen(
+            orderId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
       ),
-      GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
+      GoRoute(
+          path: '/notifications',
+          builder: (_, __) => const NotificationsScreen()),
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
     ],
   );
 });
+
+bool _requiresSession(String path) {
+  return path == '/checkout' ||
+      path == '/orders' ||
+      path == '/notifications' ||
+      path == '/profile' ||
+      path.startsWith('/tracking/');
+}

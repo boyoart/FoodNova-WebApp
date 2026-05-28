@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/colors.dart';
-import '../core/theme/spacing.dart';
 
 class PrimaryButton extends StatelessWidget {
-  const PrimaryButton({required this.label, required this.onPressed, this.icon, this.loading = false, super.key});
+  const PrimaryButton(
+      {required this.label,
+      required this.onPressed,
+      this.icon,
+      this.loading = false,
+      super.key});
 
   final String label;
   final VoidCallback? onPressed;
@@ -13,20 +17,30 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return AnimatedOpacity(
       opacity: onPressed == null ? .64 : 1,
       duration: const Duration(milliseconds: 160),
       child: FilledButton.icon(
         onPressed: loading ? null : onPressed,
         icon: loading
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: scheme.onPrimary,
+                ),
+              )
             : Icon(icon ?? Icons.arrow_forward_rounded),
         label: Text(label),
         style: FilledButton.styleFrom(
           backgroundColor: FoodNovaColors.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: scheme.onPrimary,
           minimumSize: const Size.fromHeight(54),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(FoodNovaSpacing.radiusPill)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
         ),
       ),
     );

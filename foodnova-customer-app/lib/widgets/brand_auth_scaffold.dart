@@ -18,7 +18,11 @@ class BrandAuthScaffold extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [FoodNovaColors.surface2, FoodNovaColors.bg, Color(0xFFFFF8DA)],
+            colors: [
+              FoodNovaColors.surface2,
+              FoodNovaColors.bg,
+              Color(0xFFFFF8DA)
+            ],
           ),
         ),
         child: SafeArea(
@@ -27,12 +31,23 @@ class BrandAuthScaffold extends StatelessWidget {
               return SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight - 48),
+                  constraints:
+                      BoxConstraints(minHeight: constraints.maxHeight - 48),
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
-                      const BrandLogo(height: 82),
-                      const SizedBox(height: 22),
+                      LayoutBuilder(
+                        builder: (context, logoConstraints) {
+                          final logoWidth =
+                              logoConstraints.maxWidth.clamp(170.0, 220.0);
+                          return FoodNovaLogo(
+                            width: logoWidth,
+                            height: 96,
+                            tightCrop: true,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 30),
                       Container(
                         constraints: const BoxConstraints(maxWidth: 520),
                         padding: const EdgeInsets.all(22),
