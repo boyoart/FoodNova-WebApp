@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
-import { BarChart3, BellRing, ClipboardList, CreditCard, Megaphone, Package, ShieldCheck, ShoppingBag, Users, DollarSign, Truck, Undo2 } from 'lucide-react'
+import { BarChart3, BellRing, ClipboardList, CreditCard, Megaphone, Package, ShieldCheck, ShoppingBag, Users, DollarSign, Truck, Undo2, Settings } from 'lucide-react'
 import './AdminDashboard.css'
 
 const adminTools = [
@@ -16,6 +16,7 @@ const adminTools = [
   { path: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.', icon: CreditCard, permission: 'payments:view' },
   { path: '/admin/broadcasts', title: 'Broadcasts', description: 'Send announcements to customers.', icon: BellRing, permission: 'broadcasts:view' },
   { path: '/admin/announcements', title: 'Homepage Announcements', description: 'Manage homepage bars, banners, and popups.', icon: Megaphone, permissions: ['announcements:view', 'announcements:manage'] },
+  { path: '/admin/settings', title: 'Website Settings', description: 'Control splash screen, launch mode, and premium storefront visibility.', icon: Settings, permissions: ['announcements:view', 'announcements:manage'] },
   { path: '/admin/customers', title: 'Customers', description: 'View customer data and order history.', icon: Users, permission: 'customers:view' },
   { path: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system changes.', icon: BarChart3, permission: 'audit:view' },
   { path: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.', icon: ShieldCheck, permission: 'admins:view' },

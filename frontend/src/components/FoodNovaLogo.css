@@ -1,0 +1,23 @@
+.foodnova-logo {
+  display: block;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+.foodnova-logo-header {
+  width: clamp(138px, 18vw, 210px);
+}
+
+.foodnova-logo-auth {
+  width: clamp(160px, 42vw, 220px);
+}
+
+.foodnova-logo-splash,
+.foodnova-logo-coming-soon {
+  width: clamp(190px, 42vw, 260px);
+}
+
+.foodnova-logo-inline {
+  width: clamp(130px, 22vw, 180px);
+}

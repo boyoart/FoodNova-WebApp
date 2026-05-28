@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FoodNova Checkout</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;family=Hanken+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#ffe083",
+                        "inverse-on-surface": "#edf0ff",
+                        "surface-dim": "#d3daef",
+                        "on-primary-fixed-variant": "#12512c",
+                        "primary": "#003b1b",
+                        "on-tertiary-fixed-variant": "#46473f",
+                        "surface-container-highest": "#dce2f7",
+                        "tertiary-fixed": "#e4e3d7",
+                        "on-secondary-container": "#6f5900",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed": "#00210d",
+                        "surface-bright": "#f9f9ff",
+                        "on-surface": "#141b2b",
+                        "surface-container-high": "#e1e8fd",
+                        "primary-fixed-dim": "#96d5a3",
+                        "tertiary-container": "#484941",
+                        "tertiary": "#31332b",
+                        "inverse-primary": "#96d5a3",
+                        "error-container": "#ffdad6",
+                        "background": "#f9f9ff",
+                        "on-tertiary-container": "#b8b8ad",
+                        "inverse-surface": "#293040",
+                        "outline-variant": "#c0c9be",
+                        "surface": "#f9f9ff",
+                        "surface-variant": "#dce2f7",
+                        "on-error-container": "#93000a",
+                        "secondary-container": "#fed01b",
+                        "on-background": "#141b2b",
+                        "primary-fixed": "#b1f2be",
+                        "on-tertiary-fixed": "#1b1c15",
+                        "on-primary": "#ffffff",
+                        "surface-container-low": "#f1f3ff",
+                        "outline": "#717970",
+                        "error": "#ba1a1a",
+                        "secondary": "#735c00",
+                        "primary-container": "#14532d",
+                        "surface-tint": "#2e6a41",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container": "#e9edff",
+                        "on-secondary-fixed": "#231b00",
+                        "secondary-fixed-dim": "#eec200",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed-dim": "#c7c7bc",
+                        "on-surface-variant": "#404941",
+                        "on-secondary-fixed-variant": "#574500",
+                        "on-primary-container": "#87c695"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "8px",
+                        "container-margin-desktop": "64px",
+                        "section-gap": "48px",
+                        "container-margin-mobile": "20px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "label-lg": ["Hanken Grotesk"],
+                        "label-md": ["Hanken Grotesk"],
+                        "headline-md": ["Manrope"],
+                        "display-lg-mobile": ["Manrope"],
+                        "headline-lg": ["Manrope"],
+                        "body-lg": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg-mobile": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            color: theme('colors.on-background');
+        }
+        /* Custom scrollbar for horizontal scrolling lists */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="antialiased pb-32 md:pb-0">
+<!-- Top Navigation (Desktop & Shared Style) -->
+<!-- Note: TopAppBar is adapted for a linear/transactional flow per instructions (back button added) -->
+<header class="bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-margin-mobile md:px-container-margin-desktop h-16 border-b border-white/10 shadow-sm transition-all">
+<div class="flex items-center gap-4">
+<button aria-label="Go back" class="text-on-surface hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="arrow_back" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<h1 class="font-headline-md-mobile text-headline-md-mobile font-bold tracking-tight text-primary">Checkout</h1>
+</div>
+<div class="hidden md:flex">
+<!-- Transactional page, global nav suppressed -->
+</div>
+</header>
+<main class="pt-24 px-container-margin-mobile md:px-container-margin-desktop max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-gutter pb-section-gap">
+<!-- Left Column: Forms and Selections -->
+<div class="md:col-span-7 flex flex-col gap-8">
+<!-- Delivery Address Section -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.02)] p-6 md:p-8">
+<div class="flex items-center justify-between mb-6">
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Delivery Details</h2>
+<button class="font-label-lg text-label-lg text-primary hover:opacity-80">Edit</button>
+</div>
+<div class="flex items-start gap-4 p-4 border border-outline-variant rounded-lg bg-surface-container-low/50 relative overflow-hidden">
+<div class="absolute right-0 top-0 w-1/3 h-full opacity-20">
+<img class="w-full h-full object-cover object-center" data-alt="A soft, abstract map texture showing a stylized city grid. The map is designed with minimalistic, light-mode aesthetics featuring pale cream and soft gray tones. The visual style is highly refined, resembling a luxury editorial layout rather than a functional map, ensuring it sits elegantly within the premium minimalist app design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvGe4-MZVj0K7NkNA_vvvYABt1bZfOMCYrn6vVjOs7hx87QhcThkhXlidDU28AUEGh7fxIHib94_M-VgAzmmvMcr1Yh5n_xufD74dQFkApYyIX3nMJyPtwTlZoak0psekx4U6V-TeAc5bKxZ2rvT8I3oSuXamd7LfabrnD7yFd0j8tBbqWXrgBJURALymZrE3wvnRVPgRWkexf3DBi5E0-85DskQWDPKmAQH8ER7ZRSEi1Zfez2kyPh6V_ulGq8kZkPaBzaG2UAe0"/>
+</div>
+<div class="mt-1 bg-surface-container-high p-2 rounded-full z-10">
+<span class="material-symbols-outlined text-primary" data-icon="location_on" style="font-variation-settings: 'FILL' 1;">location_on</span>
+</div>
+<div class="z-10">
+<p class="font-body-lg text-body-lg text-on-surface font-semibold">Home</p>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">123 Culinary Boulevard, Apt 4B<br/>Metropolis, NY 10001</p>
+</div>
+</div>
+<!-- Delivery Instructions -->
+<div class="mt-6">
+<label class="block font-label-lg text-label-lg text-on-surface mb-2" for="instructions">Delivery Instructions (Optional)</label>
+<textarea class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-4 py-3 font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary transition-colors placeholder:text-on-surface-variant/50" id="instructions" placeholder="e.g., Leave at the front desk..." rows="2"></textarea>
+</div>
+</section>
+<!-- Delivery Time Slot Section -->
+<section class="bg-surface-container-lowest rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.02)] p-6 md:p-8">
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-6">Delivery Time</h2>
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<!-- Option 1: Selected -->
+<label class="relative flex flex-col items-center justify-center p-4 border-2 border-primary bg-primary/5 rounded-lg cursor-pointer transition-all hover:bg-primary/10">
+<input checked="" class="sr-only" name="time_slot" type="radio"/>
+<span class="font-label-lg text-label-lg text-primary mb-1">Today</span>
+<span class="font-body-md text-body-md text-on-surface font-semibold">2:00 - 3:00 PM</span>
+<div class="absolute top-2 right-2 text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</label>
+<!-- Option 2 -->
+<label class="relative flex flex-col items-center justify-center p-4 border border-outline-variant rounded-lg cursor-pointer transition-all hover:border-primary/50">
+<input class="sr-only" name="time_slot" type="radio"/>
+<span class="font-label-lg text-label-lg text-on-surface-variant mb-1">Today</span>
+<span class="font-body-md text-body-md text-on-surface font-semibold">3:00 - 4:00 PM</span>
+</label>
+<!-- Option 3 -->
+<label class="relative flex flex-col items-center justify-center p-4 border border-outline-variant rounded-lg cursor-pointer transition-all hover:border-primary/50">
+<input class="sr-only" name="time_slot" type="radio"/>
+<span class="font-label-lg text-label-lg text-on-surface-variant mb-1">Today</span>
+<span class="font-body-md text-body-md text-on-surface font-semibold">4:00 - 5:00 PM</span>
+</label>
+<!-- Option 4 -->
+<label class="relative flex flex-col items-center justify-center p-4 border border-outline-variant rounded-lg cursor-pointer transition-all hover:border-primary/50">
+<input class="sr-only" name="time_slot" type="radio"/>
+<span class="font-label-lg text-label-lg text-on-surface-variant mb-1">Tomorrow</span>
+<span class="font-body-md text-body-md text-on-surface font-semibold">Morning</span>
+</label>
+</div>
+</section>
+</div>
+<!-- Right Column: Order Summary & Payment -->
+<div class="md:col-span-5 flex flex-col gap-8">
+<section class="bg-surface-container-lowest rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.04)] p-6 md:p-8 sticky top-24">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-6">Order Summary</h2>
+<!-- Items List -->
+<div class="flex flex-col gap-4 mb-6 max-h-[353px] overflow-y-auto pr-2 hide-scrollbar">
+<!-- Item 1 -->
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container-low">
+<img alt="Organic Avocados" class="w-full h-full object-cover" data-alt="A close-up, high-end editorial shot of perfectly ripe organic avocados resting on a clean, light marble surface. The lighting is bright and diffuse, casting soft, ambient shadows that emphasize the texture of the avocado skin. The aesthetic perfectly matches the premium minimalist, light-mode design of the grocery app, highlighting the freshness of the produce." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGUqN5VJFlpuSO7nTC_qrc6t1ilDozZ23jKfIQd35sS6c3L2HXFB3hCn8ijQgLPuyO3aYlTuuXfPPRcae7IoU1SsFO5OtHGxwRBP_34_Bl9IF9vDj_cTonTLU-NkVKqEFK_CJQkVHLV2IvsDje-bBfuwqpLOdEiWc4nd1Nhs0MA6ZHZyhFuiZ5duLveTXQ3OeNJ1eNykMZFXZ_5BSpMygRH27RdGAFswGLg9P1Rw1WaMRPYI6JFPSoDPMqEEzoZWrA6bh4iRHcdgQ"/>
+</div>
+<div class="flex-grow">
+<p class="font-body-md text-body-md text-on-surface font-semibold line-clamp-1">Organic Hass Avocados</p>
+<p class="font-label-md text-label-md text-on-surface-variant mt-1">Qty: 2</p>
+</div>
+<div class="text-right flex-shrink-0">
+<p class="font-body-md text-body-md text-on-surface font-semibold">$5.98</p>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-surface-container-low">
+<img alt="Artisan Bread" class="w-full h-full object-cover" data-alt="A beautifully baked artisanal sourdough loaf presented on a pristine white background. The crust is golden-brown and textured, captured with a shallow depth of field to create a cinematic, high-trust feeling. The lighting is soft and natural, aligning seamlessly with the expansive white space and luxury gallery look of the surrounding UI." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5qstM7JT_eQDqiS00r9QlvEeMDzDx8-VMEnojpWxY2bBDAFPbNevbYWzJUYA-3xRfoXperu1EJodeNm1fyR72lknqaXxw-TgLC9NGAFcTsxooRxHOFysMNBRfdjfVzqM7X5Hfm1Ara2LHXGmaILfVKkssMTZfF-yMS4gljpau3dkq8HviaWHyWUxco-AoV0pJxGFIL165H2azwUwxCebY9VyxMdV3zrrtRORbIIKiEz52Lc4oydMc16oGv7gHoqW5NwfF_59SGvo"/>
+</div>
+<div class="flex-grow">
+<p class="font-body-md text-body-md text-on-surface font-semibold line-clamp-1">Sourdough Artisan Loaf</p>
+<p class="font-label-md text-label-md text-on-surface-variant mt-1">Qty: 1</p>
+</div>
+<div class="text-right flex-shrink-0">
+<p class="font-body-md text-body-md text-on-surface font-semibold">$6.50</p>
+</div>
+</div>
+</div>
+<!-- Totals -->
+<div class="border-t border-outline-variant/50 pt-4 space-y-3 mb-8">
+<div class="flex justify-between font-body-md text-body-md text-on-surface-variant">
+<span>Subtotal</span>
+<span>$12.48</span>
+</div>
+<div class="flex justify-between font-body-md text-body-md text-on-surface-variant">
+<span>Delivery Fee</span>
+<span>$2.99</span>
+</div>
+<div class="flex justify-between font-body-md text-body-md text-on-surface-variant">
+<span>Taxes</span>
+<span>$1.12</span>
+</div>
+<div class="flex justify-between font-headline-md text-headline-md text-on-surface pt-2">
+<span>Total</span>
+<span>$16.59</span>
+</div>
+</div>
+<!-- Primary Action -->
+<button class="w-full min-h-[56px] bg-primary-container text-on-primary rounded-lg font-label-lg text-label-lg flex items-center justify-center gap-2 hover:scale-[1.02] hover:shadow-lg transition-all duration-300">
+                    Proceed to Payment
+                    <span class="material-symbols-outlined" data-icon="arrow_forward" style="font-variation-settings: 'FILL' 0;">arrow_forward</span>
+</button>
+</section>
+</div>
+</main>
+<!-- BottomNavBar is SUPPRESSED as this is a transactional flow (Checkout) where the user should focus on completing the task. -->
+</body></html>

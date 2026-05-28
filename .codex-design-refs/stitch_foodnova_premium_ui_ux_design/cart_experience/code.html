@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FoodNova - Cart Experience</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600&amp;family=Manrope:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "surface-variant": "#dce2f7",
+                        "primary": "#003b1b",
+                        "surface-tint": "#2e6a41",
+                        "secondary-container": "#fed01b",
+                        "on-secondary": "#ffffff",
+                        "surface-container-high": "#e1e8fd",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#96d5a3",
+                        "outline-variant": "#c0c9be",
+                        "on-surface": "#141b2b",
+                        "surface-bright": "#f9f9ff",
+                        "surface-container-low": "#f1f3ff",
+                        "on-primary-fixed-variant": "#12512c",
+                        "primary-fixed": "#b1f2be",
+                        "on-primary-fixed": "#00210d",
+                        "tertiary-fixed-dim": "#c7c7bc",
+                        "tertiary-container": "#484941",
+                        "surface-container-highest": "#dce2f7",
+                        "on-tertiary-fixed-variant": "#46473f",
+                        "on-tertiary-container": "#b8b8ad",
+                        "surface": "#f9f9ff",
+                        "on-secondary-fixed": "#231b00",
+                        "surface-container": "#e9edff",
+                        "primary-container": "#14532d",
+                        "background": "#f9f9ff",
+                        "on-secondary-fixed-variant": "#574500",
+                        "on-tertiary": "#ffffff",
+                        "inverse-on-surface": "#edf0ff",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#293040",
+                        "on-tertiary-fixed": "#1b1c15",
+                        "error-container": "#ffdad6",
+                        "tertiary": "#31332b",
+                        "surface-dim": "#d3daef",
+                        "error": "#ba1a1a",
+                        "secondary": "#735c00",
+                        "on-primary-container": "#87c695",
+                        "on-error": "#ffffff",
+                        "secondary-fixed-dim": "#eec200",
+                        "on-background": "#141b2b",
+                        "inverse-primary": "#96d5a3",
+                        "on-secondary-container": "#6f5900",
+                        "tertiary-fixed": "#e4e3d7",
+                        "outline": "#717970",
+                        "on-surface-variant": "#404941",
+                        "secondary-fixed": "#ffe083"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "container-margin-mobile": "20px",
+                        "container-margin-desktop": "64px",
+                        "section-gap": "48px",
+                        "unit": "8px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Manrope"],
+                        "body-md": ["Manrope"],
+                        "headline-lg": ["Manrope"],
+                        "display-lg": ["Manrope"],
+                        "label-lg": ["Hanken Grotesk"],
+                        "display-lg-mobile": ["Manrope"],
+                        "label-md": ["Hanken Grotesk"],
+                        "headline-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg-mobile": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background font-body-md antialiased min-h-screen flex flex-col">
+<!-- Top Navigation (Desktop) -->
+<header class="hidden md:flex fixed top-0 left-0 w-full z-50 justify-between items-center px-container-margin-desktop h-20 bg-surface/80 backdrop-blur-md border-b border-white/10 shadow-sm transition-all duration-200">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary text-2xl" data-weight="fill">location_on</span>
+<span class="font-headline-md text-primary font-bold tracking-tight">FoodNova</span>
+</div>
+<nav class="flex gap-8">
+<a class="font-label-lg text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Home</a>
+<a class="font-label-lg text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Search</a>
+<a class="font-label-lg text-primary font-bold flex flex-col items-center after:content-[''] after:w-1 after:h-1 after:bg-primary after:rounded-full after:mt-1" href="#">Orders</a>
+<a class="font-label-lg text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Profile</a>
+</nav>
+<div class="flex items-center gap-4">
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-on-surface">notifications</span>
+</button>
+</div>
+</header>
+<!-- Top Navigation (Mobile) -->
+<header class="md:hidden fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-margin-mobile h-16 bg-surface/80 backdrop-blur-md border-b border-white/10 shadow-sm transition-all duration-200">
+<div class="flex items-center gap-2">
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-on-surface">arrow_back</span>
+</button>
+<span class="font-headline-md-mobile text-primary font-bold tracking-tight">FoodNova</span>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-grow pt-24 md:pt-32 pb-32 px-container-margin-mobile md:px-container-margin-desktop max-w-7xl mx-auto w-full">
+<div class="mb-8">
+<h1 class="font-display-lg-mobile md:font-display-lg text-on-background">Your Cart</h1>
+<p class="font-body-md text-on-surface-variant mt-2">3 items from Organic Pantry</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter lg:gap-section-gap">
+<!-- Cart Items List -->
+<div class="lg:col-span-8 flex flex-col gap-6">
+<!-- Item 1 -->
+<div class="glass-panel rounded-xl p-4 flex gap-4 items-center shadow-[0_20px_40px_rgba(0,0,0,0.04)] group transition-all duration-300 hover:shadow-[0_30px_60px_rgba(0,0,0,0.08)]">
+<img alt="Fresh avocados" class="w-24 h-24 object-cover rounded-lg shadow-sm" data-alt="A close-up studio shot of two perfectly ripe Hass avocados cut in half, resting on a clean white marble surface. The lighting is bright and even, casting soft shadows, highlighting the rich green texture of the fruit against the minimalist, high-end gallery aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDXiPSeqRaJPKb_08UNd3o6a7qspBb6Ekn0HwLj9XR_i_mMek7CtWTJ2ZFTbCv_vJqvWI2suniIFLleK0J6eu1Ub5rtOe-JaWA45JqEmJvrqypL0kEHCOu_lG1vMNoUJOnOhPm9RWjXYXsDsSmuEzVV4EgyklTm0ivqatxYNHuKTtnjFTSVQ3ZHqBihK1QUGJ-CLlfDPQt_Ke9-jE96nI3KQX2STTA-uzAzL8CJNsEz8_N6NCBzmhsqNoyk-XtATHNrDR8bAi2CcJw"/>
+<div class="flex-grow">
+<h3 class="font-headline-md text-on-surface text-lg">Hass Avocados</h3>
+<p class="font-body-md text-on-surface-variant text-sm mt-1">Pack of 4 • Organic</p>
+<div class="font-label-lg text-primary mt-2">$8.99</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-full p-1 border border-outline-variant/30">
+<button aria-label="Decrease quantity" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="font-label-lg text-on-surface w-4 text-center">1</span>
+<button aria-label="Increase quantity" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="glass-panel rounded-xl p-4 flex gap-4 items-center shadow-[0_20px_40px_rgba(0,0,0,0.04)] group transition-all duration-300 hover:shadow-[0_30px_60px_rgba(0,0,0,0.08)]">
+<img alt="Sourdough bread" class="w-24 h-24 object-cover rounded-lg shadow-sm" data-alt="A rustic, artisan sourdough loaf presented on a light cream linen cloth with a clean, bright background. The crust is deeply caramelized and textured, photographed in a modern editorial style with expansive white space, evoking a premium, high-trust culinary brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5sSSiM8iF_rmJ36n88B6BEyhCB26bhQAOCaycTLnAnvKZVHTqPaD0Jkn9PQptLeyMPpdLLOudfkmsBSJKUqevWqWEhJctusKM4jXILf0wKxXb2mmHeP7LPrewilSn86FSMPH3-t_Kw_3Sns6vw5ycXoDFU9sMnnMHDdlCbuup4pkkW7jjQnA8aQGK797NZiCfZk6BDFRPdcKUYQNasQ0e6VGL54YRyntNAVgHjE6uEmXJ33ffSfi_fSnIsh7FJEHFA-ogvC4pR8k"/>
+<div class="flex-grow">
+<h3 class="font-headline-md text-on-surface text-lg">Artisan Sourdough</h3>
+<p class="font-body-md text-on-surface-variant text-sm mt-1">Freshly baked • 500g</p>
+<div class="font-label-lg text-primary mt-2">$6.50</div>
+</div>
+<div class="flex items-center gap-3 bg-surface-container-low rounded-full p-1 border border-outline-variant/30">
+<button aria-label="Decrease quantity" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="font-label-lg text-on-surface w-4 text-center">2</span>
+<button aria-label="Increase quantity" class="w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-variant transition-colors">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Summary & Actions -->
+<div class="lg:col-span-4">
+<div class="glass-panel rounded-xl p-6 shadow-[0_20px_40px_rgba(0,0,0,0.06)] sticky top-28">
+<h2 class="font-headline-lg text-on-surface mb-6 text-xl">Order Summary</h2>
+<div class="space-y-4 font-body-md text-on-surface">
+<div class="flex justify-between">
+<span class="text-on-surface-variant">Subtotal</span>
+<span>$21.99</span>
+</div>
+<div class="flex justify-between">
+<span class="text-on-surface-variant">Delivery Fee</span>
+<span>$3.50</span>
+</div>
+<div class="flex justify-between text-primary">
+<span>Promo Discount</span>
+<span>-$2.00</span>
+</div>
+<div class="border-t border-outline-variant/30 pt-4 mt-6 flex justify-between items-center">
+<span class="font-headline-md text-on-surface">Total</span>
+<span class="font-headline-lg text-primary text-2xl">$23.49</span>
+</div>
+</div>
+<button class="w-full mt-8 bg-primary text-on-primary font-label-lg rounded-xl h-14 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform duration-200 shadow-md">
+                        Checkout Now
+                        <span class="material-symbols-outlined text-lg">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Recommendations Section -->
+<section class="mt-section-gap">
+<h2 class="font-headline-lg text-on-background mb-6 text-2xl">Frequently Bought Together</h2>
+<div class="flex overflow-x-auto gap-4 pb-4 -mx-container-margin-mobile px-container-margin-mobile md:mx-0 md:px-0 snap-x">
+<!-- Rec Item 1 -->
+<div class="min-w-[160px] md:min-w-[200px] glass-panel rounded-xl p-3 flex flex-col snap-start shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<img alt="Free range eggs" class="w-full h-32 object-cover rounded-lg mb-3" data-alt="A carton of premium brown, free-range eggs set against a pristine, minimalist white background. Soft, diffused natural light illuminates the texture of the cardboard carton and the smooth shells, maintaining the high-end, clean editorial style of the overall brand experience." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAqcu5bbCfJ2r6BUSDKVCaJHkbcVxf2rsJQJt2EUq0cbdA-4ehupT2vgPaWkGgZ903WCnBmf1VyV4xsTeWseiz0nYoXlhx3Hc1ABt1l8MiIGY2tKe71NRFTeCb4miFfrh9UXHr6pJaiByemDTsgMQWHWBk_D8zSTpsR57FqG7Z-XntCD93cgqTnX83rdPO3HasfOmUGprCuuqF_TpOQS04eZvyO-h49UVJQHCAwusIIMX2t4fjik-mb0YMl7RnKPaP947Y7Ob5GmYk"/>
+<h4 class="font-headline-md text-on-surface text-base leading-tight">Free Range Eggs</h4>
+<p class="font-label-md text-on-surface-variant mt-1 mb-2">12 pack</p>
+<div class="mt-auto flex justify-between items-center">
+<span class="font-label-lg text-primary">$5.20</span>
+<button class="w-8 h-8 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:bg-primary hover:text-on-primary transition-colors">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+<!-- Rec Item 2 -->
+<div class="min-w-[160px] md:min-w-[200px] glass-panel rounded-xl p-3 flex flex-col snap-start shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+<img alt="Almond milk" class="w-full h-32 object-cover rounded-lg mb-3" data-alt="A minimalist, elegantly designed glass bottle of organic almond milk placed on a clean, light surface with ample negative space. The lighting is ethereal and soft, reflecting the premium, health-conscious, and modern aesthetic of a luxury grocery delivery interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfZtJ_COnoSUofVDOazO-gXC6TXALccs9TbkzfdigA6RA4gzp3vP1WyHv4iQWklUmbTerBVVzsz-HY_6A9nhMaLxjxbgJXxWnAo4c6JKBNSDMoGkM76vpqnI40UHqANdZeZrwEgIF62Xibq3_XGu7Wttyr1asjFGS8TgpaFV3_YwmcafWhKsxAxTMg9mbvzAvyNpLKBq8c658T11jaBwUJwtiHQmIY2xNmc8zkpEh008FF3xGVAjmhRth9krp2_bas0fppSf1IzrY"/>
+<h4 class="font-headline-md text-on-surface text-base leading-tight">Almond Milk</h4>
+<p class="font-label-md text-on-surface-variant mt-1 mb-2">1L Unsweetened</p>
+<div class="mt-auto flex justify-between items-center">
+<span class="font-label-lg text-primary">$4.80</span>
+<button class="w-8 h-8 rounded-full bg-surface-variant text-on-surface flex items-center justify-center hover:bg-primary hover:text-on-primary transition-colors">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Bottom Navigation (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-safe bg-surface/90 backdrop-blur-xl border-t border-white/20 shadow-[0_-10px_40px_rgba(0,0,0,0.04)] rounded-t-xl transition-all duration-300">
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1.5 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">home</span>
+<span class="font-label-md">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1.5 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">search</span>
+<span class="font-label-md">Search</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1.5 transition-all duration-300 scale-102" href="#">
+<span class="material-symbols-outlined mb-1" data-weight="fill">shopping_bag</span>
+<span class="font-label-md">Orders</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant px-4 py-1.5 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">person</span>
+<span class="font-label-md">Profile</span>
+</a>
+</nav>
+</body></html>

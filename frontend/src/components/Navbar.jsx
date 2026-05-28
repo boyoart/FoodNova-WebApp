@@ -4,6 +4,7 @@ import { Bell, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Shopp
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI, resolveMediaUrl } from '../services/api'
+import FoodNovaLogo from './FoodNovaLogo'
 import {
   createBroadcastNotifications,
   createDerivedNotificationsFromOrders,
@@ -26,8 +27,6 @@ export default function Navbar() {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false)
   const [refreshingNotifications, setRefreshingNotifications] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('foodnova_theme') || 'light')
-  const [logoSrc, setLogoSrc] = useState('/foodnova-logo.png')
-  const [logoFailed, setLogoFailed] = useState(false)
   const notificationRef = useRef(null)
   const avatarRef = useRef(null)
   const adminMenuRef = useRef(null)
@@ -63,15 +62,6 @@ export default function Navbar() {
 
   const toggleTheme = () => {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
-  }
-
-  const handleLogoError = () => {
-    if (logoSrc === '/foodnova-logo.png') {
-      setLogoSrc('/logo.png')
-      return
-    }
-
-    setLogoFailed(true)
   }
 
   const isActivePath = (path) => {
@@ -271,6 +261,7 @@ export default function Navbar() {
     { to: '/admin/users', label: 'Admin Users', show: canAdmin('admins:view') || canAdmin('admins:manage') },
     { to: '/admin/reports', label: 'Reports', show: canAdmin('reports:view') },
     { to: '/admin/exports', label: 'Data Exports', show: canAnyAdmin(['exports:view', 'exports:download']) },
+    { to: '/admin/settings', label: 'Website Settings', show: isSuperAdminDisplay || canAnyAdmin(['announcements:view', 'announcements:manage']) },
   ].filter((link) => link.show)
 
   const avatarMenuLinks = isAdmin ? [{ to: '/admin/dashboard', label: 'Dashboard' }, ...adminMenuLinks] : customerMenuLinks
@@ -289,12 +280,14 @@ export default function Navbar() {
     </button>
   )
 
+  if (location.pathname === '/coming-soon') return null
+
   return (
     <nav className="navbar">
       <div className="navbar-container">
         <Link to="/" className="navbar-logo">
-          {!logoFailed && <img src={logoSrc} alt="FoodNova" className="logo-image" onError={handleLogoError} />}
-          <span className={logoFailed ? 'logo-wordmark visible' : 'logo-wordmark'}>FoodNova</span>
+          <FoodNovaLogo variant="header" className="logo-image" />
+          <span className="logo-wordmark">FoodNova</span>
         </Link>
 
         <button type="button" className="menu-toggle" onClick={() => setMobileMenuOpen((value) => !value)} aria-label="Toggle navigation menu">

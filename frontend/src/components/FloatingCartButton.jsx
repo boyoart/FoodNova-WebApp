@@ -6,7 +6,7 @@ import { useCartStore } from '../store/cartStore'
 import { resolveMediaUrl } from '../services/api'
 import './FloatingCartButton.css'
 
-const hiddenRoutes = ['/cart', '/checkout', '/login', '/register', '/admin/login']
+const hiddenRoutes = ['/cart', '/checkout', '/login', '/register', '/admin/login', '/coming-soon']
 
 const formatCurrency = (value) =>
   `₦${Number(value || 0).toLocaleString()}`

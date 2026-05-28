@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import toast from 'react-hot-toast'
@@ -32,6 +32,8 @@ import AdminRiderVerificationQueue from './pages/AdminRiderVerificationQueue'
 import AdminCancellations from './pages/AdminCancellations'
 import AdminExports from './pages/AdminExports'
 import AdminReports from './pages/AdminReports'
+import AdminSettings from './pages/AdminSettings'
+import ComingSoonPage from './pages/ComingSoonPage'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
 import FAQPage from './pages/FAQPage'
@@ -43,7 +45,9 @@ import ProfilePage from './pages/ProfilePage'
 import InboxPage from './pages/InboxPage'
 import InvoicePage from './pages/InvoicePage'
 import DeliveryAppComingSoon from './pages/DeliveryAppComingSoon'
+import WebSplashScreen from './components/WebSplashScreen'
 import { useAuthStore } from './store/authStore'
+import { WEBSITE_SETTINGS_EVENT, getWebsiteSettings, isAdminPath } from './utils/websiteSettings'
 import {
   enforceSessionTimeout,
   expireAdminSessionForTesting,
@@ -136,12 +140,54 @@ function SessionSupervisor() {
   return null
 }
 
+function WebsiteModeGate() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [settings, setSettings] = useState(getWebsiteSettings)
+
+  useEffect(() => {
+    const syncSettings = () => setSettings(getWebsiteSettings())
+    window.addEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
+    window.addEventListener('storage', syncSettings)
+    return () => {
+      window.removeEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
+      window.removeEventListener('storage', syncSettings)
+    }
+  }, [])
+
+  useEffect(() => {
+    const isAdminRoute = isAdminPath(location.pathname)
+    if (settings.comingSoonEnabled && !isAdminRoute && location.pathname !== '/coming-soon') {
+      navigate('/coming-soon', { replace: true })
+    }
+    if (!settings.comingSoonEnabled && location.pathname === '/coming-soon') {
+      navigate('/', { replace: true })
+    }
+  }, [location.pathname, navigate, settings.comingSoonEnabled])
+
+  return null
+}
+
 function App() {
+  const [settings, setSettings] = useState(getWebsiteSettings)
+
+  useEffect(() => {
+    const syncSettings = () => setSettings(getWebsiteSettings())
+    window.addEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
+    window.addEventListener('storage', syncSettings)
+    return () => {
+      window.removeEventListener(WEBSITE_SETTINGS_EVENT, syncSettings)
+      window.removeEventListener('storage', syncSettings)
+    }
+  }, [])
+
   return (
     <BrowserRouter>
       <ErrorBoundary>
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
           <SessionSupervisor />
+          <WebsiteModeGate />
+          {settings.splashEnabled && <WebSplashScreen />}
           <Navbar />
           <main style={{ flex: 1, paddingTop: '60px' }}>
             <Routes>
@@ -181,6 +227,8 @@ function App() {
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/reports" element={<AdminReports />} />
               <Route path="/admin/exports" element={<AdminExports />} />
+              <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/coming-soon" element={<ComingSoonPage />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/faq" element={<FAQPage />} />

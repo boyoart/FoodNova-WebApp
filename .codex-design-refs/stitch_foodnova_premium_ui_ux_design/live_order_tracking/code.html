@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FoodNova - Live Order Tracking</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600&amp;family=Manrope:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error-container": "#93000a",
+                      "surface-variant": "#dce2f7",
+                      "primary": "#003b1b",
+                      "surface-tint": "#2e6a41",
+                      "secondary-container": "#fed01b",
+                      "on-secondary": "#ffffff",
+                      "surface-container-high": "#e1e8fd",
+                      "on-primary": "#ffffff",
+                      "primary-fixed-dim": "#96d5a3",
+                      "outline-variant": "#c0c9be",
+                      "on-surface": "#141b2b",
+                      "surface-bright": "#f9f9ff",
+                      "surface-container-low": "#f1f3ff",
+                      "on-primary-fixed-variant": "#12512c",
+                      "primary-fixed": "#b1f2be",
+                      "on-primary-fixed": "#00210d",
+                      "tertiary-fixed-dim": "#c7c7bc",
+                      "tertiary-container": "#484941",
+                      "surface-container-highest": "#dce2f7",
+                      "on-tertiary-fixed-variant": "#46473f",
+                      "on-tertiary-container": "#b8b8ad",
+                      "surface": "#f9f9ff",
+                      "on-secondary-fixed": "#231b00",
+                      "surface-container": "#e9edff",
+                      "primary-container": "#14532d",
+                      "background": "#f9f9ff",
+                      "on-secondary-fixed-variant": "#574500",
+                      "on-tertiary": "#ffffff",
+                      "inverse-on-surface": "#edf0ff",
+                      "surface-container-lowest": "#ffffff",
+                      "inverse-surface": "#293040",
+                      "on-tertiary-fixed": "#1b1c15",
+                      "error-container": "#ffdad6",
+                      "tertiary": "#31332b",
+                      "surface-dim": "#d3daef",
+                      "error": "#ba1a1a",
+                      "secondary": "#735c00",
+                      "on-primary-container": "#87c695",
+                      "on-error": "#ffffff",
+                      "secondary-fixed-dim": "#eec200",
+                      "on-background": "#141b2b",
+                      "inverse-primary": "#96d5a3",
+                      "on-secondary-container": "#6f5900",
+                      "tertiary-fixed": "#e4e3d7",
+                      "outline": "#717970",
+                      "on-surface-variant": "#404941",
+                      "secondary-fixed": "#ffe083"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "gutter": "24px",
+                      "container-margin-mobile": "20px",
+                      "container-margin-desktop": "64px",
+                      "section-gap": "48px",
+                      "unit": "8px"
+              },
+              "fontFamily": {
+                      "body-lg": ["Manrope"],
+                      "body-md": ["Manrope"],
+                      "headline-lg": ["Manrope"],
+                      "display-lg": ["Manrope"],
+                      "label-lg": ["Hanken Grotesk"],
+                      "display-lg-mobile": ["Manrope"],
+                      "label-md": ["Hanken Grotesk"],
+                      "headline-md": ["Manrope"]
+              },
+              "fontSize": {
+                      "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                      "display-lg-mobile": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .map-bg {
+            background-color: #e9edff;
+            background-image: radial-gradient(#c0c9be 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .glass-panel {
+            background: rgba(249, 249, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 59, 27, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 59, 27, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 59, 27, 0); }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface font-body-md antialiased overflow-hidden h-screen w-full relative">
+<!-- Top Navigation (Mobile App Context - Suppressed standard navs per rules as this is a linear task-focused screen) -->
+<header class="fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-margin-mobile h-16 pt-safe">
+<button aria-label="Back" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface/90 backdrop-blur-md shadow-sm text-on-surface hover:bg-surface transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">arrow_back</span>
+</button>
+<div class="px-4 py-1.5 rounded-full bg-surface/90 backdrop-blur-md shadow-sm">
+<span class="font-label-lg text-label-lg text-primary tracking-wide">ORDER #FN-8842</span>
+</div>
+<button aria-label="Help" class="w-10 h-10 flex items-center justify-center rounded-full bg-surface/90 backdrop-blur-md shadow-sm text-on-surface hover:bg-surface transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">help</span>
+</button>
+</header>
+<!-- Map Canvas Area -->
+<main class="absolute inset-0 z-0 map-bg">
+<!-- Abstract Path Representation -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" preserveaspectratio="none" viewbox="0 0 400 800">
+<path class="opacity-30" d="M 150,200 C 180,300 250,400 200,550 C 150,700 200,750 200,750" fill="none" stroke="#003b1b" stroke-dasharray="8 8" stroke-width="4"></path>
+<!-- Store Marker -->
+<g transform="translate(150, 200)">
+<circle cx="0" cy="0" fill="#ffffff" r="16" stroke="#003b1b" stroke-width="2"></circle>
+<circle cx="0" cy="0" fill="#003b1b" r="6"></circle>
+</g>
+<!-- Destination Marker -->
+<g transform="translate(200, 750)">
+<path d="M 0,-16 C 8,-16 16,-8 16,0 C 16,12 0,24 0,24 C 0,24 -16,12 -16,0 C -16,-8 -8,-16 0,-16 Z" fill="#003b1b"></path>
+<circle cx="0" cy="-2" fill="#ffffff" r="6"></circle>
+</g>
+<!-- Rider Marker -->
+<g transform="translate(210, 470)">
+<circle class="pulse-dot" cx="0" cy="0" fill="rgba(0, 59, 27, 0.1)" r="24"></circle>
+<circle cx="0" cy="0" fill="#ffffff" r="18" shadow="0 4px 6px rgba(0,0,0,0.1)"></circle>
+<circle cx="0" cy="0" fill="#003b1b" r="14"></circle>
+<path d="M -5,-2 L 5,-2 L 5,2 L -5,2 Z" fill="#ffffff"></path> <!-- Abstract bike detail -->
+</g>
+</svg>
+<!-- Floating Map Controls -->
+<div class="absolute right-container-margin-mobile bottom-[320px] md:bottom-[280px] flex flex-col gap-2 z-10">
+<button class="w-12 h-12 rounded-full bg-surface shadow-sm flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">my_location</span>
+</button>
+</div>
+</main>
+<!-- Bottom Sheet Overlay -->
+<div class="absolute bottom-0 left-0 w-full z-40 glass-panel rounded-t-[32px] shadow-[0_-20px_40px_rgba(0,0,0,0.06)] pb-safe pt-2 px-container-margin-mobile">
+<!-- Drag Handle -->
+<div class="w-12 h-1.5 bg-outline-variant/50 rounded-full mx-auto mb-6"></div>
+<div class="max-w-3xl mx-auto">
+<!-- ETA Header -->
+<div class="flex justify-between items-end mb-8">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface mb-1">Arriving in</h2>
+<div class="font-display-lg-mobile text-display-lg-mobile text-primary">12 <span class="font-headline-lg text-headline-lg font-normal text-on-surface-variant">min</span></div>
+</div>
+<div class="text-right">
+<p class="font-label-lg text-label-lg text-on-surface-variant uppercase tracking-wider mb-1">Estimated Arrival</p>
+<p class="font-body-lg text-body-lg text-on-surface">7:42 PM</p>
+</div>
+</div>
+<!-- Premium Timeline Progress -->
+<div class="mb-8">
+<div class="flex justify-between mb-2">
+<span class="font-label-md text-label-md text-primary font-semibold">Picking up</span>
+<span class="font-label-md text-label-md text-on-surface-variant">On the way</span>
+<span class="font-label-md text-label-md text-on-surface-variant">Delivered</span>
+</div>
+<div class="h-2 w-full bg-surface-variant rounded-full overflow-hidden relative">
+<div class="absolute top-0 left-0 h-full bg-primary rounded-full transition-all duration-1000 w-[35%]"></div>
+</div>
+</div>
+<div class="h-[1px] w-full bg-outline-variant/30 mb-6"></div>
+<!-- Rider Info Card -->
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-4">
+<div class="relative">
+<div class="w-14 h-14 rounded-full bg-surface-container-high overflow-hidden border-2 border-surface">
+<img alt="Delivery Rider Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a friendly delivery rider in soft, natural daylight. The lighting is bright and clean, reflecting a high-trust, premium aesthetic. The background is a blurred, neutral modern cityscape. The color palette is minimal, focusing on natural skin tones and a crisp uniform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBB4-OYljYcn8SfJjCsyAfhr8K3WAn2AR3oopsxaMv12AfD93PcKVz_j5tZ3jkbGcmE7nIh8Lrs2LC3L8EApO0gPqfq5o03XtetNC7AHgxGrtsv527SRC7D_wcWH-7g1Q5zHMrEhm7ftol2bt4gELiqXyqtCJTsuarNqzR74WK_1r-Vdq2Akf_19xdnmCs3CzJWkVRV0XSs0lAT9vMc1U1Ssd_h6wLfab3p348jmHq0KvhyWNBAOEQoCz1TnsyYJGsvQ-vBKANmYhY"/>
+</div>
+<div class="absolute -bottom-1 -right-1 bg-surface border border-outline-variant/20 rounded-full px-1.5 py-0.5 flex items-center gap-0.5 shadow-sm">
+<span class="material-symbols-outlined text-secondary-container" style="font-size: 12px; font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-label-md text-label-md text-on-surface font-bold">4.9</span>
+</div>
+</div>
+<div>
+<h3 class="font-body-lg text-body-lg text-on-surface font-semibold">Daniel</h3>
+<p class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mt-0.5">Silver Toyota Prius • ABC-1234</p>
+</div>
+</div>
+<div class="flex gap-3">
+<button aria-label="Message Rider" class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary hover:bg-surface-dim transition-colors">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">chat</span>
+</button>
+<button aria-label="Call Rider" class="w-12 h-12 rounded-full bg-primary flex items-center justify-center text-on-primary hover:scale-[1.02] transition-transform shadow-[0_4px_12px_rgba(0,59,27,0.2)]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">call</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</body></html>

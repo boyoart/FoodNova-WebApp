@@ -5,7 +5,20 @@ import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
-const emptyProduct = { name: '', price: '', stock_qty: '', category: '', is_active: true, image_url: '' }
+const emptyProduct = {
+  name: '',
+  price: '',
+  stock_qty: '',
+  category: '',
+  description: '',
+  contents: [],
+  pack_info: '',
+  serving_estimate: '',
+  freshness_note: '',
+  delivery_note: '',
+  is_active: true,
+  image_url: '',
+}
 const emptyPack = { name: '', price: '', description: '', items: [], is_active: true, image_url: '' }
 
 export default function AdminStock() {
@@ -215,6 +228,30 @@ export default function AdminStock() {
         <label>Category</label>
         <input value={formData.category || ''} onChange={(event) => setFormData({ ...formData, category: event.target.value, category_name: event.target.value })} />
       </div>
+      <div className="stock-form-field stock-form-field-wide">
+        <label>Description</label>
+        <textarea value={formData.description || ''} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows="3" placeholder="Customer-facing product or pack description" />
+      </div>
+      <div className="stock-form-field stock-form-field-wide">
+        <label>What's Included (comma-separated)</label>
+        <input value={Array.isArray(formData.contents) ? formData.contents.join(', ') : formData.contents || ''} onChange={(event) => setFormData({ ...formData, contents: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Rice, Beans, Garri, Oil" />
+      </div>
+      <div className="stock-form-field">
+        <label>Pack / Quantity Info</label>
+        <input value={formData.pack_info || ''} onChange={(event) => setFormData({ ...formData, pack_info: event.target.value })} placeholder="e.g. 13-item family pack" />
+      </div>
+      <div className="stock-form-field">
+        <label>Serving Estimate</label>
+        <input value={formData.serving_estimate || ''} onChange={(event) => setFormData({ ...formData, serving_estimate: event.target.value })} placeholder="e.g. Serves 4-6 for one week" />
+      </div>
+      <div className="stock-form-field">
+        <label>Freshness Note</label>
+        <input value={formData.freshness_note || ''} onChange={(event) => setFormData({ ...formData, freshness_note: event.target.value })} placeholder="Quality checked before dispatch" />
+      </div>
+      <div className="stock-form-field">
+        <label>Delivery Note</label>
+        <input value={formData.delivery_note || ''} onChange={(event) => setFormData({ ...formData, delivery_note: event.target.value })} placeholder="Packed after payment confirmation" />
+      </div>
       <label className="stock-toggle">
         <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
         <span>Active product</span>
@@ -295,7 +332,7 @@ export default function AdminStock() {
                 <th>ID</th>
                 <th>Image</th>
                 <th>Name</th>
-                {isProduct ? <><th>Category</th><th>Stock</th></> : <><th>Description</th><th>Items</th></>}
+                {isProduct ? <><th>Category</th><th>Contents</th><th>Stock</th></> : <><th>Description</th><th>Items</th></>}
                 <th>Price</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -310,6 +347,7 @@ export default function AdminStock() {
                   {isProduct ? (
                     <>
                       <td>{item.category}</td>
+                      <td>{Array.isArray(item.contents) ? item.contents.slice(0, 3).join(', ') : ''}{Array.isArray(item.contents) && item.contents.length > 3 ? '...' : ''}</td>
                       <td>{item.stock ?? item.stock_qty}</td>
                     </>
                   ) : (

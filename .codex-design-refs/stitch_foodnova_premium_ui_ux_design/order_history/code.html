@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FoodNova - Order History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&amp;family=Hanken+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "tertiary": "#31332b",
+                        "primary-container": "#14532d",
+                        "on-error": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f1f3ff",
+                        "surface-container": "#e9edff",
+                        "on-tertiary-fixed": "#1b1c15",
+                        "on-background": "#141b2b",
+                        "inverse-surface": "#293040",
+                        "outline-variant": "#c0c9be",
+                        "on-secondary": "#ffffff",
+                        "tertiary-container": "#484941",
+                        "background": "#f9f9ff",
+                        "surface-dim": "#d3daef",
+                        "on-secondary-fixed": "#231b00",
+                        "secondary-fixed-dim": "#eec200",
+                        "secondary": "#735c00",
+                        "on-secondary-fixed-variant": "#574500",
+                        "error": "#ba1a1a",
+                        "outline": "#717970",
+                        "on-primary-fixed-variant": "#12512c",
+                        "on-surface": "#141b2b",
+                        "primary-fixed-dim": "#96d5a3",
+                        "on-surface-variant": "#404941",
+                        "tertiary-fixed": "#e4e3d7",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#dce2f7",
+                        "primary": "#003b1b",
+                        "on-primary": "#ffffff",
+                        "surface-bright": "#f9f9ff",
+                        "secondary-fixed": "#ffe083",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#00210d",
+                        "inverse-on-surface": "#edf0ff",
+                        "tertiary-fixed-dim": "#c7c7bc",
+                        "surface-container-high": "#e1e8fd",
+                        "inverse-primary": "#96d5a3",
+                        "surface": "#f9f9ff",
+                        "surface-variant": "#dce2f7",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-container": "#87c695",
+                        "surface-tint": "#2e6a41",
+                        "primary-fixed": "#b1f2be",
+                        "on-tertiary-fixed-variant": "#46473f",
+                        "secondary-container": "#fed01b",
+                        "on-tertiary-container": "#b8b8ad",
+                        "on-secondary-container": "#6f5900"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "gutter": "24px",
+                        "container-margin-mobile": "20px",
+                        "section-gap": "48px",
+                        "unit": "8px",
+                        "container-margin-desktop": "64px"
+                    },
+                    fontFamily: {
+                        "body-lg": ["Manrope"],
+                        "label-lg": ["Hanken Grotesk"],
+                        "body-md": ["Manrope"],
+                        "headline-lg": ["Manrope"],
+                        "display-lg-mobile": ["Manrope"],
+                        "label-md": ["Hanken Grotesk"],
+                        "display-lg": ["Manrope"],
+                        "headline-md": ["Manrope"]
+                    },
+                    fontSize: {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "display-lg-mobile": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .glass-panel {
+            background: rgba(249, 249, 255, 0.7);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background min-h-screen antialiased selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="bg-surface/80 dark:bg-inverse-surface/80 backdrop-blur-md shadow-sm border-b border-white/10 dark:border-white/5 fixed top-0 left-0 w-full z-50 flex justify-between items-center px-container-margin-mobile h-16">
+<button class="text-on-surface-variant dark:text-surface-variant hover:opacity-80 transition-opacity p-2 -ml-2 rounded-full focus:outline-none focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0, 'wght' 300;">location_on</span>
+</button>
+<div class="font-headline-md-mobile text-headline-md-mobile font-bold tracking-tight text-primary dark:text-primary-fixed-dim">
+            FoodNova
+        </div>
+<div class="flex items-center gap-4">
+<!-- Desktop Nav Cluster (Hidden on Mobile) -->
+<nav class="hidden md:flex gap-6 items-center font-label-lg text-label-lg mr-4">
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Home</a>
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Search</a>
+<a class="text-primary font-bold" href="#">Orders</a>
+<a class="text-on-surface-variant hover:opacity-80 transition-opacity" href="#">Profile</a>
+</nav>
+<button class="text-on-surface-variant dark:text-surface-variant hover:opacity-80 transition-opacity p-2 -mr-2 rounded-full focus:outline-none focus:ring-2 focus:ring-primary relative">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0, 'wght' 300;">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="pt-24 pb-32 px-container-margin-mobile md:px-container-margin-desktop max-w-[1200px] mx-auto space-y-section-gap">
+<!-- Page Header -->
+<section class="space-y-2">
+<h1 class="font-display-lg-mobile text-display-lg-mobile md:font-display-lg md:text-display-lg text-primary tracking-tight">Your Orders</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Track current deliveries and review past premium grocery hauls.</p>
+</section>
+<!-- Current Order Section -->
+<section class="space-y-6">
+<h2 class="font-headline-md text-headline-md text-on-surface">Current Order</h2>
+<div class="bg-surface rounded-xl shadow-[0_20px_40px_rgba(0,0,0,0.04)] border border-outline-variant/30 overflow-hidden relative group transition-transform duration-300 hover:shadow-[0_30px_60px_rgba(0,0,0,0.06)]">
+<div class="flex flex-col md:flex-row">
+<!-- Map Thumbnail -->
+<div class="w-full md:w-1/3 h-48 md:h-auto bg-surface-container-highest relative overflow-hidden">
+<img alt="Map thumbnail showing route" class="w-full h-full object-cover opacity-80 mix-blend-multiply" data-alt="A stylized, clean digital map interface showing a delivery route through a modern urban neighborhood. The map uses a light-mode aesthetic with soft cream and pastel green streets, reflecting the FoodNova premium branding. A smooth, curved green line traces the path, culminating at a minimalist location pin. The lighting is even and flat, typical of high-end navigational UIs." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAt2D0mnzWSitKvIJ_wtMd7VczpsWuT4oMhk9SbC6Jo8oLb7GO5snXI_BSEBAiWyj4iykKUPkaXbyuU6v8F4Dk9nH70BSWQdBa7EYMTIq4D3xOz6n2nBQqeQS12dqfeb_pet3aAyF5XNsV44_abfiBgecYXF-RTWR0lCK_RcH-sJBbx8FHWyAAhrZwDYH540L_THgxQjxT4t4B8AC5GGw480nC6vUIZGRUzL8b1qyHa7GAMWXOBsUeX2JFKewlF369NmnX_RKMJlNQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-transparent md:bg-gradient-to-r"></div>
+<!-- Live Tracking Pulse -->
+<div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+<span class="flex h-6 w-6 relative">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-40"></span>
+<span class="relative inline-flex rounded-full h-6 w-6 bg-primary border-2 border-surface shadow-sm"></span>
+</span>
+</div>
+</div>
+<!-- Order Details -->
+<div class="p-6 md:p-8 flex flex-col justify-between w-full md:w-2/3 space-y-6">
+<div class="flex justify-between items-start">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<span class="inline-flex items-center px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-md text-label-md uppercase tracking-wider">
+<span class="material-symbols-outlined text-[14px] mr-1" style="font-variation-settings: 'wght' 600;">pedal_bike</span>
+                                        In Progress
+                                    </span>
+</div>
+<h3 class="font-headline-lg text-headline-lg text-primary">Organic Pantry</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Arriving in approx. 15-20 mins</p>
+</div>
+<div class="text-right">
+<p class="font-headline-md text-headline-md text-on-surface">$84.20</p>
+<p class="font-body-md text-body-md text-on-surface-variant">12 items</p>
+</div>
+</div>
+<div class="flex items-center gap-4 pt-4 border-t border-outline-variant/30">
+<button class="flex-1 bg-primary text-on-primary rounded-lg font-label-lg text-label-lg px-6 py-4 flex items-center justify-center gap-2 hover:scale-[1.02] transition-transform shadow-md">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">my_location</span>
+                                Track Order
+                            </button>
+<button class="p-4 rounded-lg border border-outline-variant text-on-surface hover:bg-surface-container-low transition-colors focus:outline-none focus:ring-2 focus:ring-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'wght' 300;">support_agent</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Past Orders Section -->
+<section class="space-y-8">
+<h2 class="font-headline-md text-headline-md text-on-surface">Past Orders</h2>
+<!-- Month Group: October -->
+<div class="space-y-6">
+<h3 class="font-label-lg text-label-lg text-outline uppercase tracking-widest border-b border-outline-variant/30 pb-2">October 2023</h3>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+<!-- Order Card 1 -->
+<div class="bg-surface rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-outline-variant/20 p-6 flex flex-col space-y-6 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)] transition-shadow">
+<!-- Header -->
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'wght' 300;">storefront</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg font-bold text-on-surface">Artisan Bakery &amp; Co.</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Oct 24 • 10:30 AM</p>
+</div>
+</div>
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-label-md text-label-md border border-primary/10">
+                                Delivered
+                            </span>
+</div>
+<!-- Content Mosaic & Summary -->
+<div class="flex items-center gap-4 bg-surface-container-low p-4 rounded-lg">
+<div class="flex -space-x-2">
+<div class="w-12 h-12 rounded-md overflow-hidden border-2 border-surface shadow-sm">
+<img alt="Sourdough bread" class="w-full h-full object-cover" data-alt="A close-up, brightly lit studio shot of a rustic artisan sourdough bread loaf resting on a clean white marble surface. The crust is golden-brown and crackled, conveying freshness and premium quality. The background is a soft, out-of-focus creamy white, adhering to a minimalist gallery aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMBMHlkyvMdzga3Rl_6fzB3DFFjBHfA1sMNUa3kdsPPYCPuFjJqmpCpKzNGBNykVeN5UYqXu5VnGK57lOTqcsbLfZ1kzm98LiDyBJ8poT0RQ3DZceTjJnTNJ7VNIYSqR0lyPEcMmA_ohrh_5vYC7XoxpZnguQkFi--IRIWP9e9TIbIf8w11QI7nydvCfDmduw2YrubYBp6cjzq1-qgEmJ3hvfWPa9-P7BDFfC03hdlo7mJsm2EnyNSEEpvh3pxLwRb1MI92QbP0Ug"/>
+</div>
+<div class="w-12 h-12 rounded-md overflow-hidden border-2 border-surface shadow-sm">
+<img alt="Croissants" class="w-full h-full object-cover" data-alt="Two perfectly baked, flaky butter croissants presented on a minimalist ceramic plate against a pristine white background. The lighting is soft and diffused, highlighting the delicate layers of pastry. The composition is clean, airy, and evokes a sense of high-end culinary craftsmanship." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCull78l6YfrmYCK1sQTNnLil5yeHDfrsTzBWIyXoOHRNsjA5jyhQQPnfIKpWh0cmZY-5KzjICh1pbajBVDqeg-CbVWdFex8to6vWlkTxcXj7ycOdzJ0hk0StqSr9mxdnRD3tPvh2i-rV9ZN3CAIaWMF0MFnLHPZxVtgESbrEUcS1Ar4c9Ow1H9IhlYw1A0125R4JOuCycrkNgAuL2cnbdOnDEJWEZGU0tITtmILTah6JMtL0c9SOb0tW5ycttMzrTYFEJgJuIjtLc"/>
+</div>
+<div class="w-12 h-12 rounded-md overflow-hidden border-2 border-surface shadow-sm bg-surface-container-high flex items-center justify-center">
+<span class="font-label-md text-label-md text-on-surface-variant">+2</span>
+</div>
+</div>
+<div class="flex-1 flex justify-end items-center gap-4">
+<div class="text-right">
+<p class="font-body-md text-body-md text-on-surface-variant">4 items</p>
+<p class="font-headline-md text-headline-md text-on-surface">$32.50</p>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex gap-3 pt-2">
+<button class="flex-1 border border-outline text-on-surface rounded-lg font-label-lg text-label-lg py-3 hover:bg-surface-container-lowest hover:border-primary hover:text-primary transition-all">
+                                Reorder
+                            </button>
+<button class="flex-1 bg-surface-container text-on-surface rounded-lg font-label-lg text-label-lg py-3 hover:bg-surface-container-highest transition-colors">
+                                Rate Order
+                            </button>
+</div>
+</div>
+<!-- Order Card 2 -->
+<div class="bg-surface rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-outline-variant/20 p-6 flex flex-col space-y-6 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)] transition-shadow">
+<!-- Header -->
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'wght' 300;">local_florist</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg font-bold text-on-surface">The Green Grocer</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Oct 18 • 4:15 PM</p>
+</div>
+</div>
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed font-label-md text-label-md border border-primary/10">
+                                Delivered
+                            </span>
+</div>
+<!-- Content Mosaic & Summary -->
+<div class="flex items-center gap-4 bg-surface-container-low p-4 rounded-lg">
+<div class="flex -space-x-2">
+<div class="w-12 h-12 rounded-md overflow-hidden border-2 border-surface shadow-sm">
+<img alt="Fresh vegetables" class="w-full h-full object-cover" data-alt="A top-down view of vibrant, farm-fresh organic vegetables including leafy greens and vibrant orange carrots, arranged neatly on a smooth, pale gray stone surface. The image is highly curated with expansive negative space, reflecting a luxurious, minimalist approach to grocery presentation. Lighting is bright, natural, and casts soft shadows." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjIxcZHb3THwmUjvEpkNtNd9-NTweM66n45CoXF0I4p7C3C6lOxHtGLT2kW9cb_eoh01wFHe4CWqa9R44rQ1aDcuQE1wL5rBGbFyKbc4InIM4W5___5Pz1NSCLCWnGDs8t--47smONyeU8J6NmWDdodSi7vij26s3nPFcI5zrd0VXYdmg3YkySTHdCncO7UjN8SsndbI6Flp8l3KLgbdkFu6orsS0K9-9M2y0oqDdZWpIxRAoCPueJIMvY2HpB0CrMbFLIsd5Lcsk"/>
+</div>
+<div class="w-12 h-12 rounded-md overflow-hidden border-2 border-surface shadow-sm">
+<img alt="Avocados" class="w-full h-full object-cover" data-alt="Perfectly ripe, dark green Hass avocados resting on a crisp white linen cloth. The composition is simple and elegant, focusing on the texture of the avocado skin against the soft fabric. The overall tone is light, fresh, and perfectly aligned with a premium minimalist aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCpvhoSf3IQNEiKk12ewPpWCZkwQqBR3eCVee9VJuEFD9TH08LJLIPE2v3whJs6BLMCnDOXjjHJhLo7YW-a7PE9oGnxZdUym0onCvWu8BL9-fZt0mN49QNUJWXqDNIKDNXlZG9cEwC34ZW-UyvFOE-IvNtvyPnfgveSOw9nDi9wW4Ms2Yq8_iuoL7Sb_prMNoUBR4zwvPo50Zv1ec_5ksJvLvbwf8UOQSk5XzDB0YIj76EoIH5UGnK2gGDmSdnK3RaFL9GUvYSN4UU"/>
+</div>
+<div class="w-12 h-12 rounded-md overflow-hidden border-2 border-surface shadow-sm bg-surface-container-high flex items-center justify-center">
+<span class="font-label-md text-label-md text-on-surface-variant">+8</span>
+</div>
+</div>
+<div class="flex-1 flex justify-end items-center gap-4">
+<div class="text-right">
+<p class="font-body-md text-body-md text-on-surface-variant">10 items</p>
+<p class="font-headline-md text-headline-md text-on-surface">$114.80</p>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex gap-3 pt-2">
+<button class="flex-1 border border-outline text-on-surface rounded-lg font-label-lg text-label-lg py-3 hover:bg-surface-container-lowest hover:border-primary hover:text-primary transition-all">
+                                Reorder
+                            </button>
+<button class="flex-1 bg-surface-container text-on-surface rounded-lg font-label-lg text-label-lg py-3 hover:bg-surface-container-highest transition-colors">
+                                Rate Order
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Month Group: September -->
+<div class="space-y-6 pt-8">
+<h3 class="font-label-lg text-label-lg text-outline uppercase tracking-widest border-b border-outline-variant/30 pb-2">September 2023</h3>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+<!-- Order Card 3 (Cancelled) -->
+<div class="bg-surface rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-outline-variant/20 p-6 flex flex-col space-y-6 hover:shadow-[0_20px_40px_rgba(0,0,0,0.05)] transition-shadow opacity-75 grayscale-[20%]">
+<!-- Header -->
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant/20">
+<span class="material-symbols-outlined text-on-surface-variant" style="font-variation-settings: 'wght' 300;">liquor</span>
+</div>
+<div>
+<h4 class="font-body-lg text-body-lg font-bold text-on-surface">Cellar Selections</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Sep 12 • 7:00 PM</p>
+</div>
+</div>
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full bg-error-container text-on-error-container font-label-md text-label-md border border-error/10">
+                                Cancelled
+                            </span>
+</div>
+<!-- Content Mosaic & Summary -->
+<div class="flex items-center gap-4 bg-surface-container-low p-4 rounded-lg">
+<div class="flex -space-x-2">
+<div class="w-12 h-12 rounded-md overflow-hidden border-2 border-surface shadow-sm">
+<img alt="Wine bottles" class="w-full h-full object-cover" data-alt="A sleek, editorial style shot of two premium wine bottles silhouetted against a stark, brilliantly white background. The glass catches subtle, elegant reflections from high-key studio lighting. The image communicates luxury and curated refinement, fitting for a high-end delivery service gallery view." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlvFUii2fQSRJvj3SBKu6hvwQgOq7hyuOu0jDX3c2nkhTVDQwcGbSuMxEt9Sjy9TBvGficXiE604FIYFEE4rSr0uO5Y7qvrKSI3P4r2eYCbA7-3kBKUeNupJj_8z468coLJIkXHCL2ddCD6K-fI8EVyoD8e9aUMZHhF1-XSTxe2pGqbwRpOwGNLRYbw6EzXHaJ7Isst-evCSnDJzJTLU6XNPeaRsGygBIVHr_p239nJQRlFKEMd-zotHLdewWZYdsZi7Y0u_UVJf0"/>
+</div>
+</div>
+<div class="flex-1 flex justify-end items-center gap-4">
+<div class="text-right">
+<p class="font-body-md text-body-md text-on-surface-variant">2 items</p>
+<p class="font-headline-md text-headline-md text-on-surface">$85.00</p>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="flex gap-3 pt-2">
+<button class="flex-1 bg-surface-container text-on-surface rounded-lg font-label-lg text-label-lg py-3 hover:bg-surface-container-highest transition-colors">
+                                View Details
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="md:hidden bg-surface/90 dark:bg-inverse-surface/90 backdrop-blur-xl shadow-[0_-10px_40px_rgba(0,0,0,0.04)] border-t border-white/20 dark:border-white/10 fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pt-3 pb-safe rounded-t-xl">
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-surface-variant px-4 py-1.5 hover:text-primary dark:hover:text-primary-fixed-dim transition-colors group" href="#">
+<span class="material-symbols-outlined mb-1 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 0, 'wght' 300;">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-surface-variant px-4 py-1.5 hover:text-primary dark:hover:text-primary-fixed-dim transition-colors group" href="#">
+<span class="material-symbols-outlined mb-1 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 0, 'wght' 300;">search</span>
+<span class="font-label-md text-label-md">Search</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-on-secondary-container dark:text-on-secondary rounded-full px-4 py-1.5 transition-all duration-300 scale-102 ease-out shadow-sm" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 1, 'wght' 400;">shopping_bag</span>
+<span class="font-label-md text-label-md font-bold">Orders</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant dark:text-surface-variant px-4 py-1.5 hover:text-primary dark:hover:text-primary-fixed-dim transition-colors group" href="#">
+<span class="material-symbols-outlined mb-1 group-active:scale-95 transition-transform" style="font-variation-settings: 'FILL' 0, 'wght' 300;">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+</nav>
+<style>
+        /* iOS Safe Area Padding for Bottom Nav */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+            .pb-safe {
+                padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+            }
+        }
+    </style>
+</body></html>

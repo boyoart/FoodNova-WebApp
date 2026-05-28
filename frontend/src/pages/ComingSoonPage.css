@@ -1,0 +1,153 @@
+.coming-soon-page {
+  align-items: center;
+  background: #07120b;
+  color: #fff;
+  display: flex;
+  margin-top: -60px;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: 2rem 1rem;
+  position: relative;
+}
+
+.coming-soon-bg {
+  background:
+    linear-gradient(90deg, rgba(7, 18, 11, 0.72), rgba(7, 18, 11, 0.42)),
+    url('https://images.unsplash.com/photo-1542838132-92c53300491e?w=1600&h=1000&fit=crop');
+  background-position: center;
+  background-size: cover;
+  inset: 0;
+  position: absolute;
+  transform: scale(1.05);
+}
+
+.coming-soon-panel {
+  backdrop-filter: blur(18px);
+  background: linear-gradient(145deg, rgba(255,255,255,0.18), rgba(255,255,255,0.08));
+  border: 1px solid rgba(255,255,255,0.24);
+  border-radius: 28px;
+  box-shadow: 0 30px 90px rgba(0,0,0,0.34);
+  margin: 0 auto;
+  max-width: 840px;
+  padding: clamp(1.5rem, 5vw, 4rem);
+  position: relative;
+  text-align: center;
+  width: 100%;
+}
+
+.coming-soon-logo {
+  filter: drop-shadow(0 20px 32px rgba(0,0,0,0.26));
+  margin-bottom: 1.2rem;
+  max-width: 230px;
+  width: 42vw;
+}
+
+.coming-soon-kicker {
+  color: #ffd23f;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.coming-soon-panel h1 {
+  color: #fff;
+  font-size: clamp(2.4rem, 7vw, 5.8rem);
+  letter-spacing: 0;
+  line-height: 0.95;
+  margin: 0.6rem 0 1rem;
+}
+
+.coming-soon-copy {
+  color: rgba(255,255,255,0.86);
+  font-size: clamp(1rem, 2vw, 1.22rem);
+  margin: 0 auto 2rem;
+  max-width: 650px;
+}
+
+.coming-soon-countdown {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(4, 1fr);
+  margin: 0 auto 2rem;
+  max-width: 680px;
+}
+
+.coming-soon-countdown div {
+  background: rgba(255,255,255,0.13);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 18px;
+  padding: 1rem 0.6rem;
+}
+
+.coming-soon-countdown strong {
+  color: #fff;
+  display: block;
+  font-size: clamp(1.8rem, 5vw, 3.2rem);
+  line-height: 1;
+}
+
+.coming-soon-countdown span {
+  color: rgba(255,255,255,0.72);
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.coming-soon-form {
+  background: rgba(255,255,255,0.94);
+  border-radius: 999px;
+  display: flex;
+  margin: 0 auto 1.25rem;
+  max-width: 560px;
+  padding: 0.35rem;
+}
+
+.coming-soon-form input {
+  border: 0;
+  box-shadow: none;
+}
+
+.coming-soon-form button {
+  background: #087a34;
+  border-radius: 999px;
+  color: #fff;
+  flex: 0 0 auto;
+  font-weight: 900;
+  padding: 0 1.3rem;
+}
+
+.coming-soon-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.coming-soon-socials a {
+  align-items: center;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 999px;
+  color: #fff;
+  display: inline-flex;
+  gap: 0.45rem;
+  padding: 0.65rem 0.9rem;
+}
+
+@media (max-width: 620px) {
+  .coming-soon-page {
+    padding: 1rem;
+  }
+  .coming-soon-countdown {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .coming-soon-form {
+    border-radius: 18px;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .coming-soon-form button {
+    min-height: 46px;
+  }
+}

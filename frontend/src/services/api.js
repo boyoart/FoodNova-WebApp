@@ -96,6 +96,11 @@ const toStockFormData = (payload = {}) => {
     stock_qty: payload.stock_qty ?? payload.stock ?? 0,
     category: payload.category || payload.category_name || "",
     description: payload.description || "",
+    contents: Array.isArray(payload.contents) ? JSON.stringify(payload.contents) : payload.contents || "[]",
+    pack_info: payload.pack_info || "",
+    serving_estimate: payload.serving_estimate || "",
+    freshness_note: payload.freshness_note || "",
+    delivery_note: payload.delivery_note || "",
     is_active: payload.is_active !== false,
   };
   Object.entries(entries).forEach(([key, value]) => formData.append(key, value));

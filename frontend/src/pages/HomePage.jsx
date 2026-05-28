@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, ChevronLeft, ChevronRight, FileText, Headphones, Lock, MessageCircle, PackageCheck, ShoppingCart, Truck, X } from 'lucide-react'
+import { Bell, CheckCircle2, ChevronLeft, ChevronRight, FileText, Headphones, Heart, Lock, MapPin, MessageCircle, PackageCheck, ShoppingCart, Sparkles, Star, Truck, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { announcementsAPI, packsAPI, productsAPI, resolveMediaUrl } from '../services/api'
 import { useCartStore } from '../store/cartStore'
@@ -10,30 +10,30 @@ import './HomePage.css'
 
 const heroSlides = [
   {
-    headline: 'Quality Foodstuff. Reliable Supply.',
-    subtext: 'Shop essential foodstuff, groceries, and curated food packs with secure payment, receipt upload, order tracking, and reliable customer support.',
-    primary: 'Shop Products',
+    headline: 'Fresh Groceries Delivered Fast',
+    subtext: 'Premium foodstuff, everyday groceries, and curated food packs delivered with clear updates from cart to doorstep.',
+    primary: 'Shop Now',
     primaryTo: '/products',
-    secondary: 'Track Order',
-    secondaryTo: '/tracking',
+    secondary: 'Explore Packs',
+    secondaryTo: '/products',
     image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=900&h=650&fit=crop',
   },
   {
-    headline: 'Stock Your Home the Easy Way',
-    subtext: 'Order rice, garri, beans, oil, noodles, and curated food packs in minutes.',
-    primary: 'Start Shopping',
+    headline: 'Premium Food Packs For Every Home',
+    subtext: 'Choose balanced restock packs for busy families, students, and bulk household planning.',
+    primary: 'Shop Now',
     primaryTo: '/products',
-    secondary: 'Learn More',
-    secondaryTo: '/contact',
+    secondary: 'Explore Packs',
+    secondaryTo: '/products',
     image: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=900&h=650&fit=crop',
   },
   {
-    headline: 'Fast Orders. Clear Updates.',
-    subtext: 'Track your order, upload payment receipts, and receive delivery updates from FoodNova.',
-    primary: 'View Products',
+    headline: 'Farm Fresh Essentials',
+    subtext: 'Trusted sourcing, reliable stock visibility, and a polished grocery experience built for modern homes.',
+    primary: 'Shop Now',
     primaryTo: '/products',
-    secondary: 'Track Order',
-    secondaryTo: '/tracking',
+    secondary: 'Explore Packs',
+    secondaryTo: '/products',
     image: 'https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=900&h=650&fit=crop',
   },
 ]
@@ -305,7 +305,9 @@ export default function HomePage() {
             {featuredProducts.map((product) => (
               <article className="home-product-card" key={`featured-product-${product.id}`}>
                 <div className="home-product-image">
-                  <img src={getImageUrl(product)} alt={product.name} onError={handleImageError} />
+                  <img src={getImageUrl(product)} alt={product.name} loading="lazy" onError={handleImageError} />
+                  <div className="home-product-badges"><span>Fresh</span>{product.low_stock ? <span>Hot deal</span> : <span>Bestseller</span>}</div>
+                  <button type="button" className="home-favorite-button" aria-label={`Save ${product.name}`}><Heart size={17} /></button>
                   {product.is_out_of_stock && <span className="stock-ribbon out">Out of Stock</span>}
                   {product.low_stock && !product.is_out_of_stock && <span className="stock-ribbon low">Only {product.stock_qty} left</span>}
                 </div>
@@ -335,7 +337,7 @@ export default function HomePage() {
           <div className="home-pack-grid">
             {featuredPacks.map((pack) => (
               <article className="home-pack-card" key={`featured-pack-${pack.id}`}>
-                <img src={getImageUrl(pack)} alt={pack.name} onError={handleImageError} />
+                <img src={getImageUrl(pack)} alt={pack.name} loading="lazy" onError={handleImageError} />
                 <div>
                   <h3>{pack.name}</h3>
                   <p>{pack.description || 'A curated FoodNova package for convenient restocking.'}</p>
@@ -384,6 +386,51 @@ export default function HomePage() {
             ['Delivery Updates', Truck],
           ].map(([label, Icon]) => (
             <div className="trust-badge" key={label}><Icon size={20} /> {label}</div>
+          ))}
+        </div>
+      </section>
+
+      <section className="premium-proof-section">
+        <div className="section-heading centered">
+          <div>
+            <h2>Freshness, Delivery, Trust</h2>
+            <p>Commercial-grade grocery operations with a neighborhood feel.</p>
+          </div>
+        </div>
+        <div className="premium-proof-grid">
+          {[
+            ['Freshness guarantee', 'Quality checks before dispatch and transparent stock status.', CheckCircle2],
+            ['Delivery promise', 'Clear customer updates from payment confirmation to doorstep delivery.', Truck],
+            ['Trusted sourcing', 'Reliable essentials, curated packs, and customer-first support.', Sparkles],
+          ].map(([title, text, Icon]) => (
+            <article className="premium-proof-card" key={title}>
+              <Icon size={24} />
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="testimonial-section">
+        <div className="section-heading">
+          <div>
+            <h2>Customers Restock With Confidence</h2>
+            <p>Designed for repeat shopping, clear payments, and dependable household planning.</p>
+          </div>
+          <div className="coverage-pill"><MapPin size={18} /> Growing delivery coverage</div>
+        </div>
+        <div className="testimonial-grid">
+          {[
+            ['A smarter way to restock rice, beans, oil, and quick meals for the week.', 'Adebayo, Lagos'],
+            ['The food packs make monthly shopping simpler and easier to budget.', 'Chidinma, Abuja'],
+            ['Order updates and receipts give the process a professional feel.', 'Tunde, Ibadan'],
+          ].map(([quote, name]) => (
+            <article className="testimonial-card" key={name}>
+              <div><Star size={16} /><Star size={16} /><Star size={16} /><Star size={16} /><Star size={16} /></div>
+              <p>{quote}</p>
+              <strong>{name}</strong>
+            </article>
           ))}
         </div>
       </section>

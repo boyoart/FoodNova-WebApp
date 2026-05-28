@@ -280,7 +280,22 @@ PACKS.extend([
         "description": "Monthly Core Pack for family foodstuff restocking.",
         "price": 25000,
         "is_active": True,
-        "items": ["Rice", "Beans", "Garri", "Oil"],
+        "items": [
+            "Rice",
+            "Beans",
+            "Garri",
+            "Spaghetti",
+            "Tomato Paste",
+            "Noodles",
+            "Red Oil",
+            "Groundnut Oil",
+            "Semovita",
+            "Salt",
+            "Maggi",
+            "Curry",
+            "Thyme",
+            "Egusi",
+        ],
         "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
     },
     {
@@ -1064,7 +1079,24 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         db.add(notif)
         db.commit()
         db.refresh(notif)
-        return notification_to_dict(notif)
+        data = notification_to_dict(notif)
+        user = db.query(DBUser).filter(func.lower(DBUser.email) == email).first()
+        if user:
+            tokens = []
+            if getattr(user, "fcm_token", ""):
+                tokens.append(user.fcm_token)
+            for token in json_load(getattr(user, "fcm_tokens_json", None), []) or []:
+                if token and token not in tokens:
+                    tokens.append(token)
+            for token in tokens:
+                send_fcm_push_token(token, title, message, {
+                    "type": notif_type,
+                    "category": category,
+                    "notification_id": str(notif.id),
+                    "order_id": str(order.get("id") if order else ""),
+                    "click_action": "/notifications",
+                })
+        return data
     finally:
         db.close()
 
@@ -1420,6 +1452,15 @@ def json_dump(value):
     return json.dumps(value)
 
 
+def parse_content_list(value) -> list:
+    parsed = json_load(value, None)
+    if isinstance(parsed, list):
+        return [str(item).strip() for item in parsed if str(item).strip()]
+    if parsed is not None:
+        return [str(parsed).strip()] if str(parsed).strip() else []
+    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
 IMAGE_CONTENT_TYPES = {
     "image/jpeg": ".jpg",
     "image/jpg": ".jpg",
@@ -1589,6 +1630,7 @@ def admin_user_to_dict(user: DBUser) -> dict:
 def product_to_dict(product: DBProduct) -> dict:
     stock_qty = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
     low_stock_threshold = 5
+    contents = parse_content_list(getattr(product, "contents", None))
     return {
         "id": product.id,
         "name": product.name,
@@ -1599,6 +1641,12 @@ def product_to_dict(product: DBProduct) -> dict:
         "category_name": product.category_name or product.category or "",
         "image_url": product.image_url or "",
         "description": product.description or "",
+        "contents": contents,
+        "included_items": contents,
+        "pack_info": getattr(product, "pack_info", "") or "",
+        "serving_estimate": getattr(product, "serving_estimate", "") or "",
+        "freshness_note": getattr(product, "freshness_note", "") or "",
+        "delivery_note": getattr(product, "delivery_note", "") or "",
         "is_active": bool(product.is_active),
         "active": bool(product.is_active),
         "is_out_of_stock": stock_qty <= 0,
@@ -1611,13 +1659,20 @@ def product_to_dict(product: DBProduct) -> dict:
 
 
 def pack_to_dict(pack: DBPack) -> dict:
+    items = parse_content_list(pack.items)
     return {
         "id": pack.id,
         "name": pack.name,
         "description": pack.description or "",
         "price": pack.price or 0,
         "is_active": bool(pack.is_active),
-        "items": json_load(pack.items, []),
+        "items": items,
+        "contents": items,
+        "included_items": items,
+        "pack_info": "Curated FoodNova pack",
+        "serving_estimate": "Sized for household restocking",
+        "freshness_note": "Packed from current FoodNova inventory before dispatch",
+        "delivery_note": "Delivered after payment confirmation and packing",
         "image_url": pack.image_url or "",
         "created_at": iso(pack.created_at),
         "active": bool(pack.is_active),
@@ -3037,6 +3092,11 @@ def ensure_database_compatibility():
             "category_name": "VARCHAR(100) DEFAULT ''",
             "image_url": "TEXT DEFAULT ''",
             "description": "TEXT DEFAULT ''",
+            "contents": "TEXT DEFAULT '[]'",
+            "pack_info": "TEXT DEFAULT ''",
+            "serving_estimate": "TEXT DEFAULT ''",
+            "freshness_note": "TEXT DEFAULT ''",
+            "delivery_note": "TEXT DEFAULT ''",
             "is_active": "BOOLEAN DEFAULT TRUE",
             "updated_at": "TIMESTAMP",
         },
@@ -5169,6 +5229,29 @@ def unread_count(request: Request):
         db.close()
 
 
+@app.post("/notifications/register-fcm-token")
+def register_customer_fcm_token(payload: FCMTokenPayload, request: Request):
+    user = require_user(request)
+    token = (payload.token or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="FCM token is required")
+    db = SessionLocal()
+    try:
+        db_user = db.query(DBUser).filter(DBUser.id == user.get("id")).first()
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        tokens = json_load(getattr(db_user, "fcm_tokens_json", None), []) or []
+        tokens = [item for item in tokens if item and item != token]
+        tokens.insert(0, token)
+        db_user.fcm_token = token
+        db_user.fcm_tokens_json = json_dump(tokens[:5])
+        db_user.updated_at = datetime.utcnow()
+        db.commit()
+        return {"success": True, "message": "Push notification token registered"}
+    finally:
+        db.close()
+
+
 @app.patch("/notifications/{notification_id}/read")
 def mark_notification_read(notification_id: int, request: Request):
     user = require_user(request)
@@ -6532,6 +6615,11 @@ async def admin_create_product(
     is_active: bool = Form(True),
     active: Optional[bool] = Form(None),
     description: str = Form(""),
+    contents: str = Form("[]"),
+    pack_info: str = Form(""),
+    serving_estimate: str = Form(""),
+    freshness_note: str = Form(""),
+    delivery_note: str = Form(""),
     image: Optional[UploadFile] = File(None),
 ):
     admin = require_permission(request, "stock:manage")
@@ -6547,6 +6635,11 @@ async def admin_create_product(
             category_name=category,
             image_url=image_url,
             description=description,
+            contents=json_dump(parse_content_list(contents)),
+            pack_info=pack_info,
+            serving_estimate=serving_estimate,
+            freshness_note=freshness_note,
+            delivery_note=delivery_note,
             is_active=is_active if active is None else active,
         )
         db.add(product)
@@ -6575,6 +6668,11 @@ async def admin_update_product(
     is_active: Optional[bool] = Form(None),
     active: Optional[bool] = Form(None),
     description: Optional[str] = Form(None),
+    contents: Optional[str] = Form(None),
+    pack_info: Optional[str] = Form(None),
+    serving_estimate: Optional[str] = Form(None),
+    freshness_note: Optional[str] = Form(None),
+    delivery_note: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
     admin = require_permission(request, "stock:manage")
@@ -6590,6 +6688,16 @@ async def admin_update_product(
                 product.category_name = category
             if description is not None:
                 product.description = description
+            if contents is not None:
+                product.contents = json_dump(parse_content_list(contents))
+            if pack_info is not None:
+                product.pack_info = pack_info
+            if serving_estimate is not None:
+                product.serving_estimate = serving_estimate
+            if freshness_note is not None:
+                product.freshness_note = freshness_note
+            if delivery_note is not None:
+                product.delivery_note = delivery_note
             if price is not None:
                 product.price = float(price or 0)
             if stock_qty is not None:

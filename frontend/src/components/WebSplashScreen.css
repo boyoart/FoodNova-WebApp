@@ -1,0 +1,64 @@
+.web-splash {
+  align-items: center;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255, 210, 63, 0.22), transparent 28%),
+    radial-gradient(circle at 82% 18%, rgba(8, 122, 52, 0.16), transparent 26%),
+    linear-gradient(145deg, #f8fff6 0%, #ffffff 48%, #eef8ed 100%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 5000;
+  animation: splashExit 1.25s ease forwards;
+}
+
+.web-splash-inner {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.web-splash .foodnova-logo {
+  animation: splashLogo 0.85s ease both;
+  filter: drop-shadow(0 22px 34px rgba(8, 122, 52, 0.16));
+}
+
+.web-splash p {
+  color: #103820;
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.web-splash-progress {
+  background: rgba(8, 122, 52, 0.14);
+  border-radius: 999px;
+  height: 5px;
+  overflow: hidden;
+  width: min(230px, 58vw);
+}
+
+.web-splash-progress span {
+  animation: splashProgress 1.05s ease both;
+  background: linear-gradient(90deg, #087a34, #ffd23f);
+  display: block;
+  height: 100%;
+  width: 100%;
+}
+
+@keyframes splashLogo {
+  from { opacity: 0; transform: translateY(10px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes splashProgress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes splashExit {
+  0%, 78% { opacity: 1; pointer-events: auto; }
+  100% { opacity: 0; pointer-events: none; }
+}

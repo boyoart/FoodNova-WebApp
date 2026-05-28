@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search } from 'lucide-react'
+import { CheckCircle2, Heart, Search, Sparkles } from 'lucide-react'
 import { productsAPI, packsAPI } from '../services/api'
 import { useCartStore } from '../store/cartStore'
 import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
@@ -45,6 +45,9 @@ export default function ProductsPage() {
       image: item?.image || item?.image_url || '/placeholder.png',
       image_url: item?.image_url || item?.image || '/placeholder.png',
       category: item?.category || item?.category_name || '',
+      includedItems: Array.isArray(item?.included_items) ? item.included_items : Array.isArray(item?.items) ? item.items : [],
+      familySize: item?.family_size || item?.serves || 'Family restock',
+      deliveryEstimate: item?.delivery_estimate || '24-48 hrs',
     }
   }
 
@@ -184,8 +187,14 @@ export default function ProductsPage() {
                 <img
                   src={getImageUrl(item)}
                   alt={item.name}
+                  loading="lazy"
                   onError={handleImageError}
                 />
+                <div className="product-badges">
+                  <span><Sparkles size={13} /> Fresh</span>
+                  <span>{activeTab === 'packs' ? 'Food pack' : 'Bestseller'}</span>
+                </div>
+                <button type="button" className="product-favorite" aria-label={`Save ${item.name}`}><Heart size={17} /></button>
                 {activeTab === 'products' && item.is_out_of_stock && <div className="out-of-stock">Out of Stock</div>}
                 {activeTab === 'products' && item.low_stock && !item.is_out_of_stock && <div className="low-stock-badge">Only {item.stock_qty} left</div>}
               </div>
@@ -193,6 +202,20 @@ export default function ProductsPage() {
                 <h3>{item.name}</h3>
                 <p className="description">{item.description}</p>
                 {item.category && <span className="category">{item.category}</span>}
+                {activeTab === 'packs' && (
+                  <div className="pack-extras">
+                    <div className="pack-meta">
+                      <span>{item.familySize}</span>
+                      <span>{item.deliveryEstimate}</span>
+                    </div>
+                    <div className="pack-included">
+                      <strong>What's inside</strong>
+                      {(item.includedItems.length ? item.includedItems : ['Rice', 'Beans', 'Garri', 'Spaghetti']).slice(0, 5).map((entry) => (
+                        <span key={String(entry)}><CheckCircle2 size={14} /> {typeof entry === 'string' ? entry : entry?.name || entry?.product_name || 'Food item'}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {activeTab === 'products' && (
                   <div className="stock-info">
                     {item.is_out_of_stock ? (

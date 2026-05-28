@@ -1,19 +1,14 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Instagram, Mail, Phone, MapPin } from 'lucide-react'
+import FoodNovaLogo from './FoodNovaLogo'
 import { FOODNOVA_CONTACT, FOODNOVA_SOCIAL_LINKS } from '../utils/contactUtils'
 import './Footer.css'
 
 export default function Footer() {
+  const location = useLocation()
   const currentYear = new Date().getFullYear()
-  const handleLogoError = (event) => {
-    if (event.currentTarget.dataset.fallback !== 'true') {
-      event.currentTarget.dataset.fallback = 'true'
-      event.currentTarget.src = '/logo.png'
-      return
-    }
 
-    event.currentTarget.style.display = 'none'
-  }
+  if (location.pathname === '/coming-soon') return null
 
   return (
     <footer className="footer">
@@ -21,7 +16,7 @@ export default function Footer() {
         <div className="footer-content">
           <div className="footer-section">
             <div className="footer-brand">
-              <img src="/foodnova-logo.png" alt="FoodNova" onError={handleLogoError} />
+              <FoodNovaLogo variant="inline" />
               <h4>FoodNova</h4>
             </div>
             <p>Fresh food delivery for everyone, everywhere.</p>
