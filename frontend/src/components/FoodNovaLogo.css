@@ -6,22 +6,22 @@
 }
 
 .foodnova-logo-header {
-  width: clamp(176px, 22vw, 260px);
+  width: clamp(220px, 26vw, 340px);
 }
 
 .foodnova-logo-auth {
-  width: clamp(190px, 48vw, 260px);
+  width: clamp(230px, 56vw, 340px);
 }
 
 .foodnova-logo-splash,
 .foodnova-logo-coming-soon {
-  width: clamp(230px, 46vw, 340px);
+  width: clamp(280px, 54vw, 430px);
 }
 
 .foodnova-logo-inline {
-  width: clamp(150px, 24vw, 210px);
+  width: clamp(180px, 28vw, 260px);
 }
 
 .foodnova-logo-onboarding {
-  width: clamp(190px, 48vw, 270px);
+  width: clamp(230px, 56vw, 350px);
 }
