@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
@@ -30,11 +31,13 @@ final packsProvider = FutureProvider<List<Product>>((ref) {
 
 final activeAnnouncementsProvider =
     FutureProvider<List<FoodNovaAnnouncement>>((ref) {
-  return ref.watch(productRepositoryProvider).activeAnnouncements();
+  return ref
+      .watch(productRepositoryProvider)
+      .activeAnnouncements(forceRefresh: true);
 });
 
 final heroBannersProvider = FutureProvider<List<FoodNovaAnnouncement>>((ref) {
-  return ref.watch(productRepositoryProvider).heroBanners();
+  return ref.watch(productRepositoryProvider).heroBanners(forceRefresh: true);
 });
 
 class ProductRepository {
@@ -128,12 +131,33 @@ class ProductRepository {
     final response = await _dio.get('/announcements/active');
     final body = response.data;
     final items = body is Map ? (body['announcements'] ?? body['data']) : body;
-    final announcements = (items as List? ?? [])
-        .map((item) =>
-            FoodNovaAnnouncement.fromJson(Map<String, dynamic>.from(item)))
-        .where((item) => item.isActive)
-        .toList()
+    final rawItems = items as List? ?? [];
+    debugPrint(
+        '[FoodNova Banners] Number of banners returned: ${rawItems.length}');
+    final parsed = rawItems.map((item) {
+      final announcement =
+          FoodNovaAnnouncement.fromJson(Map<String, dynamic>.from(item));
+      debugPrint(
+        '[FoodNova Banners] received id=${announcement.id} '
+        'active=${announcement.isActive} type=${announcement.displayType} '
+        'image=${announcement.imageUrl}',
+      );
+      return announcement;
+    }).toList();
+    final announcements = parsed.where((item) {
+      if (!item.isActive) {
+        debugPrint('[FoodNova Banners] rejected id=${item.id}: inactive');
+        return false;
+      }
+      return true;
+    }).toList()
       ..sort((a, b) => b.priority.compareTo(a.priority));
+    debugPrint(
+        '[FoodNova Banners] Number of active banners: ${announcements.length}');
+    debugPrint(
+        '[FoodNova Banners] Banner IDs: ${announcements.map((item) => item.id).join(', ')}');
+    debugPrint(
+        '[FoodNova Banners] Banner image URLs: ${announcements.map((item) => item.imageUrl).join(', ')}');
     _announcementCache = announcements;
     return announcements;
   }
@@ -141,9 +165,16 @@ class ProductRepository {
   Future<List<FoodNovaAnnouncement>> heroBanners(
       {bool forceRefresh = false}) async {
     final announcements = await activeAnnouncements(forceRefresh: forceRefresh);
-    return announcements
-        .where((item) => item.displayType == 'hero_banner')
-        .toList();
+    final banners = announcements.where((item) {
+      final isBanner = item.displayType == 'hero_banner';
+      if (!isBanner) {
+        debugPrint(
+            '[FoodNova Banners] rejected id=${item.id}: display_type=${item.displayType}');
+      }
+      return isBanner;
+    }).toList();
+    debugPrint('[FoodNova Banners] Number of hero banners: ${banners.length}');
+    return banners;
   }
 }
 
@@ -177,13 +208,15 @@ class FoodNovaAnnouncement {
       id: int.tryParse('${json['id']}') ?? 0,
       title: '${json['title'] ?? ''}'.trim(),
       message: '${json['message'] ?? json['subtitle'] ?? ''}'.trim(),
-      displayType: '${json['display_type'] ?? ''}'.trim(),
-      imageUrl: AppConfig.resolveMediaUrl('${json['image_url'] ?? ''}'),
-      buttonText: '${json['button_text'] ?? ''}'.trim(),
-      buttonLink: '${json['button_link'] ?? ''}'.trim(),
+      displayType:
+          '${json['display_type'] ?? json['displayType'] ?? ''}'.trim(),
+      imageUrl: AppConfig.resolveMediaUrl(
+          '${json['image_url'] ?? json['imageUrl'] ?? ''}'),
+      buttonText: '${json['button_text'] ?? json['buttonText'] ?? ''}'.trim(),
+      buttonLink: '${json['button_link'] ?? json['buttonLink'] ?? ''}'.trim(),
       theme: '${json['theme'] ?? 'green'}'.trim(),
       priority: int.tryParse('${json['priority'] ?? 0}') ?? 0,
-      isActive: json['is_active'] != false,
+      isActive: (json['is_active'] ?? json['isActive']) != false,
     );
   }
 }

@@ -2543,19 +2543,31 @@ def broadcast_to_dict(broadcast: DBBroadcast) -> dict:
 
 
 def announcement_to_dict(announcement: DBAnnouncement) -> dict:
+    image_url = announcement.image_url or ""
+    display_type = announcement.display_type or "top_bar"
+    button_text = announcement.button_text or ""
+    button_link = announcement.button_link or ""
+    is_active = bool(announcement.is_active)
     return {
         "id": announcement.id,
         "title": announcement.title,
         "message": announcement.message,
-        "display_type": announcement.display_type or "top_bar",
-        "button_text": announcement.button_text or "",
-        "button_link": announcement.button_link or "",
-        "image_url": announcement.image_url or "",
+        "display_type": display_type,
+        "displayType": display_type,
+        "button_text": button_text,
+        "buttonText": button_text,
+        "button_link": button_link,
+        "buttonLink": button_link,
+        "image_url": image_url,
+        "imageUrl": image_url,
         "theme": announcement.theme or "green",
         "priority": announcement.priority or 0,
-        "is_active": bool(announcement.is_active),
+        "is_active": is_active,
+        "isActive": is_active,
         "start_date": iso(announcement.start_date),
+        "startDate": iso(announcement.start_date),
         "end_date": iso(announcement.end_date),
+        "endDate": iso(announcement.end_date),
         "created_by_admin_id": announcement.created_by_admin_id,
         "created_by_admin_name": announcement.created_by_admin_name or "",
         "created_at": iso(announcement.created_at),
@@ -7748,15 +7760,32 @@ def get_active_announcements():
     db = SessionLocal()
     try:
         now = datetime.utcnow()
-        announcements = [
-            announcement_to_dict(announcement)
-            for announcement in db.query(DBAnnouncement)
-            .filter(DBAnnouncement.is_active == True)
-            .filter(or_(DBAnnouncement.start_date == None, DBAnnouncement.start_date <= now))
-            .filter(or_(DBAnnouncement.end_date == None, DBAnnouncement.end_date >= now))
-            .order_by(DBAnnouncement.priority.desc(), DBAnnouncement.created_at.desc(), DBAnnouncement.id.desc())
-            .all()
-        ]
+        rows = db.query(DBAnnouncement).order_by(
+            DBAnnouncement.priority.desc(),
+            DBAnnouncement.created_at.desc(),
+            DBAnnouncement.id.desc(),
+        ).all()
+        announcements = []
+        rejected = []
+        for announcement in rows:
+            reasons = []
+            if not bool(announcement.is_active):
+                reasons.append("inactive")
+            if announcement.start_date and announcement.start_date > now:
+                reasons.append(f"starts_at={iso(announcement.start_date)}")
+            if announcement.end_date and announcement.end_date < now:
+                reasons.append(f"ended_at={iso(announcement.end_date)}")
+            if reasons:
+                rejected.append({"id": announcement.id, "reasons": reasons})
+                continue
+            announcements.append(announcement_to_dict(announcement))
+        print("ACTIVE ANNOUNCEMENTS AUDIT:", json_dump({
+            "total_records": len(rows),
+            "active_count": len(announcements),
+            "active_ids": [item["id"] for item in announcements],
+            "active_image_urls": [item.get("image_url", "") for item in announcements],
+            "rejected": rejected,
+        }))
         return {"success": True, "announcements": announcements, "data": announcements}
     except Exception as error:
         print("ACTIVE ANNOUNCEMENTS LOAD ERROR:", repr(error))

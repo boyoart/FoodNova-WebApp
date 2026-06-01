@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
@@ -299,13 +302,64 @@ class DiscoverScreen extends ConsumerWidget {
   }
 }
 
-class _BannerStrip extends StatelessWidget {
+class _BannerStrip extends StatefulWidget {
   const _BannerStrip({required this.banners});
 
   final List<FoodNovaAnnouncement> banners;
 
   @override
+  State<_BannerStrip> createState() => _BannerStripState();
+}
+
+class _BannerStripState extends State<_BannerStrip> {
+  late final PageController _controller;
+  Timer? _timer;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+    _schedule();
+  }
+
+  @override
+  void didUpdateWidget(covariant _BannerStrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.banners.length != widget.banners.length) {
+      _index = 0;
+      _schedule();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _schedule() {
+    _timer?.cancel();
+    if (widget.banners.length < 2) return;
+    _timer = Timer.periodic(const Duration(seconds: 5), (_) => _advance());
+  }
+
+  void _advance() {
+    if (!mounted || !_controller.hasClients || widget.banners.length < 2) {
+      return;
+    }
+    final next = (_index + 1) % widget.banners.length;
+    _controller.animateToPage(
+      next,
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final banners = widget.banners;
     if (banners.isEmpty) {
       final scheme = Theme.of(context).colorScheme;
       return Container(
@@ -318,13 +372,47 @@ class _BannerStrip extends StatelessWidget {
       );
     }
     return SizedBox(
-      height: 132,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        itemCount: banners.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (_, index) => _MiniBanner(banner: banners[index]),
+      height: 148,
+      child: Stack(
+        children: [
+          PageView.builder(
+            controller: _controller,
+            physics: const BouncingScrollPhysics(),
+            itemCount: banners.length,
+            onPageChanged: (value) {
+              if (!mounted) return;
+              setState(() => _index = value);
+            },
+            itemBuilder: (_, index) => Padding(
+              padding: EdgeInsets.only(right: banners.length > 1 ? 8 : 0),
+              child: _MiniBanner(banner: banners[index]),
+            ),
+          ),
+          if (banners.length > 1)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 10,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < banners.length; i++)
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      width: i == _index ? 22 : 7,
+                      height: 7,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: i == _index
+                            ? FoodNovaColors.accent
+                            : Colors.white.withValues(alpha: .58),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -338,52 +426,106 @@ class _MiniBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 260,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        image: banner.imageUrl.isEmpty
-            ? null
-            : DecorationImage(
-                image: NetworkImage(banner.imageUrl),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  scheme.shadow.withValues(alpha: .35),
-                  BlendMode.darken,
-                ),
-              ),
-        gradient: const LinearGradient(
-          colors: [FoodNovaColors.primaryDark, FoodNovaColors.primary],
+    return InkWell(
+      borderRadius: BorderRadius.circular(24),
+      onTap: () => _openExploreBannerLink(context, banner.buttonLink),
+      child: Container(
+        width: double.infinity,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: const LinearGradient(
+            colors: [FoodNovaColors.primaryDark, FoodNovaColors.primary],
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            banner.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: scheme.onPrimary,
-              fontWeight: FontWeight.w900,
-              fontSize: 17,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (banner.imageUrl.isNotEmpty)
+              Image.network(
+                banner.imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const _BannerFallbackArt(),
+              )
+            else
+              const _BannerFallbackArt(),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.shadow.withValues(alpha: .35),
+              ),
             ),
-          ),
-          const Spacer(),
-          Text(
-            banner.message,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: scheme.onPrimary,
-              fontWeight: FontWeight.w700,
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    banner.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.onPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    banner.message,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.onPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
+}
+
+class _BannerFallbackArt extends StatelessWidget {
+  const _BannerFallbackArt();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            FoodNovaColors.primaryDark,
+            FoodNovaColors.primary,
+            FoodNovaColors.success,
+          ],
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Icon(
+          Icons.local_grocery_store_rounded,
+          size: 86,
+          color: Colors.white.withValues(alpha: .18),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _openExploreBannerLink(BuildContext context, String link) async {
+  final value = link.trim();
+  if (value.isEmpty) return;
+  if (value.startsWith('/')) {
+    context.push(value == '/products' ? '/discover' : value);
+    return;
+  }
+  await launchUrl(Uri.parse(value), mode: LaunchMode.externalApplication);
 }
 
 class _HorizontalShelf extends StatelessWidget {
