@@ -24,7 +24,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.65rem;
-  min-width: max-content;
+  flex: 0 0 25%;
+  min-width: 240px;
   color: var(--fn-primary);
   text-decoration: none;
   font-size: 1.35rem;
@@ -34,9 +35,9 @@
 
 .logo-image {
   display: block;
-  max-width: 360px;
-  height: 94px;
-  width: clamp(220px, 26vw, 340px);
+  height: clamp(60px, 7vw, 80px);
+  max-width: 100%;
+  width: auto;
   object-fit: contain;
 }
 
@@ -514,9 +515,14 @@
   }
 
   .logo-image {
-    height: 76px;
-    max-width: 280px;
-    width: clamp(210px, 58vw, 280px);
+    height: clamp(50px, 8vw, 60px);
+    max-width: 100%;
+    width: auto;
+  }
+
+  .navbar-logo {
+    flex-basis: 35%;
+    min-width: 190px;
   }
 
   .menu-toggle {
@@ -632,5 +638,29 @@
     margin: 0.35rem 0 0.5rem;
     box-shadow: none;
     border-radius: 0.9rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .navbar-container {
+    min-height: 76px;
+    padding: 0 0.85rem;
+  }
+
+  .navbar-logo {
+    flex-basis: 45%;
+    min-width: 155px;
+  }
+
+  .logo-image {
+    height: clamp(44px, 10vw, 50px);
+  }
+
+  .nav-menu {
+    top: 76px;
+  }
+
+  .nav-menu.active {
+    max-height: calc(100vh - 76px);
   }
 }

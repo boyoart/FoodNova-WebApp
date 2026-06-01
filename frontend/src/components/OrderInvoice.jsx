@@ -1,4 +1,6 @@
 import { formatPrice } from '../utils/formatters'
+import FoodNovaLogo from './FoodNovaLogo'
+import CopyButton from './ui/CopyButton'
 import './OrderInvoice.css'
 
 const BUSINESS = {
@@ -58,7 +60,7 @@ export default function OrderInvoice({ order }) {
     <article className="invoice-card">
       <header className="invoice-header">
         <div className="invoice-brand">
-          <div className="invoice-logo">FN</div>
+          <FoodNovaLogo variant="inline" className="invoice-logo" />
           <div>
             <h1>{BUSINESS.name}</h1>
             <p>{BUSINESS.tagline}</p>
@@ -66,7 +68,7 @@ export default function OrderInvoice({ order }) {
         </div>
         <div className="invoice-title-block">
           <h2>FoodNova Invoice / Receipt</h2>
-          <p>Order {getOrderCode(order)}</p>
+          <p className="copyable-value">Order {getOrderCode(order)} <CopyButton value={getOrderCode(order)} label="Copy" /></p>
           <p>{formatDate(getOrderDate(order))}</p>
         </div>
       </header>
@@ -91,7 +93,7 @@ export default function OrderInvoice({ order }) {
           <p><span>Payment Status</span><strong>{titleCase(order?.payment_status || order?.status || 'pending_payment')}</strong></p>
           <p><span>Order Status</span><strong>{titleCase(order?.order_status || order?.fulfillment_status || order?.status || 'order_placed')}</strong></p>
           <p><span>Delivery Method</span><strong>{deliveryMethod}</strong></p>
-          <p><span>Order Code</span><strong>{getOrderCode(order)}</strong></p>
+          <p><span>Order Code</span><strong className="copyable-value">{getOrderCode(order)} <CopyButton value={getOrderCode(order)} label="Copy" /></strong></p>
         </div>
       </section>
 
@@ -131,9 +133,9 @@ export default function OrderInvoice({ order }) {
 
       <section className="invoice-payment-details">
         <h3>Payment Details</h3>
-        <p>Account Number: {PAYMENT.accountNumber}</p>
+        <p>Account Number: <span className="copyable-value">{PAYMENT.accountNumber} <CopyButton value={PAYMENT.accountNumber} label="Copy" /></span></p>
         <p>Bank: {PAYMENT.bank}</p>
-        <p>Account Name: {PAYMENT.accountName}</p>
+        <p>Account Name: <span className="copyable-value">{PAYMENT.accountName} <CopyButton value={PAYMENT.accountName} label="Copy" /></span></p>
       </section>
 
       <footer className="invoice-footer">

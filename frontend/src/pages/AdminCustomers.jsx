@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
+import CopyButton from '../components/ui/CopyButton'
 import './AdminCustomers.css'
 
 const normalizeList = (body) => {
@@ -159,7 +160,7 @@ export default function AdminCustomers() {
                     <td><span>{customer.phone || 'No phone'}</span></td>
                     <td>{customer.orders_count || customer.total_orders || customer.orders?.length || 0}</td>
                     <td>{formatPrice(customer.total_spent || customer.revenue || 0)}</td>
-                    <td>{customer.last_order_code || customer.last_order_id || '—'}</td>
+                    <td>{customer.last_order_code || customer.last_order_id ? <span className="copyable-value">{customer.last_order_code || customer.last_order_id}<CopyButton value={customer.last_order_code || customer.last_order_id} label="Copy" /></span> : '—'}</td>
                     <td><button type="button" onClick={() => setSelectedCustomer(customer)}>View Data</button></td>
                   </tr>
                 ))}
@@ -186,7 +187,7 @@ export default function AdminCustomers() {
                   <h3>Recent Orders</h3>
                   {selectedCustomer.orders.slice(0, 5).map((order) => (
                     <div key={order.id} className="mini-order-row">
-                      <span>{order.order_code || `FN-${String(order.id || '').padStart(5, '0')}`}</span>
+                      <span className="copyable-value">{order.order_code || `FN-${String(order.id || '').padStart(5, '0')}`}<CopyButton value={order.order_code || `FN-${String(order.id || '').padStart(5, '0')}`} label="Copy" /></span>
                       <strong>{formatPrice(order.total_amount || order.total || 0)}</strong>
                     </div>
                   ))}

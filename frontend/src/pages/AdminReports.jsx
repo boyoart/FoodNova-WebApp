@@ -5,6 +5,7 @@ import { BarChart3, CreditCard, FileText, Package, RefreshCw, ShoppingBag, Truck
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
+import CopyButton from '../components/ui/CopyButton'
 import './AdminReports.css'
 
 const toInputDate = (date) => date.toISOString().slice(0, 10)
@@ -238,7 +239,7 @@ export default function AdminReports() {
                 <tbody>
                   {recentOrders.length ? recentOrders.map((order) => (
                     <tr key={order.id}>
-                      <td>{order.order_code}</td>
+                      <td><span className="copyable-value">{order.order_code}<CopyButton value={order.order_code} label="Copy" /></span></td>
                       <td>{order.customer_name || 'Customer'}</td>
                       <td>{formatPrice(order.total_amount || 0)}</td>
                       <td>{statusLabel(order.payment_status)}</td>

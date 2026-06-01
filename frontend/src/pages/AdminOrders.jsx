@@ -6,6 +6,7 @@ import { formatPrice } from '../utils/formatters'
 import { normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
 import { MessageCircle, Trash2 } from 'lucide-react'
+import CopyButton from '../components/ui/CopyButton'
 import './AdminPages.css'
 
 const PAYMENT_STATUS_OPTIONS = [
@@ -328,7 +329,7 @@ export default function AdminOrders() {
 
                 return (
                   <tr key={order.id}>
-                    <td>{order.order_code || `#${order.id}`}</td>
+                    <td><span className="copyable-value">{order.order_code || `#${order.id}`} <CopyButton value={order.order_code || `#${order.id}`} label="Copy" /></span></td>
                     <td>{order.customer_name || 'Unknown'}</td>
                     <td>{order.phone || order.customer_phone || 'N/A'}</td>
                     <td>{order.delivery_method === 'pickup' ? '🏪' : '🚗'}</td>
@@ -361,7 +362,7 @@ export default function AdminOrders() {
                     </td>
                     <td>
                       {deliveryCode ? (
-                        <span className="delivery-code-badge">{deliveryCode}</span>
+                        <span className="copyable-value"><span className="delivery-code-badge">{deliveryCode}</span> <CopyButton value={deliveryCode} label="Copy" /></span>
                       ) : order.delivery_method === 'delivery' && orderStatus === 'out_for_delivery' ? (
                         <span className="code-generating">Generating...</span>
                       ) : (
@@ -413,7 +414,7 @@ export default function AdminOrders() {
                 <div className="info-grid">
                   <div className="info-item">
                     <strong>Order Code:</strong>
-                    <span>{selectedOrder.order_code || `#${selectedOrder.id}`}</span>
+                    <span className="copyable-value">{selectedOrder.order_code || `#${selectedOrder.id}`} <CopyButton value={selectedOrder.order_code || `#${selectedOrder.id}`} label="Copy" /></span>
                   </div>
                   <div className="info-item">
                     <strong>Customer:</strong>

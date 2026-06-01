@@ -5,6 +5,7 @@ import { ordersAPI, notificationsAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Package, Clock, CheckCircle, AlertCircle, RotateCw, MessageCircle } from 'lucide-react'
 import { buildWhatsAppLink, normalizePhoneForWhatsApp } from '../utils/contactUtils'
+import CopyButton from '../components/ui/CopyButton'
 import './OrderHistoryPage.css'
 
 export default function OrderHistoryPage() {
@@ -480,7 +481,7 @@ export default function OrderHistoryPage() {
 
             <div className="order-detail-content">
               <div className="order-identity-section">
-                <div className="order-code-display"><h3>Order Code: {selectedOrder.order_code || selectedOrder.id}</h3></div>
+                <div className="order-code-display"><h3>Order Code: <span className="copyable-value">{selectedOrder.order_code || selectedOrder.id}<CopyButton value={selectedOrder.order_code || selectedOrder.id} label="Copy" /></span></h3></div>
                 <div className="order-meta">
                   <p><strong>Date Placed:</strong> {selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleDateString() : 'Today'}</p>
                   <p><strong>Customer Name:</strong> {selectedOrder.customer_name || 'N/A'}</p>
@@ -551,10 +552,10 @@ export default function OrderHistoryPage() {
                       <div className="bank-details">
                         <p><strong>Amount to Transfer:</strong> {formatCurrency(getOrderTotal(selectedOrder))}</p>
                         <div className="bank-info">
-                          <p><strong>Account Number:</strong> 6427173992</p>
+                          <p><strong>Account Number:</strong> <span className="copyable-value">6427173992 <CopyButton value="6427173992" label="Copy" /></span></p>
                           <p><strong>Bank:</strong> OPay</p>
-                          <p><strong>Account Name:</strong> FOODNOVA LIMITED</p>
-                          <p><strong>Payment Narration/Reference:</strong> Use your Order Code</p>
+                          <p><strong>Account Name:</strong> <span className="copyable-value">FOODNOVA LIMITED <CopyButton value="FOODNOVA LIMITED" label="Copy" /></span></p>
+                          <p><strong>Payment Narration/Reference:</strong> <span className="copyable-value">{selectedOrder.order_code || selectedOrder.id}<CopyButton value={selectedOrder.order_code || selectedOrder.id} label="Copy" /></span></p>
                         </div>
                       </div>
                       <form onSubmit={handleReceiptUpload}>

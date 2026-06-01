@@ -3,25 +3,61 @@
   height: auto;
   max-width: 100%;
   object-fit: contain;
+  transform-origin: center;
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.foodnova-logo:hover {
+  filter: drop-shadow(0 12px 18px rgba(8, 122, 52, 0.12));
+  transform: scale(1.03);
 }
 
 .foodnova-logo-header {
-  width: clamp(220px, 26vw, 340px);
+  height: clamp(60px, 7vw, 80px);
+  width: min(25vw, 340px);
 }
 
 .foodnova-logo-auth {
-  width: clamp(230px, 56vw, 340px);
+  height: clamp(60px, 8vw, 80px);
+  width: auto;
 }
 
 .foodnova-logo-splash,
 .foodnova-logo-coming-soon {
-  width: clamp(280px, 54vw, 430px);
+  height: clamp(70px, 9vw, 80px);
+  width: auto;
 }
 
 .foodnova-logo-inline {
-  width: clamp(180px, 28vw, 260px);
+  height: clamp(50px, 6vw, 68px);
+  width: auto;
 }
 
 .foodnova-logo-onboarding {
-  width: clamp(230px, 56vw, 350px);
+  height: clamp(60px, 8vw, 82px);
+  width: auto;
+}
+
+@media (max-width: 900px) {
+  .foodnova-logo-header {
+    height: clamp(50px, 8vw, 60px);
+    width: min(35vw, 280px);
+  }
+}
+
+@media (max-width: 560px) {
+  .foodnova-logo-header {
+    height: clamp(44px, 10vw, 50px);
+    width: min(45vw, 220px);
+  }
+
+  .foodnova-logo-auth,
+  .foodnova-logo-onboarding {
+    height: clamp(44px, 12vw, 50px);
+  }
+
+  .foodnova-logo-splash,
+  .foodnova-logo-coming-soon {
+    height: clamp(44px, 14vw, 50px);
+  }
 }

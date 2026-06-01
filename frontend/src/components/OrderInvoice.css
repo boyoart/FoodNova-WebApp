@@ -26,15 +26,8 @@
 }
 
 .invoice-logo {
-  width: 58px;
-  height: 58px;
-  border-radius: 16px;
-  background: var(--fn-primary);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
+  height: 60px;
+  width: auto;
 }
 
 .invoice-brand h1,

@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore'
 import { adminAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
+import CopyButton from '../components/ui/CopyButton'
 import './AdminPages.css'
 
 export default function AdminPayments() {
@@ -137,7 +138,7 @@ export default function AdminPayments() {
             <tbody>
               {payments.map(payment => (
                 <tr key={payment.id}>
-                  <td>#{payment.order_code || payment.id}</td>
+                  <td><span className="copyable-value">#{payment.order_code || payment.id} <CopyButton value={payment.order_code || payment.id} label="Copy" /></span></td>
                   <td>{payment.customer_name || 'Customer'}</td>
                   <td>{formatPrice(payment.total_amount || payment.total || 0)}</td>
                   <td>
@@ -183,7 +184,7 @@ export default function AdminPayments() {
 
             <div className="admin-receipt-body">
               <div className="receipt-meta-card">
-                <p><strong>Order:</strong> #{selectedReceipt.orderCode || selectedReceipt.orderId}</p>
+                <p><strong>Order:</strong> <span className="copyable-value">#{selectedReceipt.orderCode || selectedReceipt.orderId} <CopyButton value={selectedReceipt.orderCode || selectedReceipt.orderId} label="Copy" /></span></p>
                 <p><strong>Customer:</strong> {selectedReceipt.customerName || 'Customer'}</p>
                 <p><strong>Amount:</strong> {formatPrice(selectedReceipt.amount || 0)}</p>
                 <p><strong>File:</strong> {selectedReceipt.filename}</p>
@@ -239,7 +240,7 @@ export default function AdminPayments() {
             </div>
             <div className="admin-receipt-body">
               <div className="receipt-meta-card">
-                <p><strong>Order:</strong> #{rejectTarget.order_code || rejectTarget.id}</p>
+                <p><strong>Order:</strong> <span className="copyable-value">#{rejectTarget.order_code || rejectTarget.id} <CopyButton value={rejectTarget.order_code || rejectTarget.id} label="Copy" /></span></p>
                 <p><strong>Customer:</strong> {rejectTarget.customer_name || 'Customer'}</p>
               </div>
               <label className="admin-rejection-field">

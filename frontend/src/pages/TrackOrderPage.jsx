@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { trackingAPI } from '../services/api'
 import { buildWhatsAppLink, normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import { formatPrice } from '../utils/formatters'
+import CopyButton from '../components/ui/CopyButton'
 import './TrackOrderPage.css'
 
 const paymentLabels = {
@@ -145,7 +146,7 @@ export default function TrackOrderPage() {
             <div className="tracking-summary">
               <div>
                 <span>Order Code</span>
-                <strong>{order.order_code}</strong>
+                <strong className="copyable-value">{order.order_code}<CopyButton value={order.order_code} label="Copy" /></strong>
               </div>
               <div>
                 <span>Order Date</span>
