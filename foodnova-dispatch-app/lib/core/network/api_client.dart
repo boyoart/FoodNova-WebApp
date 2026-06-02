@@ -28,7 +28,17 @@ final dioProvider = Provider<Dio>((ref) {
         handler.next(options);
       },
       onError: (error, handler) async {
-        if (error.response?.statusCode == 401) {
+        // CRITICAL: Only clear session on 401 for authenticated endpoints
+        // Public endpoints like /delivery-workers/verify-nin should NOT trigger logout
+        final path = error.requestOptions.path ?? '';
+        final isPublicEndpoint = [
+          '/delivery-workers/verify-nin',
+          '/delivery/auth/login',
+          '/auth/login',
+        ].any((endpoint) => path.contains(endpoint));
+        
+        if (error.response?.statusCode == 401 && !isPublicEndpoint) {
+          print('TOKEN_INVALID auth_error=${error.response?.statusCode} path=$path');
           await ref.read(sessionControllerProvider.notifier).clear();
         }
         handler.next(error);

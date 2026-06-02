@@ -121,6 +121,28 @@ export default function AdminRiders() {
     }
   }
 
+  const deleteRider = async (rider) => {
+    // Stronger confirmation for permanent deletion
+    const confirmDelete = window.confirm(
+      `Are you sure you want to permanently delete this rider?\n\nName: ${rider.full_name || rider.name}\nPhone: ${rider.phone}\n\nThis action will:\n- Delete rider account\n- Delete rider documents\n- Delete rider KYC records\n- Delete rider sessions\n\nThis cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    // Second confirmation to prevent accidents
+    const secureConfirm = window.confirm(
+      'FINAL CONFIRMATION: Permanently delete this rider? This action cannot be undone.'
+    );
+    if (!secureConfirm) return;
+
+    try {
+      await adminAPI.deleteRider(rider.id);
+      toast.success('Rider permanently deleted');
+      await loadRiders();
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to delete rider permanently');
+    }
+  }
+
   if (!isAdmin) return <div className="admin-page"><p>Access denied.</p></div>
   if (!canManageDelivery) return <div className="admin-page"><p>You do not have permission to manage delivery riders.</p></div>
 
@@ -176,7 +198,8 @@ export default function AdminRiders() {
                   <td>
                     <div className="rider-actions">
                       <button type="button" className="btn-view" onClick={() => openEdit(rider)}>Edit</button>
-                      {rider.status !== 'deleted' && <button type="button" className="btn-delete" onClick={() => deactivateRider(rider)}>Delete</button>}
+                      {rider.status !== 'deleted' && <button type="button" className="btn-delete" onClick={() => deactivateRider(rider)}>Soft Delete</button>}
+                      {rider.status === 'deleted' && <button type="button" className="btn-delete" onClick={() => deleteRider(rider)} style={{ background: '#dc3545' }}>Permanent Delete</button>}
                     </div>
                   </td>
                 </tr>

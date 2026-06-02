@@ -68,6 +68,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: () async {
+              print('ROUTE_REDIRECT reason=user_logout destination=/login');
               await ref.read(authRepositoryProvider).logout();
               if (context.mounted) context.go('/login');
             },

@@ -49,11 +49,12 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       final completed = await session.onboardingCompleted();
       if (!mounted) return;
       final destination = completed ? '/login' : '/onboarding';
-      print('RIDER_STARTUP_REDIRECT $destination');
+      print('ROUTE_REDIRECT reason=no_token destination=$destination');
       context.go(destination);
       return;
     }
     try {
+      print('TOKEN_RESTORED token_length=${hasToken.length}');
       final rider = await ref.read(dispatchRepositoryProvider).me();
       if (!mounted) return;
       print('RIDER ID: ${rider.id ?? ''}');
@@ -61,12 +62,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       print('PROFILE SOURCE: backend');
       print('APPROVAL STATUS: ${rider.kycStatus}');
       if (rider.isDeleted || rider.isSuspended) {
+        print('TOKEN_INVALID reason=rider_deleted_or_suspended');
         await ref.read(sessionControllerProvider.notifier).clear();
-        print('RIDER_STARTUP_REDIRECT login_blocked');
+        print('ROUTE_REDIRECT reason=rider_blocked destination=/login');
         context.go('/login');
         return;
       }
-      print('RIDER_STARTUP_REDIRECT dashboard');
+      print('ROUTE_REDIRECT reason=authenticated_and_valid destination=/dashboard');
       context.go('/dashboard');
     } catch (error) {
       if (!mounted) return;
@@ -74,7 +76,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       setState(() => message = friendlyMessage);
       print('PROFILE EXISTS: false');
       print('PROFILE SOURCE: backend');
-      print('RIDER_STARTUP_REDIRECT login_profile_fetch_failed');
+      print('TOKEN_INVALID reason=profile_fetch_failed error=$error');
+      print('ROUTE_REDIRECT reason=profile_fetch_failed destination=/login');
       await session.clear();
       if (!mounted) return;
       context.go('/login');
