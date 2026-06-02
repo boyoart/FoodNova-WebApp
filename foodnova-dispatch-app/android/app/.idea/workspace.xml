@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="NONE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="6d887008-bb1e-41ff-bea4-b7dfa23bd5c8" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/../../lib/config/app_config.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/config/app_config.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/core/network/api_client.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/core/network/api_client.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/core/theme/app_theme.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/core/theme/app_theme.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/core/theme/shadows.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/core/theme/shadows.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/auth/data/auth_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/auth/data/auth_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/auth/presentation/forgot_password_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/auth/presentation/forgot_password_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/auth/presentation/login_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/auth/presentation/login_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/cart/data/cart_controller.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/cart/data/cart_controller.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/cart/domain/cart_item.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/cart/domain/cart_item.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/cart/presentation/cart_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/cart/presentation/cart_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/checkout/data/checkout_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/checkout/data/checkout_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/checkout/presentation/checkout_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/checkout/presentation/checkout_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/home/presentation/home_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/home/presentation/home_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/home/presentation/onboarding_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/home/presentation/onboarding_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/home/presentation/splash_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/home/presentation/splash_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/notifications/data/notifications_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/notifications/data/notifications_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/notifications/presentation/notifications_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/notifications/presentation/notifications_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/orders/data/orders_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/orders/data/orders_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/orders/presentation/orders_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/orders/presentation/orders_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/products/data/product_repository.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/products/data/product_repository.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/products/presentation/categories_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/products/presentation/categories_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/products/presentation/product_card.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/products/presentation/product_card.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/products/presentation/product_detail_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/products/presentation/product_detail_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/profile/presentation/profile_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/profile/presentation/profile_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/features/tracking/presentation/tracking_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/features/tracking/presentation/tracking_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/main.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/main.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/routes/app_router.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/routes/app_router.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/shared/models/order.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/shared/models/order.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/shared/models/product.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/shared/models/product.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/widgets/fn_shell.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/widgets/fn_shell.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/widgets/mobile_app_scaffold.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/widgets/mobile_app_scaffold.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../lib/widgets/status_badge.dart" beforeDir="false" afterPath="$PROJECT_DIR$/../../lib/widgets/status_badge.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../linux/flutter/generated_plugin_registrant.cc" beforeDir="false" afterPath="$PROJECT_DIR$/../../linux/flutter/generated_plugin_registrant.cc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../linux/flutter/generated_plugins.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/../../linux/flutter/generated_plugins.cmake" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../macos/Flutter/GeneratedPluginRegistrant.swift" beforeDir="false" afterPath="$PROJECT_DIR$/../../macos/Flutter/GeneratedPluginRegistrant.swift" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../pubspec.lock" beforeDir="false" afterPath="$PROJECT_DIR$/../../pubspec.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../pubspec.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/../../pubspec.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../windows/flutter/generated_plugin_registrant.cc" beforeDir="false" afterPath="$PROJECT_DIR$/../../windows/flutter/generated_plugin_registrant.cc" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../windows/flutter/generated_plugins.cmake" beforeDir="false" afterPath="$PROJECT_DIR$/../../windows/flutter/generated_plugins.cmake" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/../../.." />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 7,
+  "fromUser": false
+}]]></component>
+  <component name="ProjectId" id="3E8nZqT20gW3yRBeBqrCA5LfNe9" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "android.gradle.sync.needed": "true",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "dart.analysis.tool.window.visible": "false",
+    "git-widget-placeholder": "main",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "C:/Users/saljo/Desktop/FoodNova-WebApp/foodnova-customer-app/android/app/build.gradle.kts",
+    "show.migrate.to.gradle.popup": "false"
+  }
+}]]></component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="6d887008-bb1e-41ff-bea4-b7dfa23bd5c8" name="Changes" comment="" />
+      <created>1779569124470</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1779569124470</updated>
+    </task>
+    <servers />
+  </component>
+</project>

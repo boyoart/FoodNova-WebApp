@@ -1,0 +1,107 @@
+import 'package:dio/dio.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../core/network/api_client.dart';
+import '../../../core/state/session_controller.dart';
+import '../domain/dispatch_models.dart';
+
+final dispatchRepositoryProvider = Provider(DispatchRepository.new);
+
+final riderProfileProvider = FutureProvider.autoDispose<RiderProfile>((ref) {
+  return ref.read(dispatchRepositoryProvider).me();
+});
+
+final deliveryOffersProvider = FutureProvider.autoDispose<List<DeliveryOffer>>((
+  ref,
+) {
+  return ref.read(dispatchRepositoryProvider).offers();
+});
+
+class DispatchRepository {
+  DispatchRepository(this.ref);
+  final Ref ref;
+  Dio get _dio => ref.read(dioProvider);
+
+  Future<RiderProfile> me() async {
+    print('RIDER_PROFILE_FETCH');
+    final response = await _dio.get('/delivery/me');
+    final data = response.data as Map;
+    final raw = Map<String, dynamic>.from(data['worker'] ?? data['data'] ?? {});
+    if (raw.isEmpty || raw['id'] == null) {
+      print('RIDER_PROFILE_NOT_FOUND');
+      await ref.read(sessionControllerProvider.notifier).clear();
+      throw Exception('Rider account not found.');
+    }
+    final profile = RiderProfile(raw);
+    await ref.read(sessionControllerProvider.notifier).saveRiderState(
+          riderId: '${profile.id ?? ''}',
+          approvalStatus: profile.kycStatus,
+          onboardingCompleted: profile.onboardingCompleted,
+        );
+    print('RIDER_APPROVAL_STATUS ${profile.kycStatus}');
+    return profile;
+  }
+
+  Future<RiderProfile> goOnline(Map<String, dynamic> location) async {
+    final response = await _dio.post('/rider/go-online', data: location);
+    return RiderProfile(
+      Map<String, dynamic>.from(
+        response.data['worker'] ?? response.data['data'] ?? {},
+      ),
+    );
+  }
+
+  Future<RiderProfile> goOffline() async {
+    final response = await _dio.post('/delivery/go-offline');
+    return RiderProfile(
+      Map<String, dynamic>.from(
+        response.data['worker'] ?? response.data['data'] ?? {},
+      ),
+    );
+  }
+
+  Future<void> pingLocation(Map<String, dynamic> location) {
+    return _dio.post('/delivery/location-ping', data: location).then((_) {});
+  }
+
+  Future<void> panic(Map<String, dynamic> location) {
+    return _dio.post('/delivery/panic-alert', data: location).then((_) {});
+  }
+
+  Future<List<DeliveryOffer>> offers() async {
+    final response = await _dio.get('/delivery/offers');
+    final body = response.data as Map;
+    final items = (body['offers'] ?? body['data'] ?? []) as List;
+    return items
+        .map((item) => DeliveryOffer(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Future<DeliveryOffer> accept(int offerId) async {
+    final response = await _dio.post('/delivery/offers/$offerId/accept');
+    return DeliveryOffer(
+      Map<String, dynamic>.from(
+        response.data['offer'] ?? response.data['data'] ?? {},
+      ),
+    );
+  }
+
+  Future<void> decline(int offerId) async {
+    await _dio.post('/delivery/offers/$offerId/decline');
+  }
+
+  Future<void> confirmDeliveryOtp(int orderId, String otp) async {
+    await submitProof(orderId, {'delivery_code': otp});
+  }
+
+  Future<void> updateDeliveryStage(int orderId, DeliveryStage stage) async {
+    await _dio.patch(
+      '/delivery/orders/$orderId/status',
+      data: {'delivery_status': stage.apiValue, 'status': stage.apiValue},
+    );
+  }
+
+  Future<void> submitProof(int orderId, Map<String, dynamic> proof) async {
+    await _dio.post('/delivery/orders/$orderId/proof', data: proof);
+  }
+}
