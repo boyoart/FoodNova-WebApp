@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -24,19 +26,41 @@ class DispatchRepository {
 
   Future<RiderProfile> me() async {
     print('RIDER_PROFILE_FETCH');
-    final response = await _dio.get('/delivery/me');
+    Response<dynamic> response;
+    try {
+      response = await _dio.get('/delivery/me');
+    } on DioException catch (error) {
+      final exact = jsonEncode({
+        'status': error.response?.statusCode,
+        'data': error.response?.data,
+        'message': error.message,
+      });
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .recordLastApiResponse(exact);
+      print('RIDER_PROFILE_NOT_FOUND $exact');
+      throw Exception(exact);
+    }
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(response.data));
     final data = response.data as Map;
     final raw = Map<String, dynamic>.from(data['worker'] ?? data['data'] ?? {});
     if (raw.isEmpty || raw['id'] == null) {
-      print('RIDER_PROFILE_NOT_FOUND');
-      await ref.read(sessionControllerProvider.notifier).clear();
-      throw Exception('Rider account not found.');
+      final exact = jsonEncode(response.data);
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .markProfileMissing(profileSource: 'backend');
+      print('RIDER_PROFILE_NOT_FOUND $exact');
+      throw Exception(exact);
     }
     final profile = RiderProfile(raw);
     await ref.read(sessionControllerProvider.notifier).saveRiderState(
           riderId: '${profile.id ?? ''}',
           approvalStatus: profile.kycStatus,
           onboardingCompleted: profile.onboardingCompleted,
+          profileExists: true,
+          profileSource: 'backend',
         );
     print('RIDER_APPROVAL_STATUS ${profile.kycStatus}');
     return profile;

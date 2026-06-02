@@ -7,7 +7,7 @@ class RiderProfile {
   String get phone => '${raw['phone'] ?? ''}';
   String get email => '${raw['email'] ?? ''}';
   String get vehicleType => '${raw['vehicle_type'] ?? ''}';
-  String get kycStatus => '${raw['kyc_status'] ?? raw['status'] ?? 'PENDING'}';
+  String get kycStatus => '${raw['kyc_status'] ?? 'KYC_PENDING'}';
   String get normalizedKycStatus => kycStatus.toUpperCase();
   String get accountStatus => '${raw['operational_status'] ?? 'OFFLINE'}';
   String get rejectionReason =>

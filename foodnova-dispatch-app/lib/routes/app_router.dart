@@ -13,6 +13,7 @@ import '../features/home/presentation/onboarding_screen.dart';
 import '../features/home/presentation/splash_screen.dart';
 import '../features/notifications/presentation/notifications_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/settings/presentation/debug_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -57,6 +58,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+      GoRoute(path: '/debug', builder: (_, __) => const DebugScreen()),
     ],
   );
 });

@@ -49,6 +49,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           FnCard(
             child: ListTile(
               contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('Debug'),
+              subtitle: const Text('Rider auth and profile diagnostics'),
+              onTap: () => context.go('/debug'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FnCard(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.support_agent),
               title: const Text('Support'),
               subtitle: const Text('support@foodnova.com.ng'),

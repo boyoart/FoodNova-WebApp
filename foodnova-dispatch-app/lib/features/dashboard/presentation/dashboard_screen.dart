@@ -49,11 +49,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             profile.when(
-              data: (rider) => _Header(
-                rider: rider,
-                onToggle: () => _toggleOnline(rider),
-                loading: toggling,
-              ),
+              data: (rider) {
+                print('Dashboard loaded');
+                print('Rider ID ${rider.id ?? ''}');
+                print('Rider Name ${rider.name}');
+                print('Data source backend');
+                return _Header(
+                  rider: rider,
+                  onToggle: () => _toggleOnline(rider),
+                  loading: toggling,
+                );
+              },
               loading: () => const LinearProgressIndicator(),
               error: (e, _) => Text(apiMessage(e)),
             ),

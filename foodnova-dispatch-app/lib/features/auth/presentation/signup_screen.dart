@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_client.dart';
@@ -347,6 +348,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         () => message =
             'Identity verified and submitted. FoodNova admin will review your rider account.',
       );
+      context.go('/login');
     } catch (e) {
       if (!mounted) return;
       setState(() => message = _friendlyError(e));

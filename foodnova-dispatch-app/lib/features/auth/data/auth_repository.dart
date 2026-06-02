@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -46,18 +48,41 @@ class AuthRepository {
     if (token.isEmpty) {
       throw Exception('FoodNova did not return a dispatch session token.');
     }
+    print('Login token present=${token.isNotEmpty} length=${token.length}');
     await ref
         .read(sessionControllerProvider.notifier)
         .save(token, remember: remember);
-    final profileResponse = await _dio.get('/delivery/me');
+    Response<dynamic> profileResponse;
+    try {
+      profileResponse = await _dio.get('/delivery/me');
+    } on DioException catch (error) {
+      final exact = jsonEncode({
+        'status': error.response?.statusCode,
+        'data': error.response?.data,
+        'message': error.message,
+      });
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .recordLastApiResponse(exact);
+      print('Profile fetch response $exact');
+      print('RIDER_PROFILE_NOT_FOUND $exact');
+      throw Exception(exact);
+    }
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(profileResponse.data));
+    print('Profile fetch response ${jsonEncode(profileResponse.data)}');
     final profileBody = profileResponse.data as Map;
     final profile = Map<String, dynamic>.from(
       profileBody['worker'] ?? profileBody['data'] ?? {},
     );
     if (profile.isEmpty || profile['id'] == null) {
-      print('RIDER_PROFILE_NOT_FOUND');
-      await ref.read(sessionControllerProvider.notifier).clear();
-      throw Exception('Rider account not found.');
+      final exact = jsonEncode(profileResponse.data);
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .markProfileMissing(profileSource: 'backend');
+      print('RIDER_PROFILE_NOT_FOUND $exact');
+      throw Exception(exact);
     }
     final liveApprovalStatus =
         '${profile['kyc_status'] ?? profile['status'] ?? approvalStatus}'
@@ -66,6 +91,8 @@ class AuthRepository {
           riderId: '${profile['id'] ?? ''}',
           approvalStatus: liveApprovalStatus,
           onboardingCompleted: true,
+          profileExists: true,
+          profileSource: 'backend',
         );
     print('RIDER_LOGIN_SUCCESS ${profile['id']}');
     print('RIDER_APPROVAL_STATUS $liveApprovalStatus');
@@ -103,13 +130,22 @@ class AuthRepository {
     });
     final response = await _dio.post('/delivery-workers/signup', data: form);
     final body = Map<String, dynamic>.from(response.data as Map);
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(body));
+    print('Registration response ${jsonEncode(body)}');
     final worker =
         Map<String, dynamic>.from(body['worker'] ?? body['data'] ?? {});
+    print('Created rider ID ${worker['id'] ?? ''}');
+    print(
+        'Backend record created ${worker.isNotEmpty && worker['id'] != null}');
     if (worker.isNotEmpty) {
       await ref.read(sessionControllerProvider.notifier).saveRiderState(
             riderId: '${worker['id'] ?? ''}',
             approvalStatus: '${worker['kyc_status'] ?? 'KYC_PENDING'}',
             onboardingCompleted: true,
+            profileExists: true,
+            profileSource: 'backend',
           );
       print('RIDER_ONBOARDING_COMPLETE ${worker['id']}');
       print('RIDER_APPROVAL_STATUS ${worker['kyc_status'] ?? 'KYC_PENDING'}');

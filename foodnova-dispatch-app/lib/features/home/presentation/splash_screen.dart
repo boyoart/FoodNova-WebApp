@@ -35,16 +35,31 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
   Future<void> _routeFromBackend() async {
     if (!mounted) return;
-    final hasToken = await ref.read(sessionControllerProvider.notifier).token();
+    final session = ref.read(sessionControllerProvider.notifier);
+    final startupDiagnostics = await session.diagnostics();
+    print('AUTH TOKEN: ${startupDiagnostics['token_preview']}');
+    print('RIDER ID: ${startupDiagnostics['rider_id']}');
+    print('ONBOARDING COMPLETE: ${startupDiagnostics['onboarding_complete']}');
+    print('PROFILE EXISTS: ${startupDiagnostics['profile_exists']}');
+    print('PROFILE SOURCE: ${startupDiagnostics['profile_source']}');
+    print('APPROVAL STATUS: ${startupDiagnostics['approval_status']}');
+    final hasToken = await session.token();
     if (!mounted) return;
     if (hasToken == null || hasToken.isEmpty) {
-      print('RIDER_STARTUP_REDIRECT onboarding');
-      context.go('/onboarding');
+      final completed = await session.onboardingCompleted();
+      if (!mounted) return;
+      final destination = completed ? '/login' : '/onboarding';
+      print('RIDER_STARTUP_REDIRECT $destination');
+      context.go(destination);
       return;
     }
     try {
       final rider = await ref.read(dispatchRepositoryProvider).me();
       if (!mounted) return;
+      print('RIDER ID: ${rider.id ?? ''}');
+      print('PROFILE EXISTS: true');
+      print('PROFILE SOURCE: backend');
+      print('APPROVAL STATUS: ${rider.kycStatus}');
       if (rider.isDeleted || rider.isSuspended) {
         await ref.read(sessionControllerProvider.notifier).clear();
         print('RIDER_STARTUP_REDIRECT login_blocked');
@@ -54,13 +69,15 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       print('RIDER_STARTUP_REDIRECT dashboard');
       context.go('/dashboard');
     } catch (error) {
-      await ref.read(sessionControllerProvider.notifier).clear();
       if (!mounted) return;
-      setState(() => message = apiMessage(error));
-      print('RIDER_STARTUP_REDIRECT login_profile_missing');
-      timer = Timer(const Duration(milliseconds: 900), () {
-        if (mounted) context.go('/login');
-      });
+      final friendlyMessage = apiMessage(error);
+      setState(() => message = friendlyMessage);
+      print('PROFILE EXISTS: false');
+      print('PROFILE SOURCE: backend');
+      print('RIDER_STARTUP_REDIRECT login_profile_fetch_failed');
+      await session.clear();
+      if (!mounted) return;
+      context.go('/login');
     }
   }
 
