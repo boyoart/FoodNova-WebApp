@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlertTriangle, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, PauseCircle, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2, UserCheck, UserX, X } from 'lucide-react'
 import { adminAPI, resolveMediaUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './WorkerPages.css'
@@ -43,6 +43,8 @@ export default function AdminRiderVerificationQueue() {
   const [filters, setFilters] = useState({ status: 'pending', stage: 'all', search: '' })
   const [reviewAction, setReviewAction] = useState('')
   const [reviewNote, setReviewNote] = useState('')
+  const [actionSaving, setActionSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [balance, setBalance] = useState(null)
   const [providerHealth, setProviderHealth] = useState(null)
 
@@ -88,17 +90,38 @@ export default function AdminRiderVerificationQueue() {
     deleted: riders.filter((item) => item.worker?.kyc_status === 'DELETED' || item.worker?.deleted_at).length,
   }), [riders])
 
-  const submitReview = async () => {
-    if (!selected || !reviewAction || !canManage) return
+  const runReviewAction = async (action, note = reviewNote) => {
+    if (!selected || !action || !canManage) return
     try {
-      const response = await adminAPI.reviewRiderVerification(selected.worker.id, reviewAction, { status: reviewAction, review_note: reviewNote })
+      setActionSaving(true)
+      const response = await adminAPI.reviewRiderVerification(selected.worker.id, action, { status: action, review_note: note })
       setSelected(response.rider || response.data)
       setReviewAction('')
       setReviewNote('')
-      toast.success(`Rider ${label(reviewAction)}`)
+      toast.success(`Rider ${label(action)}`)
       await loadQueue()
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to update rider verification')
+    } finally {
+      setActionSaving(false)
+    }
+  }
+
+  const submitReview = async () => runReviewAction(reviewAction)
+
+  const deleteRider = async () => {
+    if (!deleteTarget || !canManage) return
+    try {
+      setActionSaving(true)
+      await adminAPI.permanentlyDeleteRiderVerification(deleteTarget.worker.id)
+      toast.success('Rider permanently deleted')
+      setDeleteTarget(null)
+      if (selected?.worker?.id === deleteTarget.worker.id) setSelected(null)
+      await loadQueue()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to delete rider')
+    } finally {
+      setActionSaving(false)
     }
   }
 
@@ -159,8 +182,9 @@ export default function AdminRiderVerificationQueue() {
                 <tr>
                   <th>Rider</th>
                   <th>Phone</th>
+                  <th>Vehicle</th>
                   <th>Registered</th>
-                  <th>KYC</th>
+                  <th>Approval Status</th>
                   <th>Verification</th>
                   <th>Risk</th>
                   <th>Actions</th>
@@ -175,10 +199,16 @@ export default function AdminRiderVerificationQueue() {
                       <td>
                         <div className="rider-cell">
                           <span className="rider-avatar">{worker.profile_photo_url ? <img src={resolveMediaUrl(worker.profile_photo_url)} alt="" /> : (worker.full_name || 'R').slice(0, 1)}</span>
-                          <div><strong>{worker.full_name}</strong><small>{worker.plate_number || 'No plate'}</small></div>
+                          <div><strong>{worker.full_name}</strong><small>{worker.email || 'No email'}</small></div>
                         </div>
                       </td>
                       <td>{worker.phone}</td>
+                      <td>
+                        <div className="verification-result-cell">
+                          <strong>{worker.vehicle_type || 'N/A'}</strong>
+                          <small>{worker.plate_number || 'No plate'} · {worker.driver_license_number || 'No licence'}</small>
+                        </div>
+                      </td>
                       <td>{worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</td>
                       <td><span className={`worker-status ${chip(worker.kyc_status)}`}>{label(item.kyc?.onboarding_stage)}</span></td>
                       <td>
@@ -192,7 +222,7 @@ export default function AdminRiderVerificationQueue() {
                     </tr>
                   )
                 })}
-                {!riders.length && <tr><td colSpan="7" className="verification-empty">No riders match this queue.</td></tr>}
+                {!riders.length && <tr><td colSpan="8" className="verification-empty">No riders match this queue.</td></tr>}
               </tbody>
             </table>
           )}
@@ -213,6 +243,12 @@ export default function AdminRiderVerificationQueue() {
               <div className="worker-detail-grid">
                 <div><strong>Submitted NIN</strong><span>{selected.kyc.submitted_nin || (selected.kyc.nin_last4 ? `*******${selected.kyc.nin_last4}` : 'Not submitted')}</span></div>
                 <div><strong>Verification</strong><span>{selected.kyc.nin_verified ? 'Verified' : label(selected.kyc.identity_status)} {selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
+                <div><strong>Email</strong><span>{selected.worker.email || 'No email'}</span></div>
+                <div><strong>Approval status</strong><span>{label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</span></div>
+                <div><strong>Vehicle type</strong><span>{selected.worker.vehicle_type || 'Missing'}</span></div>
+                <div><strong>Plate number</strong><span>{selected.worker.plate_number || 'Missing'}</span></div>
+                <div><strong>Licence number</strong><span>{selected.worker.driver_license_number || 'Missing'}</span></div>
+                <div><strong>Registration date</strong><span>{selected.worker.created_at ? new Date(selected.worker.created_at).toLocaleString() : 'N/A'}</span></div>
                 <div><strong>Verified name</strong><span>{[selected.worker.verified_first_name, selected.worker.verified_middle_name, selected.worker.verified_surname].filter(Boolean).join(' ') || 'No provider name'}</span></div>
                 <div><strong>Provider phone</strong><span>{selected.worker.verified_phone || 'No provider phone'}</span></div>
                 <div><strong>Verified at</strong><span>{selected.kyc.timestamps?.identity_verified_at ? new Date(selected.kyc.timestamps.identity_verified_at).toLocaleString() : selected.kyc.timestamps?.last_verification_at ? new Date(selected.kyc.timestamps.last_verification_at).toLocaleString() : 'No verification timestamp'}</span></div>
@@ -248,25 +284,46 @@ export default function AdminRiderVerificationQueue() {
               </div>
               {canManage && (
                 <div className="worker-review-actions">
+                  <div className="rider-management-buttons">
+                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('approve')}><UserCheck size={16} /> Approve</button>
+                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('reject')}><UserX size={16} /> Reject</button>
+                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('suspend')}><PauseCircle size={16} /> Suspend</button>
+                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('reactivate')}><RotateCcw size={16} /> Reactivate</button>
+                    <button type="button" className="danger-worker-button" disabled={actionSaving} onClick={() => setDeleteTarget(selected)}><Trash2 size={16} /> Delete Permanently</button>
+                  </div>
                   <select value={reviewAction} onChange={(event) => setReviewAction(event.target.value)}>
                     <option value="">Select action</option>
                     <option value="approve">Approve</option>
+                    <option value="reactivate">Reactivate</option>
                     <option value="request_resubmission">Request resubmission</option>
                     <option value="reject">Reject</option>
                     <option value="suspend">Suspend</option>
                     <option value="deactivate">Deactivate</option>
                     <option value="force_logout">Force logout</option>
                     <option value="reset_onboarding">Reset onboarding</option>
-                    <option value="delete">Delete rider</option>
                   </select>
                   <textarea rows="3" placeholder="Reason or resubmission instructions" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} />
-                  <button type="button" disabled={!reviewAction} onClick={submitReview}>Submit review</button>
+                  <button type="button" disabled={!reviewAction || actionSaving} onClick={submitReview}>{actionSaving ? 'Saving...' : 'Submit review'}</button>
                 </div>
               )}
             </>
           )}
         </aside>
       </div>
+      {deleteTarget && (
+        <div className="rider-delete-modal">
+          <div className="rider-delete-dialog">
+            <button type="button" className="rider-delete-close" onClick={() => setDeleteTarget(null)} aria-label="Close"><X size={18} /></button>
+            <Trash2 size={28} />
+            <h2>Delete rider permanently?</h2>
+            <p>This removes {deleteTarget.worker?.full_name || 'this rider'} from rider login, KYC, onboarding, active offers, and admin rider lists. This cannot be undone.</p>
+            <div>
+              <button type="button" className="secondary-worker-button" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button type="button" className="danger-worker-button" disabled={actionSaving} onClick={deleteRider}>{actionSaving ? 'Deleting...' : 'Delete Rider'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -2771,6 +2771,14 @@ def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker, reques
     token = create_access_token(user)
     record_rider_session(token, user, worker, request)
     requires_verification = (worker.kyc_status or "") != "APPROVED"
+    print("RIDER_LOGIN_SUCCESS", json_dump({
+        "worker_id": worker.id,
+        "user_id": user.id,
+        "approval_status": worker.kyc_status or "KYC_PENDING",
+        "worker_type": worker.worker_type or "",
+        "timestamp": iso(datetime.utcnow()),
+    }))
+    print("RIDER_APPROVAL_STATUS", json_dump({"worker_id": worker.id, "status": worker.kyc_status or "KYC_PENDING"}))
     return {
         "success": True,
         "worker_id": str(worker.id),
@@ -2807,6 +2815,7 @@ def get_delivery_worker_record_for_request(request: Request):
     try:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
         if not worker:
+            print("RIDER_PROFILE_NOT_FOUND", json_dump({"user_id": user.get("id"), "route": "delivery_worker_record", "timestamp": iso(datetime.utcnow())}))
             raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
         blocked_reason = delivery_worker_access_block_reason(worker)
         if blocked_reason:
@@ -4069,6 +4078,14 @@ async def delivery_worker_signup(
         db.commit()
         db.refresh(worker)
         worker_data = worker_to_dict(worker)
+        print("RIDER_ONBOARDING_COMPLETE", json_dump({
+            "worker_id": worker.id,
+            "user_id": user.id,
+            "worker_type": worker.worker_type,
+            "approval_status": worker.kyc_status or "KYC_PENDING",
+            "admin_source": "delivery_workers",
+            "timestamp": iso(datetime.utcnow()),
+        }))
         create_admin_audit_log(
             request,
             {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
@@ -4110,6 +4127,14 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
         result = verify_nin(payload.nin, payload.consent)
     except CheckMyNINBVNError as error:
         provider_response = error.provider_response or (json_dump(error.provider_body or {}) if error.provider_body else "")
+        provider_detail = ""
+        if isinstance(error.provider_body, dict):
+            provider_detail = str(error.provider_body.get("message") or error.provider_body.get("detail") or error.provider_body.get("error") or "").strip()
+        if not provider_detail and provider_response:
+            try:
+                provider_detail = str(json.loads(provider_response).get("message") or "").strip()
+            except Exception:
+                provider_detail = provider_response.strip()
         user_message = {
             "invalid_provider_credentials": "The NIN provider rejected the API credentials.",
             "provider_not_configured": "Identity verification is not configured yet. Please contact FoodNova support.",
@@ -4122,6 +4147,8 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             "provider_rejected_request": "The NIN provider rejected this request. Please check the NIN and try again.",
             "provider_error": "Identity verification is temporarily unavailable. Please try again later.",
         }.get(error.code, str(error) or "NIN verification failed.")
+        if provider_detail:
+            user_message = provider_detail
         print("NIN_VERIFICATION_FAILURE", json_dump({
             "route": "/delivery-workers/verify-nin",
             "error_code": error.code,
@@ -4205,6 +4232,10 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             "gender": data.get("gender") or "",
             "phone": data.get("phone") or "",
             "address": data.get("address") or "",
+            "state": data.get("residence_state") or data.get("state") or "",
+            "residence_state": data.get("residence_state") or data.get("state") or "",
+            "residence_town": data.get("residence_town") or "",
+            "residence_lga": data.get("residence_lga") or "",
             "photo": data.get("photo") or "",
         },
     }
@@ -4709,6 +4740,13 @@ def delivery_auth_login(payload: DeliveryAuthLoginPayload, request: Request):
 def delivery_me(request: Request):
     db, user, worker = get_delivery_worker_record_for_request(request)
     try:
+        print("RIDER_PROFILE_FETCH", json_dump({
+            "worker_id": worker.id,
+            "user_id": user.get("id"),
+            "approval_status": worker.kyc_status or "KYC_PENDING",
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        print("RIDER_APPROVAL_STATUS", json_dump({"worker_id": worker.id, "status": worker.kyc_status or "KYC_PENDING"}))
         return {
             "success": True,
             "worker_id": str(worker.id),
@@ -5013,6 +5051,7 @@ def get_current_worker_record(request: Request, expected_type: Optional[str] = N
     try:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
         if not worker:
+            print("RIDER_PROFILE_NOT_FOUND", json_dump({"user_id": user.get("id"), "route": "current_worker_record", "timestamp": iso(datetime.utcnow())}))
             raise HTTPException(status_code=404, detail="Delivery worker profile not found.")
         blocked_reason = delivery_worker_access_block_reason(worker)
         if blocked_reason:
@@ -5027,6 +5066,13 @@ def get_current_worker_record(request: Request, expected_type: Optional[str] = N
 def delivery_me(request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
+        print("RIDER_PROFILE_FETCH", json_dump({
+            "worker_id": worker.id,
+            "user_id": user.get("id"),
+            "approval_status": worker.kyc_status or "KYC_PENDING",
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        print("RIDER_APPROVAL_STATUS", json_dump({"worker_id": worker.id, "status": worker.kyc_status or "KYC_PENDING"}))
         data = worker_to_dict(worker)
         return {"success": True, "user": user, "worker": data, "data": data}
     finally:
@@ -6144,6 +6190,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         "approve": "APPROVED",
         "reject": "REJECTED",
         "request_resubmission": "KYC_PENDING",
+        "reactivate": "KYC_PENDING",
         "suspend": "SUSPENDED",
         "deactivate": "DEACTIVATED",
         "delete": "DELETED",
@@ -6151,7 +6198,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         "force_logout": "FORCE_LOGOUT",
     }
     if action not in action_map:
-        raise HTTPException(status_code=400, detail="Action must be approve, reject, request_resubmission, suspend, deactivate, delete, reset_onboarding, or force_logout.")
+        raise HTTPException(status_code=400, detail="Action must be approve, reject, request_resubmission, reactivate, suspend, deactivate, delete, reset_onboarding, or force_logout.")
     db = SessionLocal()
     try:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type == "rider").first()
@@ -6282,7 +6329,104 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         db.refresh(worker)
         data = rider_detail_payload(db, worker)
         create_admin_audit_log(request, admin, f"rider_verification_{action}", "delivery_worker", worker.id, f"Admin {action.replace('_', ' ')} for rider {worker.full_name}", {"before": old_data, "after": data})
+        audit_event = {
+            "approve": "RIDER_APPROVED",
+            "reject": "RIDER_REJECTED",
+            "suspend": "RIDER_SUSPENDED",
+            "reactivate": "RIDER_REACTIVATED",
+            "request_resubmission": "RIDER_REACTIVATED",
+            "delete": "RIDER_DELETED",
+        }.get(action, "RIDER_STATUS_UPDATED")
+        print(audit_event, json_dump({
+            "worker_id": worker.id,
+            "status": worker.kyc_status,
+            "admin_id": admin.get("id"),
+            "action": action,
+            "timestamp": iso(datetime.utcnow()),
+        }))
         return {"success": True, "rider": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.delete("/admin/rider-verification-queue/{worker_id}")
+def permanently_delete_rider(worker_id: int, request: Request):
+    admin = require_workforce_manage(request)
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type == "rider").first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Rider verification profile not found")
+        old_data = rider_detail_payload(db, worker)
+        worker_name = worker.full_name or f"Rider #{worker.id}"
+        user_id = worker.user_id
+        revoked_sessions = revoke_rider_sessions(db, worker, admin, "Rider permanently deleted")
+        released_orders = db.query(DBOrder).filter(
+            DBOrder.delivery_worker_id == worker.id,
+            DBOrder.order_status.notin_(["delivered", "cancelled"]),
+        ).all()
+        for order in released_orders:
+            order.delivery_worker_id = None
+            order.delivery_worker_type = ""
+            order.delivery_status = ""
+            order.rider_name = ""
+            order.rider_phone = ""
+            order.rider_vehicle_type = ""
+            order.rider_vehicle_number = ""
+            order.updated_at = datetime.utcnow()
+        offer_count = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).count()
+        db.add(DBDeletedRiderLog(
+            delivery_worker_id=worker.id,
+            admin_id=admin.get("id"),
+            admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+            reason="Permanent admin deletion",
+            snapshot_json=json_dump({
+                "rider": old_data,
+                "deleted_at": iso(datetime.utcnow()),
+                "deleted_by": admin.get("id"),
+                "revoked_sessions": revoked_sessions,
+                "released_order_ids": [order.id for order in released_orders],
+                "removed_delivery_offers": offer_count,
+                "ip": get_request_ip(request),
+                "device": parse_user_agent(request.headers.get("user-agent", "")),
+            }),
+            hard_deleted=True,
+        ))
+        db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.delete(worker)
+        db.query(DBAddress).filter(DBAddress.user_id == user_id).delete(synchronize_session=False)
+        db.query(DBProfile).filter(DBProfile.user_id == user_id).delete(synchronize_session=False)
+        user = db.query(DBUser).filter(DBUser.id == user_id).first()
+        if user:
+            db.delete(user)
+        db.commit()
+        print("RIDER_DELETED", json_dump({
+            "worker_id": worker_id,
+            "user_id": user_id,
+            "admin_id": admin.get("id"),
+            "hard_deleted": True,
+            "revoked_sessions": revoked_sessions,
+            "released_orders": len(released_orders),
+            "removed_delivery_offers": offer_count,
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        create_admin_audit_log(
+            request,
+            admin,
+            "rider_deleted",
+            "delivery_worker",
+            worker_id,
+            f"Admin permanently deleted rider {worker_name}",
+            {"before": old_data, "hard_deleted": True, "revoked_sessions": revoked_sessions, "released_orders": len(released_orders), "removed_delivery_offers": offer_count},
+        )
+        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": worker_id, "released_orders": len(released_orders), "removed_delivery_offers": offer_count}
     finally:
         db.close()
 
@@ -6457,20 +6601,40 @@ def delete_admin_order(order_id: int, request: Request):
 
 @app.get("/admin/riders")
 def get_riders(request: Request, include_deleted: bool = False, status: Optional[str] = None):
-    require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:view", "workforce:manage"])
     db = SessionLocal()
     try:
-        query = db.query(DBDeliveryRider)
+        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type == "rider")
         if include_deleted or (status or "").lower() == "deleted":
-            query = query.filter(DBDeliveryRider.deleted_at.isnot(None))
+            query = query.filter(or_(DBDeliveryWorker.deleted_at.isnot(None), DBDeliveryWorker.kyc_status == "DELETED"))
         else:
-            query = query.filter(DBDeliveryRider.deleted_at.is_(None), DBDeliveryRider.status != "deleted")
+            query = query.filter(DBDeliveryWorker.deleted_at.is_(None), DBDeliveryWorker.kyc_status != "DELETED")
         if status and (status or "").lower() not in ["all", "deleted"]:
-            query = query.filter(DBDeliveryRider.status == status.lower())
-        riders = [
-            rider_to_dict(rider)
-            for rider in query.order_by(DBDeliveryRider.status.asc(), DBDeliveryRider.full_name.asc()).all()
-        ]
+            status_map = {
+                "active": "APPROVED",
+                "approved": "APPROVED",
+                "pending": "KYC_PENDING",
+                "pending_review": "KYC_PENDING",
+                "inactive": "KYC_PENDING",
+                "rejected": "REJECTED",
+                "suspended": "SUSPENDED",
+                "deactivated": "DEACTIVATED",
+            }
+            wanted = status_map.get((status or "").lower(), (status or "").upper())
+            query = query.filter(DBDeliveryWorker.kyc_status == wanted)
+        riders = []
+        for worker in query.order_by(DBDeliveryWorker.kyc_status.asc(), DBDeliveryWorker.full_name.asc()).all():
+            data = worker_to_dict(worker)
+            data.update({
+                "status": "deleted" if data.get("deleted_at") else "approved" if data.get("kyc_status") == "APPROVED" else "rejected" if data.get("kyc_status") == "REJECTED" else "suspended" if data.get("kyc_status") == "SUSPENDED" else "deactivated" if data.get("kyc_status") == "DEACTIVATED" else "pending",
+                "rider_id": worker.id,
+                "nin_status": "verified" if data.get("nin_verified") else "not_verified",
+                "approval_status": data.get("kyc_status") or "KYC_PENDING",
+                "vehicle_number": data.get("plate_number") or "",
+                "source": "delivery_workers",
+            })
+            riders.append(data)
+        print("ADMIN_RIDERS_FETCH", json_dump({"count": len(riders), "status": status or "all", "source": "delivery_workers"}))
         return {"success": True, "riders": riders, "data": riders}
     finally:
         db.close()
@@ -6478,7 +6642,7 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
 
 @app.post("/admin/riders")
 def create_rider(payload: RiderPayload, request: Request):
-    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
     full_name = (payload.full_name or "").strip()
     phone = (payload.phone or "").strip()
     if not full_name:
@@ -6487,22 +6651,60 @@ def create_rider(payload: RiderPayload, request: Request):
         raise HTTPException(status_code=400, detail="Rider phone is required")
     db = SessionLocal()
     try:
-        rider = DBDeliveryRider(
+        clean_email = (payload.email or "").strip().lower()
+        digits = "".join(ch for ch in phone if ch.isdigit())
+        account_email = clean_email or f"admin-rider-{digits or uuid4().hex[:10]}@foodnova.local"
+        if get_db_user_by_email(db, account_email):
+            raise HTTPException(status_code=409, detail="A rider account with this email already exists")
+        if get_db_user_by_phone(db, phone):
+            raise HTTPException(status_code=409, detail="A rider account with this phone already exists")
+        user = DBUser(
+            full_name=full_name,
+            email=account_email,
+            phone=phone,
+            password=_hash_new_password(uuid4().hex),
+            role="rider",
+            is_active=True,
+        )
+        db.add(user)
+        db.flush()
+        ensure_profile(db, user)
+        status_map = {
+            "active": "APPROVED",
+            "approved": "APPROVED",
+            "inactive": "KYC_PENDING",
+            "pending": "KYC_PENDING",
+            "pending_review": "KYC_PENDING",
+            "rejected": "REJECTED",
+            "suspended": "SUSPENDED",
+            "deactivated": "DEACTIVATED",
+        }
+        worker = DBDeliveryWorker(
+            user_id=user.id,
+            worker_type="rider",
             full_name=full_name,
             phone=phone,
-            email=(payload.email or "").strip(),
+            email=clean_email,
             vehicle_type=(payload.vehicle_type or "").strip(),
-            vehicle_number=(payload.vehicle_number or "").strip(),
-            status=(payload.status or "active").strip().lower() if payload.status else "active",
-            notes=(payload.notes or "").strip(),
+            plate_number=(payload.vehicle_number or "").strip(),
+            kyc_status=status_map.get((payload.status or "active").strip().lower(), "APPROVED"),
+            operational_status="OFFLINE",
+            review_note=(payload.notes or "").strip(),
         )
-        if rider.status not in ["active", "inactive"]:
-            rider.status = "active"
-        db.add(rider)
+        db.add(worker)
+        db.flush()
+        ensure_rider_records(db, worker)
+        sync_rider_onboarding_state(db, worker, admin, "Admin created rider")
         db.commit()
-        db.refresh(rider)
-        data = rider_to_dict(rider)
-        create_admin_audit_log(request, admin, "rider_created", "rider", rider.id, f"Admin created rider {rider.full_name}", {"rider": data})
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        data.update({
+            "status": "approved" if data.get("kyc_status") == "APPROVED" else "rejected" if data.get("kyc_status") == "REJECTED" else "suspended" if data.get("kyc_status") == "SUSPENDED" else "deactivated" if data.get("kyc_status") == "DEACTIVATED" else "pending",
+            "rider_id": worker.id,
+            "vehicle_number": data.get("plate_number") or "",
+            "source": "delivery_workers",
+        })
+        create_admin_audit_log(request, admin, "rider_created", "delivery_worker", worker.id, f"Admin created rider {worker.full_name}", {"rider": data})
         return {"success": True, "message": "Rider created successfully", "rider": data, "data": data}
     finally:
         db.close()
@@ -6510,29 +6712,58 @@ def create_rider(payload: RiderPayload, request: Request):
 
 @app.patch("/admin/riders/{rider_id}")
 def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
-    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
     updates = payload.dict(exclude_unset=True)
     db = SessionLocal()
     try:
-        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == rider_id).first()
-        if not rider:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == rider_id, DBDeliveryWorker.worker_type == "rider").first()
+        if not worker:
             raise HTTPException(status_code=404, detail="Rider not found")
-        old_data = rider_to_dict(rider)
-        for field in ["full_name", "phone", "email", "vehicle_type", "vehicle_number", "status", "notes"]:
-            if field in updates and updates[field] is not None:
-                value = updates[field].strip() if isinstance(updates[field], str) else updates[field]
-                if field in ["full_name", "phone"] and not value:
-                    raise HTTPException(status_code=400, detail="Rider name and phone are required")
-                if field == "status":
-                    value = str(value or "active").lower()
-                    if value not in ["active", "inactive", "suspended", "deactivated"]:
-                        value = "active"
-                setattr(rider, field, value)
-        rider.updated_at = datetime.utcnow()
+        old_data = worker_to_dict(worker)
+        if "full_name" in updates and updates["full_name"] is not None:
+            worker.full_name = updates["full_name"].strip()
+        if "phone" in updates and updates["phone"] is not None:
+            worker.phone = updates["phone"].strip()
+        if "email" in updates and updates["email"] is not None:
+            worker.email = updates["email"].strip()
+        if "vehicle_type" in updates and updates["vehicle_type"] is not None:
+            worker.vehicle_type = updates["vehicle_type"].strip()
+        if "vehicle_number" in updates and updates["vehicle_number"] is not None:
+            worker.plate_number = updates["vehicle_number"].strip()
+        if "notes" in updates and updates["notes"] is not None:
+            worker.review_note = updates["notes"].strip()
+        if "status" in updates and updates["status"] is not None:
+            value = str(updates["status"] or "").lower()
+            status_map = {
+                "active": "APPROVED",
+                "approved": "APPROVED",
+                "reactivated": "APPROVED",
+                "inactive": "KYC_PENDING",
+                "pending": "KYC_PENDING",
+                "pending_review": "KYC_PENDING",
+                "rejected": "REJECTED",
+                "suspended": "SUSPENDED",
+                "deactivated": "DEACTIVATED",
+            }
+            worker.kyc_status = status_map.get(value, worker.kyc_status)
+            if worker.kyc_status == "APPROVED":
+                worker.approved_at = worker.approved_at or datetime.utcnow()
+                worker.approved_by_admin_id = admin.get("id")
+                worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or ""
+                worker.deleted_at = None
+                worker.deleted_reason = ""
+                user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+                if user:
+                    user.is_active = True
+                    user.updated_at = datetime.utcnow()
+            if worker.kyc_status in ["REJECTED", "SUSPENDED", "DEACTIVATED"]:
+                worker.operational_status = "OFFLINE"
+        worker.updated_at = datetime.utcnow()
+        sync_rider_onboarding_state(db, worker, admin, "Admin updated rider")
         db.commit()
-        db.refresh(rider)
-        data = rider_to_dict(rider)
-        create_admin_audit_log(request, admin, "rider_updated", "rider", rider.id, f"Admin updated rider {rider.full_name}", {"before": old_data, "after": data})
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        create_admin_audit_log(request, admin, "rider_updated", "delivery_worker", worker.id, f"Admin updated rider {worker.full_name}", {"before": old_data, "after": data})
         return {"success": True, "message": "Rider updated successfully", "rider": data, "data": data}
     finally:
         db.close()
@@ -6540,22 +6771,31 @@ def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
 
 @app.delete("/admin/riders/{rider_id}")
 def deactivate_rider(rider_id: int, request: Request):
-    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
     db = SessionLocal()
     try:
-        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == rider_id).first()
-        if not rider:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == rider_id, DBDeliveryWorker.worker_type == "rider").first()
+        if not worker:
             raise HTTPException(status_code=404, detail="Rider not found")
-        old_data = rider_to_dict(rider)
-        rider.status = "deleted"
-        rider.deleted_at = datetime.utcnow()
-        rider.deleted_by_admin_id = admin.get("id")
-        rider.deleted_reason = "Deleted from admin rider management"
-        rider.updated_at = datetime.utcnow()
+        old_data = worker_to_dict(worker)
+        revoked = revoke_rider_sessions(db, worker, admin, "Rider deleted from admin rider management")
+        worker.kyc_status = "DELETED"
+        worker.operational_status = "OFFLINE"
+        worker.deleted_at = datetime.utcnow()
+        worker.deleted_by_admin_id = admin.get("id")
+        worker.deleted_reason = "Deleted from admin rider management"
+        worker.fcm_token = ""
+        worker.fcm_tokens_json = "[]"
+        user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+        if user:
+            user.is_active = False
+            user.updated_at = datetime.utcnow()
+        sync_rider_onboarding_state(db, worker, admin, "Rider deleted from admin rider management")
         db.commit()
-        db.refresh(rider)
-        data = rider_to_dict(rider)
-        create_admin_audit_log(request, admin, "rider_deleted", "rider", rider.id, f"Admin deleted rider {rider.full_name}", {"before": old_data, "after": data, "ip": get_request_ip(request), "device": parse_user_agent(request.headers.get("user-agent", ""))})
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        print("RIDER_DELETED", json_dump({"worker_id": worker.id, "admin_id": admin.get("id"), "hard_deleted": False, "revoked_sessions": revoked, "timestamp": iso(datetime.utcnow())}))
+        create_admin_audit_log(request, admin, "rider_deleted", "delivery_worker", worker.id, f"Admin deleted rider {worker.full_name}", {"before": old_data, "after": data, "revoked_sessions": revoked})
         return {"success": True, "message": "Rider deleted successfully", "rider": data, "data": data}
     finally:
         db.close()
@@ -6569,17 +6809,22 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        rider = db.query(DBDeliveryRider).filter(DBDeliveryRider.id == payload.rider_id, DBDeliveryRider.deleted_at.is_(None)).first()
+        rider = db.query(DBDeliveryWorker).filter(
+            DBDeliveryWorker.id == payload.rider_id,
+            DBDeliveryWorker.worker_type == "rider",
+            DBDeliveryWorker.deleted_at.is_(None),
+            DBDeliveryWorker.kyc_status != "DELETED",
+        ).first()
         if not rider:
             raise HTTPException(status_code=404, detail="Rider not found")
-        if rider.status != "active":
-            raise HTTPException(status_code=400, detail="Rider must be active before assignment")
+        if (rider.kyc_status or "") != "APPROVED":
+            raise HTTPException(status_code=400, detail="Rider must be approved before assignment")
 
         order.rider_id = rider.id
         order.rider_name = rider.full_name
         order.rider_phone = rider.phone
         order.rider_vehicle_type = rider.vehicle_type or ""
-        order.rider_vehicle_number = rider.vehicle_number or ""
+        order.rider_vehicle_number = rider.plate_number or ""
         order.delivery_note = payload.delivery_note or ""
         order.delivery_assigned_at = datetime.utcnow()
         if payload.mark_out_for_delivery:
@@ -6594,7 +6839,7 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         db.commit()
         db.refresh(order)
         order_data = order_to_dict(order)
-        rider_data = rider_to_dict(rider)
+        rider_data = worker_to_dict(rider)
 
         if order_data.get("customer_email"):
             _create_order_notification(
@@ -7603,15 +7848,18 @@ def export_riders(request: Request):
         columns = ["rider_id", "full_name", "phone", "vehicle_type", "vehicle_number", "status", "created_at"]
         rows = [
             {
-                "rider_id": rider.id,
-                "full_name": rider.full_name or "",
-                "phone": rider.phone or "",
-                "vehicle_type": rider.vehicle_type or "",
-                "vehicle_number": rider.vehicle_number or "",
-                "status": rider.status or "",
-                "created_at": iso(rider.created_at),
+                "rider_id": worker.id,
+                "full_name": worker.full_name or "",
+                "phone": worker.phone or "",
+                "vehicle_type": worker.vehicle_type or "",
+                "vehicle_number": worker.plate_number or "",
+                "status": worker.kyc_status or "KYC_PENDING",
+                "created_at": iso(worker.created_at),
             }
-            for rider in db.query(DBDeliveryRider).order_by(DBDeliveryRider.created_at.desc(), DBDeliveryRider.id.desc()).all()
+            for worker in db.query(DBDeliveryWorker)
+            .filter(DBDeliveryWorker.worker_type == "rider")
+            .order_by(DBDeliveryWorker.created_at.desc(), DBDeliveryWorker.id.desc())
+            .all()
         ]
         return csv_download_response("riders", columns, rows)
     finally:
@@ -8298,20 +8546,19 @@ def get_nin_provider_diagnostics(request: Request):
             "body": {"nin": "<11-digit-number>", "consent": True},
             "headers": {
                 "Content-Type": "application/json",
-                "X-API-Key": "present" if config.get("api_key") else "missing",
+                "x-api-key": "present" if config.get("api_key") else "missing",
             },
             "auth_mode": current_nin_auth_mode(),
-            "auth_strategy": "x-api-key first, retry bearer once on x-api-key 401",
+            "auth_strategy": "documented x-api-key header only",
             "auth_methods": [
                 {"auth_mode": "x-api-key", "header_name": "x-api-key"},
-                {"auth_mode": "bearer", "header_name": "Authorization"},
             ],
         },
         "balance_contract": {
             "method": "GET",
             "url": balance_url,
             "headers": {
-                "X-API-Key": "present" if config.get("api_key") else "missing",
+                "x-api-key": "present" if config.get("api_key") else "missing",
             },
             "auth_mode": "x-api-key",
             "header_name": "x-api-key",
@@ -8428,16 +8675,12 @@ def debug_checkmynin_config():
     api_key = config.get("api_key") or ""
     return {
         "api_key_present": bool(api_key),
-        "api_key_prefix": api_key[:8] if api_key else "",
         "api_key_length": len(api_key),
-        "api_key_first6": api_key[:6] if api_key else "",
-        "api_key_last4": api_key[-4:] if api_key else "",
         "base_url": config.get("base_url"),
         "auth_mode": current_nin_auth_mode(),
-        "auth_strategy": "x-api-key first, retry bearer once on x-api-key 401, then prefer bearer if it succeeds",
+        "auth_strategy": "documented x-api-key header only",
         "auth_methods": [
             {"auth_mode": "x-api-key", "header_name": "x-api-key"},
-            {"auth_mode": "bearer", "header_name": "Authorization"},
         ],
         "endpoint": f"{config.get('base_url')}/nin-verification",
     }

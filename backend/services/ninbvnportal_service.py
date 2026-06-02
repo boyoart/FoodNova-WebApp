@@ -17,7 +17,6 @@ LOW_BALANCE_THRESHOLD = 500
 _ACTIVE_NIN_REQUESTS = set()
 _ACTIVE_NIN_REQUESTS_LOCK = threading.Lock()
 _NIN_ENDPOINT_PATH = "nin-verification"
-_PREFERRED_NIN_AUTH_MODE = "x-api-key"
 
 
 @dataclass
@@ -124,25 +123,19 @@ def _log_provider_event(event: str, request_id: str, payload: dict) -> None:
 
 
 def _auth_headers(api_key: str, mode: str = "x-api-key") -> dict:
-    if mode == "bearer":
-        return {"Authorization": f"Bearer {api_key}"}
     return {"x-api-key": api_key}
 
 
 def current_nin_auth_mode() -> str:
-    return _PREFERRED_NIN_AUTH_MODE
+    return "x-api-key"
 
 
 def _auth_log(api_key: str, mode: str = "x-api-key") -> dict:
-    header_name = "Authorization" if mode == "bearer" else "x-api-key"
     return {
-        "auth_mode": mode,
-        "header_name": header_name,
-        "x_api_key_present": mode == "x-api-key" and bool(api_key),
-        "authorization_bearer_present": mode == "bearer" and bool(api_key),
+        "auth_mode": "x-api-key",
+        "header_name": "x-api-key",
+        "x_api_key_present": bool(api_key),
         "api_key_length": len(api_key or ""),
-        "api_key_first6": (api_key or "")[:6],
-        "api_key_last4": (api_key or "")[-4:] if api_key else "",
     }
 
 
@@ -238,7 +231,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             {"http_status": error.code, "duration_ms": duration_ms},
         )
         return CheckMyNINBVNError(
-            message="Verification provider authentication failed.",
+            message=provider_message or "Provider rejected API credentials. Verify API key or wallet status.",
             code="invalid_provider_credentials",
             status_code=503,
             retryable=False,
@@ -248,7 +241,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         )
     if _is_insufficient_balance(lower_message):
         return CheckMyNINBVNError(
-            message="Verification service temporarily unavailable.",
+            message=provider_message or "Insufficient wallet balance.",
             code="insufficient_wallet_balance",
             status_code=503,
             retryable=False,
@@ -308,7 +301,6 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
 
 
 def verify_nin(nin_number: str, consent: bool = True) -> dict:
-    global _PREFERRED_NIN_AUTH_MODE
     request_id = f"nin_{uuid4().hex[:12]}"
     nin = "".join(ch for ch in str(nin_number or "") if ch.isdigit())
     if len(nin) != 11:
@@ -397,102 +389,79 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         print("ENDPOINT USED:", url)
         print("CHECKMYNINBVN_API_KEY exists:", bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()))
         print("CHECKMYNINBVN_API_KEY length:", len(config["api_key"] or ""))
-        print("CHECKMYNINBVN_API_KEY first6:", (config["api_key"] or "")[:6])
-        print("CHECKMYNINBVN_API_KEY last4:", (config["api_key"] or "")[-4:] if config["api_key"] else "")
         print("Payload:", json.dumps({"nin": f"*******{nin[-4:]}", "consent": True}))
+        print("NIN_VERIFICATION_STARTED", json.dumps({"endpoint": url, "nin_last4": nin[-4:], "request_id": request_id}))
 
         started = time.monotonic()
         response_status = None
         raw_body = ""
         attempts = []
         try:
-            auth_order = (
-                ("bearer",)
-                if _PREFERRED_NIN_AUTH_MODE == "bearer"
-                else ("x-api-key", "bearer")
+            auth_mode = "x-api-key"
+            request = urllib.request.Request(
+                url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    **_auth_headers(config["api_key"], auth_mode),
+                },
+                method="POST",
             )
-            for auth_mode in auth_order:
-                request = urllib.request.Request(
-                    url,
-                    data=payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                        **_auth_headers(config["api_key"], auth_mode),
+            auth_meta = _auth_log(config["api_key"], auth_mode)
+            print("AUTH MODE USED:", auth_meta["auth_mode"])
+            print("HEADER NAME USED:", auth_meta["header_name"])
+            print("Headers:", json.dumps(_safe_headers_for_print(dict(request.header_items())), default=str))
+            print("NIN_VERIFICATION_REQUEST_SENT", json.dumps({"endpoint": url, "auth_mode": auth_meta["auth_mode"], "header_name": auth_meta["header_name"], "request_id": request_id}))
+            _log_provider_event(
+                "request_attempt",
+                request_id,
+                {
+                    "url": url,
+                    "method": "POST",
+                    "headers": {
+                        "content_type": "application/json",
+                        "accept": "application/json",
+                        **auth_meta,
                     },
-                    method="POST",
-                )
-                auth_meta = _auth_log(config["api_key"], auth_mode)
-                print("AUTH MODE USED:", auth_meta["auth_mode"])
-                print("HEADER NAME USED:", auth_meta["header_name"])
-                print("Headers:", json.dumps(_safe_headers_for_print(dict(request.header_items())), default=str))
-                _log_provider_event(
-                    "request_attempt",
-                    request_id,
-                    {
-                        "url": url,
-                        "method": "POST",
-                        "headers": {
-                            "content_type": "application/json",
-                            "accept": "application/json",
-                            **auth_meta,
-                        },
-                    },
-                )
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+                    response_status = response.status
+                    raw_body = response.read().decode("utf-8")
+                parsed_body = _parse_provider_body(raw_body)
+                print("Status:", response_status)
+                print("Body:", json.dumps(_redact_provider_body(parsed_body), default=str))
+                attempts.append({
+                    "auth_method": auth_meta["auth_mode"],
+                    "header_name": auth_meta["header_name"],
+                    "endpoint": url,
+                    "response_code": response_status,
+                    "response_body": raw_body,
+                    "response": _redact_provider_body(parsed_body),
+                })
+            except urllib.error.HTTPError as error:
                 try:
-                    with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
-                        response_status = response.status
-                        raw_body = response.read().decode("utf-8")
-                    parsed_body = _parse_provider_body(raw_body)
-                    print("Status:", response_status)
-                    print("Body:", json.dumps(_redact_provider_body(parsed_body), default=str))
-                    attempts.append({
-                        "auth_method": auth_meta["auth_mode"],
-                        "header_name": auth_meta["header_name"],
-                        "endpoint": url,
-                        "response_code": response_status,
-                        "response_body": raw_body,
-                        "response": _redact_provider_body(parsed_body),
-                    })
-                    if auth_mode == "bearer":
-                        _PREFERRED_NIN_AUTH_MODE = "bearer"
-                        print("CHECKMYNINBVN_AUTH_MODE_SWITCHED:", "bearer")
-                    break
-                except urllib.error.HTTPError as error:
-                    try:
-                        error_body = error.read().decode("utf-8")
-                    except Exception:
-                        error_body = ""
-                    parsed_error_body = _parse_provider_body(error_body)
-                    print("Status:", error.code)
-                    print("Body:", error_body)
-                    attempts.append({
-                        "auth_method": auth_meta["auth_mode"],
-                        "header_name": auth_meta["header_name"],
-                        "endpoint": url,
-                        "response_code": error.code,
-                        "response_body": error_body,
-                        "response": _redact_provider_body(parsed_error_body),
-                    })
-                    if auth_mode == "x-api-key" and error.code == 401:
-                        print("Retrying with Authorization Bearer after x-api-key 401")
-                        continue
-                    if error_body:
-                        error.fp = io.BytesIO(error_body.encode("utf-8"))
-                    mapped = _map_provider_http_error(error, request_id, int((time.monotonic() - started) * 1000))
-                    mapped.provider_attempts = attempts
-                    raise mapped from error
-            else:
-                raise CheckMyNINBVNError(
-                    message="Provider rejected API credentials. Verify API key or wallet status.",
-                    code="invalid_provider_credentials",
-                    status_code=401,
-                    retryable=False,
-                    provider_status=attempts[-1]["response_code"] if attempts else None,
-                    provider_body=attempts[-1].get("response") if attempts else {},
-                    provider_response=attempts[-1].get("response_body") if attempts else "",
-                    provider_attempts=attempts,
-                )
+                    error_body = error.read().decode("utf-8")
+                except Exception:
+                    error_body = ""
+                parsed_error_body = _parse_provider_body(error_body)
+                print("Status:", error.code)
+                print("Body:", error_body)
+                attempts.append({
+                    "auth_method": auth_meta["auth_mode"],
+                    "header_name": auth_meta["header_name"],
+                    "endpoint": url,
+                    "response_code": error.code,
+                    "response_body": error_body,
+                    "response": _redact_provider_body(parsed_error_body),
+                })
+                if error_body:
+                    error.fp = io.BytesIO(error_body.encode("utf-8"))
+                mapped = _map_provider_http_error(error, request_id, int((time.monotonic() - started) * 1000))
+                mapped.provider_attempts = attempts
+                raise mapped from error
         except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
             duration_ms = int((time.monotonic() - started) * 1000)
             reason = getattr(error, "reason", error)
@@ -561,6 +530,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         status = str(result.get("status", "")).lower()
         provider_message = result.get("message") or ""
         if status != "success" and _is_insufficient_balance(provider_message):
+            print("NIN_VERIFICATION_FAILED", json.dumps({"request_id": request_id, "status": status, "message": provider_message, "http_status": response_status}))
             raise CheckMyNINBVNError(
                 message="Verification service temporarily unavailable.",
                 code="insufficient_wallet_balance",
@@ -572,6 +542,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 provider_attempts=attempts,
             )
         if status != "success" and ("internal" in provider_message.lower() or "unauthorized" in provider_message.lower() or "api key" in provider_message.lower()):
+            print("NIN_VERIFICATION_FAILED", json.dumps({"request_id": request_id, "status": status, "message": provider_message, "http_status": response_status}))
             raise CheckMyNINBVNError(
                 message="Provider rejected API credentials. Verify API key or wallet status." if ("unauthorized" in provider_message.lower() or "api key" in provider_message.lower()) else "Identity verification currently unavailable.",
                 code="invalid_provider_credentials" if ("unauthorized" in provider_message.lower() or "api key" in provider_message.lower()) else "provider_error",
@@ -583,6 +554,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 provider_attempts=attempts,
             )
         verified = status == "success"
+        print(("NIN_VERIFICATION_SUCCESS" if verified else "NIN_VERIFICATION_FAILED"), json.dumps({"request_id": request_id, "status": status, "message": provider_message, "http_status": response_status}))
         data = result.get("data") or {}
         address = data.get("residence_address") or data.get("address") or data.get("residential_address") or ""
         return {

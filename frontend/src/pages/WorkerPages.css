@@ -105,6 +105,35 @@
   font-weight: 900;
 }
 
+.worker-verified-badge {
+  align-items: center;
+  background: #e6f6ec;
+  border: 1px solid rgba(8, 122, 52, 0.18);
+  border-radius: 999px;
+  display: inline-flex;
+  padding: 0.45rem 0.75rem;
+}
+
+.worker-verification-card {
+  background: #f4fbf6;
+  border: 1px solid rgba(8, 122, 52, 0.16);
+  border-radius: 8px;
+  color: #24382b;
+  display: grid;
+  gap: 0.3rem;
+  margin: -0.3rem 0 1rem;
+  padding: 0.9rem;
+}
+
+.worker-verification-card strong {
+  color: #087a34;
+}
+
+.worker-verification-card span {
+  color: #53665a;
+  font-weight: 700;
+}
+
 .worker-camera-panel {
   border: 1px solid #d9e7de;
   border-radius: 8px;
@@ -522,6 +551,76 @@
 .worker-review-actions {
   display: grid;
   gap: 0.75rem;
+}
+
+.rider-management-buttons {
+  display: grid !important;
+  gap: 0.55rem !important;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.danger-worker-button {
+  background: #b3261e !important;
+  color: #fff !important;
+}
+
+.rider-delete-modal {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.46);
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  left: 0;
+  padding: 1rem;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 1000;
+}
+
+.rider-delete-dialog {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  display: grid;
+  gap: 0.8rem;
+  max-width: 460px;
+  padding: 1.25rem;
+  position: relative;
+  width: min(100%, 460px);
+}
+
+.rider-delete-dialog h2,
+.rider-delete-dialog p {
+  margin: 0;
+}
+
+.rider-delete-dialog h2 {
+  color: #12351f;
+}
+
+.rider-delete-dialog p {
+  color: #5d6b62;
+}
+
+.rider-delete-dialog > svg {
+  color: #b3261e;
+}
+
+.rider-delete-dialog div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.rider-delete-close {
+  background: #eef5f0 !important;
+  color: #12351f !important;
+  min-height: 34px !important;
+  padding: 0.45rem !important;
+  position: absolute;
+  right: 0.85rem;
+  top: 0.85rem;
 }
 
 .worker-search-box {

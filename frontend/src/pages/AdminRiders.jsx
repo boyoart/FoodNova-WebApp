@@ -28,7 +28,7 @@ export default function AdminRiders() {
 
   const permissions = Array.isArray(admin?.permissions) ? admin.permissions : []
   const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || permissions.length === 0))
-  const canManageDelivery = isSuperAdmin || permissions.includes('delivery:manage') || permissions.includes('orders:delivery')
+  const canManageDelivery = isSuperAdmin || ['delivery:manage', 'orders:delivery', 'riders:manage', 'workforce:view', 'workforce:manage'].some((permission) => permissions.includes(permission))
 
   const loadRiders = async () => {
     try {
@@ -140,7 +140,7 @@ export default function AdminRiders() {
       <div className="rider-toolbar">
         <label className="rider-search"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, phone, vehicle" /></label>
         <div className="rider-status-tabs">
-          {['all', 'active', 'inactive', 'suspended', 'deactivated', 'deleted'].map((status) => (
+          {['all', 'pending', 'approved', 'rejected', 'suspended', 'deactivated', 'deleted'].map((status) => (
             <button key={status} type="button" className={statusFilter === status ? 'active' : ''} onClick={() => setStatusFilter(status)}>
               {status}
             </button>
@@ -156,8 +156,10 @@ export default function AdminRiders() {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Rider ID</th>
                 <th>Phone</th>
                 <th>Vehicle</th>
+                <th>NIN</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
@@ -166,9 +168,11 @@ export default function AdminRiders() {
               {filteredRiders.map((rider) => (
                 <tr key={rider.id}>
                   <td><strong>{rider.full_name || rider.name}</strong><small>{rider.email || 'No email'}</small></td>
+                  <td>#{rider.rider_id || rider.id}</td>
                   <td>{rider.phone}</td>
-                  <td>{[rider.vehicle_type, rider.vehicle_number].filter(Boolean).join(' - ') || 'N/A'}</td>
-                  <td><span className={`rider-status ${rider.status}`}>{rider.status}</span></td>
+                  <td>{[rider.vehicle_type, rider.vehicle_number || rider.plate_number].filter(Boolean).join(' - ') || 'N/A'}</td>
+                  <td><span className={`rider-status ${rider.nin_verified ? 'active' : 'inactive'}`}>{rider.nin_status || (rider.nin_verified ? 'verified' : 'not verified')}</span></td>
+                  <td><span className={`rider-status ${rider.status}`}>{rider.approval_status || rider.status}</span></td>
                   <td>
                     <div className="rider-actions">
                       <button type="button" className="btn-view" onClick={() => openEdit(rider)}>Edit</button>

@@ -77,6 +77,16 @@ export default function DeliveryWorkerSignup({ workerType }) {
     if (field === 'nin_number') setNinVerification(null)
   }
   const updateFile = (field, file) => setFiles((current) => ({ ...current, [field]: file || null }))
+  const verifiedIdentity = ninVerification?.verified === true
+
+  const providerErrorMessage = (error) => {
+    const body = error?.response?.data || {}
+    const providerBody = body.provider_body || {}
+    const attempts = Array.isArray(body.provider_attempts) ? body.provider_attempts : []
+    const lastAttempt = attempts[attempts.length - 1] || {}
+    const providerMessage = providerBody.message || providerBody.detail || providerBody.error || lastAttempt.response?.message || lastAttempt.response_body || body.provider_response
+    return providerMessage || body.message || body.detail || 'NIN verification failed. Please check the number and try again.'
+  }
 
   const startCamera = async () => {
     try {
@@ -106,7 +116,9 @@ export default function DeliveryWorkerSignup({ workerType }) {
     setCameraActive(false)
   }
 
-  const verifyNin = async () => {
+  const verifyNin = async (event) => {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
     const nin = form.nin_number.replace(/\D/g, '')
     if (nin.length !== 11) {
       toast.error('NIN must be exactly 11 digits')
@@ -133,14 +145,22 @@ export default function DeliveryWorkerSignup({ workerType }) {
       })
       if (!result.verified) {
         setNinVerification(null)
-        toast.error(result.message || 'NIN verification failed. Please check the number and try again.')
+        toast.error(result.provider_response || result.message || 'NIN verification failed. Please check the number and try again.')
         return
       }
+      const identity = result.data || {}
+      const verifiedName = [identity.firstname || identity.first_name, identity.middlename || identity.middle_name, identity.surname || identity.last_name].filter(Boolean).join(' ').trim()
+      setForm((current) => ({
+        ...current,
+        full_name: verifiedName || current.full_name,
+        phone: identity.phone || current.phone,
+        home_address: identity.address || current.home_address,
+      }))
       setNinVerification(result)
-      toast.success('Identity Verified. Submitted for operational review.')
+      toast.success('NIN Verified Successfully')
     } catch (error) {
       setNinVerification(null)
-      toast.error(error?.response?.data?.detail || 'NIN verification failed. Please check the number and try again.')
+      toast.error(providerErrorMessage(error))
     } finally {
       setVerifyingNin(false)
     }
@@ -226,15 +246,15 @@ export default function DeliveryWorkerSignup({ workerType }) {
           </div>
 
           <div className="worker-form-grid">
-            <label>Full Name<input value={form.full_name} onChange={(event) => update('full_name', event.target.value)} required /></label>
-            <label>Phone<input value={form.phone} onChange={(event) => update('phone', event.target.value)} required /></label>
+            <label>Full Name<input value={form.full_name} onChange={(event) => update('full_name', event.target.value)} readOnly={verifiedIdentity} required /></label>
+            <label>Phone<input value={form.phone} onChange={(event) => update('phone', event.target.value)} readOnly={verifiedIdentity && Boolean(ninVerification?.data?.phone)} required /></label>
             <label>Email<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} required /></label>
-            <label>Home Address<input value={form.home_address} onChange={(event) => update('home_address', event.target.value)} required /></label>
+            <label>Home Address<input value={form.home_address} onChange={(event) => update('home_address', event.target.value)} readOnly={verifiedIdentity && Boolean(ninVerification?.data?.address)} required /></label>
             <label>Password<input type="password" value={form.password} onChange={(event) => update('password', event.target.value)} required /></label>
             <label>Confirm Password<input type="password" value={form.confirm_password} onChange={(event) => update('confirm_password', event.target.value)} required /></label>
             <label>Emergency Contact Name<input value={form.emergency_contact_name} onChange={(event) => update('emergency_contact_name', event.target.value)} required /></label>
             <label>Emergency Contact Phone<input value={form.emergency_contact_phone} onChange={(event) => update('emergency_contact_phone', event.target.value)} required /></label>
-            <label>NIN Number<input inputMode="numeric" maxLength="11" value={form.nin_number} onChange={(event) => update('nin_number', event.target.value.replace(/\D/g, ''))} required /></label>
+            <label>NIN Number<input inputMode="numeric" maxLength="11" value={form.nin_number} onChange={(event) => update('nin_number', event.target.value.replace(/\D/g, ''))} readOnly={verifiedIdentity} required /></label>
             <label>ID Type<input value={form.id_type} onChange={(event) => update('id_type', event.target.value)} placeholder="NIN, Passport, Driver License" required /></label>
             <label>ID Number<input value={form.id_number} onChange={(event) => update('id_number', event.target.value)} required /></label>
             <label>ID Document Upload<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => updateFile('id_document', event.target.files?.[0])} required /></label>
@@ -245,11 +265,19 @@ export default function DeliveryWorkerSignup({ workerType }) {
             <span>I consent to FoodNova verifying my identity using my NIN for worker activation and compliance purposes.</span>
           </label>
           <div className="worker-verify-row">
-            <button type="button" onClick={verifyNin} disabled={verifyingNin || !form.nin_consent || form.nin_number.length !== 11}>
+            <button type="button" onClick={verifyNin} disabled={verifyingNin || verifiedIdentity || !form.nin_consent || form.nin_number.length !== 11}>
               <ShieldCheck size={18} /> {verifyingNin ? 'Verifying...' : 'Verify NIN'}
             </button>
-            {ninVerification?.verified && <span>✔ Identity Verified. Submitted for operational review - *******{ninVerification.nin_last4}</span>}
+            {verifiedIdentity && <span className="worker-verified-badge">✓ NIN Verified Successfully - *******{ninVerification.nin_last4}</span>}
           </div>
+          {verifiedIdentity && (
+            <div className="worker-verification-card">
+              <strong>Verified identity</strong>
+              <span>{form.full_name || 'Full name verified'}</span>
+              <span>{ninVerification?.data?.gender || 'Gender from provider'} · {ninVerification?.data?.phone || form.phone || 'Phone from provider'}</span>
+              <span>{ninVerification?.data?.state || ninVerification?.data?.residence_state || ninVerification?.data?.address || 'Address details received'}</span>
+            </div>
+          )}
 
           <section className="worker-camera-panel">
             <h2>Live Selfie</h2>
