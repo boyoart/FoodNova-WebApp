@@ -122,13 +122,13 @@ def _log_provider_event(event: str, request_id: str, payload: dict) -> None:
 
 
 def _auth_headers(api_key: str) -> dict:
-    return {"x-api-key": api_key}
+    return {"X-API-Key": api_key}
 
 
 def _auth_log(api_key: str) -> dict:
     return {
         "auth_mode": "x-api-key",
-        "header_name": "x-api-key",
+        "header_name": "X-API-Key",
         "x_api_key_present": bool(api_key),
         "api_key_length": len(api_key or ""),
     }
@@ -383,7 +383,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         print("Calling:", url)
         print("ENDPOINT USED:", url)
         print("AUTH MODE USED:", "x-api-key")
-        print("HEADER NAME USED:", "x-api-key")
+        print("HEADER NAME USED:", "X-API-Key")
         print("Payload:", json.dumps({"nin": f"*******{nin[-4:]}", "consent": True}))
 
         started = time.monotonic()

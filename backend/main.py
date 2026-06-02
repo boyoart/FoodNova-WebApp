@@ -8283,19 +8283,19 @@ def get_nin_provider_diagnostics(request: Request):
             "body": {"nin": "<11-digit-number>", "consent": True},
             "headers": {
                 "Content-Type": "application/json",
-                "x-api-key": "present" if config.get("api_key") else "missing",
+                "X-API-Key": "present" if config.get("api_key") else "missing",
             },
             "auth_mode": "x-api-key",
-            "header_name": "x-api-key",
+            "header_name": "X-API-Key",
         },
         "balance_contract": {
             "method": "GET",
             "url": balance_url,
             "headers": {
-                "x-api-key": "present" if config.get("api_key") else "missing",
+                "X-API-Key": "present" if config.get("api_key") else "missing",
             },
             "auth_mode": "x-api-key",
-            "header_name": "x-api-key",
+            "header_name": "X-API-Key",
         },
         "provider_auth": {
             "status": "failed" if balance_status.get("error_code") == "invalid_provider_credentials" else "authenticated" if balance_status.get("available") else "unknown",
@@ -8401,6 +8401,20 @@ def get_public_nin_health():
         }
     finally:
         db.close()
+
+
+@app.get("/debug/checkmynin")
+def debug_checkmynin_config():
+    config = checkmyninbvn_config()
+    api_key = config.get("api_key") or ""
+    return {
+        "api_key_present": bool(api_key),
+        "api_key_prefix": api_key[:8] if api_key else "",
+        "base_url": config.get("base_url"),
+        "auth_mode": "x-api-key",
+        "header_name": "X-API-Key",
+        "endpoint": f"{config.get('base_url')}/nin-verification",
+    }
 
 
 @app.get("/admin/diagnostics/nin-provider/balance")
