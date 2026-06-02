@@ -3669,6 +3669,15 @@ def seed_database():
 def on_startup():
     seed_database()
     global NIN_PROVIDER_HEALTH
+    nin_config = checkmyninbvn_config()
+    nin_endpoint = f"{nin_config.get('base_url')}/nin-verification"
+    print("NIN_BASE_URL", nin_config.get("base_url"))
+    print("NIN_ENDPOINT", nin_endpoint)
+    print("AUTH_MODE", current_nin_auth_mode())
+    print("HEADER_NAME_USED", "x-api-key")
+    print("CHECKMYNINBVN_API_KEY present:", bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()))
+    print("CHECKMYNINBVN_API_KEY length:", len(nin_config.get("api_key") or ""))
+    print("CHECKMYNINBVN_BASE_URL", os.getenv("CHECKMYNINBVN_BASE_URL", "").strip() or nin_config.get("base_url"))
     validation = validate_checkmyninbvn_config()
     print("CHECKMYNINBVN_API_KEY detected:", bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()))
     if not validation.get("configured"):
@@ -3676,14 +3685,18 @@ def on_startup():
         NIN_PROVIDER_HEALTH = {
             "healthy": False,
             "onboarding_verification_enabled": False,
-            "message": "Identity verification currently unavailable.",
+            "message": validation.get("message") or "NIN API key missing from server configuration",
             "provider_status": None,
             "provider_message": validation.get("message"),
             "checked_at": iso(datetime.utcnow()),
         }
         print("CHECKMYNINBVN_STARTUP_FAILURE", json_dump({
             "api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
-            "provider_url": f"{checkmyninbvn_config().get('base_url')}/nin-verification",
+            "api_key_length": len(nin_config.get("api_key") or ""),
+            "base_url": nin_config.get("base_url"),
+            "provider_url": nin_endpoint,
+            "auth_mode": current_nin_auth_mode(),
+            "header_name_used": "x-api-key",
             "message": validation.get("message"),
             "timestamp": iso(datetime.utcnow()),
         }))
@@ -4115,7 +4128,7 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
         raise HTTPException(status_code=403, detail="NIN verification must be completed on a mobile phone.")
     validation = validate_checkmyninbvn_config()
     if not validation.get("configured"):
-        raise HTTPException(status_code=503, detail="Identity verification is not configured yet. Please contact FoodNova support.")
+        raise HTTPException(status_code=503, detail=validation.get("message") or "NIN API key missing from server configuration")
     print("NIN_VERIFICATION_ATTEMPT", json_dump({
         "route": "/delivery-workers/verify-nin",
         "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
@@ -4137,7 +4150,7 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
                 provider_detail = provider_response.strip()
         user_message = {
             "invalid_provider_credentials": "The NIN provider rejected the API credentials.",
-            "provider_not_configured": "Identity verification is not configured yet. Please contact FoodNova support.",
+            "provider_not_configured": "NIN API key missing from server configuration",
             "invalid_nin": "Please enter a valid 11-digit NIN.",
             "consent_required": "Please accept NIN verification consent before continuing.",
             "insufficient_wallet_balance": "Identity verification is temporarily unavailable. Please try again later.",
@@ -8683,6 +8696,18 @@ def debug_checkmynin_config():
             {"auth_mode": "x-api-key", "header_name": "x-api-key"},
         ],
         "endpoint": f"{config.get('base_url')}/nin-verification",
+    }
+
+
+@app.get("/debug/nin-config")
+def debug_nin_config():
+    config = checkmyninbvn_config()
+    api_key = config.get("api_key") or ""
+    return {
+        "base_url": config.get("base_url"),
+        "auth_mode": current_nin_auth_mode(),
+        "api_key_present": bool(api_key),
+        "api_key_length": len(api_key),
     }
 
 

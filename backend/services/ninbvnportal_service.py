@@ -82,7 +82,7 @@ def validate_checkmyninbvn_config() -> dict:
     if not config["api_key"]:
         return {
             "configured": False,
-            "message": "CHECKMYNINBVN_API_KEY is missing. Add it to the Render environment before enabling live NIN checks.",
+            "message": "NIN API key missing from server configuration",
         }
     if not config["base_url"].startswith("https://checkmyninbvn.com.ng/api"):
         return {
@@ -97,7 +97,7 @@ def validate_checkmyninbvn_config() -> dict:
 
 def _raise_config_error(message: str) -> None:
     raise CheckMyNINBVNError(
-        message=message,
+        message=message or "NIN API key missing from server configuration",
         code="provider_not_configured",
         status_code=503,
         retryable=False,
@@ -345,14 +345,19 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
     try:
         validation = validate_checkmyninbvn_config()
         if not validation["configured"]:
+            config = checkmyninbvn_config()
             _log_provider_event(
                 "configuration_failure",
                 request_id,
                 {
                     "configured": False,
                     "reason": validation["message"],
-                    "base_url": checkmyninbvn_config().get("base_url"),
-                    "api_key_present": bool(checkmyninbvn_config().get("api_key")),
+                    "base_url": config.get("base_url"),
+                    "endpoint": f"{config.get('base_url')}/nin-verification",
+                    "auth_mode": current_nin_auth_mode(),
+                    "header_name_used": "x-api-key",
+                    "api_key_present": bool(config.get("api_key")),
+                    "api_key_length": len(config.get("api_key") or ""),
                     "env_api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
                 },
             )
@@ -374,11 +379,11 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "api_key_present": bool(config["api_key"]),
                 "env_api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
                 "headers": {
-                    "content_type": "application/json",
-                    "accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
                     **_auth_log(config["api_key"], "x-api-key"),
                 },
-                "body": {"nin": f"*******{nin[-4:]}", "consent": True},
+                "payload": {"nin": f"*******{nin[-4:]}", "consent": True},
                 "body_keys": ["nin", "consent"],
                 "nin_last4": nin[-4:],
                 "timeout_seconds": _timeout_seconds(),
@@ -420,10 +425,11 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                     "url": url,
                     "method": "POST",
                     "headers": {
-                        "content_type": "application/json",
-                        "accept": "application/json",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
                         **auth_meta,
                     },
+                    "payload": {"nin": f"*******{nin[-4:]}", "consent": True},
                 },
             )
             try:

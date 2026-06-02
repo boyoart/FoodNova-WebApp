@@ -365,13 +365,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       if (mounted) setState(() => loading = false);
     }
   }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => message = _friendlyError(e));
-    } finally {
-      if (mounted) setState(() => loading = false);
-    }
-  }
 
   String? _submissionBlocker() {
     if (verifiedNin?.verified != true) {

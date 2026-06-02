@@ -37,6 +37,7 @@ final dioProvider = Provider<Dio>((ref) {
           '/auth/login',
         ].any((endpoint) => path.contains(endpoint));
         
+        // ignore: dead_null_aware_expression
         if (error.response?.statusCode == 401 && !isPublicEndpoint) {
           print('TOKEN_INVALID auth_error=${error.response?.statusCode} path=$path');
           await ref.read(sessionControllerProvider.notifier).clear();
