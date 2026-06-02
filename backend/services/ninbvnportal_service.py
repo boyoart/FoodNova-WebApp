@@ -1,4 +1,5 @@
 import json
+import io
 import os
 import socket
 import threading
@@ -15,6 +16,7 @@ DEFAULT_CHECKMYNINBVN_BASE_URL = "https://checkmyninbvn.com.ng/api"
 LOW_BALANCE_THRESHOLD = 500
 _ACTIVE_NIN_REQUESTS = set()
 _ACTIVE_NIN_REQUESTS_LOCK = threading.Lock()
+_NIN_ENDPOINT_PATH = "nin-verification"
 
 
 @dataclass
@@ -25,6 +27,7 @@ class CheckMyNINBVNError(Exception):
     retryable: bool = False
     provider_status: Optional[int] = None
     provider_body: Optional[dict] = None
+    provider_response: Optional[str] = None
 
     def __str__(self) -> str:
         return self.message
@@ -38,6 +41,22 @@ def _env_value(*names: str) -> str:
     return ""
 
 
+def _clean_api_key(value: str) -> str:
+    key = str(value or "").strip().strip("\"'")
+    if key.lower().startswith("bearer "):
+        key = key[7:].strip()
+    return key
+
+
+def _normalize_base_url(value: str) -> str:
+    url = str(value or DEFAULT_CHECKMYNINBVN_BASE_URL).strip().strip("\"'").rstrip("/")
+    if not url:
+        url = DEFAULT_CHECKMYNINBVN_BASE_URL
+    if url.endswith(f"/{_NIN_ENDPOINT_PATH}"):
+        url = url[: -(len(_NIN_ENDPOINT_PATH) + 1)]
+    return url
+
+
 def _timeout_seconds() -> int:
     try:
         return max(3, min(int(os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "10")), 10))
@@ -46,10 +65,13 @@ def _timeout_seconds() -> int:
 
 
 def checkmyninbvn_config() -> dict:
-    api_key = _env_value("CHECKMYNINBVN_API_KEY")
+    api_key = _clean_api_key(_env_value("CHECKMYNINBVN_API_KEY"))
+    configured_base_url = _env_value("CHECKMYNINBVN_API_BASE_URL", "CHECKMYNINBVN_BASE_URL")
+    base_url = _normalize_base_url(configured_base_url or DEFAULT_CHECKMYNINBVN_BASE_URL)
     return {
         "api_key": api_key,
-        "base_url": DEFAULT_CHECKMYNINBVN_BASE_URL,
+        "base_url": base_url,
+        "configured_base_url": configured_base_url,
         "configured": bool(api_key),
     }
 
@@ -61,10 +83,10 @@ def validate_checkmyninbvn_config() -> dict:
             "configured": False,
             "message": "CHECKMYNINBVN_API_KEY is missing. Add it to the Render environment before enabling live NIN checks.",
         }
-    if config["base_url"] != DEFAULT_CHECKMYNINBVN_BASE_URL:
+    if not config["base_url"].startswith("https://checkmyninbvn.com.ng/api"):
         return {
             "configured": False,
-            "message": "CheckMyNINBVN provider URL must be https://checkmyninbvn.com.ng/api.",
+            "message": "CheckMyNINBVN provider URL must point to https://checkmyninbvn.com.ng/api.",
         }
     return {
         "configured": True,
@@ -97,6 +119,32 @@ def _log_provider_event(event: str, request_id: str, payload: dict) -> None:
     }
     safe_payload.pop("api_key", None)
     print("CHECKMYNINBVN_DIAGNOSTIC", json.dumps(safe_payload, default=str))
+
+
+def _auth_headers(api_key: str, mode: str) -> dict:
+    if mode == "bearer":
+        return {"Authorization": f"Bearer {api_key}"}
+    return {"x-api-key": api_key}
+
+
+def _auth_log(mode: str, api_key: str) -> dict:
+    return {
+        "auth_mode": mode,
+        "x_api_key_present": mode == "x-api-key" and bool(api_key),
+        "authorization_bearer_present": mode == "bearer" and bool(api_key),
+        "api_key_length": len(api_key or ""),
+    }
+
+
+def _safe_headers_for_print(headers: dict) -> dict:
+    safe = {}
+    for key, value in headers.items():
+        lower = str(key).lower()
+        if lower in {"x-api-key", "authorization"}:
+            safe[key] = "[redacted]"
+        else:
+            safe[key] = value
+    return safe
 
 
 def _redact_provider_body(data):
@@ -186,6 +234,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             retryable=False,
             provider_status=error.code,
             provider_body=data,
+            provider_response=body,
         )
     if _is_insufficient_balance(lower_message):
         return CheckMyNINBVNError(
@@ -195,6 +244,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             retryable=False,
             provider_status=error.code,
             provider_body=data,
+            provider_response=body,
         )
     if error.code == 400 and ("invalid" in lower_message or "nin" in lower_message or "number" in lower_message):
         return CheckMyNINBVNError(
@@ -204,6 +254,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             retryable=False,
             provider_status=error.code,
             provider_body=data,
+            provider_response=body,
         )
     if error.code == 429:
         return CheckMyNINBVNError(
@@ -213,6 +264,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             retryable=True,
             provider_status=error.code,
             provider_body=data,
+            provider_response=body,
         )
     if error.code >= 500:
         return CheckMyNINBVNError(
@@ -222,6 +274,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             retryable=True,
             provider_status=error.code,
             provider_body=data,
+            provider_response=body,
         )
     if "internal" in lower_message or "unauthorized" in lower_message:
         return CheckMyNINBVNError(
@@ -231,6 +284,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
             retryable=True,
             provider_status=error.code,
             provider_body=data,
+            provider_response=body,
         )
     return CheckMyNINBVNError(
         message="Invalid NIN detected.",
@@ -239,6 +293,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
         retryable=False,
         provider_status=error.code,
         provider_body=data,
+        provider_response=body,
     )
 
 
@@ -301,18 +356,9 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             _raise_config_error(validation["message"])
 
         config = checkmyninbvn_config()
-        payload = json.dumps({"nin": nin, "consent": True}).encode("utf-8")
+        request_body = {"nin": nin, "consent": True}
+        payload = json.dumps(request_body).encode("utf-8")
         url = f"{config['base_url']}/nin-verification"
-        request = urllib.request.Request(
-            url,
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "x-api-key": config["api_key"],
-            },
-            method="POST",
-        )
 
         _log_provider_event(
             "request",
@@ -321,13 +367,13 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "url": url,
                 "method": "POST",
                 "base_url": config["base_url"],
+                "configured_base_url_present": bool(config.get("configured_base_url")),
                 "api_key_present": bool(config["api_key"]),
                 "env_api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
                 "headers": {
                     "content_type": "application/json",
                     "accept": "application/json",
-                    "x_api_key_present": bool(config["api_key"]),
-                    "authorization_bearer_present": False,
+                    **_auth_log("x-api-key", config["api_key"]),
                 },
                 "body": {"nin": f"*******{nin[-4:]}", "consent": True},
                 "body_keys": ["nin", "consent"],
@@ -335,15 +381,78 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "timeout_seconds": _timeout_seconds(),
             },
         )
+        print("BASE URL:", config["base_url"])
+        print("Calling:", url)
+        print("Payload:", json.dumps({"nin": f"*******{nin[-4:]}", "consent": True}))
 
         started = time.monotonic()
+        response_status = None
+        raw_body = ""
+        last_auth_error = None
         try:
-            with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
-                response_status = response.status
-                raw_body = response.read().decode("utf-8")
-        except urllib.error.HTTPError as error:
-            duration_ms = int((time.monotonic() - started) * 1000)
-            raise _map_provider_http_error(error, request_id, duration_ms) from error
+            for auth_mode in ("x-api-key", "bearer"):
+                request = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        **_auth_headers(config["api_key"], auth_mode),
+                    },
+                    method="POST",
+                )
+                print("Headers:", json.dumps(_safe_headers_for_print(dict(request.header_items())), default=str))
+                _log_provider_event(
+                    "request_attempt",
+                    request_id,
+                    {
+                        "url": url,
+                        "method": "POST",
+                        "headers": {
+                            "content_type": "application/json",
+                            "accept": "application/json",
+                            **_auth_log(auth_mode, config["api_key"]),
+                        },
+                    },
+                )
+                try:
+                    with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+                        response_status = response.status
+                        raw_body = response.read().decode("utf-8")
+                    print("Status:", response_status)
+                    print("Body:", json.dumps(_redact_provider_body(_parse_provider_body(raw_body)), default=str))
+                    break
+                except urllib.error.HTTPError as error:
+                    duration_ms = int((time.monotonic() - started) * 1000)
+                    try:
+                        error_body = error.read().decode("utf-8")
+                    except Exception:
+                        error_body = ""
+                    print("Status:", error.code)
+                    print("Body:", error_body)
+                    if error_body:
+                        error.fp = io.BytesIO(error_body.encode("utf-8"))
+                    mapped = _map_provider_http_error(error, request_id, duration_ms)
+                    if mapped.code == "invalid_provider_credentials" and auth_mode == "x-api-key":
+                        last_auth_error = mapped
+                        _log_provider_event(
+                            "auth_retry",
+                            request_id,
+                            {
+                                "from_auth_mode": "x-api-key",
+                                "to_auth_mode": "bearer",
+                                "provider_status": error.code,
+                            },
+                        )
+                        continue
+                    raise mapped from error
+            else:
+                raise last_auth_error or CheckMyNINBVNError(
+                    message="Verification provider authentication failed.",
+                    code="invalid_provider_credentials",
+                    status_code=503,
+                    retryable=False,
+                )
         except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
             duration_ms = int((time.monotonic() - started) * 1000)
             reason = getattr(error, "reason", error)
@@ -468,14 +577,6 @@ def check_balance() -> dict:
 
     config = checkmyninbvn_config()
     url = f"{config['base_url']}/balance"
-    request = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/json",
-            "x-api-key": config["api_key"],
-        },
-        method="GET",
-    )
     _log_provider_event(
         "balance_request",
         request_id,
@@ -483,20 +584,75 @@ def check_balance() -> dict:
             "url": url,
             "method": "GET",
             "api_key_present": bool(config["api_key"]),
-            "headers": {"x_api_key_present": True, "authorization_bearer_present": False},
+            "configured_base_url_present": bool(config.get("configured_base_url")),
+            "headers": {"accept": "application/json", **_auth_log("x-api-key", config["api_key"])},
             "timeout_seconds": _timeout_seconds(),
         },
     )
     started = time.monotonic()
+    raw_body = ""
+    response_status = None
+    last_auth_error = None
     try:
-        with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
-            raw_body = response.read().decode("utf-8")
-    except urllib.error.HTTPError as error:
-        duration_ms = int((time.monotonic() - started) * 1000)
-        raise _map_provider_http_error(error, request_id, duration_ms) from error
+        for auth_mode in ("x-api-key", "bearer"):
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "Accept": "application/json",
+                    **_auth_headers(config["api_key"], auth_mode),
+                },
+                method="GET",
+            )
+            _log_provider_event(
+                "balance_request_attempt",
+                request_id,
+                {
+                    "url": url,
+                    "method": "GET",
+                    "headers": {"accept": "application/json", **_auth_log(auth_mode, config["api_key"])},
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+                    response_status = response.status
+                    raw_body = response.read().decode("utf-8")
+                break
+            except urllib.error.HTTPError as error:
+                duration_ms = int((time.monotonic() - started) * 1000)
+                mapped = _map_provider_http_error(error, request_id, duration_ms)
+                if mapped.code == "invalid_provider_credentials" and auth_mode == "x-api-key":
+                    last_auth_error = mapped
+                    _log_provider_event(
+                        "balance_auth_retry",
+                        request_id,
+                        {
+                            "from_auth_mode": "x-api-key",
+                            "to_auth_mode": "bearer",
+                            "provider_status": error.code,
+                        },
+                    )
+                    continue
+                raise mapped from error
+        else:
+            raise last_auth_error or CheckMyNINBVNError(
+                message="Verification provider authentication failed.",
+                code="invalid_provider_credentials",
+                status_code=503,
+                retryable=False,
+            )
     except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
         duration_ms = int((time.monotonic() - started) * 1000)
-        _log_provider_event("balance_network_failure", request_id, {"duration_ms": duration_ms, "retryable": True, "error_type": type(error).__name__})
+        reason = getattr(error, "reason", error)
+        _log_provider_event(
+            "balance_network_failure",
+            request_id,
+            {
+                "duration_ms": duration_ms,
+                "retryable": True,
+                "error_type": type(error).__name__,
+                "error": str(reason),
+            },
+        )
         raise CheckMyNINBVNError(
             message=_sanitized_unavailable_message(),
             code="provider_unavailable",
@@ -506,7 +662,7 @@ def check_balance() -> dict:
 
     result = _parse_provider_body(raw_body)
     duration_ms = int((time.monotonic() - started) * 1000)
-    _log_provider_event("balance_response", request_id, {"http_status": response.status, "duration_ms": duration_ms, "response": _provider_response_log(result), "response_body": _redact_provider_body(result)})
+    _log_provider_event("balance_response", request_id, {"http_status": response_status, "duration_ms": duration_ms, "response": _provider_response_log(result), "response_body": _redact_provider_body(result)})
     if "raw_text_preview" in result:
         raise CheckMyNINBVNError(
             message="Identity verification currently unavailable.",
@@ -524,7 +680,7 @@ def check_balance() -> dict:
     return {
         "success": str(result.get("status", "")).lower() == "success",
         "message": result.get("message") or "",
-        "provider_http_status": response.status,
+        "provider_http_status": response_status,
         "report_id": result.get("reportID") or result.get("reportId") or result.get("report_id") or "",
         "balance": balance,
         "formatted_balance": data.get("formatted_balance") or "",

@@ -618,6 +618,20 @@ class FCMTokenPayload(BaseModel):
     platform: Optional[str] = ""
 
 
+class DeliveryOrderStatusPayload(BaseModel):
+    delivery_status: Optional[str] = ""
+    status: Optional[str] = ""
+    note: Optional[str] = ""
+
+
+class DeliveryProofPayload(BaseModel):
+    delivery_code: Optional[str] = ""
+    signature_present: Optional[bool] = False
+    photo_url: Optional[str] = ""
+    photo_path: Optional[str] = ""
+    note: Optional[str] = ""
+
+
 class DeliveryAuthCheckPhonePayload(BaseModel):
     phone_number: str
 
@@ -4080,31 +4094,86 @@ async def delivery_worker_signup(
 def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request):
     if not is_mobile_worker_registration_request(request):
         raise HTTPException(status_code=403, detail="NIN verification must be completed on a mobile phone.")
-    if not NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True):
-        raise HTTPException(status_code=503, detail=NIN_PROVIDER_HEALTH.get("message") or "Identity verification currently unavailable.")
+    validation = validate_checkmyninbvn_config()
+    if not validation.get("configured"):
+        raise HTTPException(status_code=503, detail="Identity verification is not configured yet. Please contact FoodNova support.")
+    print("NIN_VERIFICATION_ATTEMPT", json_dump({
+        "route": "/delivery-workers/verify-nin",
+        "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
+        "consent": bool(payload.consent),
+        "provider_health": NIN_PROVIDER_HEALTH,
+        "timestamp": iso(datetime.utcnow()),
+    }))
     try:
         result = verify_nin(payload.nin, payload.consent)
     except CheckMyNINBVNError as error:
+        provider_response = error.provider_response or (json_dump(error.provider_body or {}) if error.provider_body else "")
+        user_message = {
+            "invalid_provider_credentials": "The NIN provider rejected the API credentials.",
+            "provider_not_configured": "Identity verification is not configured yet. Please contact FoodNova support.",
+            "invalid_nin": "Please enter a valid 11-digit NIN.",
+            "consent_required": "Please accept NIN verification consent before continuing.",
+            "insufficient_wallet_balance": "Identity verification is temporarily unavailable. Please try again later.",
+            "provider_unavailable": "Identity verification provider is currently unreachable. Please try again shortly.",
+            "provider_timeout": "Identity verification is taking too long. Please try again.",
+            "provider_rate_limited": "Too many verification requests. Please try again later.",
+            "provider_rejected_request": "The NIN provider rejected this request. Please check the NIN and try again.",
+            "provider_error": "Identity verification is temporarily unavailable. Please try again later.",
+        }.get(error.code, str(error) or "NIN verification failed.")
+        print("NIN_VERIFICATION_FAILURE", json_dump({
+            "route": "/delivery-workers/verify-nin",
+            "error_code": error.code,
+            "provider_status": error.provider_status,
+            "provider_response": provider_response,
+            "retryable": error.retryable,
+            "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
+            "timestamp": iso(datetime.utcnow()),
+        }))
         if error.code in {"invalid_provider_credentials", "insufficient_wallet_balance", "provider_unavailable", "provider_timeout", "provider_error"}:
             auth_failed = error.code == "invalid_provider_credentials" or error.provider_status in (401, 403)
             NIN_PROVIDER_HEALTH.update({
                 "healthy": False,
-                "onboarding_verification_enabled": False,
-                "message": "Provider authentication failed. Check API credentials." if auth_failed else (str(error) or "Identity verification currently unavailable."),
+                "onboarding_verification_enabled": not auth_failed and bool(error.retryable),
+                "message": user_message,
                 "provider_auth_status": "failed" if auth_failed else "unknown",
                 "provider_status": error.provider_status,
                 "provider_message": str(error),
                 "checked_at": iso(datetime.utcnow()),
             })
-        return {
+        response_body = {
             "success": False,
             "verified": False,
-            "message": str(error) or "NIN verification failed.",
+            "message": user_message,
             "error_code": error.code,
+            "provider_status": error.provider_status,
+            "provider_response": provider_response,
+            "provider_body": error.provider_body or {},
             "retryable": error.retryable,
         }
+        return JSONResponse(
+            status_code=error.provider_status or error.status_code or 400,
+            content=response_body,
+        )
     if not result.get("verified"):
         return {"success": False, "verified": False, "message": result.get("message") or "NIN verification failed."}
+    NIN_PROVIDER_HEALTH.update({
+        "healthy": True,
+        "onboarding_verification_enabled": True,
+        "message": "Provider healthy.",
+        "provider_auth_status": "authenticated",
+        "provider_status": result.get("provider_http_status"),
+        "provider_message": result.get("message"),
+        "latency_ms": result.get("duration_ms"),
+        "checked_at": iso(datetime.utcnow()),
+    })
+    print("NIN_VERIFICATION_SUCCESS", json_dump({
+        "route": "/delivery-workers/verify-nin",
+        "request_id": result.get("request_id"),
+        "provider_status": result.get("provider_http_status"),
+        "duration_ms": result.get("duration_ms"),
+        "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
+        "timestamp": iso(datetime.utcnow()),
+    }))
     data = result.get("data") or {}
     return {
         "success": True,
@@ -6774,6 +6843,110 @@ def confirm_delivery(order_id: int, payload: dict):
         db.close()
 
 
+def _delivery_worker_order_or_404(db, worker: DBDeliveryWorker, order_id: int) -> DBOrder:
+    order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if getattr(order, "delivery_worker_id", None) != worker.id and getattr(order, "rider_id", None) != worker.id:
+        raise HTTPException(status_code=403, detail="This order is not assigned to your dispatch account")
+    return order
+
+
+@app.patch("/delivery/orders/{order_id}/status")
+def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderStatusPayload, request: Request):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        order = _delivery_worker_order_or_404(db, worker, order_id)
+        raw_status = (payload.delivery_status or payload.status or "").strip().lower()
+        allowed = {
+            "assigned",
+            "accepted",
+            "en_route_to_pickup",
+            "arrived_at_pickup",
+            "picked_up",
+            "en_route_to_customer",
+            "delivered",
+            "cancelled",
+        }
+        if raw_status not in allowed:
+            raise HTTPException(status_code=400, detail="Invalid delivery status")
+
+        order.delivery_status = raw_status.upper()
+        if raw_status in {"picked_up", "en_route_to_customer"}:
+            order.status = "out_for_delivery"
+            order.order_status = "out_for_delivery"
+            order.fulfillment_status = "out_for_delivery"
+        if raw_status == "delivered":
+            order.status = "delivered"
+            order.order_status = "delivered"
+            order.fulfillment_status = "delivered"
+            order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
+        if raw_status == "cancelled":
+            order.delivery_status = "CANCELLED"
+        if payload.note:
+            existing_note = order.service_note or order.admin_note or ""
+            order.service_note = f"{existing_note}\nRider note: {payload.note}".strip()
+        order.updated_at = datetime.utcnow()
+        worker.operational_status = "ON_DELIVERY" if raw_status not in {"delivered", "cancelled"} else "ONLINE"
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(order)
+        data = order_to_dict(order)
+        _create_order_notification(
+            data,
+            "Delivery update",
+            f"Your order {order.order_code} is now {raw_status.replace('_', ' ')}.",
+            "delivery_update",
+            "delivery",
+        )
+        create_admin_audit_log(request, user, "delivery_status_update", "order", order.id, f"{worker.full_name} updated delivery status for {order.order_code}", {"delivery_status": raw_status, "order": data})
+        return {"success": True, "order": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.post("/delivery/orders/{order_id}/proof")
+def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, request: Request):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        order = _delivery_worker_order_or_404(db, worker, order_id)
+        proof = {
+            "signature_present": bool(payload.signature_present),
+            "photo_url": payload.photo_url or payload.photo_path or "",
+            "note": payload.note or "",
+            "submitted_at": datetime.utcnow().isoformat(),
+            "worker_id": worker.id,
+        }
+        if payload.delivery_code:
+            stored_code = str(order.delivery_code or "").strip()
+            if not stored_code:
+                raise HTTPException(status_code=400, detail="No delivery code generated for this order")
+            if str(payload.delivery_code).strip() != stored_code:
+                raise HTTPException(status_code=400, detail="Invalid delivery confirmation code")
+            order.delivery_confirmed_at = datetime.utcnow()
+        elif not proof["signature_present"] and not proof["photo_url"]:
+            raise HTTPException(status_code=400, detail="Delivery proof requires OTP, signature, or photo")
+
+        order.status = "delivered"
+        order.order_status = "delivered"
+        order.fulfillment_status = "delivered"
+        order.delivery_status = "DELIVERED"
+        order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
+        order.service_note = f"{order.service_note or ''}\nDelivery proof: {json_dump(proof)}".strip()
+        order.updated_at = datetime.utcnow()
+        worker.operational_status = "ONLINE"
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(order)
+        data = order_to_dict(order)
+        _create_order_notification(data, "Delivery completed", f"Your order {order.order_code} has been delivered.", "delivery_update", "delivery")
+        create_admin_audit_log(request, user, "delivery_proof_submitted", "order", order.id, f"{worker.full_name} submitted proof for {order.order_code}", {"proof": proof, "order": data})
+        safe_email_call("customer_delivery_confirmed", send_customer_order_email, data, "delivered")
+        return {"success": True, "message": "Delivery proof submitted", "order": data, "data": data}
+    finally:
+        db.close()
+
+
 @app.get("/admin/products")
 def admin_products(request: Request):
     require_permission(request, "stock:view")
@@ -8109,16 +8282,18 @@ def get_nin_provider_diagnostics(request: Request):
             "headers": {
                 "Content-Type": "application/json",
                 "x-api-key": "present" if config.get("api_key") else "missing",
-                "Authorization": "not sent",
+                "Authorization": "fallback Bearer token if x-api-key is rejected",
             },
+            "auth_order": ["x-api-key", "Authorization: Bearer"],
         },
         "balance_contract": {
             "method": "GET",
             "url": balance_url,
             "headers": {
                 "x-api-key": "present" if config.get("api_key") else "missing",
-                "Authorization": "not sent",
+                "Authorization": "fallback Bearer token if x-api-key is rejected",
             },
+            "auth_order": ["x-api-key", "Authorization: Bearer"],
         },
         "provider_auth": {
             "status": "failed" if balance_status.get("error_code") == "invalid_provider_credentials" else "authenticated" if balance_status.get("available") else "unknown",
