@@ -3661,7 +3661,9 @@ def on_startup():
     seed_database()
     global NIN_PROVIDER_HEALTH
     validation = validate_checkmyninbvn_config()
+    print("CHECKMYNINBVN_API_KEY detected:", bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()))
     if not validation.get("configured"):
+        print("CHECKMYNINBVN_CONFIGURATION_ERROR", validation.get("message"))
         NIN_PROVIDER_HEALTH = {
             "healthy": False,
             "onboarding_verification_enabled": False,
@@ -8282,18 +8284,18 @@ def get_nin_provider_diagnostics(request: Request):
             "headers": {
                 "Content-Type": "application/json",
                 "x-api-key": "present" if config.get("api_key") else "missing",
-                "Authorization": "fallback Bearer token if x-api-key is rejected",
             },
-            "auth_order": ["x-api-key", "Authorization: Bearer"],
+            "auth_mode": "x-api-key",
+            "header_name": "x-api-key",
         },
         "balance_contract": {
             "method": "GET",
             "url": balance_url,
             "headers": {
                 "x-api-key": "present" if config.get("api_key") else "missing",
-                "Authorization": "fallback Bearer token if x-api-key is rejected",
             },
-            "auth_order": ["x-api-key", "Authorization: Bearer"],
+            "auth_mode": "x-api-key",
+            "header_name": "x-api-key",
         },
         "provider_auth": {
             "status": "failed" if balance_status.get("error_code") == "invalid_provider_credentials" else "authenticated" if balance_status.get("available") else "unknown",

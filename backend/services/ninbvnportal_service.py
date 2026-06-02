@@ -121,17 +121,15 @@ def _log_provider_event(event: str, request_id: str, payload: dict) -> None:
     print("CHECKMYNINBVN_DIAGNOSTIC", json.dumps(safe_payload, default=str))
 
 
-def _auth_headers(api_key: str, mode: str) -> dict:
-    if mode == "bearer":
-        return {"Authorization": f"Bearer {api_key}"}
+def _auth_headers(api_key: str) -> dict:
     return {"x-api-key": api_key}
 
 
-def _auth_log(mode: str, api_key: str) -> dict:
+def _auth_log(api_key: str) -> dict:
     return {
-        "auth_mode": mode,
-        "x_api_key_present": mode == "x-api-key" and bool(api_key),
-        "authorization_bearer_present": mode == "bearer" and bool(api_key),
+        "auth_mode": "x-api-key",
+        "header_name": "x-api-key",
+        "x_api_key_present": bool(api_key),
         "api_key_length": len(api_key or ""),
     }
 
@@ -373,7 +371,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "headers": {
                     "content_type": "application/json",
                     "accept": "application/json",
-                    **_auth_log("x-api-key", config["api_key"]),
+                    **_auth_log(config["api_key"]),
                 },
                 "body": {"nin": f"*******{nin[-4:]}", "consent": True},
                 "body_keys": ["nin", "consent"],
@@ -383,76 +381,56 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         )
         print("BASE URL:", config["base_url"])
         print("Calling:", url)
+        print("ENDPOINT USED:", url)
+        print("AUTH MODE USED:", "x-api-key")
+        print("HEADER NAME USED:", "x-api-key")
         print("Payload:", json.dumps({"nin": f"*******{nin[-4:]}", "consent": True}))
 
         started = time.monotonic()
         response_status = None
         raw_body = ""
-        last_auth_error = None
         try:
-            for auth_mode in ("x-api-key", "bearer"):
-                request = urllib.request.Request(
-                    url,
-                    data=payload,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                        **_auth_headers(config["api_key"], auth_mode),
+            request = urllib.request.Request(
+                url,
+                data=payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    **_auth_headers(config["api_key"]),
+                },
+                method="POST",
+            )
+            print("Headers:", json.dumps(_safe_headers_for_print(dict(request.header_items())), default=str))
+            _log_provider_event(
+                "request_attempt",
+                request_id,
+                {
+                    "url": url,
+                    "method": "POST",
+                    "headers": {
+                        "content_type": "application/json",
+                        "accept": "application/json",
+                        **_auth_log(config["api_key"]),
                     },
-                    method="POST",
-                )
-                print("Headers:", json.dumps(_safe_headers_for_print(dict(request.header_items())), default=str))
-                _log_provider_event(
-                    "request_attempt",
-                    request_id,
-                    {
-                        "url": url,
-                        "method": "POST",
-                        "headers": {
-                            "content_type": "application/json",
-                            "accept": "application/json",
-                            **_auth_log(auth_mode, config["api_key"]),
-                        },
-                    },
-                )
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+                    response_status = response.status
+                    raw_body = response.read().decode("utf-8")
+                print("Status:", response_status)
+                print("Body:", json.dumps(_redact_provider_body(_parse_provider_body(raw_body)), default=str))
+            except urllib.error.HTTPError as error:
+                duration_ms = int((time.monotonic() - started) * 1000)
                 try:
-                    with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
-                        response_status = response.status
-                        raw_body = response.read().decode("utf-8")
-                    print("Status:", response_status)
-                    print("Body:", json.dumps(_redact_provider_body(_parse_provider_body(raw_body)), default=str))
-                    break
-                except urllib.error.HTTPError as error:
-                    duration_ms = int((time.monotonic() - started) * 1000)
-                    try:
-                        error_body = error.read().decode("utf-8")
-                    except Exception:
-                        error_body = ""
-                    print("Status:", error.code)
-                    print("Body:", error_body)
-                    if error_body:
-                        error.fp = io.BytesIO(error_body.encode("utf-8"))
-                    mapped = _map_provider_http_error(error, request_id, duration_ms)
-                    if mapped.code == "invalid_provider_credentials" and auth_mode == "x-api-key":
-                        last_auth_error = mapped
-                        _log_provider_event(
-                            "auth_retry",
-                            request_id,
-                            {
-                                "from_auth_mode": "x-api-key",
-                                "to_auth_mode": "bearer",
-                                "provider_status": error.code,
-                            },
-                        )
-                        continue
-                    raise mapped from error
-            else:
-                raise last_auth_error or CheckMyNINBVNError(
-                    message="Verification provider authentication failed.",
-                    code="invalid_provider_credentials",
-                    status_code=503,
-                    retryable=False,
-                )
+                    error_body = error.read().decode("utf-8")
+                except Exception:
+                    error_body = ""
+                print("Status:", error.code)
+                print("Body:", error_body)
+                if error_body:
+                    error.fp = io.BytesIO(error_body.encode("utf-8"))
+                raise _map_provider_http_error(error, request_id, duration_ms) from error
         except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
             duration_ms = int((time.monotonic() - started) * 1000)
             reason = getattr(error, "reason", error)
@@ -585,61 +563,38 @@ def check_balance() -> dict:
             "method": "GET",
             "api_key_present": bool(config["api_key"]),
             "configured_base_url_present": bool(config.get("configured_base_url")),
-            "headers": {"accept": "application/json", **_auth_log("x-api-key", config["api_key"])},
+            "headers": {"accept": "application/json", **_auth_log(config["api_key"])},
             "timeout_seconds": _timeout_seconds(),
         },
     )
     started = time.monotonic()
     raw_body = ""
     response_status = None
-    last_auth_error = None
     try:
-        for auth_mode in ("x-api-key", "bearer"):
-            request = urllib.request.Request(
-                url,
-                headers={
-                    "Accept": "application/json",
-                    **_auth_headers(config["api_key"], auth_mode),
-                },
-                method="GET",
-            )
-            _log_provider_event(
-                "balance_request_attempt",
-                request_id,
-                {
-                    "url": url,
-                    "method": "GET",
-                    "headers": {"accept": "application/json", **_auth_log(auth_mode, config["api_key"])},
-                },
-            )
-            try:
-                with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
-                    response_status = response.status
-                    raw_body = response.read().decode("utf-8")
-                break
-            except urllib.error.HTTPError as error:
-                duration_ms = int((time.monotonic() - started) * 1000)
-                mapped = _map_provider_http_error(error, request_id, duration_ms)
-                if mapped.code == "invalid_provider_credentials" and auth_mode == "x-api-key":
-                    last_auth_error = mapped
-                    _log_provider_event(
-                        "balance_auth_retry",
-                        request_id,
-                        {
-                            "from_auth_mode": "x-api-key",
-                            "to_auth_mode": "bearer",
-                            "provider_status": error.code,
-                        },
-                    )
-                    continue
-                raise mapped from error
-        else:
-            raise last_auth_error or CheckMyNINBVNError(
-                message="Verification provider authentication failed.",
-                code="invalid_provider_credentials",
-                status_code=503,
-                retryable=False,
-            )
+        request = urllib.request.Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                **_auth_headers(config["api_key"]),
+            },
+            method="GET",
+        )
+        _log_provider_event(
+            "balance_request_attempt",
+            request_id,
+            {
+                "url": url,
+                "method": "GET",
+                "headers": {"accept": "application/json", **_auth_log(config["api_key"])},
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+                response_status = response.status
+                raw_body = response.read().decode("utf-8")
+        except urllib.error.HTTPError as error:
+            duration_ms = int((time.monotonic() - started) * 1000)
+            raise _map_provider_http_error(error, request_id, duration_ms) from error
     except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
         duration_ms = int((time.monotonic() - started) * 1000)
         reason = getattr(error, "reason", error)
