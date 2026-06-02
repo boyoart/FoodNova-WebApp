@@ -30,7 +30,7 @@ from email_service import (
     send_customer_order_email,
     send_low_stock_alert,
 )
-from services.ninbvnportal_service import CheckMyNINBVNError, check_balance, check_provider_connectivity, checkmyninbvn_config, validate_checkmyninbvn_config, verify_nin
+from services.ninbvnportal_service import CheckMyNINBVNError, check_balance, check_provider_connectivity, checkmyninbvn_config, current_nin_auth_mode, validate_checkmyninbvn_config, verify_nin
 
 try:
     import firebase_admin
@@ -4127,6 +4127,7 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             "error_code": error.code,
             "provider_status": error.provider_status,
             "provider_response": provider_response,
+            "provider_attempts": error.provider_attempts or [],
             "retryable": error.retryable,
             "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
             "timestamp": iso(datetime.utcnow()),
@@ -4150,6 +4151,7 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             "provider_status": error.provider_status,
             "provider_response": provider_response,
             "provider_body": error.provider_body or {},
+            "provider_attempts": error.provider_attempts or [],
             "retryable": error.retryable,
         }
         return JSONResponse(
@@ -4157,7 +4159,15 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             content=response_body,
         )
     if not result.get("verified"):
-        return {"success": False, "verified": False, "message": result.get("message") or "NIN verification failed."}
+        return {
+            "success": False,
+            "verified": False,
+            "message": result.get("message") or "NIN verification failed.",
+            "provider_status": result.get("provider_http_status"),
+            "provider_response": json_dump(result.get("raw_response") or {}),
+            "provider_body": result.get("raw_response") or {},
+            "provider_attempts": result.get("provider_attempts") or [],
+        }
     NIN_PROVIDER_HEALTH.update({
         "healthy": True,
         "onboarding_verification_enabled": True,
@@ -4184,13 +4194,18 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
         "report_id": result.get("report_id") or "",
         "nin_last4": "".join(ch for ch in str(payload.nin or "") if ch.isdigit())[-4:],
         "data": {
+            "firstname": data.get("first_name") or "",
+            "middlename": data.get("middle_name") or "",
+            "surname": data.get("surname") or "",
             "first_name": data.get("first_name") or "",
             "last_name": data.get("surname") or "",
             "middle_name": data.get("middle_name") or "",
-            "date_of_birth": data.get("birthdate") or "",
+            "date_of_birth": data.get("birthdate") or data.get("dob") or "",
+            "birthdate": data.get("birthdate") or data.get("dob") or "",
             "gender": data.get("gender") or "",
             "phone": data.get("phone") or "",
             "address": data.get("address") or "",
+            "photo": data.get("photo") or "",
         },
     }
 
@@ -8285,8 +8300,12 @@ def get_nin_provider_diagnostics(request: Request):
                 "Content-Type": "application/json",
                 "X-API-Key": "present" if config.get("api_key") else "missing",
             },
-            "auth_mode": "x-api-key",
-            "header_name": "X-API-Key",
+            "auth_mode": current_nin_auth_mode(),
+            "auth_strategy": "x-api-key first, retry bearer once on x-api-key 401",
+            "auth_methods": [
+                {"auth_mode": "x-api-key", "header_name": "x-api-key"},
+                {"auth_mode": "bearer", "header_name": "Authorization"},
+            ],
         },
         "balance_contract": {
             "method": "GET",
@@ -8295,7 +8314,7 @@ def get_nin_provider_diagnostics(request: Request):
                 "X-API-Key": "present" if config.get("api_key") else "missing",
             },
             "auth_mode": "x-api-key",
-            "header_name": "X-API-Key",
+            "header_name": "x-api-key",
         },
         "provider_auth": {
             "status": "failed" if balance_status.get("error_code") == "invalid_provider_credentials" else "authenticated" if balance_status.get("available") else "unknown",
@@ -8410,9 +8429,16 @@ def debug_checkmynin_config():
     return {
         "api_key_present": bool(api_key),
         "api_key_prefix": api_key[:8] if api_key else "",
+        "api_key_length": len(api_key),
+        "api_key_first6": api_key[:6] if api_key else "",
+        "api_key_last4": api_key[-4:] if api_key else "",
         "base_url": config.get("base_url"),
-        "auth_mode": "x-api-key",
-        "header_name": "X-API-Key",
+        "auth_mode": current_nin_auth_mode(),
+        "auth_strategy": "x-api-key first, retry bearer once on x-api-key 401, then prefer bearer if it succeeds",
+        "auth_methods": [
+            {"auth_mode": "x-api-key", "header_name": "x-api-key"},
+            {"auth_mode": "bearer", "header_name": "Authorization"},
+        ],
         "endpoint": f"{config.get('base_url')}/nin-verification",
     }
 

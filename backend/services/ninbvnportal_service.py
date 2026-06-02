@@ -17,6 +17,7 @@ LOW_BALANCE_THRESHOLD = 500
 _ACTIVE_NIN_REQUESTS = set()
 _ACTIVE_NIN_REQUESTS_LOCK = threading.Lock()
 _NIN_ENDPOINT_PATH = "nin-verification"
+_PREFERRED_NIN_AUTH_MODE = "x-api-key"
 
 
 @dataclass
@@ -28,6 +29,7 @@ class CheckMyNINBVNError(Exception):
     provider_status: Optional[int] = None
     provider_body: Optional[dict] = None
     provider_response: Optional[str] = None
+    provider_attempts: Optional[list] = None
 
     def __str__(self) -> str:
         return self.message
@@ -121,16 +123,26 @@ def _log_provider_event(event: str, request_id: str, payload: dict) -> None:
     print("CHECKMYNINBVN_DIAGNOSTIC", json.dumps(safe_payload, default=str))
 
 
-def _auth_headers(api_key: str) -> dict:
-    return {"X-API-Key": api_key}
+def _auth_headers(api_key: str, mode: str = "x-api-key") -> dict:
+    if mode == "bearer":
+        return {"Authorization": f"Bearer {api_key}"}
+    return {"x-api-key": api_key}
 
 
-def _auth_log(api_key: str) -> dict:
+def current_nin_auth_mode() -> str:
+    return _PREFERRED_NIN_AUTH_MODE
+
+
+def _auth_log(api_key: str, mode: str = "x-api-key") -> dict:
+    header_name = "Authorization" if mode == "bearer" else "x-api-key"
     return {
-        "auth_mode": "x-api-key",
-        "header_name": "X-API-Key",
-        "x_api_key_present": bool(api_key),
+        "auth_mode": mode,
+        "header_name": header_name,
+        "x_api_key_present": mode == "x-api-key" and bool(api_key),
+        "authorization_bearer_present": mode == "bearer" and bool(api_key),
         "api_key_length": len(api_key or ""),
+        "api_key_first6": (api_key or "")[:6],
+        "api_key_last4": (api_key or "")[-4:] if api_key else "",
     }
 
 
@@ -296,6 +308,7 @@ def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, dur
 
 
 def verify_nin(nin_number: str, consent: bool = True) -> dict:
+    global _PREFERRED_NIN_AUTH_MODE
     request_id = f"nin_{uuid4().hex[:12]}"
     nin = "".join(ch for ch in str(nin_number or "") if ch.isdigit())
     if len(nin) != 11:
@@ -371,7 +384,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "headers": {
                     "content_type": "application/json",
                     "accept": "application/json",
-                    **_auth_log(config["api_key"]),
+                    **_auth_log(config["api_key"], "x-api-key"),
                 },
                 "body": {"nin": f"*******{nin[-4:]}", "consent": True},
                 "body_keys": ["nin", "consent"],
@@ -382,55 +395,104 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         print("BASE URL:", config["base_url"])
         print("Calling:", url)
         print("ENDPOINT USED:", url)
-        print("AUTH MODE USED:", "x-api-key")
-        print("HEADER NAME USED:", "X-API-Key")
+        print("CHECKMYNINBVN_API_KEY exists:", bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()))
+        print("CHECKMYNINBVN_API_KEY length:", len(config["api_key"] or ""))
+        print("CHECKMYNINBVN_API_KEY first6:", (config["api_key"] or "")[:6])
+        print("CHECKMYNINBVN_API_KEY last4:", (config["api_key"] or "")[-4:] if config["api_key"] else "")
         print("Payload:", json.dumps({"nin": f"*******{nin[-4:]}", "consent": True}))
 
         started = time.monotonic()
         response_status = None
         raw_body = ""
+        attempts = []
         try:
-            request = urllib.request.Request(
-                url,
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    **_auth_headers(config["api_key"]),
-                },
-                method="POST",
+            auth_order = (
+                ("bearer",)
+                if _PREFERRED_NIN_AUTH_MODE == "bearer"
+                else ("x-api-key", "bearer")
             )
-            print("Headers:", json.dumps(_safe_headers_for_print(dict(request.header_items())), default=str))
-            _log_provider_event(
-                "request_attempt",
-                request_id,
-                {
-                    "url": url,
-                    "method": "POST",
-                    "headers": {
-                        "content_type": "application/json",
-                        "accept": "application/json",
-                        **_auth_log(config["api_key"]),
+            for auth_mode in auth_order:
+                request = urllib.request.Request(
+                    url,
+                    data=payload,
+                    headers={
+                        "Content-Type": "application/json",
+                        "Accept": "application/json",
+                        **_auth_headers(config["api_key"], auth_mode),
                     },
-                },
-            )
-            try:
-                with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
-                    response_status = response.status
-                    raw_body = response.read().decode("utf-8")
-                print("Status:", response_status)
-                print("Body:", json.dumps(_redact_provider_body(_parse_provider_body(raw_body)), default=str))
-            except urllib.error.HTTPError as error:
-                duration_ms = int((time.monotonic() - started) * 1000)
+                    method="POST",
+                )
+                auth_meta = _auth_log(config["api_key"], auth_mode)
+                print("AUTH MODE USED:", auth_meta["auth_mode"])
+                print("HEADER NAME USED:", auth_meta["header_name"])
+                print("Headers:", json.dumps(_safe_headers_for_print(dict(request.header_items())), default=str))
+                _log_provider_event(
+                    "request_attempt",
+                    request_id,
+                    {
+                        "url": url,
+                        "method": "POST",
+                        "headers": {
+                            "content_type": "application/json",
+                            "accept": "application/json",
+                            **auth_meta,
+                        },
+                    },
+                )
                 try:
-                    error_body = error.read().decode("utf-8")
-                except Exception:
-                    error_body = ""
-                print("Status:", error.code)
-                print("Body:", error_body)
-                if error_body:
-                    error.fp = io.BytesIO(error_body.encode("utf-8"))
-                raise _map_provider_http_error(error, request_id, duration_ms) from error
+                    with urllib.request.urlopen(request, timeout=_timeout_seconds()) as response:
+                        response_status = response.status
+                        raw_body = response.read().decode("utf-8")
+                    parsed_body = _parse_provider_body(raw_body)
+                    print("Status:", response_status)
+                    print("Body:", json.dumps(_redact_provider_body(parsed_body), default=str))
+                    attempts.append({
+                        "auth_method": auth_meta["auth_mode"],
+                        "header_name": auth_meta["header_name"],
+                        "endpoint": url,
+                        "response_code": response_status,
+                        "response_body": raw_body,
+                        "response": _redact_provider_body(parsed_body),
+                    })
+                    if auth_mode == "bearer":
+                        _PREFERRED_NIN_AUTH_MODE = "bearer"
+                        print("CHECKMYNINBVN_AUTH_MODE_SWITCHED:", "bearer")
+                    break
+                except urllib.error.HTTPError as error:
+                    try:
+                        error_body = error.read().decode("utf-8")
+                    except Exception:
+                        error_body = ""
+                    parsed_error_body = _parse_provider_body(error_body)
+                    print("Status:", error.code)
+                    print("Body:", error_body)
+                    attempts.append({
+                        "auth_method": auth_meta["auth_mode"],
+                        "header_name": auth_meta["header_name"],
+                        "endpoint": url,
+                        "response_code": error.code,
+                        "response_body": error_body,
+                        "response": _redact_provider_body(parsed_error_body),
+                    })
+                    if auth_mode == "x-api-key" and error.code == 401:
+                        print("Retrying with Authorization Bearer after x-api-key 401")
+                        continue
+                    if error_body:
+                        error.fp = io.BytesIO(error_body.encode("utf-8"))
+                    mapped = _map_provider_http_error(error, request_id, int((time.monotonic() - started) * 1000))
+                    mapped.provider_attempts = attempts
+                    raise mapped from error
+            else:
+                raise CheckMyNINBVNError(
+                    message="Provider rejected API credentials. Verify API key or wallet status.",
+                    code="invalid_provider_credentials",
+                    status_code=401,
+                    retryable=False,
+                    provider_status=attempts[-1]["response_code"] if attempts else None,
+                    provider_body=attempts[-1].get("response") if attempts else {},
+                    provider_response=attempts[-1].get("response_body") if attempts else "",
+                    provider_attempts=attempts,
+                )
         except (urllib.error.URLError, TimeoutError, socket.timeout) as error:
             duration_ms = int((time.monotonic() - started) * 1000)
             reason = getattr(error, "reason", error)
@@ -450,7 +512,10 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 code="provider_timeout" if event == "timeout_failure" else "provider_unavailable",
                 status_code=503,
                 retryable=True,
+                provider_attempts=attempts,
             ) from error
+        except CheckMyNINBVNError:
+            raise
         except Exception as error:
             duration_ms = int((time.monotonic() - started) * 1000)
             _log_provider_event(
@@ -488,6 +553,9 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 code="invalid_provider_response",
                 status_code=503,
                 retryable=True,
+                provider_status=response_status,
+                provider_response=raw_body,
+                provider_attempts=attempts,
             )
 
         status = str(result.get("status", "")).lower()
@@ -499,14 +567,20 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 status_code=503,
                 retryable=False,
                 provider_status=response_status,
+                provider_body=result,
+                provider_response=raw_body,
+                provider_attempts=attempts,
             )
         if status != "success" and ("internal" in provider_message.lower() or "unauthorized" in provider_message.lower() or "api key" in provider_message.lower()):
             raise CheckMyNINBVNError(
-                message="Verification provider authentication failed." if ("unauthorized" in provider_message.lower() or "api key" in provider_message.lower()) else "Identity verification currently unavailable.",
+                message="Provider rejected API credentials. Verify API key or wallet status." if ("unauthorized" in provider_message.lower() or "api key" in provider_message.lower()) else "Identity verification currently unavailable.",
                 code="invalid_provider_credentials" if ("unauthorized" in provider_message.lower() or "api key" in provider_message.lower()) else "provider_error",
-                status_code=503,
-                retryable=True,
+                status_code=response_status or 401,
+                retryable=False,
                 provider_status=response_status,
+                provider_body=result,
+                provider_response=raw_body,
+                provider_attempts=attempts,
             )
         verified = status == "success"
         data = result.get("data") or {}
@@ -521,6 +595,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             "duration_ms": duration_ms,
             "provider": "checkmyninbvn",
             "raw_response": result,
+            "provider_attempts": attempts,
             "data": {
                 "first_name": data.get("firstname") or data.get("first_name") or "",
                 "middle_name": data.get("middlename") or data.get("middle_name") or "",
