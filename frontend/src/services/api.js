@@ -3,6 +3,16 @@ import axios from "axios";
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "https://foodnova-webapp.onrender.com";
 
+export const resolveMediaUrl = (value = "") => {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  if (url.startsWith("//")) return `https:${url}`;
+  const base = API_BASE_URL.replace(/\/+$/, "");
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${base}${path}`;
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -47,6 +57,29 @@ export const packsAPI = {
 
 export const categoriesAPI = {
   getAll: async () => await api.get("/categories"),
+};
+
+export const announcementsAPI = {
+  getActive: async () => await api.get("/announcements/active"),
+};
+
+export const websiteSettingsAPI = {
+  get: async () => {
+    const response = await api.get("/website-settings");
+    return response.data?.settings || response.data?.data || response.data || {};
+  },
+  getAdmin: async () => {
+    const response = await api.get("/admin/website-settings");
+    return response.data?.settings || response.data?.data || response.data || {};
+  },
+  update: async (payload) => {
+    const response = await api.patch("/admin/website-settings", payload);
+    return response.data?.settings || response.data?.data || response.data || {};
+  },
+  subscribe: async (email) => {
+    const response = await api.post("/coming-soon/subscribe", { email });
+    return response.data;
+  },
 };
 
 export const authAPI = {
@@ -147,6 +180,13 @@ export const ordersAPI = {
     const response = await api.post(`/orders/${orderId}/confirm-delivery`, {
       delivery_code: code,
     });
+    return response.data;
+  },
+};
+
+export const trackingAPI = {
+  trackOrder: async (payload) => {
+    const response = await api.post("/track-order", payload);
     return response.data;
   },
 };
