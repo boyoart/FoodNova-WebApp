@@ -509,6 +509,18 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 **_auth_headers(config["api_key"], auth_mode),
             }
             auth_meta = _auth_log(config["api_key"], auth_mode)
+            safe_request_headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "x-api-key": "[configured]" if config["api_key"] else "[missing]",
+            }
+            print("NIN_VERIFY_REQUEST", json.dumps({
+                "request_id": request_id,
+                "method": "POST",
+                "endpoint": url,
+                "headers": safe_request_headers,
+                "payload": request_body,
+            }))
             print("AUTH MODE USED:", auth_meta["auth_mode"])
             print("HEADER NAME USED:", auth_meta["header_name"])
             print("Headers:", json.dumps(_safe_headers_for_print(request_headers), default=str))
@@ -535,6 +547,8 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 timeout=_timeout_seconds(),
             )
             parsed_body = _parse_provider_body(raw_body)
+            print("NIN_VERIFY_STATUS", response_status)
+            print("NIN_VERIFY_RESPONSE", raw_body)
             print("Status:", response_status)
             print("Body:", raw_body)
             attempts.append({
@@ -662,6 +676,13 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             "request_id": request_id,
             "duration_ms": duration_ms,
             "provider": "ninbvnportal",
+            "request_endpoint": url,
+            "request_method": "POST",
+            "request_headers": safe_request_headers,
+            "request_payload": request_body,
+            "raw_response_body": raw_body,
+            "parsed_response_body": result,
+            "failure_stage": "" if verified else "provider_rejection",
             "raw_response": result,
             "provider_attempts": attempts,
             "data": {

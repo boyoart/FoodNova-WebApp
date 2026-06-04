@@ -68,7 +68,7 @@ export default function AdminNinDiagnostics() {
         </button>
         <button type="button" className="nin-test-button secondary" onClick={runTestVerification} disabled={loading}>
           <BadgeCheck size={18} />
-          Run Test NIN Verification
+          Test NIN Verification
         </button>
       </div>
 
@@ -84,13 +84,30 @@ export default function AdminNinDiagnostics() {
             <div><dt>Balance</dt><dd>{displayValue(result.balance)}</dd></div>
             <div><dt>Last Verification Attempt</dt><dd><pre className="nin-inline-json">{JSON.stringify(result.last_verification_attempt ?? 'Not available', null, 2)}</pre></dd></div>
             <div><dt>Last Verification Error</dt><dd><pre className="nin-inline-json">{JSON.stringify(result.last_verification_error ?? result.last_error ?? 'Not available', null, 2)}</pre></dd></div>
+            <div><dt>Failure Stage</dt><dd>{displayValue(result.failure_stage)}</dd></div>
+            <div><dt>Shared Backend Service</dt><dd>{displayValue(result.shared_service)}</dd></div>
           </dl>
 
           {result.last_error && <p className="nin-error-message">{result.last_error}</p>}
 
           <div className="nin-raw-response">
+            <h2>Request Payload</h2>
+            <pre>{JSON.stringify(result.request_payload ?? 'Not available', null, 2)}</pre>
+          </div>
+
+          <div className="nin-raw-response">
+            <h2>Request Headers Used</h2>
+            <pre>{JSON.stringify(result.request_headers_used ?? 'Not available', null, 2)}</pre>
+          </div>
+
+          <div className="nin-raw-response">
             <h2>Full Provider Response Body</h2>
             <pre>{formattedBody || 'Empty response body'}</pre>
+          </div>
+
+          <div className="nin-raw-response">
+            <h2>Parsed Provider Response Body</h2>
+            <pre>{JSON.stringify(result.parsed_response_body ?? 'Not available', null, 2)}</pre>
           </div>
         </section>
       )}

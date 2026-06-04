@@ -4006,6 +4006,13 @@ async def delivery_worker_signup(
 
     db = SessionLocal()
     try:
+        print("NIN_ONBOARDING_REGISTRATION_STAGE", json_dump({
+            "stage": "database_validation",
+            "provider_verified": bool(nin_result.get("verified")),
+            "report_id": nin_result.get("report_id") or "",
+            "identity_fields_populated": bool(any(nin_data.values())),
+            "route": "/delivery-workers/signup",
+        }))
         if get_db_user_by_email(db, account_email) or get_db_user_by_phone(db, clean_phone):
             raise HTTPException(status_code=400, detail="A delivery account with this email or phone already exists")
 
@@ -4102,6 +4109,12 @@ async def delivery_worker_signup(
             rider_document_upsert(db, worker, "identity_document", id_document_url, {"filename": id_document.filename, "content_type": id_document.content_type or ""})
             rider_document_upsert(db, worker, "vehicle_photo", vehicle_photo_url, {"filename": getattr(vehicle_photo, "filename", ""), "content_type": getattr(vehicle_photo, "content_type", "")})
             sync_rider_onboarding_state(db, worker, note="Rider submitted complete signup KYC")
+        print("NIN_ONBOARDING_REGISTRATION_STAGE", json_dump({
+            "stage": "database_save",
+            "worker_id": worker.id,
+            "user_id": user.id,
+            "route": "/delivery-workers/signup",
+        }))
         db.commit()
         db.refresh(worker)
         worker_data = worker_to_dict(worker)
@@ -4132,6 +4145,24 @@ async def delivery_worker_signup(
             {"worker": worker_data},
         )
         return {"success": True, "message": "Identity Verified. Submitted for operational review.", "worker": worker_data, "data": worker_data}
+    except HTTPException as error:
+        db.rollback()
+        print("NIN_ONBOARDING_FAILURE_STAGE", json_dump({
+            "stage": "database_validation",
+            "status_code": error.status_code,
+            "detail": error.detail,
+            "route": "/delivery-workers/signup",
+        }))
+        raise
+    except Exception as error:
+        db.rollback()
+        print("NIN_ONBOARDING_FAILURE_STAGE", json_dump({
+            "stage": "database_save",
+            "error_type": type(error).__name__,
+            "message": str(error),
+            "route": "/delivery-workers/signup",
+        }))
+        raise
     finally:
         db.close()
 
@@ -4139,9 +4170,11 @@ async def delivery_worker_signup(
 @app.post("/delivery-workers/verify-nin")
 def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request):
     if not is_mobile_worker_registration_request(request):
+        print("NIN_ONBOARDING_FAILURE_STAGE", json_dump({"stage": "backend_validation", "reason": "mobile_request_required", "route": "/delivery-workers/verify-nin"}))
         raise HTTPException(status_code=403, detail="NIN verification must be completed on a mobile phone.")
     validation = validate_ninbvnportal_config()
     if not validation.get("configured"):
+        print("NIN_ONBOARDING_FAILURE_STAGE", json_dump({"stage": "backend_validation", "reason": "provider_not_configured", "route": "/delivery-workers/verify-nin"}))
         raise HTTPException(status_code=503, detail=validation.get("message") or "NIN API key missing from server configuration")
     print("NIN_VERIFICATION_ATTEMPT", json_dump({
         "route": "/delivery-workers/verify-nin",
@@ -4153,6 +4186,15 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
     try:
         result = verify_nin(payload.nin, payload.consent)
     except NINBVNPortalError as error:
+        failure_stage = "provider_rejection" if error.provider_status else "backend_validation"
+        if error.code in {"provider_unavailable", "provider_timeout"}:
+            failure_stage = "provider_network"
+        print("NIN_ONBOARDING_FAILURE_STAGE", json_dump({
+            "stage": failure_stage,
+            "error_code": error.code,
+            "provider_status": error.provider_status,
+            "route": "/delivery-workers/verify-nin",
+        }))
         provider_response = error.provider_response or (json_dump(error.provider_body or {}) if error.provider_body else "")
         provider_detail = ""
         if isinstance(error.provider_body, dict):
@@ -4213,6 +4255,12 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
             content=response_body,
         )
     if not result.get("verified"):
+        print("NIN_ONBOARDING_FAILURE_STAGE", json_dump({
+            "stage": "provider_rejection",
+            "provider_status": result.get("provider_http_status"),
+            "provider_message": result.get("message"),
+            "route": "/delivery-workers/verify-nin",
+        }))
         return {
             "success": False,
             "verified": False,
@@ -5050,6 +5098,14 @@ def admin_login(payload: LoginPayload, request: Request):
         "ip_address": get_request_ip(request),
         "route": request.url.path,
         "timestamp": iso(datetime.utcnow()),
+    }))
+    print("NIN_ONBOARDING_VERIFICATION_STAGE", json_dump({
+        "stage": "provider_verified",
+        "shared_service": "services.ninbvnportal_service.verify_nin",
+        "provider_status": result.get("provider_http_status"),
+        "report_id": result.get("report_id"),
+        "identity_fields_populated": bool(any((result.get("data") or {}).values())),
+        "route": "/delivery-workers/verify-nin",
     }))
     db = SessionLocal()
     try:
@@ -9099,7 +9155,7 @@ def get_admin_nin_provider_status(request: Request):
 @app.post("/admin/nin-provider-test-verification")
 def run_admin_nin_provider_test_verification(request: Request):
     require_workforce_view(request)
-    sample_nin = "".join(ch for ch in os.getenv("NINBVNPORTAL_DIAGNOSTIC_NIN", "12345678901") if ch.isdigit())
+    sample_nin = "".join(ch for ch in os.getenv("NINBVNPORTAL_DIAGNOSTIC_NIN", "22021091960") if ch.isdigit())
     if len(sample_nin) != 11:
         raise HTTPException(status_code=500, detail="NINBVNPORTAL_DIAGNOSTIC_NIN must contain exactly 11 digits.")
     print("NIN_DIAGNOSTIC_VERIFY_REQUEST", json_dump({
@@ -9114,11 +9170,21 @@ def run_admin_nin_provider_test_verification(request: Request):
             "diagnostic_only": True,
             "sample_nin_masked": f"*******{sample_nin[-4:]}",
             "provider": "ninbvnportal",
+            "provider_url": result.get("request_endpoint"),
+            "request_payload": result.get("request_payload"),
+            "request_headers_used": result.get("request_headers"),
             "http_status_code": result.get("provider_http_status"),
             "provider_response_body": result.get("raw_response_body") or json_dump(result.get("raw_response") or {}),
+            "parsed_response_body": result.get("parsed_response_body") or result.get("raw_response") or {},
+            "failure_stage": result.get("failure_stage") or "",
+            "shared_service": "services.ninbvnportal_service.verify_nin",
             "result": result,
         }
     except NINBVNPortalError as error:
+        provider_attempt = (error.provider_attempts or [{}])[-1]
+        failure_stage = "provider_rejection" if error.provider_status else "backend_validation"
+        if error.code in {"provider_unavailable", "provider_timeout"}:
+            failure_stage = "provider_network"
         return JSONResponse(
             status_code=error.provider_status or error.status_code or 400,
             content={
@@ -9126,9 +9192,19 @@ def run_admin_nin_provider_test_verification(request: Request):
                 "diagnostic_only": True,
                 "sample_nin_masked": f"*******{sample_nin[-4:]}",
                 "provider": "ninbvnportal",
+                "provider_url": provider_attempt.get("endpoint") or f"{ninbvnportal_config().get('base_url')}/nin-verification",
+                "request_payload": {"nin": sample_nin, "consent": True},
+                "request_headers_used": {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "x-api-key": "[configured]" if ninbvnportal_config().get("api_key") else "[missing]",
+                },
                 "error_code": error.code,
                 "http_status_code": error.provider_status,
                 "provider_response_body": error.provider_response or error.provider_body or "",
+                "parsed_response_body": error.provider_body or {},
+                "failure_stage": failure_stage,
+                "shared_service": "services.ninbvnportal_service.verify_nin",
                 "message": str(error),
                 "provider_attempts": error.provider_attempts or [],
             },
