@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
-import { Activity, RefreshCw } from 'lucide-react'
+import { Activity, BadgeCheck, RefreshCw, WalletCards } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './AdminPages.css'
@@ -16,13 +16,13 @@ export default function AdminNinDiagnostics() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
 
-  const testProvider = async () => {
+  const runAction = async (action, successMessage) => {
     setLoading(true)
     try {
-      const response = await adminAPI.testNinProvider()
+      const response = await action()
       setResult(response)
-      if (response.authenticated) toast.success('NIN provider authenticated successfully')
-      else toast.error(response.last_error || 'NIN provider test failed')
+      if (response.authenticated || response.success) toast.success(successMessage)
+      else toast.error(response.last_error || response.message || 'NIN provider test failed')
     } catch (error) {
       const response = error.response?.data || {
         balance_request_status: 'request_failed',
@@ -36,6 +36,10 @@ export default function AdminNinDiagnostics() {
       setLoading(false)
     }
   }
+
+  const testProvider = () => runAction(adminAPI.testNinProvider, 'NIN provider test completed')
+  const checkBalance = () => runAction(adminAPI.checkNinProviderBalance, 'Balance check completed')
+  const runTestVerification = () => runAction(adminAPI.runTestNinVerification, 'Test NIN verification completed')
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
 
@@ -53,20 +57,33 @@ export default function AdminNinDiagnostics() {
         <Activity size={36} />
       </header>
 
-      <button type="button" className="nin-test-button" onClick={testProvider} disabled={loading}>
-        <RefreshCw size={18} className={loading ? 'spin' : ''} />
-        {loading ? 'Testing NIN Provider...' : 'Test NIN Provider'}
-      </button>
+      <div className="nin-diagnostic-actions">
+        <button type="button" className="nin-test-button" onClick={testProvider} disabled={loading}>
+          <RefreshCw size={18} className={loading ? 'spin' : ''} />
+          Test Provider Now
+        </button>
+        <button type="button" className="nin-test-button secondary" onClick={checkBalance} disabled={loading}>
+          <WalletCards size={18} />
+          Check Balance
+        </button>
+        <button type="button" className="nin-test-button secondary" onClick={runTestVerification} disabled={loading}>
+          <BadgeCheck size={18} />
+          Run Test NIN Verification
+        </button>
+      </div>
 
       {result && (
         <section className="nin-result-panel">
           <dl className="nin-result-grid">
             <div><dt>Provider URL</dt><dd>{displayValue(result.provider_url || result.base_url)}</dd></div>
+            <div><dt>Provider Name</dt><dd>{displayValue(result.provider)}</dd></div>
             <div><dt>API key loaded</dt><dd>{result.api_key_loaded ? `Yes (${result.api_key_masked})` : 'No'}</dd></div>
-            <div><dt>Balance request status</dt><dd>{displayValue(result.balance_request_status)}</dd></div>
+            <div><dt>Balance Check Result</dt><dd>{displayValue(result.balance_request_status || result.balance?.message || result.message)}</dd></div>
             <div><dt>HTTP status code</dt><dd>{displayValue(result.http_status_code)}</dd></div>
             <div><dt>Authenticated</dt><dd>{result.authenticated ? 'Yes' : 'No'}</dd></div>
             <div><dt>Balance</dt><dd>{displayValue(result.balance)}</dd></div>
+            <div><dt>Last Verification Attempt</dt><dd><pre className="nin-inline-json">{JSON.stringify(result.last_verification_attempt ?? 'Not available', null, 2)}</pre></dd></div>
+            <div><dt>Last Verification Error</dt><dd><pre className="nin-inline-json">{JSON.stringify(result.last_verification_error ?? result.last_error ?? 'Not available', null, 2)}</pre></dd></div>
           </dl>
 
           {result.last_error && <p className="nin-error-message">{result.last_error}</p>}

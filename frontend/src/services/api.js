@@ -419,6 +419,16 @@ export const adminAPI = {
     const response = await api.get("/admin/nin-provider-status");
     return response.data;
   },
+
+  checkNinProviderBalance: async () => {
+    const response = await api.get("/admin/diagnostics/nin-provider/balance");
+    return response.data;
+  },
+
+  runTestNinVerification: async () => {
+    const response = await api.post("/admin/nin-provider-test-verification");
+    return response.data;
+  },
 };
 
 export const notificationsAPI = {

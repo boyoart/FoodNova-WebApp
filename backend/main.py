@@ -8988,13 +8988,22 @@ def get_nin_provider_balance(request: Request):
     require_workforce_view(request)
     try:
         balance = check_balance()
-        return {"success": True, "provider": "ninbvnportal", "balance": balance, "data": balance}
+        return {
+            "success": True,
+            "provider": "ninbvnportal",
+            "http_status_code": balance.get("provider_http_status"),
+            "provider_response_body": balance.get("raw_response_body") or json_dump(balance.get("raw_response") or {}),
+            "balance": balance,
+            "data": balance,
+        }
     except NINBVNPortalError as error:
         return {
             "success": False,
             "provider": "ninbvnportal",
             "message": str(error) or "Verification service unavailable. Please retry shortly.",
             "error_code": error.code,
+            "http_status_code": error.provider_status,
+            "provider_response_body": error.provider_response or error.provider_body or "",
             "retryable": error.retryable,
             "data": {
                 "available": False,
@@ -9022,6 +9031,35 @@ def get_admin_nin_provider_status(request: Request):
     api_key = config.get("api_key") or ""
     masked_key = f"{api_key[:6]}{'*' * max(len(api_key) - 6, 0)}" if api_key else ""
     provider_url = f"{config.get('base_url')}/balance"
+    db = SessionLocal()
+    try:
+        latest_attempt = db.query(DBVerificationLog).filter(
+            DBVerificationLog.provider == "ninbvnportal",
+        ).order_by(DBVerificationLog.created_at.desc()).first()
+        latest_error = db.query(DBVerificationLog).filter(
+            DBVerificationLog.provider == "ninbvnportal",
+            DBVerificationLog.success == False,
+        ).order_by(DBVerificationLog.created_at.desc()).first()
+        last_attempt_data = {
+            "id": latest_attempt.id,
+            "request_id": latest_attempt.request_id or "",
+            "status": latest_attempt.status or "",
+            "success": bool(latest_attempt.success),
+            "http_status": latest_attempt.http_status,
+            "message": latest_attempt.message or "",
+            "created_at": iso(latest_attempt.created_at),
+        } if latest_attempt else None
+        last_error_data = {
+            "id": latest_error.id,
+            "request_id": latest_error.request_id or "",
+            "error_code": latest_error.error_code or "",
+            "http_status": latest_error.http_status,
+            "message": latest_error.message or "",
+            "response": json_load(latest_error.response_json, {}),
+            "created_at": iso(latest_error.created_at),
+        } if latest_error else None
+    finally:
+        db.close()
     try:
         balance = check_balance()
         authenticated = bool(balance.get("success"))
@@ -9036,6 +9074,8 @@ def get_admin_nin_provider_status(request: Request):
             "balance_request_status": "success" if authenticated else "failed",
             "http_status_code": balance.get("provider_http_status"),
             "provider_response_body": balance.get("raw_response_body") or json_dump(balance.get("raw_response") or {}),
+            "last_verification_attempt": last_attempt_data,
+            "last_verification_error": last_error_data,
             "last_error": "" if authenticated else balance.get("message") or "Provider balance check failed.",
         }
     except NINBVNPortalError as error:
@@ -9050,8 +9090,49 @@ def get_admin_nin_provider_status(request: Request):
             "balance_request_status": "failed",
             "http_status_code": error.provider_status,
             "provider_response_body": error.provider_response or error.provider_body or "",
+            "last_verification_attempt": last_attempt_data,
+            "last_verification_error": last_error_data,
             "last_error": str(error) or "Provider balance check failed.",
         }
+
+
+@app.post("/admin/nin-provider-test-verification")
+def run_admin_nin_provider_test_verification(request: Request):
+    require_workforce_view(request)
+    sample_nin = "".join(ch for ch in os.getenv("NINBVNPORTAL_DIAGNOSTIC_NIN", "12345678901") if ch.isdigit())
+    if len(sample_nin) != 11:
+        raise HTTPException(status_code=500, detail="NINBVNPORTAL_DIAGNOSTIC_NIN must contain exactly 11 digits.")
+    print("NIN_DIAGNOSTIC_VERIFY_REQUEST", json_dump({
+        "sample_nin_last4": sample_nin[-4:],
+        "provider": "ninbvnportal",
+        "timestamp": iso(datetime.utcnow()),
+    }))
+    try:
+        result = verify_nin(sample_nin, True)
+        return {
+            "success": bool(result.get("verified")),
+            "diagnostic_only": True,
+            "sample_nin_masked": f"*******{sample_nin[-4:]}",
+            "provider": "ninbvnportal",
+            "http_status_code": result.get("provider_http_status"),
+            "provider_response_body": result.get("raw_response_body") or json_dump(result.get("raw_response") or {}),
+            "result": result,
+        }
+    except NINBVNPortalError as error:
+        return JSONResponse(
+            status_code=error.provider_status or error.status_code or 400,
+            content={
+                "success": False,
+                "diagnostic_only": True,
+                "sample_nin_masked": f"*******{sample_nin[-4:]}",
+                "provider": "ninbvnportal",
+                "error_code": error.code,
+                "http_status_code": error.provider_status,
+                "provider_response_body": error.provider_response or error.provider_body or "",
+                "message": str(error),
+                "provider_attempts": error.provider_attempts or [],
+            },
+        )
 
 
 @app.patch("/admin/broadcasts/{broadcast_id}")

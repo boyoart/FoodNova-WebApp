@@ -262,7 +262,7 @@ export default function Navbar() {
     { to: '/admin/reports', label: 'Reports', show: canAdmin('reports:view') },
     { to: '/admin/exports', label: 'Data Exports', show: canAnyAdmin(['exports:view', 'exports:download']) },
     { to: '/admin/settings', label: 'Website Settings', show: isSuperAdminDisplay || canAnyAdmin(['announcements:view', 'announcements:manage']) },
-    { to: '/admin/nin-diagnostics', label: 'NIN Provider Diagnostics', show: isSuperAdminDisplay || canAnyAdmin(['workforce:view', 'workforce:manage', 'delivery:manage', 'riders:manage']) },
+    { to: '/admin/nin-diagnostics', label: 'NIN Diagnostics', show: isSuperAdminDisplay || canAnyAdmin(['workforce:view', 'workforce:manage', 'delivery:manage', 'riders:manage']) },
   ].filter((link) => link.show)
 
   const avatarMenuLinks = isAdmin ? [{ to: '/admin/dashboard', label: 'Dashboard' }, ...adminMenuLinks] : customerMenuLinks
