@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../config/app_config.dart';
@@ -30,16 +31,16 @@ final dioProvider = Provider<Dio>((ref) {
       onError: (error, handler) async {
         // CRITICAL: Only clear session on 401 for authenticated endpoints
         // Public endpoints like /delivery-workers/verify-nin should NOT trigger logout
-        final path = error.requestOptions.path ?? '';
+        final path = error.requestOptions.path;
         final isPublicEndpoint = [
           '/delivery-workers/verify-nin',
           '/delivery/auth/login',
           '/auth/login',
         ].any((endpoint) => path.contains(endpoint));
-        
-        // ignore: dead_null_aware_expression
         if (error.response?.statusCode == 401 && !isPublicEndpoint) {
-          print('TOKEN_INVALID auth_error=${error.response?.statusCode} path=$path');
+          debugPrint(
+            'TOKEN_INVALID auth_error=${error.response?.statusCode} path=$path',
+          );
           await ref.read(sessionControllerProvider.notifier).clear();
         }
         handler.next(error);

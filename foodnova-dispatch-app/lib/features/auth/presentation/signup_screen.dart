@@ -268,7 +268,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       setState(() => verificationMessage = 'NIN consent is required.');
       return;
     }
-    print('VERIFY_NIN_START nin_length=${nin.length}');
+    debugPrint('VERIFY_NIN_START nin_length=${nin.length}');
     setState(() {
       verifyingNin = true;
       verificationMessage = '';
@@ -281,7 +281,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           );
       if (!mounted) return;
       if (!result.verified) {
-        print('VERIFY_NIN_FAILURE message=${result.message}');
+        debugPrint('VERIFY_NIN_FAILURE message=${result.message}');
         setState(() {
           verificationMessage = result.message.isEmpty
               ? 'NIN verification failed.'
@@ -289,7 +289,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         });
         return;
       }
-      print('VERIFY_NIN_SUCCESS nin_last4=${result.ninLast4} full_name=${result.fullName}');
+      debugPrint(
+          'VERIFY_NIN_SUCCESS nin_last4=${result.ninLast4} full_name=${result.fullName}');
       final name = result.fullName;
       if (name.isNotEmpty) fields['full_name']!.text = name;
       if (result.phone.isNotEmpty && fields['phone']!.text.trim().isEmpty) {
@@ -305,7 +306,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      print('VERIFY_NIN_FAILURE error=$e');
+      debugPrint('VERIFY_NIN_FAILURE error=$e');
       setState(() => verificationMessage = _friendlyError(e));
     } finally {
       if (mounted) setState(() => verifyingNin = false);
@@ -356,7 +357,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       // Only redirect after a brief delay, allowing user to see the success message.
       await Future.delayed(const Duration(milliseconds: 1500));
       if (!mounted) return;
-      print('RIDER_ONBOARDING_COMPLETE_REDIRECT_TO_LOGIN');
+      debugPrint('RIDER_ONBOARDING_COMPLETE_REDIRECT_TO_LOGIN');
       context.go('/login');
     } catch (e) {
       if (!mounted) return;

@@ -50,10 +50,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           children: [
             profile.when(
               data: (rider) {
-                print('Dashboard loaded');
-                print('Rider ID ${rider.id ?? ''}');
-                print('Rider Name ${rider.name}');
-                print('Data source backend');
+                debugPrint('Dashboard loaded');
+                debugPrint('Rider ID ${rider.id ?? ''}');
+                debugPrint('Rider Name ${rider.name}');
+                debugPrint('Data source backend');
                 return _Header(
                   rider: rider,
                   onToggle: () => _toggleOnline(rider),

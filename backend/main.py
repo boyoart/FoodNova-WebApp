@@ -41,6 +41,7 @@ except Exception:
     messaging = None
 from models import (
     Address as DBAddress,
+    Admin as DBAdmin,
     AdminAuditLog as DBAdminAuditLog,
     Announcement as DBAnnouncement,
     AppSetting as DBAppSetting,
@@ -851,7 +852,10 @@ def is_delivery_token_revoked(token: str, user_id: int, payload: dict = None) ->
     db = SessionLocal()
     try:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user_id).first()
-        if not worker or (worker.worker_type or "") != "rider":
+        token_role = str((payload or {}).get("role") or "").lower()
+        if not worker:
+            return token_role == "rider"
+        if (worker.worker_type or "") != "rider":
             return False
         if delivery_worker_access_block_reason(worker):
             return True
@@ -891,7 +895,7 @@ def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
         user = get_db_user_by_email(db, email)
         if not user:
             return None
-        if (user.role or "") == "admin" and not getattr(user, "is_active", True):
+        if not getattr(user, "is_active", True):
             return None
         if (user.role or "") in ["rider", "messenger"]:
             worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
@@ -5020,22 +5024,85 @@ def login(payload: LoginPayload, request: Request):
 
 
 @app.post("/auth/admin/login")
+@app.post("/api/admin/login")
 def admin_login(payload: LoginPayload, request: Request):
     if not payload.email:
+        print("ADMIN_LOGIN_FAILURE", json_dump({
+            "email": "",
+            "reason": "email_missing",
+            "ip_address": get_request_ip(request),
+            "timestamp": iso(datetime.utcnow()),
+        }))
         raise HTTPException(status_code=400, detail="Admin email is required")
     email = payload.email.lower().strip()
+    print("ADMIN_LOGIN_ATTEMPT", json_dump({
+        "email": email,
+        "ip_address": get_request_ip(request),
+        "route": request.url.path,
+        "timestamp": iso(datetime.utcnow()),
+    }))
     db = SessionLocal()
     try:
         user = get_db_user_by_email(db, email)
-        if not user or (user.role or "") != "admin" or not _password_matches(payload.password, user.password):
+        if not user:
+            print("ADMIN_LOGIN_FAILURE", json_dump({
+                "email": email,
+                "reason": "user_not_found",
+                "ip_address": get_request_ip(request),
+                "timestamp": iso(datetime.utcnow()),
+            }))
+            raise HTTPException(status_code=401, detail="Invalid admin email or password")
+        if (user.role or "") != "admin":
+            print("ADMIN_LOGIN_FAILURE", json_dump({
+                "email": email,
+                "user_id": user.id,
+                "reason": "role_not_admin",
+                "ip_address": get_request_ip(request),
+                "timestamp": iso(datetime.utcnow()),
+            }))
+            raise HTTPException(status_code=401, detail="Invalid admin email or password")
+        if not _password_matches(payload.password, user.password):
+            print("ADMIN_LOGIN_FAILURE", json_dump({
+                "email": email,
+                "user_id": user.id,
+                "reason": "invalid_password",
+                "ip_address": get_request_ip(request),
+                "timestamp": iso(datetime.utcnow()),
+            }))
             raise HTTPException(status_code=401, detail="Invalid admin email or password")
         if not getattr(user, "is_active", True):
+            print("ADMIN_LOGIN_FAILURE", json_dump({
+                "email": email,
+                "user_id": user.id,
+                "reason": "account_inactive",
+                "ip_address": get_request_ip(request),
+                "timestamp": iso(datetime.utcnow()),
+            }))
             raise HTTPException(status_code=403, detail="Admin account is inactive")
 
         token = create_access_token(user)
         user_data = db_user_to_dict(user)
         create_admin_audit_log(request, user_data, "admin_login", "admin", user.id, "Admin logged in")
+        print("ADMIN_LOGIN_SUCCESS", json_dump({
+            "email": email,
+            "user_id": user.id,
+            "role": user.role,
+            "ip_address": get_request_ip(request),
+            "route": request.url.path,
+            "timestamp": iso(datetime.utcnow()),
+        }))
         return auth_response("Admin login successful", user_data, token)
+    except HTTPException:
+        raise
+    except Exception as error:
+        print("ADMIN_LOGIN_FAILURE", json_dump({
+            "email": email,
+            "reason": "unexpected_backend_error",
+            "error_type": type(error).__name__,
+            "ip_address": get_request_ip(request),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        raise
     finally:
         db.close()
 
@@ -6791,25 +6858,79 @@ def deactivate_rider(rider_id: int, request: Request):
         if not worker:
             raise HTTPException(status_code=404, detail="Rider not found")
         old_data = worker_to_dict(worker)
+        worker_name = worker.full_name or f"Rider #{worker.id}"
+        user_id = worker.user_id
         revoked = revoke_rider_sessions(db, worker, admin, "Rider deleted from admin rider management")
-        worker.kyc_status = "DELETED"
-        worker.operational_status = "OFFLINE"
-        worker.deleted_at = datetime.utcnow()
-        worker.deleted_by_admin_id = admin.get("id")
-        worker.deleted_reason = "Deleted from admin rider management"
-        worker.fcm_token = ""
-        worker.fcm_tokens_json = "[]"
-        user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+
+        released_orders = db.query(DBOrder).filter(
+            or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id),
+            DBOrder.order_status.notin_(["delivered", "cancelled"]),
+        ).all()
+        for order in released_orders:
+            order.delivery_worker_id = None
+            order.delivery_worker_type = ""
+            order.delivery_status = ""
+            order.rider_id = None
+            order.rider_name = ""
+            order.rider_phone = ""
+            order.rider_vehicle_type = ""
+            order.rider_vehicle_number = ""
+            order.updated_at = datetime.utcnow()
+
+        offer_count = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).count()
+        db.add(DBDeletedRiderLog(
+            delivery_worker_id=worker.id,
+            admin_id=admin.get("id"),
+            admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+            reason="Permanent admin deletion from rider management",
+            snapshot_json=json_dump({
+                "rider": old_data,
+                "deleted_at": iso(datetime.utcnow()),
+                "deleted_by": admin.get("id"),
+                "revoked_sessions": revoked,
+                "released_order_ids": [order.id for order in released_orders],
+                "removed_delivery_offers": offer_count,
+                "ip": get_request_ip(request),
+                "device": parse_user_agent(request.headers.get("user-agent", "")),
+            }),
+            hard_deleted=True,
+        ))
+        db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).delete(synchronize_session=False)
+        db.delete(worker)
+
+        db.query(DBAddress).filter(DBAddress.user_id == user_id).delete(synchronize_session=False)
+        db.query(DBProfile).filter(DBProfile.user_id == user_id).delete(synchronize_session=False)
+        user = db.query(DBUser).filter(DBUser.id == user_id).first()
         if user:
-            user.is_active = False
-            user.updated_at = datetime.utcnow()
-        sync_rider_onboarding_state(db, worker, admin, "Rider deleted from admin rider management")
+            db.delete(user)
         db.commit()
-        db.refresh(worker)
-        data = worker_to_dict(worker)
-        print("RIDER_DELETED", json_dump({"worker_id": worker.id, "admin_id": admin.get("id"), "hard_deleted": False, "revoked_sessions": revoked, "timestamp": iso(datetime.utcnow())}))
-        create_admin_audit_log(request, admin, "rider_deleted", "delivery_worker", worker.id, f"Admin deleted rider {worker.full_name}", {"before": old_data, "after": data, "revoked_sessions": revoked})
-        return {"success": True, "message": "Rider deleted successfully", "rider": data, "data": data}
+        print("RIDER_DELETED", json_dump({
+            "worker_id": rider_id,
+            "user_id": user_id,
+            "admin_id": admin.get("id"),
+            "hard_deleted": True,
+            "revoked_sessions": revoked,
+            "released_orders": len(released_orders),
+            "removed_delivery_offers": offer_count,
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        create_admin_audit_log(
+            request,
+            admin,
+            "rider_deleted",
+            "delivery_worker",
+            rider_id,
+            f"Admin permanently deleted rider {worker_name}",
+            {"before": old_data, "hard_deleted": True, "revoked_sessions": revoked, "released_orders": len(released_orders), "removed_delivery_offers": offer_count},
+        )
+        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": rider_id, "released_orders": len(released_orders), "removed_delivery_offers": offer_count}
     finally:
         db.close()
 
@@ -8703,12 +8824,154 @@ def debug_checkmynin_config():
 def debug_nin_config():
     config = checkmyninbvn_config()
     api_key = config.get("api_key") or ""
+    endpoint = f"{config.get('base_url')}/nin-verification"
     return {
+        "provider": "checkmyninbvn",
+        "endpoint": endpoint,
         "base_url": config.get("base_url"),
         "auth_mode": current_nin_auth_mode(),
-        "api_key_present": bool(api_key),
+        "auth_header": "x-api-key",
+        "api_key_loaded": bool(api_key),
         "api_key_length": len(api_key),
     }
+
+
+@app.get("/admin/diagnostics/account-search")
+def search_account_records(email: str, request: Request):
+    require_any_permission(request, ["admins:manage", "workforce:view", "workforce:manage", "riders:manage"])
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_email or "@" not in normalized_email:
+        raise HTTPException(status_code=400, detail="A valid email is required")
+    db = SessionLocal()
+    try:
+        matches = []
+        users = db.query(DBUser).filter(func.lower(DBUser.email) == normalized_email).all()
+        user_ids = {user.id for user in users}
+        for user in users:
+            matches.append({
+                "table": "users",
+                "record_id": user.id,
+                "email": user.email,
+                "role": user.role or "",
+                "approval_status": "active" if bool(user.is_active) else "inactive",
+                "created_at": iso(user.created_at),
+                "updated_at": iso(user.updated_at),
+            })
+
+        admins = db.query(DBAdmin).filter(func.lower(DBAdmin.email) == normalized_email).all()
+        for admin_record in admins:
+            matches.append({
+                "table": "admins",
+                "record_id": admin_record.id,
+                "email": admin_record.email,
+                "role": "admin",
+                "approval_status": "active" if bool(admin_record.is_active) else "inactive",
+                "created_at": iso(admin_record.created_at),
+            })
+
+        workers_query = db.query(DBDeliveryWorker).filter(func.lower(DBDeliveryWorker.email) == normalized_email)
+        if user_ids:
+            workers_query = db.query(DBDeliveryWorker).filter(or_(func.lower(DBDeliveryWorker.email) == normalized_email, DBDeliveryWorker.user_id.in_(user_ids)))
+        workers = workers_query.all()
+        worker_ids = {worker.id for worker in workers}
+        for worker in workers:
+            matches.append({
+                "table": "delivery_workers",
+                "record_id": worker.id,
+                "user_id": worker.user_id,
+                "email": worker.email,
+                "worker_type": worker.worker_type,
+                "approval_status": worker.kyc_status or "KYC_PENDING",
+                "operational_status": worker.operational_status or "OFFLINE",
+                "deleted_at": iso(worker.deleted_at),
+                "created_at": iso(worker.created_at),
+                "updated_at": iso(worker.updated_at),
+            })
+
+        legacy_riders = db.query(DBDeliveryRider).filter(func.lower(DBDeliveryRider.email) == normalized_email).all()
+        for rider in legacy_riders:
+            matches.append({
+                "table": "delivery_riders",
+                "record_id": rider.id,
+                "email": rider.email,
+                "approval_status": rider.status or "",
+                "deleted_at": iso(rider.deleted_at),
+                "created_at": iso(rider.created_at),
+                "updated_at": iso(rider.updated_at),
+            })
+
+        riders_query = db.query(DBRider).filter(func.lower(DBRider.email) == normalized_email)
+        if user_ids or worker_ids:
+            clauses = [func.lower(DBRider.email) == normalized_email]
+            if user_ids:
+                clauses.append(DBRider.user_id.in_(user_ids))
+            if worker_ids:
+                clauses.append(DBRider.delivery_worker_id.in_(worker_ids))
+            riders_query = db.query(DBRider).filter(or_(*clauses))
+        riders = riders_query.all()
+        for rider in riders:
+            matches.append({
+                "table": "riders",
+                "record_id": rider.id,
+                "user_id": rider.user_id,
+                "delivery_worker_id": rider.delivery_worker_id,
+                "email": rider.email,
+                "approval_status": rider.status or "",
+                "onboarding_stage": rider.onboarding_stage or "",
+                "created_at": iso(rider.created_at),
+                "updated_at": iso(rider.updated_at),
+            })
+
+        profiles = db.query(DBProfile).filter(DBProfile.user_id.in_(user_ids)).all() if user_ids else []
+        for profile in profiles:
+            matches.append({
+                "table": "profiles",
+                "record_id": profile.id,
+                "user_id": profile.user_id,
+                "approval_status": "profile_exists",
+                "created_at": iso(profile.created_at),
+                "updated_at": iso(profile.updated_at),
+            })
+
+        session_clauses = []
+        if user_ids:
+            session_clauses.append(DBRiderSession.user_id.in_(user_ids))
+        if worker_ids:
+            session_clauses.append(DBRiderSession.delivery_worker_id.in_(worker_ids))
+        sessions = db.query(DBRiderSession).filter(or_(*session_clauses)).all() if session_clauses else []
+        for session in sessions:
+            matches.append({
+                "table": "rider_sessions",
+                "record_id": session.id,
+                "user_id": session.user_id,
+                "delivery_worker_id": session.delivery_worker_id,
+                "approval_status": "active" if bool(session.is_active) else "revoked",
+                "token_hash_present": bool(session.token_hash),
+                "created_at": iso(session.created_at),
+                "last_seen_at": iso(session.last_seen_at),
+                "revoked_at": iso(session.revoked_at),
+                "revoked_reason": session.revoked_reason or "",
+            })
+
+        deleted_logs = db.query(DBDeletedRiderLog).filter(DBDeletedRiderLog.snapshot_json.ilike(f"%{normalized_email}%")).all()
+        for log in deleted_logs:
+            matches.append({
+                "table": "deleted_rider_logs",
+                "record_id": log.id,
+                "delivery_worker_id": log.delivery_worker_id,
+                "approval_status": "hard_deleted" if bool(log.hard_deleted) else "soft_deleted",
+                "created_at": iso(log.created_at),
+                "reason": log.reason or "",
+            })
+
+        return {
+            "success": True,
+            "email": normalized_email,
+            "match_count": len(matches),
+            "matches": matches,
+        }
+    finally:
+        db.close()
 
 
 @app.get("/admin/diagnostics/nin-provider/balance")

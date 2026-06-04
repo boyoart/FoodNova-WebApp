@@ -37,47 +37,51 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     if (!mounted) return;
     final session = ref.read(sessionControllerProvider.notifier);
     final startupDiagnostics = await session.diagnostics();
-    print('AUTH TOKEN: ${startupDiagnostics['token_preview']}');
-    print('RIDER ID: ${startupDiagnostics['rider_id']}');
-    print('ONBOARDING COMPLETE: ${startupDiagnostics['onboarding_complete']}');
-    print('PROFILE EXISTS: ${startupDiagnostics['profile_exists']}');
-    print('PROFILE SOURCE: ${startupDiagnostics['profile_source']}');
-    print('APPROVAL STATUS: ${startupDiagnostics['approval_status']}');
+    debugPrint('AUTH TOKEN: ${startupDiagnostics['token_preview']}');
+    debugPrint('RIDER ID: ${startupDiagnostics['rider_id']}');
+    debugPrint(
+        'ONBOARDING COMPLETE: ${startupDiagnostics['onboarding_complete']}');
+    debugPrint('PROFILE EXISTS: ${startupDiagnostics['profile_exists']}');
+    debugPrint('PROFILE SOURCE: ${startupDiagnostics['profile_source']}');
+    debugPrint('APPROVAL STATUS: ${startupDiagnostics['approval_status']}');
     final hasToken = await session.token();
     if (!mounted) return;
     if (hasToken == null || hasToken.isEmpty) {
       final completed = await session.onboardingCompleted();
       if (!mounted) return;
       final destination = completed ? '/login' : '/onboarding';
-      print('ROUTE_REDIRECT reason=no_token destination=$destination');
+      debugPrint('ROUTE_REDIRECT reason=no_token destination=$destination');
       context.go(destination);
       return;
     }
     try {
-      print('TOKEN_RESTORED token_length=${hasToken.length}');
+      debugPrint('TOKEN_RESTORED token_length=${hasToken.length}');
       final rider = await ref.read(dispatchRepositoryProvider).me();
       if (!mounted) return;
-      print('RIDER ID: ${rider.id ?? ''}');
-      print('PROFILE EXISTS: true');
-      print('PROFILE SOURCE: backend');
-      print('APPROVAL STATUS: ${rider.kycStatus}');
+      debugPrint('RIDER ID: ${rider.id ?? ''}');
+      debugPrint('PROFILE EXISTS: true');
+      debugPrint('PROFILE SOURCE: backend');
+      debugPrint('APPROVAL STATUS: ${rider.kycStatus}');
       if (rider.isDeleted || rider.isSuspended) {
-        print('TOKEN_INVALID reason=rider_deleted_or_suspended');
+        debugPrint('TOKEN_INVALID reason=rider_deleted_or_suspended');
         await ref.read(sessionControllerProvider.notifier).clear();
-        print('ROUTE_REDIRECT reason=rider_blocked destination=/login');
+        if (!mounted) return;
+        debugPrint('ROUTE_REDIRECT reason=rider_blocked destination=/login');
         context.go('/login');
         return;
       }
-      print('ROUTE_REDIRECT reason=authenticated_and_valid destination=/dashboard');
+      debugPrint(
+          'ROUTE_REDIRECT reason=authenticated_and_valid destination=/dashboard');
       context.go('/dashboard');
     } catch (error) {
       if (!mounted) return;
       final friendlyMessage = apiMessage(error);
       setState(() => message = friendlyMessage);
-      print('PROFILE EXISTS: false');
-      print('PROFILE SOURCE: backend');
-      print('TOKEN_INVALID reason=profile_fetch_failed error=$error');
-      print('ROUTE_REDIRECT reason=profile_fetch_failed destination=/login');
+      debugPrint('PROFILE EXISTS: false');
+      debugPrint('PROFILE SOURCE: backend');
+      debugPrint('TOKEN_INVALID reason=profile_fetch_failed error=$error');
+      debugPrint(
+          'ROUTE_REDIRECT reason=profile_fetch_failed destination=/login');
       await session.clear();
       if (!mounted) return;
       context.go('/login');

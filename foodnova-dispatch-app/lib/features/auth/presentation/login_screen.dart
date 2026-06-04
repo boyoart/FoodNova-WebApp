@@ -114,11 +114,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             remember: remember,
           );
       if (!mounted) return;
-      print('RIDER_LOGIN_SUCCESS route_redirect=/dashboard');
+      debugPrint('RIDER_LOGIN_SUCCESS route_redirect=/dashboard');
       if (mounted) context.go('/dashboard');
     } catch (e) {
       if (!mounted) return;
-      print('RIDER_LOGIN_FAILURE error=$e');
+      debugPrint('RIDER_LOGIN_FAILURE error=$e');
       setState(() => error = apiMessage(e));
     } finally {
       if (mounted) setState(() => loading = false);

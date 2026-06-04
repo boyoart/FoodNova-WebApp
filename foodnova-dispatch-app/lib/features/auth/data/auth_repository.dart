@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
@@ -48,7 +49,8 @@ class AuthRepository {
     if (token.isEmpty) {
       throw Exception('FoodNova did not return a dispatch session token.');
     }
-    print('Login token present=${token.isNotEmpty} length=${token.length}');
+    debugPrint(
+        'Login token present=${token.isNotEmpty} length=${token.length}');
     await ref
         .read(sessionControllerProvider.notifier)
         .save(token, remember: remember);
@@ -64,14 +66,14 @@ class AuthRepository {
       await ref
           .read(sessionControllerProvider.notifier)
           .recordLastApiResponse(exact);
-      print('Profile fetch response $exact');
-      print('RIDER_PROFILE_NOT_FOUND $exact');
+      debugPrint('Profile fetch response $exact');
+      debugPrint('RIDER_PROFILE_NOT_FOUND $exact');
       throw Exception(exact);
     }
     await ref
         .read(sessionControllerProvider.notifier)
         .recordLastApiResponse(jsonEncode(profileResponse.data));
-    print('Profile fetch response ${jsonEncode(profileResponse.data)}');
+    debugPrint('Profile fetch response ${jsonEncode(profileResponse.data)}');
     final profileBody = profileResponse.data as Map;
     final profile = Map<String, dynamic>.from(
       profileBody['worker'] ?? profileBody['data'] ?? {},
@@ -81,7 +83,7 @@ class AuthRepository {
       await ref
           .read(sessionControllerProvider.notifier)
           .markProfileMissing(profileSource: 'backend');
-      print('RIDER_PROFILE_NOT_FOUND $exact');
+      debugPrint('RIDER_PROFILE_NOT_FOUND $exact');
       throw Exception(exact);
     }
     final liveApprovalStatus =
@@ -94,8 +96,8 @@ class AuthRepository {
           profileExists: true,
           profileSource: 'backend',
         );
-    print('RIDER_LOGIN_SUCCESS ${profile['id']}');
-    print('RIDER_APPROVAL_STATUS $liveApprovalStatus');
+    debugPrint('RIDER_LOGIN_SUCCESS ${profile['id']}');
+    debugPrint('RIDER_APPROVAL_STATUS $liveApprovalStatus');
   }
 
   Future<void> forgotPassword(String email) async {
@@ -133,11 +135,11 @@ class AuthRepository {
     await ref
         .read(sessionControllerProvider.notifier)
         .recordLastApiResponse(jsonEncode(body));
-    print('Registration response ${jsonEncode(body)}');
+    debugPrint('Registration response ${jsonEncode(body)}');
     final worker =
         Map<String, dynamic>.from(body['worker'] ?? body['data'] ?? {});
-    print('Created rider ID ${worker['id'] ?? ''}');
-    print(
+    debugPrint('Created rider ID ${worker['id'] ?? ''}');
+    debugPrint(
         'Backend record created ${worker.isNotEmpty && worker['id'] != null}');
     if (worker.isNotEmpty) {
       await ref.read(sessionControllerProvider.notifier).saveRiderState(
@@ -147,8 +149,9 @@ class AuthRepository {
             profileExists: true,
             profileSource: 'backend',
           );
-      print('RIDER_ONBOARDING_COMPLETE ${worker['id']}');
-      print('RIDER_APPROVAL_STATUS ${worker['kyc_status'] ?? 'KYC_PENDING'}');
+      debugPrint('RIDER_ONBOARDING_COMPLETE ${worker['id']}');
+      debugPrint(
+          'RIDER_APPROVAL_STATUS ${worker['kyc_status'] ?? 'KYC_PENDING'}');
     }
     return body;
   }

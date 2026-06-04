@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
@@ -25,7 +26,7 @@ class DispatchRepository {
   Dio get _dio => ref.read(dioProvider);
 
   Future<RiderProfile> me() async {
-    print('RIDER_PROFILE_FETCH');
+    debugPrint('RIDER_PROFILE_FETCH');
     Response<dynamic> response;
     try {
       response = await _dio.get('/delivery/me');
@@ -38,7 +39,7 @@ class DispatchRepository {
       await ref
           .read(sessionControllerProvider.notifier)
           .recordLastApiResponse(exact);
-      print('RIDER_PROFILE_NOT_FOUND $exact');
+      debugPrint('RIDER_PROFILE_NOT_FOUND $exact');
       throw Exception(exact);
     }
     await ref
@@ -51,7 +52,7 @@ class DispatchRepository {
       await ref
           .read(sessionControllerProvider.notifier)
           .markProfileMissing(profileSource: 'backend');
-      print('RIDER_PROFILE_NOT_FOUND $exact');
+      debugPrint('RIDER_PROFILE_NOT_FOUND $exact');
       throw Exception(exact);
     }
     final profile = RiderProfile(raw);
@@ -62,7 +63,7 @@ class DispatchRepository {
           profileExists: true,
           profileSource: 'backend',
         );
-    print('RIDER_APPROVAL_STATUS ${profile.kycStatus}');
+    debugPrint('RIDER_APPROVAL_STATUS ${profile.kycStatus}');
     return profile;
   }
 

@@ -20,13 +20,22 @@ const api = axios.create({
   },
 });
 
-const getAuthToken = () =>
-  localStorage.getItem("foodnova_token") ||
-  localStorage.getItem("token") ||
-  localStorage.getItem("admin_token");
+const isAdminRequest = (url = "") => /^\/(?:api\/)?admin(?:\/|$)/.test(url);
+
+const getAuthToken = (url = "") => {
+  if (isAdminRequest(url)) {
+    return localStorage.getItem("admin_token");
+  }
+
+  return (
+    localStorage.getItem("foodnova_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("admin_token")
+  );
+};
 
 api.interceptors.request.use((config) => {
-  const token = getAuthToken();
+  const token = getAuthToken(config.url);
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -84,7 +93,7 @@ export const websiteSettingsAPI = {
 
 export const authAPI = {
   login: async (payload) => await api.post("/auth/login", payload),
-  adminLogin: async (payload) => await api.post("/auth/login", payload),
+  adminLogin: async (payload) => await api.post("/api/admin/login", payload),
   register: async (payload) => await api.post("/auth/register", payload),
   me: async () => await api.get("/auth/me"),
 };

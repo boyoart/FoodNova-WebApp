@@ -99,4 +99,17 @@ class SessionController extends AsyncNotifier<bool> {
     }
     state = const AsyncData(false);
   }
+
+  Future<void> clearSession() => clear();
+
+  Future<void> clearOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_onboardingCompletedKey);
+    await prefs.remove(_riderIdKey);
+    await prefs.remove(_approvalStatusKey);
+    await prefs.remove(_profileExistsKey);
+    await prefs.remove(_profileSourceKey);
+  }
+
+  Future<void> logoutAndReset() => clear(clearOnboarding: true);
 }

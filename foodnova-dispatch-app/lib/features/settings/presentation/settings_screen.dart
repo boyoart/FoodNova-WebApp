@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/fn_widgets.dart';
 import '../../auth/data/auth_repository.dart';
+import '../../../core/state/session_controller.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -50,9 +51,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Debug'),
+              title: const Text('Diagnostics'),
               subtitle: const Text('Rider auth and profile diagnostics'),
               onTap: () => context.go('/debug'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FnCard(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.delete_sweep_outlined),
+              title: const Text('Clear Local Storage'),
+              subtitle:
+                  const Text('Reset local rider token and onboarding keys'),
+              onTap: () async {
+                await ref
+                    .read(sessionControllerProvider.notifier)
+                    .logoutAndReset();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Local rider storage cleared')),
+                  );
+                  context.go('/onboarding');
+                }
+              },
             ),
           ),
           const SizedBox(height: 10),
@@ -68,7 +91,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: () async {
-              print('ROUTE_REDIRECT reason=user_logout destination=/login');
+              debugPrint(
+                  'ROUTE_REDIRECT reason=user_logout destination=/login');
               await ref.read(authRepositoryProvider).logout();
               if (context.mounted) context.go('/login');
             },
