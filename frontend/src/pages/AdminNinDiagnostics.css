@@ -1,0 +1,137 @@
+.nin-diagnostics-page {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.nin-diagnostics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem;
+  color: white;
+  background: #123f2d;
+  border-radius: 0.75rem;
+  box-shadow: 0 12px 28px rgba(18, 63, 45, 0.2);
+}
+
+.nin-diagnostics-header h1,
+.nin-diagnostics-header p {
+  margin: 0;
+  color: inherit;
+}
+
+.nin-diagnostics-header .admin-eyebrow {
+  margin-bottom: 0.45rem;
+  color: #b9e7cc;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.nin-test-button {
+  width: fit-content;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  color: white;
+  background: var(--primary);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nin-test-button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.nin-result-panel {
+  padding: 1.25rem;
+  background: var(--fn-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.nin-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.nin-result-grid div {
+  min-width: 0;
+  padding: 0.9rem;
+  background: var(--light);
+  border-radius: 0.5rem;
+}
+
+.nin-result-grid dt {
+  margin-bottom: 0.35rem;
+  color: var(--text-light);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.nin-result-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--dark);
+  font-weight: 650;
+}
+
+.nin-error-message {
+  margin: 1rem 0 0;
+  padding: 0.85rem;
+  color: #8f1d1d;
+  background: #fff0f0;
+  border-left: 4px solid #c83d3d;
+}
+
+.nin-raw-response {
+  margin-top: 1.25rem;
+}
+
+.nin-raw-response h2 {
+  margin-bottom: 0.65rem;
+  font-size: 1rem;
+}
+
+.nin-raw-response pre {
+  max-height: 420px;
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #d8f3e2;
+  background: #10251d;
+  border-radius: 0.5rem;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.spin {
+  animation: nin-spin 0.9s linear infinite;
+}
+
+@keyframes nin-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .nin-diagnostics-header {
+    align-items: flex-start;
+  }
+
+  .nin-test-button {
+    width: 100%;
+    justify-content: center;
+  }
+}

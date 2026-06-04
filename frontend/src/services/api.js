@@ -414,6 +414,11 @@ export const adminAPI = {
     const response = await api.delete(`/admin/riders/${id}`);
     return response.data;
   },
+
+  testNinProvider: async () => {
+    const response = await api.get("/admin/nin-provider-status");
+    return response.data;
+  },
 };
 
 export const notificationsAPI = {

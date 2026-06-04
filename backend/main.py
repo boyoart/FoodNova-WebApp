@@ -30,7 +30,7 @@ from email_service import (
     send_customer_order_email,
     send_low_stock_alert,
 )
-from services.ninbvnportal_service import CheckMyNINBVNError, check_balance, check_provider_connectivity, checkmyninbvn_config, current_nin_auth_mode, validate_checkmyninbvn_config, verify_nin
+from services.ninbvnportal_service import NINBVNPortalError, check_balance, check_provider_connectivity, ninbvnportal_config, current_nin_auth_mode, validate_ninbvnportal_config, verify_nin
 
 try:
     import firebase_admin
@@ -90,7 +90,7 @@ except Exception:
 load_dotenv()
 
 app = FastAPI(title="FoodNova API")
-nin_provider_config = validate_checkmyninbvn_config()
+nin_provider_config = validate_ninbvnportal_config()
 if not nin_provider_config.get("configured"):
     print(f"WARNING: {nin_provider_config.get('message')}")
 NIN_PROVIDER_HEALTH = {
@@ -2901,9 +2901,9 @@ def log_rider_status_change(db, worker: DBDeliveryWorker, old_stage: str, new_st
     ))
 
 
-def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str, provider_result: dict = None, error: CheckMyNINBVNError = None, message: str = "", nin_last4: str = "", attempt_number: int = 0) -> None:
+def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str, provider_result: dict = None, error: NINBVNPortalError = None, message: str = "", nin_last4: str = "", attempt_number: int = 0) -> None:
     provider_result = provider_result or {}
-    endpoint_url = provider_result.get("endpoint_url") or f"{checkmyninbvn_config().get('base_url')}/nin-verification"
+    endpoint_url = provider_result.get("endpoint_url") or f"{ninbvnportal_config().get('base_url')}/nin-verification"
     print("RIDER_VERIFICATION_ATTEMPT", json_dump({
         "request_timestamp": iso(datetime.utcnow()),
         "rider_id": worker.id if worker else None,
@@ -2920,7 +2920,7 @@ def log_verification_event(db, worker: DBDeliveryWorker, verification_type: str,
     db.add(DBVerificationLog(
         delivery_worker_id=worker.id,
         verification_type=verification_type,
-        provider=provider_result.get("provider") or "checkmyninbvn",
+        provider=provider_result.get("provider") or "ninbvnportal",
         request_id=provider_result.get("request_id") or "",
         status=provider_result.get("provider_status") or ("error" if error else ""),
         success=bool(provider_result.get("verified")) and error is None,
@@ -3463,7 +3463,7 @@ def ensure_database_compatibility():
             "submitted_nin": "VARCHAR(20) DEFAULT ''",
             "nin_last4": "VARCHAR(4) DEFAULT ''",
             "nin_verified": "BOOLEAN DEFAULT FALSE",
-            "nin_provider": "VARCHAR(80) DEFAULT 'checkmyninbvn'",
+            "nin_provider": "VARCHAR(80) DEFAULT 'ninbvnportal'",
             "nin_provider_report_id": "VARCHAR(120) DEFAULT ''",
             "nin_provider_status": "VARCHAR(80) DEFAULT ''",
             "nin_provider_message": "TEXT DEFAULT ''",
@@ -3497,7 +3497,7 @@ def ensure_database_compatibility():
         "verification_logs": {
             "delivery_worker_id": "INTEGER",
             "verification_type": "VARCHAR(60) DEFAULT 'nin'",
-            "provider": "VARCHAR(80) DEFAULT 'checkmyninbvn'",
+            "provider": "VARCHAR(80) DEFAULT 'ninbvnportal'",
             "request_id": "VARCHAR(120) DEFAULT ''",
             "status": "VARCHAR(50) DEFAULT ''",
             "success": "BOOLEAN DEFAULT FALSE",
@@ -3673,19 +3673,20 @@ def seed_database():
 def on_startup():
     seed_database()
     global NIN_PROVIDER_HEALTH
-    nin_config = checkmyninbvn_config()
+    nin_config = ninbvnportal_config()
     nin_endpoint = f"{nin_config.get('base_url')}/nin-verification"
+    print("NIN_PROVIDER_BASE_URL", nin_config.get("base_url"))
     print("NIN_BASE_URL", nin_config.get("base_url"))
     print("NIN_ENDPOINT", nin_endpoint)
     print("AUTH_MODE", current_nin_auth_mode())
     print("HEADER_NAME_USED", "x-api-key")
-    print("CHECKMYNINBVN_API_KEY present:", bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()))
-    print("CHECKMYNINBVN_API_KEY length:", len(nin_config.get("api_key") or ""))
-    print("CHECKMYNINBVN_BASE_URL", os.getenv("CHECKMYNINBVN_BASE_URL", "").strip() or nin_config.get("base_url"))
-    validation = validate_checkmyninbvn_config()
-    print("CHECKMYNINBVN_API_KEY detected:", bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()))
+    print("NINBVNPORTAL_API_KEY present:", bool(os.getenv("NINBVNPORTAL_API_KEY", "").strip()))
+    print("NINBVNPORTAL_API_KEY length:", len(nin_config.get("api_key") or ""))
+    print("NINBVNPORTAL_BASE_URL", os.getenv("NINBVNPORTAL_BASE_URL", "").strip() or nin_config.get("base_url"))
+    validation = validate_ninbvnportal_config()
+    print("NINBVNPORTAL_API_KEY detected:", bool(os.getenv("NINBVNPORTAL_API_KEY", "").strip()))
     if not validation.get("configured"):
-        print("CHECKMYNINBVN_CONFIGURATION_ERROR", validation.get("message"))
+        print("NINBVNPORTAL_CONFIGURATION_ERROR", validation.get("message"))
         NIN_PROVIDER_HEALTH = {
             "healthy": False,
             "onboarding_verification_enabled": False,
@@ -3694,8 +3695,8 @@ def on_startup():
             "provider_message": validation.get("message"),
             "checked_at": iso(datetime.utcnow()),
         }
-        print("CHECKMYNINBVN_STARTUP_FAILURE", json_dump({
-            "api_key_loaded": bool(os.getenv("CHECKMYNINBVN_API_KEY", "").strip()),
+        print("NINBVNPORTAL_STARTUP_FAILURE", json_dump({
+            "api_key_loaded": bool(os.getenv("NINBVNPORTAL_API_KEY", "").strip()),
             "api_key_length": len(nin_config.get("api_key") or ""),
             "base_url": nin_config.get("base_url"),
             "provider_url": nin_endpoint,
@@ -3704,9 +3705,11 @@ def on_startup():
             "message": validation.get("message"),
             "timestamp": iso(datetime.utcnow()),
         }))
+        print("NIN_PROVIDER_STATUS", "configuration_error")
+        print("NIN_PROVIDER_BALANCE_CHECK", "skipped_missing_configuration")
         _create_admin_notifications(
             "Verification provider unhealthy",
-            "FoodNova NIN verification is disabled until CHECKMYNINBVN_API_KEY is configured and the backend is redeployed.",
+            "FoodNova NIN verification is disabled until NINBVNPORTAL_API_KEY is configured and the backend is redeployed.",
             "verification_health",
             "operations",
         )
@@ -3725,7 +3728,7 @@ def on_startup():
         "latency_ms": health.get("latencyMs"),
         "checked_at": iso(datetime.utcnow()),
     }
-    print("CHECKMYNINBVN_STARTUP_HEALTH", json_dump({
+    print("NINBVNPORTAL_STARTUP_HEALTH", json_dump({
         "api_key_loaded": health.get("apiKeyLoaded"),
         "endpoint_reachable": health.get("endpointReachable"),
         "last_provider_status": health.get("lastProviderStatus"),
@@ -3733,6 +3736,13 @@ def on_startup():
         "provider_url": health.get("providerUrl"),
         "latency_ms": health.get("latencyMs"),
         "timestamp": iso(datetime.utcnow()),
+    }))
+    print("NIN_PROVIDER_STATUS", "authenticated" if healthy else health.get("providerAuthStatus") or "unavailable")
+    print("NIN_PROVIDER_BALANCE_CHECK", json_dump({
+        "success": healthy,
+        "status": health.get("lastProviderStatus"),
+        "message": health.get("lastProviderMessage"),
+        "balance_url": health.get("balanceUrl"),
     }))
     if not healthy:
         _create_admin_notifications(
@@ -3982,7 +3992,7 @@ async def delivery_worker_signup(
 
     try:
         nin_result = verify_nin(nin_number, True)
-    except CheckMyNINBVNError as error:
+    except NINBVNPortalError as error:
         raise HTTPException(status_code=error.status_code, detail=str(error) or "NIN verification failed. Please check the number and try again.")
     if not nin_result.get("verified"):
         raise HTTPException(status_code=400, detail=nin_result.get("message") or "NIN verification failed. Please check the number and try again.")
@@ -4054,7 +4064,7 @@ async def delivery_worker_signup(
                 "verification_state": "verified",
                 "nin_last4": worker.nin_last4,
                 "nin_hash": _nin_hash("".join(ch for ch in str(nin_number or "") if ch.isdigit())),
-                "provider": "checkmyninbvn",
+                "provider": "ninbvnportal",
                 "provider_report_id": worker.nin_report_id,
                 "provider_message": nin_result.get("message") or "",
                 "verified_full_name": nin_data.get("full_name") or " ".join([nin_data.get("first_name") or "", nin_data.get("middle_name") or "", nin_data.get("surname") or ""]).strip(),
@@ -4130,7 +4140,7 @@ async def delivery_worker_signup(
 def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request):
     if not is_mobile_worker_registration_request(request):
         raise HTTPException(status_code=403, detail="NIN verification must be completed on a mobile phone.")
-    validation = validate_checkmyninbvn_config()
+    validation = validate_ninbvnportal_config()
     if not validation.get("configured"):
         raise HTTPException(status_code=503, detail=validation.get("message") or "NIN API key missing from server configuration")
     print("NIN_VERIFICATION_ATTEMPT", json_dump({
@@ -4142,7 +4152,7 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
     }))
     try:
         result = verify_nin(payload.nin, payload.consent)
-    except CheckMyNINBVNError as error:
+    except NINBVNPortalError as error:
         provider_response = error.provider_response or (json_dump(error.provider_body or {}) if error.provider_body else "")
         provider_detail = ""
         if isinstance(error.provider_body, dict):
@@ -4313,7 +4323,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             provider_result["attempt_number"] = attempt_number
             provider_result["nin_last4"] = clean_nin[-4:]
             log_verification_event(db, worker, "nin", provider_result, message=provider_message, nin_last4=clean_nin[-4:], attempt_number=attempt_number)
-        except CheckMyNINBVNError as error:
+        except NINBVNPortalError as error:
             if error.code in {"invalid_provider_credentials", "insufficient_wallet_balance", "provider_unavailable", "provider_timeout", "provider_error"}:
                 auth_failed = error.code == "invalid_provider_credentials" or error.provider_status in (401, 403)
                 NIN_PROVIDER_HEALTH.update({
@@ -4336,7 +4346,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 rider_kyc.submitted_nin = clean_nin
                 rider_kyc.nin_last4 = clean_nin[-4:]
                 rider_kyc.nin_verified = False
-                rider_kyc.nin_provider = "checkmyninbvn"
+                rider_kyc.nin_provider = "ninbvnportal"
                 rider_kyc.nin_provider_status = "error"
                 rider_kyc.nin_provider_message = provider_message
                 rider_kyc.nin_response_json = json_dump({"error_code": provider_error_code, "message": provider_message, "provider_status": provider_http_status})
@@ -4401,7 +4411,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             "verification_state": status,
             "nin_last4": clean_nin[-4:],
             "nin_hash": _nin_hash(clean_nin),
-            "provider": "checkmyninbvn",
+            "provider": "ninbvnportal",
             "provider_report_id": provider_result.get("report_id") or "",
             "provider_message": provider_message,
             "provider_response_log": {
@@ -4434,7 +4444,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
                 rider_kyc.submitted_nin = clean_nin
                 rider_kyc.nin_last4 = clean_nin[-4:]
                 rider_kyc.nin_verified = status == "verified"
-                rider_kyc.nin_provider = "checkmyninbvn"
+                rider_kyc.nin_provider = "ninbvnportal"
                 rider_kyc.nin_provider_report_id = provider_result.get("report_id") or ""
                 rider_kyc.nin_provider_status = provider_result.get("provider_status") or status
                 rider_kyc.nin_provider_message = provider_message or ""
@@ -8631,8 +8641,8 @@ def get_admin_audit_logs(
 @app.get("/admin/diagnostics/nin-provider")
 def get_nin_provider_diagnostics(request: Request):
     admin = require_permission(request, "audit:view")
-    config = checkmyninbvn_config()
-    validation = validate_checkmyninbvn_config()
+    config = ninbvnportal_config()
+    validation = validate_ninbvnportal_config()
     endpoint_url = f"{config.get('base_url')}/nin-verification"
     balance_url = f"{config.get('base_url')}/balance"
     balance_status = {"checked": False, "available": False, "message": "Balance not checked."}
@@ -8650,7 +8660,7 @@ def get_nin_provider_diagnostics(request: Request):
                 "api_limit": balance.get("api_limit"),
                 "message": balance.get("message"),
             }
-        except CheckMyNINBVNError as error:
+        except NINBVNPortalError as error:
             balance_status = {
                 "checked": True,
                 "available": False,
@@ -8661,14 +8671,13 @@ def get_nin_provider_diagnostics(request: Request):
             }
     diagnostics = {
         "success": True,
-        "provider": "checkmyninbvn",
+        "provider": "ninbvnportal",
         "configured": bool(validation.get("configured")),
         "message": validation.get("message"),
         "render_environment": {
             "api_key_present": bool(config.get("api_key")),
-            "api_base_url_present": bool(os.getenv("CHECKMYNINBVN_API_BASE_URL")),
-            "legacy_base_url_present": bool(os.getenv("CHECKMYNINBVN_BASE_URL")),
-            "timeout_seconds": os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "25"),
+            "base_url_present": bool(os.getenv("NINBVNPORTAL_BASE_URL")),
+            "timeout_seconds": os.getenv("NINBVNPORTAL_TIMEOUT_SECONDS", "25"),
             "runtime_env_checked_at": iso(datetime.utcnow()),
             "redeploy_required_after_env_update": True,
             "redeploy_note": "After changing Render environment variables, redeploy the backend before retesting provider health.",
@@ -8718,8 +8727,8 @@ def get_nin_provider_diagnostics(request: Request):
         admin,
         "nin_provider_diagnostics_viewed",
         "diagnostic",
-        "checkmyninbvn",
-        "Admin viewed CheckMyNINBVN provider diagnostics",
+        "ninbvnportal",
+        "Admin viewed NINBVNPortal provider diagnostics",
         {
             "configured": diagnostics["configured"],
             "api_key_present": diagnostics["render_environment"]["api_key_present"],
@@ -8730,13 +8739,13 @@ def get_nin_provider_diagnostics(request: Request):
 
 
 def nin_provider_health_payload(db=None) -> dict:
-    config = checkmyninbvn_config()
+    config = ninbvnportal_config()
     connectivity = check_provider_connectivity()
     balance = None
     if connectivity.get("endpointReachable"):
         try:
             balance = check_balance()
-        except CheckMyNINBVNError:
+        except NINBVNPortalError:
             balance = None
 
     failed_requests_count = 0
@@ -8744,16 +8753,16 @@ def nin_provider_health_payload(db=None) -> dict:
     average_latency_ms = None
     if db is not None:
         failed_requests_count = db.query(DBVerificationLog).filter(
-            DBVerificationLog.provider == "checkmyninbvn",
+            DBVerificationLog.provider == "ninbvnportal",
             DBVerificationLog.success == False,
         ).count()
         last_success = db.query(DBVerificationLog).filter(
-            DBVerificationLog.provider == "checkmyninbvn",
+            DBVerificationLog.provider == "ninbvnportal",
             DBVerificationLog.success == True,
         ).order_by(DBVerificationLog.created_at.desc()).first()
         last_successful_verification_at = iso(last_success.created_at) if last_success else ""
         average_latency_ms = db.query(func.avg(DBVerificationLog.latency_ms)).filter(
-            DBVerificationLog.provider == "checkmyninbvn",
+            DBVerificationLog.provider == "ninbvnportal",
             DBVerificationLog.latency_ms.isnot(None),
         ).scalar()
 
@@ -8772,7 +8781,7 @@ def nin_provider_health_payload(db=None) -> dict:
         "providerUrl": f"{config.get('base_url')}/nin-verification",
         "endpoint": f"{config.get('base_url')}/nin-verification",
         "balanceEndpoint": f"{config.get('base_url')}/balance",
-        "timeoutSeconds": os.getenv("CHECKMYNINBVN_TIMEOUT_SECONDS", "10"),
+        "timeoutSeconds": os.getenv("NINBVNPORTAL_TIMEOUT_SECONDS", "10"),
         "latencyCheckedAt": iso(datetime.utcnow()),
         "latencyMs": connectivity.get("latencyMs"),
         "balance": balance,
@@ -8803,9 +8812,9 @@ def get_public_nin_health():
         db.close()
 
 
-@app.get("/debug/checkmynin")
-def debug_checkmynin_config():
-    config = checkmyninbvn_config()
+@app.get("/debug/nin-provider")
+def debug_nin_provider_config():
+    config = ninbvnportal_config()
     api_key = config.get("api_key") or ""
     return {
         "api_key_present": bool(api_key),
@@ -8822,11 +8831,11 @@ def debug_checkmynin_config():
 
 @app.get("/debug/nin-config")
 def debug_nin_config():
-    config = checkmyninbvn_config()
+    config = ninbvnportal_config()
     api_key = config.get("api_key") or ""
     endpoint = f"{config.get('base_url')}/nin-verification"
     return {
-        "provider": "checkmyninbvn",
+        "provider": "ninbvnportal",
         "endpoint": endpoint,
         "base_url": config.get("base_url"),
         "auth_mode": current_nin_auth_mode(),
@@ -8979,11 +8988,11 @@ def get_nin_provider_balance(request: Request):
     require_workforce_view(request)
     try:
         balance = check_balance()
-        return {"success": True, "provider": "checkmyninbvn", "balance": balance, "data": balance}
-    except CheckMyNINBVNError as error:
+        return {"success": True, "provider": "ninbvnportal", "balance": balance, "data": balance}
+    except NINBVNPortalError as error:
         return {
             "success": False,
-            "provider": "checkmyninbvn",
+            "provider": "ninbvnportal",
             "message": str(error) or "Verification service unavailable. Please retry shortly.",
             "error_code": error.code,
             "retryable": error.retryable,
@@ -9001,9 +9010,48 @@ def get_admin_nin_provider_health(request: Request):
     db = SessionLocal()
     try:
         health = nin_provider_health_payload(db)
-        return {"success": True, "provider": "checkmyninbvn", "health": health, "data": health}
+        return {"success": True, "provider": "ninbvnportal", "health": health, "data": health}
     finally:
         db.close()
+
+
+@app.get("/admin/nin-provider-status")
+def get_admin_nin_provider_status(request: Request):
+    require_workforce_view(request)
+    config = ninbvnportal_config()
+    api_key = config.get("api_key") or ""
+    masked_key = f"{api_key[:6]}{'*' * max(len(api_key) - 6, 0)}" if api_key else ""
+    provider_url = f"{config.get('base_url')}/balance"
+    try:
+        balance = check_balance()
+        authenticated = bool(balance.get("success"))
+        return {
+            "provider": "ninbvnportal",
+            "base_url": config.get("base_url"),
+            "provider_url": provider_url,
+            "api_key_loaded": bool(api_key),
+            "api_key_masked": masked_key,
+            "authenticated": authenticated,
+            "balance": balance.get("balance") if authenticated else None,
+            "balance_request_status": "success" if authenticated else "failed",
+            "http_status_code": balance.get("provider_http_status"),
+            "provider_response_body": balance.get("raw_response_body") or json_dump(balance.get("raw_response") or {}),
+            "last_error": "" if authenticated else balance.get("message") or "Provider balance check failed.",
+        }
+    except NINBVNPortalError as error:
+        return {
+            "provider": "ninbvnportal",
+            "base_url": config.get("base_url"),
+            "provider_url": provider_url,
+            "api_key_loaded": bool(api_key),
+            "api_key_masked": masked_key,
+            "authenticated": False,
+            "balance": None,
+            "balance_request_status": "failed",
+            "http_status_code": error.provider_status,
+            "provider_response_body": error.provider_response or error.provider_body or "",
+            "last_error": str(error) or "Provider balance check failed.",
+        }
 
 
 @app.patch("/admin/broadcasts/{broadcast_id}")

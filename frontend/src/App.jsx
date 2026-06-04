@@ -33,6 +33,7 @@ import AdminCancellations from './pages/AdminCancellations'
 import AdminExports from './pages/AdminExports'
 import AdminReports from './pages/AdminReports'
 import AdminSettings from './pages/AdminSettings'
+import AdminNinDiagnostics from './pages/AdminNinDiagnostics'
 import ComingSoonPage from './pages/ComingSoonPage'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
@@ -236,6 +237,7 @@ function App() {
               <Route path="/admin/reports" element={<AdminReports />} />
               <Route path="/admin/exports" element={<AdminExports />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
+              <Route path="/admin/nin-diagnostics" element={<AdminNinDiagnostics />} />
               <Route path="/coming-soon" element={<ComingSoonPage />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsPage />} />
