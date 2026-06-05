@@ -11,6 +11,7 @@ import json
 import math
 import os
 import random
+import traceback
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -247,6 +248,14 @@ async def coming_soon_middleware(request: Request, call_next):
         settings = get_website_settings_from_db(db)
         if settings.get("comingSoonEnabled"):
             return RedirectResponse(url="/coming-soon", status_code=307)
+    except Exception as error:
+        traceback.print_exception(type(error), error, error.__traceback__)
+        print("COMING_SOON_MIDDLEWARE_ERROR", json_dump({
+            "path": path,
+            "error_type": type(error).__name__,
+            "message": str(error),
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+        }))
     finally:
         db.close()
 
@@ -262,6 +271,26 @@ async def foodnova_http_exception_handler(request: Request, exc: HTTPException):
         status_code=exc.status_code,
         content={"success": False, "detail": exc.detail},
         headers=exc.headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def foodnova_unhandled_exception_handler(request: Request, exc: Exception):
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
+    print("UNHANDLED_BACKEND_EXCEPTION", json_dump({
+        "path": request.url.path,
+        "method": request.method,
+        "error_type": type(exc).__name__,
+        "message": str(exc),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    }))
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "detail": "Internal server error",
+            "error_type": type(exc).__name__,
+        },
     )
 
 USERS: Dict[str, dict] = {}
@@ -1325,6 +1354,22 @@ def get_public_website_settings():
         settings = get_website_settings_from_db(db)
         public_settings = {key: value for key, value in settings.items() if key != "subscribers"}
         return {"success": True, "settings": public_settings, "data": public_settings}
+    except Exception as error:
+        traceback.print_exception(type(error), error, error.__traceback__)
+        print("WEBSITE_SETTINGS_ERROR", json_dump({
+            "route": "/website-settings",
+            "error_type": type(error).__name__,
+            "message": str(error),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        public_settings = {key: value for key, value in normalize_website_settings().items() if key != "subscribers"}
+        return {
+            "success": True,
+            "settings": public_settings,
+            "data": public_settings,
+            "fallback": True,
+            "warning": "Website settings unavailable; default settings returned.",
+        }
     finally:
         db.close()
 
@@ -1336,6 +1381,15 @@ def get_admin_website_settings(request: Request):
     try:
         settings = get_website_settings_from_db(db)
         return {"success": True, "settings": settings, "data": settings}
+    except Exception as error:
+        traceback.print_exception(type(error), error, error.__traceback__)
+        print("ADMIN_WEBSITE_SETTINGS_ERROR", json_dump({
+            "route": "/admin/website-settings",
+            "error_type": type(error).__name__,
+            "message": str(error),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        raise HTTPException(status_code=500, detail=f"Website settings unavailable: {type(error).__name__}")
     finally:
         db.close()
 
@@ -3768,6 +3822,35 @@ def health():
     return {"success": True, "status": "ok"}
 
 
+@app.get("/admin/debug")
+def admin_debug():
+    db_connected = False
+    db_error = ""
+    try:
+        db = SessionLocal()
+        try:
+            db.execute(text("SELECT 1"))
+            db_connected = True
+        finally:
+            db.close()
+    except Exception as error:
+        db_error = f"{type(error).__name__}: {error}"
+
+    nin_config = ninbvnportal_config()
+    return {
+        "status": "ok",
+        "environment_loaded": True,
+        "admin_email_loaded": bool(ADMIN_EMAIL),
+        "database_connected": db_connected,
+        "database_error": db_error,
+        "nin_provider_connected": bool(NIN_PROVIDER_HEALTH.get("healthy")),
+        "nin_provider_status": NIN_PROVIDER_HEALTH,
+        "nin_base_url": nin_config.get("base_url"),
+        "nin_api_key_loaded": bool(nin_config.get("api_key")),
+        "timestamp": iso(datetime.utcnow()),
+    }
+
+
 @app.get("/debug/db")
 def debug_db():
     db = SessionLocal()
@@ -5098,14 +5181,6 @@ def admin_login(payload: LoginPayload, request: Request):
         "ip_address": get_request_ip(request),
         "route": request.url.path,
         "timestamp": iso(datetime.utcnow()),
-    }))
-    print("NIN_ONBOARDING_VERIFICATION_STAGE", json_dump({
-        "stage": "provider_verified",
-        "shared_service": "services.ninbvnportal_service.verify_nin",
-        "provider_status": result.get("provider_http_status"),
-        "report_id": result.get("report_id"),
-        "identity_fields_populated": bool(any((result.get("data") or {}).values())),
-        "route": "/delivery-workers/verify-nin",
     }))
     db = SessionLocal()
     try:
