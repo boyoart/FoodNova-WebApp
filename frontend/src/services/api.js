@@ -415,6 +415,27 @@ export const adminAPI = {
     return response.data;
   },
 
+  getRiderVerificationQueue: async (params = {}) => {
+    const response = await api.get("/admin/rider-verification-queue", { params });
+    const riders = normalizeList(response.data, ["riders", "data"]);
+    return { data: riders, counts: response.data?.counts || {}, raw: response.data };
+  },
+
+  reviewRiderVerification: async (id, action, payload = {}) => {
+    const response = await api.post(`/admin/rider-verification-queue/${id}/${action}`, payload);
+    return response.data;
+  },
+
+  permanentlyDeleteRiderVerification: async (id) => {
+    const response = await api.delete(`/admin/rider-verification-queue/${id}`);
+    return response.data;
+  },
+
+  getNinProviderStatus: async () => {
+    const response = await api.get("/admin/nin-provider-status");
+    return response.data;
+  },
+
   testNinProvider: async () => {
     const response = await api.get("/admin/nin-provider-status");
     return response.data;
@@ -427,6 +448,48 @@ export const adminAPI = {
 
   runTestNinVerification: async () => {
     const response = await api.post("/admin/nin-provider-test-verification");
+    return response.data;
+  },
+
+  getWorkforce: async (params = {}) => {
+    const response = await api.get("/admin/workforce", { params });
+    const workers = normalizeList(response.data, ["workers", "data"]);
+    return { data: workers, raw: response.data };
+  },
+
+  updateWorkerStatus: async (id, payload) => {
+    const response = await api.patch(`/admin/workforce/${id}/status`, payload);
+    return response.data;
+  },
+
+  deleteWorker: async (id) => {
+    const response = await api.delete(`/admin/rider-verification-queue/${id}`);
+    return response.data;
+  },
+
+  getDeliveryOffers: async (params = {}) => {
+    const response = await api.get("/admin/delivery-offers", { params });
+    const offers = normalizeList(response.data, ["offers", "data"]);
+    return { data: offers, raw: response.data };
+  },
+
+  assignDeliveryOffer: async (id) => {
+    const response = await api.post(`/admin/delivery-offers/${id}/assign`);
+    return response.data;
+  },
+
+  rejectDeliveryOffer: async (id, payload = {}) => {
+    const response = await api.post(`/admin/delivery-offers/${id}/reject`, payload);
+    return response.data;
+  },
+
+  getDeliveryAssignmentMode: async () => {
+    const response = await api.get("/admin/delivery-assignment-mode");
+    return response.data;
+  },
+
+  updateDeliveryAssignmentMode: async (mode) => {
+    const response = await api.patch("/admin/delivery-assignment-mode", { mode });
     return response.data;
   },
 };

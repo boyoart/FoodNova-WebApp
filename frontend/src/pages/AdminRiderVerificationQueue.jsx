@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { AlertTriangle, PauseCircle, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2, UserCheck, UserX, X } from 'lucide-react'
 import { adminAPI, resolveMediaUrl } from '../services/api'
@@ -23,8 +23,11 @@ function chip(value) {
 
 function formatNairaBalance(balance) {
   if (balance?.formatted_balance) return balance.formatted_balance
-  const value = Number(balance?.balance ?? 0)
-  return `₦${value.toLocaleString('en-NG', { maximumFractionDigits: 0 })} remaining`
+  const raw = typeof balance === 'number' ? balance : balance?.balance
+  if (raw === null || raw === undefined || raw === '') return 'Balance unavailable'
+  const value = Number(raw)
+  if (Number.isNaN(value)) return String(raw)
+  return `NGN ${value.toLocaleString('en-NG', { maximumFractionDigits: 0 })} remaining`
 }
 
 function riskLevel(item) {
@@ -40,13 +43,14 @@ export default function AdminRiderVerificationQueue() {
   const [riders, setRiders] = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
-  const [filters, setFilters] = useState({ status: 'pending', stage: 'all', search: '' })
+  const [filters, setFilters] = useState({ status: 'all', stage: 'all', search: '' })
   const [reviewAction, setReviewAction] = useState('')
   const [reviewNote, setReviewNote] = useState('')
   const [actionSaving, setActionSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [balance, setBalance] = useState(null)
   const [providerHealth, setProviderHealth] = useState(null)
+  const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0, suspended: 0, deleted: 0 })
 
   const permissions = Array.isArray(admin?.permissions) ? admin.permissions : []
   const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || permissions.length === 0))
@@ -62,11 +66,30 @@ export default function AdminRiderVerificationQueue() {
       if (filters.search.trim()) params.search = filters.search.trim()
       const response = await adminAPI.getRiderVerificationQueue(params)
       setRiders(response.data || [])
+      setCounts({
+        pending: Number(response.counts?.pending || 0),
+        approved: Number(response.counts?.approved || 0),
+        rejected: Number(response.counts?.rejected || 0),
+        suspended: Number(response.counts?.suspended || 0),
+        deleted: Number(response.counts?.deleted || 0),
+      })
       try {
-        const balanceResponse = await adminAPI.getNinProviderBalance()
-        setBalance(balanceResponse.balance || balanceResponse.data || null)
-        const healthResponse = await adminAPI.getNinProviderHealth()
-        setProviderHealth(healthResponse.health || healthResponse.data || null)
+        const statusResponse = await adminAPI.getNinProviderStatus()
+        setBalance({
+          balance: statusResponse.balance,
+          status: statusResponse.balance_request_status,
+          raw: statusResponse.provider_response_body,
+        })
+        setProviderHealth({
+          providerReachable: Boolean(statusResponse.authenticated),
+          apiKeyLoaded: Boolean(statusResponse.api_key_loaded),
+          authenticated: Boolean(statusResponse.authenticated),
+          providerStatus: statusResponse.http_status_code,
+          providerMessage: statusResponse.last_error || statusResponse.balance_request_status || '',
+          lastVerificationAttempt: statusResponse.last_verification_attempt,
+          lastVerificationError: statusResponse.last_verification_error,
+          providerUrl: statusResponse.provider_url,
+        })
       } catch {
         setBalance({ available: false, message: 'Provider wallet balance unavailable' })
         setProviderHealth({ providerReachable: false, lastStatus: 'unavailable' })
@@ -81,14 +104,6 @@ export default function AdminRiderVerificationQueue() {
   useEffect(() => {
     if (isAdmin && canView) loadQueue()
   }, [isAdmin, canView, filters.status, filters.stage])
-
-  const counts = useMemo(() => ({
-    pending: riders.filter((item) => !['APPROVED', 'REJECTED', 'SUSPENDED', 'DEACTIVATED', 'DELETED'].includes(item.worker?.kyc_status)).length,
-    approved: riders.filter((item) => item.worker?.kyc_status === 'APPROVED').length,
-    rejected: riders.filter((item) => item.worker?.kyc_status === 'REJECTED').length,
-    suspended: riders.filter((item) => item.worker?.kyc_status === 'SUSPENDED').length,
-    deleted: riders.filter((item) => item.worker?.kyc_status === 'DELETED' || item.worker?.deleted_at).length,
-  }), [riders])
 
   const runReviewAction = async (action, note = reviewNote) => {
     if (!selected || !action || !canManage) return
@@ -143,19 +158,19 @@ export default function AdminRiderVerificationQueue() {
       </section>
       <section className={`verification-wallet-monitor ${balance?.is_low ? 'low' : ''}`}>
         <div>
-          <span>Operations → Verification Health</span>
+          <span>Operations - Verification Health</span>
           <strong>NIN Verification Balance</strong>
         </div>
         <div className="verification-wallet-balance">{balance ? formatNairaBalance(balance) : 'Checking balance...'}</div>
         <div className={`verification-api-health ${providerHealth?.providerReachable ? 'healthy' : 'down'}`}>
           <span>Verification API Health</span>
-          <strong>{providerHealth?.providerReachable ? 'Reachable' : 'Unavailable'}</strong>
-          <small>API key {providerHealth?.apiKeyLoaded ? 'loaded' : 'missing'} · {providerHealth?.failedRequestsCount || 0} failed requests · avg {providerHealth?.averageLatencyMs ?? providerHealth?.latencyMs ?? 'N/A'} ms · last success {providerHealth?.lastSuccessfulVerificationAt ? new Date(providerHealth.lastSuccessfulVerificationAt).toLocaleString() : 'none yet'}</small>
+          <strong>{providerHealth?.authenticated ? 'Authenticated' : providerHealth?.providerReachable ? 'Reachable' : 'Unavailable'}</strong>
+          <small>API key {providerHealth?.apiKeyLoaded ? 'loaded' : 'missing'} - status {providerHealth?.providerStatus || 'N/A'} - last verification {providerHealth?.lastVerificationAttempt?.created_at ? new Date(providerHealth.lastVerificationAttempt.created_at).toLocaleString() : 'none yet'}</small>
         </div>
         {balance?.is_low && (
           <div className="verification-wallet-warning">
             <AlertTriangle size={18} />
-            <span>⚠ Low verification balance</span>
+            <span>Low verification balance</span>
           </div>
         )}
       </section>
@@ -180,20 +195,20 @@ export default function AdminRiderVerificationQueue() {
             <table className="verification-table">
               <thead>
                 <tr>
-                  <th>Rider</th>
+                  <th>Name</th>
                   <th>Phone</th>
-                  <th>Vehicle</th>
-                  <th>Registered</th>
+                  <th>Email</th>
+                  <th>Rider Type</th>
+                  <th>NIN Status</th>
                   <th>Approval Status</th>
-                  <th>Verification</th>
-                  <th>Risk</th>
+                  <th>Submission Date</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {riders.map((item) => {
                   const worker = item.worker || {}
-                  const risk = riskLevel(item)
+                  const riderType = worker.worker_type === 'messenger' ? 'Walking Messenger' : worker.rider_type === 'bicycle' ? 'Bicycle Rider' : 'Motorcycle Rider'
                   return (
                     <tr key={worker.id} className={selected?.worker?.id === worker.id ? 'selected' : ''}>
                       <td>
@@ -203,21 +218,16 @@ export default function AdminRiderVerificationQueue() {
                         </div>
                       </td>
                       <td>{worker.phone}</td>
-                      <td>
-                        <div className="verification-result-cell">
-                          <strong>{worker.vehicle_type || 'N/A'}</strong>
-                          <small>{worker.plate_number || 'No plate'} · {worker.driver_license_number || 'No licence'}</small>
-                        </div>
-                      </td>
-                      <td>{worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</td>
-                      <td><span className={`worker-status ${chip(worker.kyc_status)}`}>{label(item.kyc?.onboarding_stage)}</span></td>
+                      <td>{worker.email || 'No email'}</td>
+                      <td>{riderType}</td>
                       <td>
                         <div className="verification-result-cell">
                           <span className={`worker-status ${item.kyc?.nin_verified ? 'approved' : chip(item.kyc?.identity_status)}`}>{item.kyc?.nin_verified ? 'Verified' : label(item.kyc?.identity_status || 'not_started')}</span>
-                          <small>{item.kyc?.failed_verification_attempts ? `${item.kyc.failed_verification_attempts} failed attempt${item.kyc.failed_verification_attempts === 1 ? '' : 's'}` : item.kyc?.provider_report_id || 'No report yet'}</small>
+                          <small>{item.kyc?.provider_report_id || worker.nin_report_id || 'No report yet'}</small>
                         </div>
                       </td>
-                      <td><span className={`risk-chip risk-${risk.toLowerCase()}`}>{risk}</span></td>
+                      <td><span className={`worker-status ${chip(worker.kyc_status)}`}>{label(worker.kyc_status || item.rider?.status || 'KYC_PENDING')}</span></td>
+                      <td>{worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</td>
                       <td><button type="button" onClick={() => setSelected(item)}>Review</button></td>
                     </tr>
                   )
@@ -261,7 +271,7 @@ export default function AdminRiderVerificationQueue() {
               {selected.worker.verified_photo_url && (
                 <div className="verified-photo-strip">
                   <img src={resolveMediaUrl(selected.worker.verified_photo_url)} alt="" />
-                  <div><strong>Provider profile photo</strong><span>Returned by CheckMyNINBVN after successful verification.</span></div>
+                  <div><strong>Provider profile photo</strong><span>Returned by NINBVNPORTAL after successful verification.</span></div>
                 </div>
               )}
               {selected.approval_blockers?.length > 0 && <p className="verification-warning"><strong>Blockers:</strong> {selected.approval_blockers.join(' ')}</p>}

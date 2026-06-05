@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Copy, RefreshCw } from 'lucide-react'
+import { Copy, RefreshCw, Trash2 } from 'lucide-react'
 import { adminAPI, resolveMediaUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './WorkerPages.css'
@@ -8,7 +8,9 @@ import './WorkerPages.css'
 const statusOptions = ['KYC_PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']
 
 function workerTypeLabel(worker) {
-  return worker.worker_type === 'rider' ? 'Rider / Delivery Partner' : 'Walking Messenger'
+  if (worker.worker_type === 'messenger') return 'Walking Messenger'
+  if (worker.rider_type === 'bicycle') return 'Bicycle Rider'
+  return 'Motorcycle Rider'
 }
 
 function locationHref(worker) {
@@ -93,6 +95,23 @@ export default function AdminWorkforce() {
       await loadWorkers()
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to update worker')
+    }
+  }
+
+  const deleteWorker = async (worker) => {
+    if (!canManage) return
+    if (worker.worker_type !== 'rider') {
+      toast.error('Permanent delete is available for rider profiles only.')
+      return
+    }
+    const confirmed = window.confirm(`Delete ${worker.full_name || 'this rider'} permanently? This removes login access and the rider profile.`)
+    if (!confirmed) return
+    try {
+      await adminAPI.deleteWorker(worker.id)
+      toast.success('Rider deleted')
+      await loadWorkers()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to delete rider')
     }
   }
 
@@ -236,29 +255,25 @@ export default function AdminWorkforce() {
                 <span className={`worker-status ${worker.kyc_status}`}>{worker.kyc_status}</span>
               </div>
               <div className="worker-detail-grid">
-                <div><strong>Operational</strong><span>{worker.operational_status}</span></div>
-                <div><strong>Availability</strong><span>{worker.availability_status || 'N/A'}</span></div>
-                <div><strong>Coverage</strong><span>{worker.assignment_scope === 'wide_area' ? 'Wide area' : 'Hyperlocal'}</span></div>
-                <div><strong>Geo-Fence</strong><span>{worker.geo_fence_enforced ? (worker.inside_zone ? 'Inside zone' : 'Outside zone') : 'Not enforced'}</span></div>
-                <div><strong>Last Seen</strong><span>{worker.last_seen_at ? new Date(worker.last_seen_at).toLocaleString() : 'No GPS yet'}</span></div>
-                <div><strong>GPS Fresh</strong><span>{worker.gps_recent ? 'Yes' : 'No'}</span></div>
-                <div><strong>Coordinates</strong><span>{worker.latest_latitude ? `${worker.latest_latitude}, ${worker.latest_longitude}` : 'N/A'}</span></div>
-                <div><strong>Active Order</strong><span>{worker.active_order?.order_code || 'None'}</span></div>
-                <div><strong>Assignment</strong><span>{worker.assignment_eligible ? 'Eligible' : 'Not eligible'}</span></div>
-                <div><strong>Trust Score</strong><span>{worker.trust_score}</span></div>
+                <div><strong>Name</strong><span>{worker.full_name || 'N/A'}</span></div>
+                <div><strong>Phone</strong><span>{worker.phone || 'N/A'}</span></div>
+                <div><strong>Email</strong><span>{worker.email || 'N/A'}</span></div>
+                <div><strong>Rider Type</strong><span>{workerTypeLabel(worker)}</span></div>
+                <div><strong>NIN Status</strong><span>{worker.nin_verified ? 'Verified' : 'Not verified'}</span></div>
+                <div><strong>Approval Status</strong><span>{worker.kyc_status || 'KYC_PENDING'}</span></div>
+                <div><strong>Registration Date</strong><span>{worker.created_at ? new Date(worker.created_at).toLocaleString() : 'N/A'}</span></div>
+                <div><strong>Operating City</strong><span>{worker.operating_city || worker.home_address || 'N/A'}</span></div>
               </div>
-              <p><strong>Readiness:</strong> {worker.assignment_eligibility_reason || 'N/A'}</p>
-              <p><strong>Address:</strong> {worker.home_address || 'N/A'}</p>
-              <p><strong>Emergency:</strong> {worker.emergency_contact_name} - {worker.emergency_contact_phone}</p>
+              <p><strong>Emergency:</strong> {worker.emergency_contact_name || 'N/A'} - {worker.emergency_contact_phone || 'N/A'}{worker.emergency_contact_relationship ? ` (${worker.emergency_contact_relationship})` : ''}</p>
               <p><strong>NIN:</strong> {worker.masked_nin || 'Not verified'} - {worker.nin_verified ? 'Verified' : 'Not verified'}</p>
               {worker.nin_verified && (
                 <p><strong>Verified Identity:</strong> {[worker.verified_first_name, worker.verified_middle_name, worker.verified_surname].filter(Boolean).join(' ') || 'N/A'}</p>
               )}
               {worker.nin_report_id && <p><strong>NIN Report:</strong> {worker.nin_report_id}</p>}
-              {worker.worker_type === 'rider' && <p><strong>Partner Company:</strong> {worker.partner_company || 'Independent rider'}</p>}
+              {worker.worker_type === 'rider' && <p><strong>Motorcycle:</strong> {[worker.vehicle_type, worker.plate_number].filter(Boolean).join(' - ') || 'Not required'}</p>}
+              <p><strong>Operational:</strong> {worker.operational_status} - {worker.assignment_eligibility_reason || 'N/A'}</p>
               {locationHref(worker) && <a href={locationHref(worker)} target="_blank" rel="noopener noreferrer">View live GPS location</a>}
               {canViewKycDocuments && worker.selfie_url && <a href={resolveMediaUrl(worker.selfie_url)} target="_blank" rel="noopener noreferrer">View selfie</a>}
-              {canViewKycDocuments && worker.id_document_url && <a href={resolveMediaUrl(worker.id_document_url)} target="_blank" rel="noopener noreferrer">View ID document</a>}
               {canViewKycDocuments && worker.vehicle_photo_url && <a href={resolveMediaUrl(worker.vehicle_photo_url)} target="_blank" rel="noopener noreferrer">View vehicle photo</a>}
               {canManage && (
                 <div className="worker-review-actions">
@@ -268,6 +283,7 @@ export default function AdminWorkforce() {
                     <button type="button" onClick={() => updateWorkerStatus(worker, 'REJECTED')}>Reject</button>
                     <button type="button" onClick={() => updateWorkerStatus(worker, 'SUSPENDED')}>Suspend</button>
                     <button type="button" onClick={() => updateWorkerStatus(worker, 'APPROVED')}>Reactivate</button>
+                    <button type="button" className="danger-worker-button" onClick={() => deleteWorker(worker)}><Trash2 size={14} /> Delete</button>
                   </div>
                 </div>
               )}

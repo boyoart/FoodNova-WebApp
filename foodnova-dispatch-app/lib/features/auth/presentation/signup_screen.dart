@@ -24,17 +24,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     'phone': TextEditingController(),
     'email': TextEditingController(),
     'password': TextEditingController(),
-    'confirm_password': TextEditingController(),
-    'home_address': TextEditingController(),
+    'nin_number': TextEditingController(),
+    'operating_city': TextEditingController(),
     'emergency_contact_name': TextEditingController(),
     'emergency_contact_phone': TextEditingController(),
-    'nin_number': TextEditingController(),
-    'id_number': TextEditingController(),
-    'vehicle_type': TextEditingController(text: 'Motorcycle'),
+    'emergency_contact_relationship': TextEditingController(),
+    'motorcycle_brand': TextEditingController(),
     'plate_number': TextEditingController(),
-    'driver_license_number': TextEditingController(),
   };
-  String idType = 'National ID';
+
+  String riderType = 'motorcycle';
   bool ninConsent = false;
   bool verifyingNin = false;
   bool loading = false;
@@ -42,8 +41,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   String verificationMessage = '';
   NinVerificationResult? verifiedNin;
   XFile? selfie;
-  XFile? idDocument;
   XFile? vehiclePhoto;
+
+  bool get isMotorcycleRider => riderType == 'motorcycle';
+  bool get isWalkingMessenger => riderType == 'walking';
 
   @override
   void dispose() {
@@ -63,22 +64,34 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         child: ListView(
           padding: const EdgeInsets.all(22),
           children: [
-            const Center(child: BrandLogo(width: 190, height: 74)),
-            const SizedBox(height: 16),
-            const FnCard(
-              child: Text(
-                'Complete rider KYC with a verified NIN. Your account remains pending until FoodNova admin approval.',
+            const Center(child: BrandLogo(width: 210, height: 82)),
+            const SizedBox(height: 18),
+            FnCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Apply to deliver with FoodNova',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Register, verify your NIN, upload a live selfie, then wait for admin approval before dashboard access.',
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 18),
             _sectionTitle('Account'),
-            _field('full_name', readOnly: verified),
-            _field('phone',
-                keyboardType: TextInputType.phone, readOnly: verified),
+            _field('full_name',
+                readOnly:
+                    verified && fields['full_name']!.text.trim().isNotEmpty),
+            _field('phone', keyboardType: TextInputType.phone),
             _field('email', keyboardType: TextInputType.emailAddress),
             _field('password', obscure: true),
-            _field('confirm_password', obscure: true),
-            _sectionTitle('Identity Verification'),
+            _sectionTitle('NIN Verification'),
             _field(
               'nin_number',
               keyboardType: TextInputType.number,
@@ -96,15 +109,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               value: ninConsent,
-              onChanged: (value) => setState(() => ninConsent = value ?? false),
+              onChanged: verified
+                  ? null
+                  : (value) => setState(() => ninConsent = value ?? false),
               title: const Text('I consent to FoodNova verifying my NIN.'),
-              subtitle: const Text(
-                'This is required for rider identity and operational review.',
-              ),
+              subtitle:
+                  const Text('Required for rider identity and safety review.'),
             ),
             FilledButton.icon(
               onPressed: verifyingNin || verified ? null : _verifyNin,
-              icon: const Icon(Icons.verified_user_outlined),
+              icon: verifyingNin
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.verified_user_outlined),
               label: Text(verifyingNin ? 'Verifying...' : 'Verify NIN'),
             ),
             if (verified)
@@ -126,36 +146,41 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   style: const TextStyle(color: FoodNovaColors.danger),
                 ),
               ),
-            const SizedBox(height: 12),
+            _sectionTitle('Delivery Profile'),
             DropdownButtonFormField<String>(
-              initialValue: idType,
-              decoration:
-                  const InputDecoration(labelText: 'Government ID Type'),
+              initialValue: riderType,
+              decoration: const InputDecoration(labelText: 'Rider Type'),
               items: const [
                 DropdownMenuItem(
-                    value: 'National ID', child: Text('National ID')),
-                DropdownMenuItem(
-                  value: 'Driver License',
-                  child: Text('Driver License'),
+                  value: 'motorcycle',
+                  child: Text('Motorcycle Rider'),
                 ),
-                DropdownMenuItem(value: 'Passport', child: Text('Passport')),
                 DropdownMenuItem(
-                    value: 'Voter Card', child: Text('Voter Card')),
+                  value: 'bicycle',
+                  child: Text('Bicycle Rider'),
+                ),
+                DropdownMenuItem(
+                  value: 'walking',
+                  child: Text('Walking Messenger'),
+                ),
               ],
-              onChanged: (value) => setState(() => idType = value ?? idType),
+              onChanged: (value) =>
+                  setState(() => riderType = value ?? riderType),
             ),
             const SizedBox(height: 12),
-            _field('id_number'),
-            _sectionTitle('Address and Emergency'),
-            _field('home_address', minLines: 2),
-            _field('emergency_contact_name'),
-            _field('emergency_contact_phone',
-                keyboardType: TextInputType.phone),
-            _sectionTitle('Vehicle'),
-            _field('vehicle_type'),
-            _field('plate_number'),
-            _field('driver_license_number'),
-            _sectionTitle('Documents'),
+            _field('operating_city'),
+            if (isMotorcycleRider) ...[
+              _field('motorcycle_brand'),
+              _field('plate_number'),
+              _UploadTile(
+                title: 'Vehicle Photo',
+                subtitle: 'Optional. Upload a clear motorcycle photo.',
+                file: vehiclePhoto,
+                icon: Icons.two_wheeler_outlined,
+                onTap: () => _pickFile('vehicle_photo', ImageSource.gallery),
+              ),
+            ],
+            _sectionTitle('Selfie and Emergency Contact'),
             _UploadTile(
               title: 'Live Selfie',
               subtitle: 'Use camera for a clear front-facing rider selfie.',
@@ -163,20 +188,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               icon: Icons.camera_front_outlined,
               onTap: () => _pickFile('selfie', ImageSource.camera),
             ),
-            _UploadTile(
-              title: 'Government ID Upload',
-              subtitle: 'Upload a clear image of your selected ID document.',
-              file: idDocument,
-              icon: Icons.badge_outlined,
-              onTap: () => _pickFile('id_document', ImageSource.gallery),
-            ),
-            _UploadTile(
-              title: 'Vehicle Photo',
-              subtitle: 'Upload a clear photo of the delivery vehicle.',
-              file: vehiclePhoto,
-              icon: Icons.two_wheeler_outlined,
-              onTap: () => _pickFile('vehicle_photo', ImageSource.gallery),
-            ),
+            _field('emergency_contact_name'),
+            _field('emergency_contact_phone',
+                keyboardType: TextInputType.phone),
+            _field('emergency_contact_relationship'),
             if (message.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -192,7 +207,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             const SizedBox(height: 16),
             FilledButton(
               onPressed: loading ? null : _submit,
-              child: Text(loading ? 'Submitting...' : 'Submit for approval'),
+              child: Text(loading ? 'Submitting...' : 'Submit application'),
             ),
           ],
         ),
@@ -216,7 +231,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     bool obscure = false,
     TextInputType? keyboardType,
     int? maxLength,
-    int minLines = 1,
     bool readOnly = false,
     ValueChanged<String>? onChanged,
   }) =>
@@ -227,8 +241,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           obscureText: obscure,
           keyboardType: keyboardType,
           maxLength: maxLength,
-          minLines: minLines,
-          maxLines: obscure ? 1 : minLines,
           readOnly: readOnly,
           decoration: InputDecoration(
             labelText: _label(key),
@@ -245,13 +257,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             if (key == 'password' && text.length < 6) {
               return 'Password must be at least 6 characters';
             }
-            if (key == 'confirm_password' &&
-                text != fields['password']!.text.trim()) {
-              return 'Passwords do not match';
-            }
             if (key == 'nin_number' &&
                 text.replaceAll(RegExp(r'\D'), '').length != 11) {
               return 'NIN must be exactly 11 digits';
+            }
+            if (key == 'phone' || key == 'emergency_contact_phone') {
+              if (text.replaceAll(RegExp(r'\D'), '').length < 10) {
+                return 'Enter a valid phone number';
+              }
             }
             return null;
           },
@@ -291,14 +304,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       }
       debugPrint(
           'VERIFY_NIN_SUCCESS nin_last4=${result.ninLast4} full_name=${result.fullName}');
-      final name = result.fullName;
-      if (name.isNotEmpty) fields['full_name']!.text = name;
+      if (result.fullName.isNotEmpty) {
+        fields['full_name']!.text = result.fullName;
+      }
       if (result.phone.isNotEmpty && fields['phone']!.text.trim().isEmpty) {
         fields['phone']!.text = result.phone;
-      }
-      if (result.address.isNotEmpty &&
-          fields['home_address']!.text.trim().isEmpty) {
-        fields['home_address']!.text = result.address;
       }
       setState(() {
         verifiedNin = result;
@@ -318,7 +328,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (!mounted || file == null) return;
     setState(() {
       if (type == 'selfie') selfie = file;
-      if (type == 'id_document') idDocument = file;
       if (type == 'vehicle_photo') vehiclePhoto = file;
     });
   }
@@ -335,26 +344,45 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       message = '';
     });
     try {
+      final nin = fields['nin_number']!.text.replaceAll(RegExp(r'\D'), '');
       final payload = <String, dynamic>{
-        for (final entry in fields.entries) entry.key: entry.value.text.trim(),
+        'full_name': fields['full_name']!.text.trim(),
+        'phone': fields['phone']!.text.trim(),
+        'email': fields['email']!.text.trim(),
+        'password': fields['password']!.text,
+        'confirm_password': fields['password']!.text,
+        'nin_number': nin,
+        'nin_consent': ninConsent,
+        'rider_type': riderType,
+        'worker_type': isWalkingMessenger ? 'messenger' : 'rider',
+        'operating_city': fields['operating_city']!.text.trim(),
+        'home_address': fields['operating_city']!.text.trim(),
+        'emergency_contact_name': fields['emergency_contact_name']!.text.trim(),
+        'emergency_contact_phone':
+            fields['emergency_contact_phone']!.text.trim(),
+        'emergency_contact_relationship':
+            fields['emergency_contact_relationship']!.text.trim(),
+        'id_type': 'NIN',
+        'id_number': nin,
+        'vehicle_type': isMotorcycleRider
+            ? fields['motorcycle_brand']!.text.trim()
+            : isWalkingMessenger
+                ? 'Walking Messenger'
+                : 'Bicycle',
+        'plate_number':
+            isMotorcycleRider ? fields['plate_number']!.text.trim() : '',
+        'driver_license_number': '',
       };
-      payload['nin_number'] =
-          fields['nin_number']!.text.replaceAll(RegExp(r'\D'), '');
-      payload['nin_consent'] = ninConsent;
-      payload['id_type'] = idType;
       await ref.read(authRepositoryProvider).signup(
             fields: payload,
             selfiePath: selfie!.path,
-            idDocumentPath: idDocument!.path,
-            vehiclePhotoPath: vehiclePhoto!.path,
+            vehiclePhotoPath: vehiclePhoto?.path,
           );
       if (!mounted) return;
       setState(
         () => message =
-            'Identity verified and submitted. FoodNova admin will review your rider account.',
+            'Application submitted. FoodNova admin will review your account before dashboard access.',
       );
-      // CRITICAL: Do NOT redirect immediately. Stay on signup screen to show success message.
-      // Only redirect after a brief delay, allowing user to see the success message.
       await Future.delayed(const Duration(milliseconds: 1500));
       if (!mounted) return;
       debugPrint('RIDER_ONBOARDING_COMPLETE_REDIRECT_TO_LOGIN');
@@ -373,8 +401,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     }
     if (!ninConsent) return 'NIN verification consent is required.';
     if (selfie == null) return 'Capture a live selfie before submitting.';
-    if (idDocument == null) return 'Upload your government ID document.';
-    if (vehiclePhoto == null) return 'Upload your vehicle photo.';
     return null;
   }
 
@@ -384,7 +410,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       if (data is Map) {
         final providerStatus = data['provider_status'];
         final providerResponse = data['provider_response'];
-        final message = data['message'];
+        final message = data['message'] ?? data['detail'];
         if (providerStatus != null || providerResponse != null) {
           return [
             if (message != null && '$message'.trim().isNotEmpty) '$message',
@@ -393,6 +419,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                 '$providerResponse'.trim().isNotEmpty)
               'Provider response: $providerResponse',
           ].join('\n');
+        }
+        if (message != null && '$message'.trim().isNotEmpty) {
+          return '$message';
         }
       }
     }
@@ -407,10 +436,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     return message;
   }
 
-  String _label(String key) => key
-      .split('_')
-      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-      .join(' ');
+  String _label(String key) {
+    const labels = {
+      'full_name': 'Full Name',
+      'phone': 'Phone Number',
+      'email': 'Email',
+      'password': 'Password',
+      'nin_number': 'NIN Number',
+      'operating_city': 'Operating City',
+      'emergency_contact_name': 'Emergency Contact Name',
+      'emergency_contact_phone': 'Emergency Contact Phone',
+      'emergency_contact_relationship': 'Emergency Contact Relationship',
+      'motorcycle_brand': 'Motorcycle Brand',
+      'plate_number': 'Plate Number',
+    };
+    return labels[key] ?? key;
+  }
 }
 
 class _UploadTile extends StatelessWidget {
@@ -459,8 +500,6 @@ class _VerifiedIdentityCard extends StatelessWidget {
       ('Date of Birth', result.dateOfBirth),
       ('Gender', result.gender),
       ('Phone Number', result.phone),
-      ('State', result.state),
-      ('Address', result.address),
     ];
     return FnCard(
       child: Column(
@@ -472,7 +511,7 @@ class _VerifiedIdentityCard extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'NIN Verified Successfully${result.ninLast4.isEmpty ? '' : ' • ${result.ninLast4}'}',
+                  'NIN Verified Successfully${result.ninLast4.isEmpty ? '' : ' - ${result.ninLast4}'}',
                   style: const TextStyle(
                     color: FoodNovaColors.success,
                     fontWeight: FontWeight.w900,
@@ -506,7 +545,7 @@ class _VerifiedIdentityCard extends StatelessWidget {
               ),
             ),
           const Text(
-            'Verified identity fields are locked for rider safety review.',
+            'Verified identity fields are locked for FoodNova admin review.',
             style: TextStyle(color: FoodNovaColors.muted, fontSize: 12),
           ),
         ],
