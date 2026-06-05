@@ -39,7 +39,7 @@ export default function AdminNinDiagnostics() {
 
   const testProvider = () => runAction(adminAPI.testNinProvider, 'NIN provider test completed')
   const checkBalance = () => runAction(adminAPI.checkNinProviderBalance, 'Balance check completed')
-  const runTestVerification = () => runAction(adminAPI.runTestNinVerification, 'Test NIN verification completed')
+  const runTestVerification = () => runAction(adminAPI.runTestNinVerification, 'NIN verification test completed')
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
 
@@ -66,16 +66,25 @@ export default function AdminNinDiagnostics() {
           <WalletCards size={18} />
           Check Balance
         </button>
-        <button type="button" className="nin-test-button secondary" onClick={runTestVerification} disabled={loading}>
-          <BadgeCheck size={18} />
-          Test NIN Verification
-        </button>
       </div>
+
+      <section className="nin-verification-test-card">
+        <div>
+          <p className="admin-eyebrow">Verification workflow only</p>
+          <h2>NIN Verification Test</h2>
+          <p>Runs the same backend verification service used by rider onboarding with sample NIN 22021091960.</p>
+        </div>
+        <button type="button" className="nin-test-button" onClick={runTestVerification} disabled={loading}>
+          <BadgeCheck size={18} />
+          Run NIN Verification Test
+        </button>
+      </section>
 
       {result && (
         <section className="nin-result-panel">
           <dl className="nin-result-grid">
             <div><dt>Provider URL</dt><dd>{displayValue(result.provider_url || result.base_url)}</dd></div>
+            <div><dt>Request URL</dt><dd>{displayValue(result.request_url || result.provider_url)}</dd></div>
             <div><dt>Provider Name</dt><dd>{displayValue(result.provider)}</dd></div>
             <div><dt>API key loaded</dt><dd>{result.api_key_loaded ? `Yes (${result.api_key_masked})` : 'No'}</dd></div>
             <div><dt>Balance Check Result</dt><dd>{displayValue(result.balance_request_status || result.balance?.message || result.message)}</dd></div>
@@ -85,6 +94,7 @@ export default function AdminNinDiagnostics() {
             <div><dt>Last Verification Attempt</dt><dd><pre className="nin-inline-json">{JSON.stringify(result.last_verification_attempt ?? 'Not available', null, 2)}</pre></dd></div>
             <div><dt>Last Verification Error</dt><dd><pre className="nin-inline-json">{JSON.stringify(result.last_verification_error ?? result.last_error ?? 'Not available', null, 2)}</pre></dd></div>
             <div><dt>Failure Stage</dt><dd>{displayValue(result.failure_stage)}</dd></div>
+            <div><dt>Provider Error Message</dt><dd>{displayValue(result.provider_error_message || result.message || result.last_error)}</dd></div>
             <div><dt>Shared Backend Service</dt><dd>{displayValue(result.shared_service)}</dd></div>
           </dl>
 

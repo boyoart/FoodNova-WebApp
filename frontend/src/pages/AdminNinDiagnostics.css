@@ -61,6 +61,31 @@
   cursor: wait;
 }
 
+.nin-verification-test-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: var(--fn-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+}
+
+.nin-verification-test-card h2,
+.nin-verification-test-card p {
+  margin: 0;
+}
+
+.nin-verification-test-card .admin-eyebrow {
+  margin-bottom: 0.35rem;
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
 .nin-result-panel {
   padding: 1.25rem;
   background: var(--fn-surface);
@@ -155,6 +180,10 @@
   .nin-test-button {
     width: 100%;
     justify-content: center;
+  }
+
+  .nin-verification-test-card {
+    display: grid;
   }
 
   .nin-diagnostic-actions {
