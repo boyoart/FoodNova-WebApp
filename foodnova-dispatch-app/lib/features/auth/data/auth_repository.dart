@@ -119,16 +119,14 @@ class AuthRepository {
   Future<Map<String, dynamic>> signup({
     required Map<String, dynamic> fields,
     required String selfiePath,
-    String? vehiclePhotoPath,
+    required String driverLicensePath,
   }) async {
     final formMap = <String, dynamic>{
       ...fields,
       'nin_consent': fields['nin_consent'] == true ? 'true' : 'false',
       'selfie': await MultipartFile.fromFile(selfiePath),
+      'id_document': await MultipartFile.fromFile(driverLicensePath),
     };
-    if (vehiclePhotoPath != null && vehiclePhotoPath.trim().isNotEmpty) {
-      formMap['vehicle_photo'] = await MultipartFile.fromFile(vehiclePhotoPath);
-    }
     final form = FormData.fromMap(formMap);
     final response = await _dio.post('/delivery-workers/signup', data: form);
     final body = Map<String, dynamic>.from(response.data as Map);

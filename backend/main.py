@@ -2908,7 +2908,7 @@ RIDER_ONBOARDING_STAGES = [
 
 
 def ensure_rider_records(db, worker: DBDeliveryWorker) -> tuple[Optional[DBRider], Optional[DBRiderKyc]]:
-    if (worker.worker_type or "").lower() != "rider":
+    if (worker.worker_type or "").lower() not in ["rider", "messenger"]:
         return None, None
     rider = db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).first()
     if not rider:
@@ -2923,7 +2923,7 @@ def ensure_rider_records(db, worker: DBDeliveryWorker) -> tuple[Optional[DBRider
 
 
 def rider_document_upsert(db, worker: DBDeliveryWorker, document_type: str, file_url: str, metadata: dict = None, checksum: str = "") -> None:
-    if (worker.worker_type or "").lower() != "rider" or not file_url:
+    if (worker.worker_type or "").lower() not in ["rider", "messenger"] or not file_url:
         return
     document = db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id, DBRiderDocument.document_type == document_type).order_by(DBRiderDocument.id.desc()).first()
     if not document:
@@ -3077,8 +3077,6 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
 
 
 def rider_approval_blockers(db, worker: DBDeliveryWorker) -> List[str]:
-    if (worker.worker_type or "").lower() != "rider":
-        return []
     sync_rider_onboarding_state(db, worker)
     kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
     blockers = []
@@ -3093,14 +3091,14 @@ def rider_approval_blockers(db, worker: DBDeliveryWorker) -> List[str]:
     if not worker.selfie_url:
         blockers.append("Selfie submission is required.")
     if not worker.home_address:
-        blockers.append("Operating city is required.")
-    if not worker.emergency_contact_name or not worker.emergency_contact_phone:
-        blockers.append("Emergency contact is required.")
+        blockers.append("Residential address is required.")
+    if not worker.id_document_url:
+        blockers.append("Driver license upload is required.")
     rider_meta = (delivery_worker_review_meta(worker).get("identity_verification") or {})
     rider_type = (rider_meta.get("rider_type") or "").lower()
-    if rider_type in ["motorcycle", "motorcycle_rider", "motorbike"]:
+    if rider_type in ["motorcycle", "motorcycle_rider", "motorbike", "vehicle"]:
         if not worker.vehicle_type or not worker.plate_number:
-            blockers.append("Motorcycle brand and plate number are required.")
+            blockers.append("Vehicle type and plate number are required.")
     return blockers
 
 
@@ -4043,15 +4041,18 @@ def register(payload: RegisterPayload):
 async def delivery_worker_signup(
     request: Request,
     worker_type: str = Form(...),
-    full_name: str = Form(...),
+    full_name: str = Form(""),
+    first_name: str = Form(""),
+    last_name: str = Form(""),
     phone: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...),
     email: str = Form(...),
     home_address: str = Form(""),
+    residential_address: str = Form(""),
     operating_city: str = Form(""),
-    emergency_contact_name: str = Form(...),
-    emergency_contact_phone: str = Form(...),
+    emergency_contact_name: str = Form(""),
+    emergency_contact_phone: str = Form(""),
     emergency_contact_relationship: str = Form(""),
     nin_number: str = Form(...),
     nin_consent: bool = Form(...),
@@ -4063,7 +4064,7 @@ async def delivery_worker_signup(
     plate_number: Optional[str] = Form(""),
     driver_license_number: Optional[str] = Form(""),
     selfie: UploadFile = File(...),
-    id_document: Optional[UploadFile] = File(None),
+    id_document: UploadFile = File(...),
     vehicle_photo: Optional[UploadFile] = File(None),
 ):
     if not is_mobile_worker_registration_request(request):
@@ -4071,14 +4072,15 @@ async def delivery_worker_signup(
     worker_type = (worker_type or "").strip().lower()
     if worker_type not in ["messenger", "rider"]:
         raise HTTPException(status_code=400, detail="Invalid delivery worker type")
+    clean_first_name = (first_name or "").strip()
+    clean_last_name = (last_name or "").strip()
+    clean_full_name = (full_name or " ".join([clean_first_name, clean_last_name]).strip()).strip()
+    clean_address = (residential_address or home_address or operating_city or "").strip()
     required_values = {
-        "full name": full_name,
+        "full name": clean_full_name,
         "phone": phone,
         "email": email,
-        "operating city": operating_city or home_address,
-        "emergency contact name": emergency_contact_name,
-        "emergency contact phone": emergency_contact_phone,
-        "emergency contact relationship": emergency_contact_relationship,
+        "residential address": clean_address,
         "NIN": nin_number,
     }
     missing = [label for label, value in required_values.items() if not str(value or "").strip()]
@@ -4092,12 +4094,24 @@ async def delivery_worker_signup(
         raise HTTPException(status_code=400, detail="NIN verification consent is required")
     if not selfie:
         raise HTTPException(status_code=400, detail="Live selfie capture is required")
-    rider_type = (rider_type or ("walking" if worker_type == "messenger" else "motorcycle")).strip().lower()
-    is_motorcycle_rider = worker_type == "rider" and rider_type in ["motorcycle", "motorcycle_rider", "motorbike"]
-    if is_motorcycle_rider:
+    if not id_document:
+        raise HTTPException(status_code=400, detail="Driver license upload is required")
+    rider_type = (rider_type or ("walker" if worker_type == "messenger" else "motorcycle")).strip().lower()
+    if rider_type in ["walking", "walking_messenger", "messenger"]:
+        rider_type = "walker"
+    if rider_type in ["motorcycle_rider", "motorbike"]:
+        rider_type = "motorcycle"
+    if rider_type not in ["walker", "motorcycle", "vehicle", "bicycle"]:
+        raise HTTPException(status_code=400, detail="Invalid rider type")
+    if rider_type == "walker":
+        worker_type = "messenger"
+    elif rider_type in ["motorcycle", "vehicle", "bicycle"]:
+        worker_type = "rider"
+    requires_vehicle_details = worker_type == "rider" and rider_type in ["motorcycle", "vehicle"]
+    if requires_vehicle_details:
         rider_missing = []
         if not (vehicle_type or "").strip():
-            rider_missing.append("motorcycle brand")
+            rider_missing.append("vehicle type")
         if not (plate_number or "").strip():
             rider_missing.append("plate number")
         if rider_missing:
@@ -4108,6 +4122,8 @@ async def delivery_worker_signup(
     clean_phone = (phone or "").strip()
     clean_email = (email or "").strip().lower()
     account_email = clean_email
+    clean_nin = "".join(ch for ch in str(nin_number or "") if ch.isdigit())
+    submitted_nin_hash = _nin_hash(clean_nin)
 
     try:
         nin_result = verify_nin(nin_number, True)
@@ -4134,16 +4150,26 @@ async def delivery_worker_signup(
         }))
         if get_db_user_by_email(db, account_email) or get_db_user_by_phone(db, clean_phone):
             raise HTTPException(status_code=400, detail="A delivery account with this email or phone already exists")
+        existing_kyc_nin = db.query(DBRiderKyc).filter(DBRiderKyc.nin_hash == submitted_nin_hash).first()
+        existing_worker_nin = None
+        if not existing_kyc_nin:
+            for existing_worker in db.query(DBDeliveryWorker).filter(DBDeliveryWorker.deleted_at.is_(None)).all():
+                existing_identity = (delivery_worker_review_meta(existing_worker).get("identity_verification") or {})
+                if existing_identity.get("nin_hash") == submitted_nin_hash:
+                    existing_worker_nin = existing_worker
+                    break
+        if existing_kyc_nin or existing_worker_nin:
+            raise HTTPException(status_code=400, detail="A rider application with this NIN already exists")
 
         selfie_url = await save_workforce_upload(selfie, False, "foodnova/workforce/selfies")
-        id_document_url = await save_workforce_upload(id_document, True, "foodnova/workforce/id-documents") if id_document else ""
+        id_document_url = await save_workforce_upload(id_document, True, "foodnova/workforce/id-documents")
         vehicle_photo_url = await save_workforce_upload(vehicle_photo, False, "foodnova/workforce/vehicles") if vehicle_photo else ""
-        effective_city = (operating_city or home_address or "").strip()
-        clean_id_type = (id_type or "NIN").strip() or "NIN"
-        clean_id_number = (id_number or "".join(ch for ch in str(nin_number or "") if ch.isdigit())).strip()
+        effective_city = clean_address
+        clean_id_type = (id_type or "Driver License").strip() or "Driver License"
+        clean_id_number = (id_number or clean_nin).strip()
 
         user = DBUser(
-            full_name=full_name.strip(),
+            full_name=clean_full_name,
             email=account_email,
             phone=clean_phone,
             password=_hash_new_password(password),
@@ -4155,17 +4181,17 @@ async def delivery_worker_signup(
         worker = DBDeliveryWorker(
             user_id=user.id,
             worker_type=worker_type,
-            full_name=full_name.strip(),
+            full_name=clean_full_name,
             phone=clean_phone,
             email=clean_email,
             home_address=effective_city,
-            emergency_contact_name=emergency_contact_name.strip(),
-            emergency_contact_phone=emergency_contact_phone.strip(),
+            emergency_contact_name=(emergency_contact_name or "").strip(),
+            emergency_contact_phone=(emergency_contact_phone or "").strip(),
             id_type=clean_id_type,
             id_number=clean_id_number,
             nin_verified=True,
             nin_report_id=nin_result.get("report_id") or "",
-            nin_last4="".join(ch for ch in str(nin_number or "") if ch.isdigit())[-4:],
+            nin_last4=clean_nin[-4:],
             verified_first_name=nin_data.get("first_name") or "",
             verified_middle_name=nin_data.get("middle_name") or "",
             verified_surname=nin_data.get("surname") or "",
@@ -4176,23 +4202,22 @@ async def delivery_worker_signup(
             selfie_url=selfie_url,
             profile_photo_url=selfie_url,
             id_document_url=id_document_url,
-            vehicle_type=(vehicle_type or "").strip() if worker_type == "rider" else "Walking Messenger",
+            vehicle_type=(vehicle_type or "").strip() if worker_type == "rider" else "Walker",
             partner_company=(partner_company or "").strip() if worker_type == "rider" else "",
-            plate_number=(plate_number or "").strip() if is_motorcycle_rider else "",
-            driver_license_number=(driver_license_number or "").strip() if is_motorcycle_rider else "",
+            plate_number=(plate_number or "").strip() if requires_vehicle_details else "",
+            driver_license_number=(driver_license_number or "").strip() if requires_vehicle_details else "",
             vehicle_photo_url=vehicle_photo_url,
-            kyc_status="KYC_PENDING",
+            kyc_status="PENDING_REVIEW",
             operational_status="OFFLINE",
         )
         db.add(worker)
         db.flush()
         log_verification_event(db, worker, "nin", nin_result, message=nin_result.get("message") or "")
-        if worker_type == "rider":
-            set_delivery_worker_review_meta(worker, "identity_verification", {
+        set_delivery_worker_review_meta(worker, "identity_verification", {
                 "status": "verified",
                 "verification_state": "verified",
                 "nin_last4": worker.nin_last4,
-                "nin_hash": _nin_hash("".join(ch for ch in str(nin_number or "") if ch.isdigit())),
+                "nin_hash": submitted_nin_hash,
                 "provider": "ninbvnportal",
                 "provider_report_id": worker.nin_report_id,
                 "provider_message": nin_result.get("message") or "",
@@ -4206,35 +4231,35 @@ async def delivery_worker_signup(
                 "consent": consent_meta,
                 "manual_review_required": False,
                 "verified_at": iso(datetime.utcnow()),
-            })
-            set_delivery_worker_review_meta(worker, "address_verification", {"status": "submitted", "operating_city": effective_city, "submitted_at": iso(datetime.utcnow())})
-            set_delivery_worker_review_meta(worker, "emergency_contact", {"status": "completed", "full_name": worker.emergency_contact_name, "phone_number": worker.emergency_contact_phone, "relationship": emergency_contact_relationship.strip(), "submitted_at": iso(datetime.utcnow())})
-            _, rider_kyc = ensure_rider_records(db, worker)
-            if rider_kyc:
-                rider_kyc.identity_status = "verified"
-                rider_kyc.address_status = "submitted"
-                rider_kyc.emergency_status = "completed"
-                rider_kyc.selfie_status = "verified"
-                rider_kyc.nin_hash = _nin_hash("".join(ch for ch in str(nin_number or "") if ch.isdigit()))
-                rider_kyc.nin_last4 = worker.nin_last4
-                rider_kyc.nin_verified = True
-                rider_kyc.nin_provider_report_id = worker.nin_report_id
-                rider_kyc.nin_response_json = json_dump(nin_result)
-                rider_kyc.verified_full_name = nin_data.get("full_name") or " ".join([nin_data.get("first_name") or "", nin_data.get("middle_name") or "", nin_data.get("surname") or ""]).strip()
-                rider_kyc.verified_dob = nin_data.get("dob") or nin_data.get("birthdate") or ""
-                rider_kyc.verified_phone = nin_data.get("phone") or ""
-                rider_kyc.verified_gender = nin_data.get("gender") or ""
-                rider_kyc.verified_address = nin_data.get("address") or ""
-                rider_kyc.consent_accepted = True
-                rider_kyc.consent_timestamp = datetime.utcnow()
-                rider_kyc.consent_device_json = json_dump(consent_meta.get("device") or {})
-                rider_kyc.consent_ip_address = consent_meta.get("ip_address") or ""
-            rider_document_upsert(db, worker, "selfie", selfie_url, {"filename": selfie.filename, "content_type": selfie.content_type or ""}, hashlib.sha256(str(selfie_url or "").encode("utf-8")).hexdigest())
-            if id_document_url:
-                rider_document_upsert(db, worker, "identity_document", id_document_url, {"filename": id_document.filename, "content_type": id_document.content_type or ""})
-            if vehicle_photo_url:
-                rider_document_upsert(db, worker, "vehicle_photo", vehicle_photo_url, {"filename": getattr(vehicle_photo, "filename", ""), "content_type": getattr(vehicle_photo, "content_type", "")})
-            sync_rider_onboarding_state(db, worker, note="Rider submitted complete signup KYC")
+        })
+        set_delivery_worker_review_meta(worker, "address_verification", {"status": "submitted", "operating_city": effective_city, "submitted_at": iso(datetime.utcnow())})
+        set_delivery_worker_review_meta(worker, "emergency_contact", {"status": "completed" if worker.emergency_contact_name or worker.emergency_contact_phone else "not_required", "full_name": worker.emergency_contact_name, "phone_number": worker.emergency_contact_phone, "relationship": emergency_contact_relationship.strip(), "submitted_at": iso(datetime.utcnow())})
+        _, rider_kyc = ensure_rider_records(db, worker)
+        if rider_kyc:
+            rider_kyc.identity_status = "verified"
+            rider_kyc.address_status = "submitted"
+            rider_kyc.emergency_status = "completed"
+            rider_kyc.selfie_status = "verified"
+            rider_kyc.nin_hash = submitted_nin_hash
+            rider_kyc.nin_last4 = worker.nin_last4
+            rider_kyc.nin_verified = True
+            rider_kyc.nin_provider_report_id = worker.nin_report_id
+            rider_kyc.nin_response_json = json_dump(nin_result)
+            rider_kyc.verified_full_name = nin_data.get("full_name") or " ".join([nin_data.get("first_name") or "", nin_data.get("middle_name") or "", nin_data.get("surname") or ""]).strip()
+            rider_kyc.verified_dob = nin_data.get("dob") or nin_data.get("birthdate") or ""
+            rider_kyc.verified_phone = nin_data.get("phone") or ""
+            rider_kyc.verified_gender = nin_data.get("gender") or ""
+            rider_kyc.verified_address = nin_data.get("address") or ""
+            rider_kyc.consent_accepted = True
+            rider_kyc.consent_timestamp = datetime.utcnow()
+            rider_kyc.consent_device_json = json_dump(consent_meta.get("device") or {})
+            rider_kyc.consent_ip_address = consent_meta.get("ip_address") or ""
+        rider_document_upsert(db, worker, "selfie", selfie_url, {"filename": selfie.filename, "content_type": selfie.content_type or ""}, hashlib.sha256(str(selfie_url or "").encode("utf-8")).hexdigest())
+        if id_document_url:
+            rider_document_upsert(db, worker, "driver_license", id_document_url, {"filename": id_document.filename, "content_type": id_document.content_type or ""})
+        if vehicle_photo_url:
+            rider_document_upsert(db, worker, "vehicle_photo", vehicle_photo_url, {"filename": getattr(vehicle_photo, "filename", ""), "content_type": getattr(vehicle_photo, "content_type", "")})
+        sync_rider_onboarding_state(db, worker, note="Rider submitted complete signup KYC")
         print("NIN_ONBOARDING_REGISTRATION_STAGE", json_dump({
             "stage": "database_save",
             "worker_id": worker.id,
@@ -6488,7 +6513,7 @@ def get_rider_verification_queue(
         count_query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type.in_(worker_types))
         all_count_workers = count_query.all()
         counts = {
-            "pending": sum(1 for worker in all_count_workers if (worker.kyc_status or "KYC_PENDING") not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED"] and not worker.deleted_at),
+            "pending": sum(1 for worker in all_count_workers if (worker.kyc_status or "PENDING_REVIEW") not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED"] and not worker.deleted_at),
             "approved": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "APPROVED" and not worker.deleted_at),
             "rejected": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "REJECTED" and not worker.deleted_at),
             "suspended": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "SUSPENDED" and not worker.deleted_at),
@@ -6503,7 +6528,7 @@ def get_rider_verification_queue(
         if status:
             wanted = status.strip().upper()
             if wanted in ["PENDING", "ADMIN_REVIEW"]:
-                query = query.filter(DBDeliveryWorker.kyc_status == "KYC_PENDING")
+                query = query.filter(DBDeliveryWorker.kyc_status.in_(["KYC_PENDING", "PENDING_REVIEW"]))
             elif wanted in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED"]:
                 query = query.filter(DBDeliveryWorker.kyc_status == wanted)
         if search:
@@ -6540,12 +6565,12 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
     action_map = {
         "approve": "APPROVED",
         "reject": "REJECTED",
-        "request_resubmission": "KYC_PENDING",
-        "reactivate": "KYC_PENDING",
+        "request_resubmission": "PENDING_REVIEW",
+        "reactivate": "PENDING_REVIEW",
         "suspend": "SUSPENDED",
         "deactivate": "DEACTIVATED",
         "delete": "DELETED",
-        "reset_onboarding": "KYC_PENDING",
+        "reset_onboarding": "PENDING_REVIEW",
         "force_logout": "FORCE_LOGOUT",
     }
     if action not in action_map:
@@ -6609,12 +6634,12 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             ))
         elif action == "reset_onboarding":
             revoke_rider_sessions(db, worker, admin, review_note or "KYC reset")
-            worker.kyc_status = "KYC_PENDING"
+            worker.kyc_status = "PENDING_REVIEW"
             worker.operational_status = "OFFLINE"
             worker.nin_verified = False
             worker.nin_report_id = ""
             worker.nin_last4 = ""
-            worker.review_note = json_dump({"admin_override": {"status": "KYC_PENDING", "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}})
+            worker.review_note = json_dump({"admin_override": {"status": "PENDING_REVIEW", "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}})
             kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
             if kyc:
                 kyc.onboarding_stage = "account_created"
@@ -6662,7 +6687,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         _, rider_kyc = ensure_rider_records(db, worker)
         if rider_kyc:
             rider_kyc.rejection_reason = review_note if new_status == "REJECTED" else rider_kyc.rejection_reason
-            rider_kyc.resubmission_requested = new_status == "KYC_PENDING"
+            rider_kyc.resubmission_requested = new_status in ["KYC_PENDING", "PENDING_REVIEW"]
             rider_kyc.admin_reviewed_at = datetime.utcnow()
             if new_status == "DELETED":
                 rider_kyc.onboarding_stage = "deleted"
@@ -6786,7 +6811,7 @@ def permanently_delete_rider(worker_id: int, request: Request):
 def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request: Request):
     admin = require_workforce_manage(request)
     new_status = (payload.status or "").strip().upper()
-    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED", "KYC_PENDING"]:
+    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED", "KYC_PENDING", "PENDING_REVIEW"]:
         raise HTTPException(status_code=400, detail="Invalid worker status")
     db = SessionLocal()
     try:
@@ -6794,7 +6819,7 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
         if not worker:
             raise HTTPException(status_code=404, detail="Delivery worker not found")
         old_data = worker_to_dict(worker)
-        if (worker.worker_type or "").lower() == "rider" and new_status == "APPROVED":
+        if (worker.worker_type or "").lower() in ["rider", "messenger"] and new_status == "APPROVED":
             blockers = rider_approval_blockers(db, worker)
             if blockers:
                 raise HTTPException(status_code=422, detail="Rider cannot be approved yet: " + " ".join(blockers))
@@ -6848,14 +6873,14 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
                         }),
                         hard_deleted=False,
                     ))
-        if new_status in ["REJECTED", "KYC_PENDING"]:
+        if new_status in ["REJECTED", "KYC_PENDING", "PENDING_REVIEW"]:
             worker.operational_status = "OFFLINE"
         worker.updated_at = datetime.utcnow()
-        if (worker.worker_type or "").lower() == "rider":
+        if (worker.worker_type or "").lower() in ["rider", "messenger"]:
             _, rider_kyc = ensure_rider_records(db, worker)
             if rider_kyc:
                 rider_kyc.rejection_reason = (payload.review_note or "").strip() if new_status == "REJECTED" else rider_kyc.rejection_reason
-                rider_kyc.resubmission_requested = new_status == "KYC_PENDING"
+                rider_kyc.resubmission_requested = new_status in ["KYC_PENDING", "PENDING_REVIEW"]
                 rider_kyc.admin_reviewed_at = datetime.utcnow()
                 if new_status == "DELETED":
                     rider_kyc.onboarding_stage = "deleted"
@@ -6955,7 +6980,7 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
     require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:view", "workforce:manage"])
     db = SessionLocal()
     try:
-        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type == "rider")
+        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type.in_(["rider", "messenger"]))
         if include_deleted or (status or "").lower() == "deleted":
             query = query.filter(or_(DBDeliveryWorker.deleted_at.isnot(None), DBDeliveryWorker.kyc_status == "DELETED"))
         else:
@@ -6964,15 +6989,18 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
             status_map = {
                 "active": "APPROVED",
                 "approved": "APPROVED",
-                "pending": "KYC_PENDING",
-                "pending_review": "KYC_PENDING",
-                "inactive": "KYC_PENDING",
+                "pending": "PENDING_REVIEW",
+                "pending_review": "PENDING_REVIEW",
+                "inactive": "PENDING_REVIEW",
                 "rejected": "REJECTED",
                 "suspended": "SUSPENDED",
                 "deactivated": "DEACTIVATED",
             }
             wanted = status_map.get((status or "").lower(), (status or "").upper())
-            query = query.filter(DBDeliveryWorker.kyc_status == wanted)
+            if wanted == "PENDING_REVIEW":
+                query = query.filter(DBDeliveryWorker.kyc_status.in_(["PENDING_REVIEW", "KYC_PENDING"]))
+            else:
+                query = query.filter(DBDeliveryWorker.kyc_status == wanted)
         riders = []
         for worker in query.order_by(DBDeliveryWorker.kyc_status.asc(), DBDeliveryWorker.full_name.asc()).all():
             data = worker_to_dict(worker)
@@ -7023,9 +7051,9 @@ def create_rider(payload: RiderPayload, request: Request):
         status_map = {
             "active": "APPROVED",
             "approved": "APPROVED",
-            "inactive": "KYC_PENDING",
-            "pending": "KYC_PENDING",
-            "pending_review": "KYC_PENDING",
+            "inactive": "PENDING_REVIEW",
+            "pending": "PENDING_REVIEW",
+            "pending_review": "PENDING_REVIEW",
             "rejected": "REJECTED",
             "suspended": "SUSPENDED",
             "deactivated": "DEACTIVATED",
@@ -7089,9 +7117,9 @@ def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
                 "active": "APPROVED",
                 "approved": "APPROVED",
                 "reactivated": "APPROVED",
-                "inactive": "KYC_PENDING",
-                "pending": "KYC_PENDING",
-                "pending_review": "KYC_PENDING",
+                "inactive": "PENDING_REVIEW",
+                "pending": "PENDING_REVIEW",
+                "pending_review": "PENDING_REVIEW",
                 "rejected": "REJECTED",
                 "suspended": "SUSPENDED",
                 "deactivated": "DEACTIVATED",
@@ -7125,7 +7153,7 @@ def deactivate_rider(rider_id: int, request: Request):
     admin = require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
     db = SessionLocal()
     try:
-        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == rider_id, DBDeliveryWorker.worker_type == "rider").first()
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == rider_id, DBDeliveryWorker.worker_type.in_(["rider", "messenger"])).first()
         if not worker:
             raise HTTPException(status_code=404, detail="Rider not found")
         old_data = worker_to_dict(worker)

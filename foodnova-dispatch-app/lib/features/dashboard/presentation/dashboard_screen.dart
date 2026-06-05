@@ -25,7 +25,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(riderProfileProvider);
-    final offers = ref.watch(deliveryOffersProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dispatch'),
@@ -54,10 +53,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 debugPrint('Rider ID ${rider.id ?? ''}');
                 debugPrint('Rider Name ${rider.name}');
                 debugPrint('Data source backend');
-                return _Header(
-                  rider: rider,
-                  onToggle: () => _toggleOnline(rider),
-                  loading: toggling,
+                if (!rider.isApproved) {
+                  return _AccessLockedCard(rider: rider);
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Header(
+                      rider: rider,
+                      onToggle: () => _toggleOnline(rider),
+                      loading: toggling,
+                    ),
+                    const SizedBox(height: 16),
+                    _ApprovedDashboardBody(money: money),
+                  ],
                 );
               },
               loading: () => const LinearProgressIndicator(),
@@ -71,74 +80,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   style: const TextStyle(color: FoodNovaColors.danger),
                 ),
               ),
-            const SizedBox(height: 16),
-            GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 1.15,
-              children: [
-                StatTile(
-                  label: 'Today\'s Earnings',
-                  value: money.format(0),
-                  icon: Icons.payments_outlined,
-                ),
-                const StatTile(
-                  label: 'Today\'s Deliveries',
-                  value: '0',
-                  icon: Icons.local_shipping_outlined,
-                ),
-                const StatTile(
-                  label: 'Completed',
-                  value: '0',
-                  icon: Icons.check_circle_outline,
-                ),
-                const StatTile(
-                  label: 'Pending',
-                  value: '0',
-                  icon: Icons.pending_actions_outlined,
-                  color: FoodNovaColors.warning,
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Text(
-                  'Incoming orders',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => ref.invalidate(deliveryOffersProvider),
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-            offers.when(
-              data: (items) => items.isEmpty
-                  ? const FnCard(
-                      child: Text(
-                        'No active assignments yet. Stay online to receive dispatch offers.',
-                      ),
-                    )
-                  : Column(
-                      children: items
-                          .map((offer) => _OfferCard(offer: offer))
-                          .toList(),
-                    ),
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-              error: (e, _) => FnCard(child: Text(apiMessage(e))),
-            ),
           ],
         ),
       ),
@@ -202,6 +143,151 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     } finally {
       if (mounted) setState(() => toggling = false);
     }
+  }
+}
+
+class _ApprovedDashboardBody extends ConsumerWidget {
+  const _ApprovedDashboardBody({required this.money});
+  final NumberFormat money;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final offers = ref.watch(deliveryOffersProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          childAspectRatio: 1.15,
+          children: [
+            StatTile(
+              label: 'Today\'s Earnings',
+              value: money.format(0),
+              icon: Icons.payments_outlined,
+            ),
+            const StatTile(
+              label: 'Today\'s Deliveries',
+              value: '0',
+              icon: Icons.local_shipping_outlined,
+            ),
+            const StatTile(
+              label: 'Completed',
+              value: '0',
+              icon: Icons.check_circle_outline,
+            ),
+            const StatTile(
+              label: 'Pending',
+              value: '0',
+              icon: Icons.pending_actions_outlined,
+              color: FoodNovaColors.warning,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        Row(
+          children: [
+            Text(
+              'Incoming orders',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const Spacer(),
+            IconButton(
+              onPressed: () => ref.invalidate(deliveryOffersProvider),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        offers.when(
+          data: (items) => items.isEmpty
+              ? const FnCard(
+                  child: Text(
+                    'No active assignments yet. Stay online to receive dispatch offers.',
+                  ),
+                )
+              : Column(
+                  children:
+                      items.map((offer) => _OfferCard(offer: offer)).toList(),
+                ),
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          error: (e, _) => FnCard(child: Text(apiMessage(e))),
+        ),
+      ],
+    );
+  }
+}
+
+class _AccessLockedCard extends StatelessWidget {
+  const _AccessLockedCard({required this.rider});
+  final RiderProfile rider;
+
+  @override
+  Widget build(BuildContext context) {
+    final isRejected = rider.isRejected;
+    final isSuspended = rider.isSuspended;
+    final title = isRejected
+        ? 'Application rejected'
+        : isSuspended
+            ? 'Account suspended'
+            : 'Your application is under review.';
+    final detail = isRejected
+        ? (rider.rejectionReason.isEmpty
+            ? 'FoodNova admin rejected this application. Update your documents and resubmit when requested.'
+            : rider.rejectionReason)
+        : isSuspended
+            ? 'FoodNova has temporarily blocked dashboard access. Contact support for the next step.'
+            : 'FoodNova admin is reviewing your verified NIN, selfie, and driver license before unlocking deliveries.';
+    return FnCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isRejected || isSuspended
+                    ? Icons.lock_outline
+                    : Icons.hourglass_top_outlined,
+                color: isRejected || isSuspended
+                    ? FoodNovaColors.danger
+                    : FoodNovaColors.warning,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text('Status: ${rider.kycStatus}'),
+          const SizedBox(height: 8),
+          Text(detail),
+          if (isRejected) ...[
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: () => context.go('/signup'),
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('Update application'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

@@ -208,7 +208,12 @@ export default function AdminRiderVerificationQueue() {
               <tbody>
                 {riders.map((item) => {
                   const worker = item.worker || {}
-                  const riderType = worker.worker_type === 'messenger' ? 'Walking Messenger' : worker.rider_type === 'bicycle' ? 'Bicycle Rider' : 'Motorcycle Rider'
+                  const rawRiderType = `${worker.rider_type || ''}`.toLowerCase()
+                  const riderType = worker.worker_type === 'messenger' || rawRiderType === 'walker'
+                    ? 'Walker'
+                    : rawRiderType === 'vehicle'
+                      ? 'Vehicle Rider'
+                      : 'Motorcycle Rider'
                   return (
                     <tr key={worker.id} className={selected?.worker?.id === worker.id ? 'selected' : ''}>
                       <td>
@@ -255,16 +260,15 @@ export default function AdminRiderVerificationQueue() {
                 <div><strong>Verification</strong><span>{selected.kyc.nin_verified ? 'Verified' : label(selected.kyc.identity_status)} {selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
                 <div><strong>Email</strong><span>{selected.worker.email || 'No email'}</span></div>
                 <div><strong>Approval status</strong><span>{label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</span></div>
-                <div><strong>Vehicle type</strong><span>{selected.worker.vehicle_type || 'Missing'}</span></div>
-                <div><strong>Plate number</strong><span>{selected.worker.plate_number || 'Missing'}</span></div>
-                <div><strong>Licence number</strong><span>{selected.worker.driver_license_number || 'Missing'}</span></div>
+                <div><strong>Rider type</strong><span>{selected.worker.worker_type === 'messenger' ? 'Walker' : selected.worker.rider_type === 'vehicle' ? 'Vehicle Rider' : 'Motorcycle Rider'}</span></div>
+                <div><strong>Vehicle type</strong><span>{selected.worker.vehicle_type || 'Not applicable'}</span></div>
+                <div><strong>Plate number</strong><span>{selected.worker.plate_number || 'Not applicable'}</span></div>
                 <div><strong>Registration date</strong><span>{selected.worker.created_at ? new Date(selected.worker.created_at).toLocaleString() : 'N/A'}</span></div>
                 <div><strong>Verified name</strong><span>{[selected.worker.verified_first_name, selected.worker.verified_middle_name, selected.worker.verified_surname].filter(Boolean).join(' ') || 'No provider name'}</span></div>
                 <div><strong>Provider phone</strong><span>{selected.worker.verified_phone || 'No provider phone'}</span></div>
                 <div><strong>Verified at</strong><span>{selected.kyc.timestamps?.identity_verified_at ? new Date(selected.kyc.timestamps.identity_verified_at).toLocaleString() : selected.kyc.timestamps?.last_verification_at ? new Date(selected.kyc.timestamps.last_verification_at).toLocaleString() : 'No verification timestamp'}</span></div>
                 <div><strong>Failed attempts</strong><span>{selected.kyc.failed_verification_attempts || 0}</span></div>
-                <div><strong>Address</strong><span>{label(selected.kyc.address_status)}</span></div>
-                <div><strong>Emergency</strong><span>{selected.worker.emergency_contact_name || 'Missing'}</span></div>
+                <div><strong>Residential address</strong><span>{selected.worker.home_address || label(selected.kyc.address_status)}</span></div>
                 <div><strong>GPS</strong><span>{selected.worker.latest_latitude ? `${selected.worker.latest_latitude}, ${selected.worker.latest_longitude}` : 'No GPS ping'}</span></div>
                 <div><strong>Risk</strong><span>{riskLevel(selected)}</span></div>
               </div>

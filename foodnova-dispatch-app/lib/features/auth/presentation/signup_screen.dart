@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -20,16 +21,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   final formKey = GlobalKey<FormState>();
   final picker = ImagePicker();
   final fields = <String, TextEditingController>{
-    'full_name': TextEditingController(),
+    'first_name': TextEditingController(),
+    'last_name': TextEditingController(),
     'phone': TextEditingController(),
     'email': TextEditingController(),
     'password': TextEditingController(),
+    'confirm_password': TextEditingController(),
     'nin_number': TextEditingController(),
-    'operating_city': TextEditingController(),
-    'emergency_contact_name': TextEditingController(),
-    'emergency_contact_phone': TextEditingController(),
-    'emergency_contact_relationship': TextEditingController(),
-    'motorcycle_brand': TextEditingController(),
+    'residential_address': TextEditingController(),
+    'vehicle_type': TextEditingController(),
     'plate_number': TextEditingController(),
   };
 
@@ -41,10 +41,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   String verificationMessage = '';
   NinVerificationResult? verifiedNin;
   XFile? selfie;
-  XFile? vehiclePhoto;
+  PlatformFile? driverLicense;
 
-  bool get isMotorcycleRider => riderType == 'motorcycle';
-  bool get isWalkingMessenger => riderType == 'walking';
+  bool get requiresVehicleDetails =>
+      riderType == 'motorcycle' || riderType == 'vehicle';
+  bool get isWalker => riderType == 'walker';
 
   @override
   void dispose() {
@@ -85,12 +86,19 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             ),
             const SizedBox(height: 18),
             _sectionTitle('Account'),
-            _field('full_name',
-                readOnly:
-                    verified && fields['full_name']!.text.trim().isNotEmpty),
+            _field(
+              'first_name',
+              readOnly:
+                  verified && fields['first_name']!.text.trim().isNotEmpty,
+            ),
+            _field(
+              'last_name',
+              readOnly: verified && fields['last_name']!.text.trim().isNotEmpty,
+            ),
             _field('phone', keyboardType: TextInputType.phone),
             _field('email', keyboardType: TextInputType.emailAddress),
             _field('password', obscure: true),
+            _field('confirm_password', obscure: true),
             _sectionTitle('NIN Verification'),
             _field(
               'nin_number',
@@ -152,46 +160,42 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               decoration: const InputDecoration(labelText: 'Rider Type'),
               items: const [
                 DropdownMenuItem(
+                  value: 'walker',
+                  child: Text('Walker'),
+                ),
+                DropdownMenuItem(
                   value: 'motorcycle',
                   child: Text('Motorcycle Rider'),
                 ),
                 DropdownMenuItem(
-                  value: 'bicycle',
-                  child: Text('Bicycle Rider'),
-                ),
-                DropdownMenuItem(
-                  value: 'walking',
-                  child: Text('Walking Messenger'),
+                  value: 'vehicle',
+                  child: Text('Vehicle Rider'),
                 ),
               ],
               onChanged: (value) =>
                   setState(() => riderType = value ?? riderType),
             ),
             const SizedBox(height: 12),
-            _field('operating_city'),
-            if (isMotorcycleRider) ...[
-              _field('motorcycle_brand'),
+            _field('residential_address'),
+            if (requiresVehicleDetails) ...[
+              _field('vehicle_type'),
               _field('plate_number'),
-              _UploadTile(
-                title: 'Vehicle Photo',
-                subtitle: 'Optional. Upload a clear motorcycle photo.',
-                file: vehiclePhoto,
-                icon: Icons.two_wheeler_outlined,
-                onTap: () => _pickFile('vehicle_photo', ImageSource.gallery),
-              ),
             ],
-            _sectionTitle('Selfie and Emergency Contact'),
+            _sectionTitle('Documents'),
+            _UploadTile(
+              title: 'Driver License',
+              subtitle: 'Upload JPG, PNG, or PDF. Required for admin review.',
+              fileName: driverLicense?.name,
+              icon: Icons.badge_outlined,
+              onTap: _pickDriverLicense,
+            ),
             _UploadTile(
               title: 'Live Selfie',
               subtitle: 'Use camera for a clear front-facing rider selfie.',
-              file: selfie,
+              fileName: selfie?.name,
               icon: Icons.camera_front_outlined,
-              onTap: () => _pickFile('selfie', ImageSource.camera),
+              onTap: _pickSelfie,
             ),
-            _field('emergency_contact_name'),
-            _field('emergency_contact_phone',
-                keyboardType: TextInputType.phone),
-            _field('emergency_contact_relationship'),
             if (message.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 12),
@@ -257,11 +261,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             if (key == 'password' && text.length < 6) {
               return 'Password must be at least 6 characters';
             }
+            if (key == 'confirm_password' && text != fields['password']!.text) {
+              return 'Passwords do not match';
+            }
             if (key == 'nin_number' &&
                 text.replaceAll(RegExp(r'\D'), '').length != 11) {
               return 'NIN must be exactly 11 digits';
             }
-            if (key == 'phone' || key == 'emergency_contact_phone') {
+            if (key == 'phone') {
               if (text.replaceAll(RegExp(r'\D'), '').length < 10) {
                 return 'Enter a valid phone number';
               }
@@ -305,7 +312,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       debugPrint(
           'VERIFY_NIN_SUCCESS nin_last4=${result.ninLast4} full_name=${result.fullName}');
       if (result.fullName.isNotEmpty) {
-        fields['full_name']!.text = result.fullName;
+        final parts = result.fullName
+            .split(RegExp(r'\s+'))
+            .where((part) => part.trim().isNotEmpty)
+            .toList();
+        if (parts.isNotEmpty) {
+          fields['first_name']!.text = parts.first;
+          fields['last_name']!.text =
+              parts.length > 1 ? parts.sublist(1).join(' ') : '';
+        }
       }
       if (result.phone.isNotEmpty && fields['phone']!.text.trim().isEmpty) {
         fields['phone']!.text = result.phone;
@@ -323,13 +338,38 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     }
   }
 
-  Future<void> _pickFile(String type, ImageSource source) async {
-    final file = await picker.pickImage(source: source, imageQuality: 82);
+  Future<void> _pickSelfie() async {
+    final file = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 82,
+    );
     if (!mounted || file == null) return;
-    setState(() {
-      if (type == 'selfie') selfie = file;
-      if (type == 'vehicle_photo') vehiclePhoto = file;
-    });
+    final length = await file.length();
+    if (!mounted) return;
+    if (length > 5 * 1024 * 1024) {
+      setState(() => message = 'Selfie must be 5MB or smaller.');
+      return;
+    }
+    setState(() => selfie = file);
+  }
+
+  Future<void> _pickDriverLicense() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
+      withData: false,
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+    final file = result.files.single;
+    if (file.path == null || file.path!.trim().isEmpty) {
+      setState(() => message = 'FoodNova could not access that file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setState(() => message = 'Driver license file must be 5MB or smaller.');
+      return;
+    }
+    setState(() => driverLicense = file);
   }
 
   Future<void> _submit() async {
@@ -345,38 +385,37 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     });
     try {
       final nin = fields['nin_number']!.text.replaceAll(RegExp(r'\D'), '');
+      final fullName = [
+        fields['first_name']!.text.trim(),
+        fields['last_name']!.text.trim(),
+      ].where((part) => part.isNotEmpty).join(' ');
       final payload = <String, dynamic>{
-        'full_name': fields['full_name']!.text.trim(),
+        'first_name': fields['first_name']!.text.trim(),
+        'last_name': fields['last_name']!.text.trim(),
+        'full_name': fullName,
         'phone': fields['phone']!.text.trim(),
         'email': fields['email']!.text.trim(),
         'password': fields['password']!.text,
-        'confirm_password': fields['password']!.text,
+        'confirm_password': fields['confirm_password']!.text,
         'nin_number': nin,
         'nin_consent': ninConsent,
         'rider_type': riderType,
-        'worker_type': isWalkingMessenger ? 'messenger' : 'rider',
-        'operating_city': fields['operating_city']!.text.trim(),
-        'home_address': fields['operating_city']!.text.trim(),
-        'emergency_contact_name': fields['emergency_contact_name']!.text.trim(),
-        'emergency_contact_phone':
-            fields['emergency_contact_phone']!.text.trim(),
-        'emergency_contact_relationship':
-            fields['emergency_contact_relationship']!.text.trim(),
-        'id_type': 'NIN',
+        'worker_type': isWalker ? 'messenger' : 'rider',
+        'residential_address': fields['residential_address']!.text.trim(),
+        'home_address': fields['residential_address']!.text.trim(),
+        'operating_city': fields['residential_address']!.text.trim(),
+        'id_type': 'Driver License',
         'id_number': nin,
-        'vehicle_type': isMotorcycleRider
-            ? fields['motorcycle_brand']!.text.trim()
-            : isWalkingMessenger
-                ? 'Walking Messenger'
-                : 'Bicycle',
+        'vehicle_type':
+            requiresVehicleDetails ? fields['vehicle_type']!.text.trim() : '',
         'plate_number':
-            isMotorcycleRider ? fields['plate_number']!.text.trim() : '',
+            requiresVehicleDetails ? fields['plate_number']!.text.trim() : '',
         'driver_license_number': '',
       };
       await ref.read(authRepositoryProvider).signup(
             fields: payload,
             selfiePath: selfie!.path,
-            vehiclePhotoPath: vehiclePhoto?.path,
+            driverLicensePath: driverLicense!.path!,
           );
       if (!mounted) return;
       setState(
@@ -400,7 +439,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       return 'Verify your NIN successfully before submitting onboarding.';
     }
     if (!ninConsent) return 'NIN verification consent is required.';
+    if (fields['password']!.text != fields['confirm_password']!.text) {
+      return 'Passwords do not match.';
+    }
     if (selfie == null) return 'Capture a live selfie before submitting.';
+    if (driverLicense == null) {
+      return 'Upload your driver license before submitting.';
+    }
     return null;
   }
 
@@ -438,16 +483,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
 
   String _label(String key) {
     const labels = {
-      'full_name': 'Full Name',
+      'first_name': 'First Name',
+      'last_name': 'Last Name',
       'phone': 'Phone Number',
       'email': 'Email',
+      'confirm_password': 'Confirm Password',
       'password': 'Password',
       'nin_number': 'NIN Number',
-      'operating_city': 'Operating City',
-      'emergency_contact_name': 'Emergency Contact Name',
-      'emergency_contact_phone': 'Emergency Contact Phone',
-      'emergency_contact_relationship': 'Emergency Contact Relationship',
-      'motorcycle_brand': 'Motorcycle Brand',
+      'residential_address': 'Residential Address',
+      'vehicle_type': 'Vehicle Type',
       'plate_number': 'Plate Number',
     };
     return labels[key] ?? key;
@@ -458,13 +502,13 @@ class _UploadTile extends StatelessWidget {
   const _UploadTile({
     required this.title,
     required this.subtitle,
-    required this.file,
+    required this.fileName,
     required this.icon,
     required this.onTap,
   });
   final String title;
   final String subtitle;
-  final XFile? file;
+  final String? fileName;
   final IconData icon;
   final VoidCallback onTap;
 
@@ -477,8 +521,8 @@ class _UploadTile extends StatelessWidget {
           contentPadding: EdgeInsets.zero,
           leading: Icon(icon, color: FoodNovaColors.primary),
           title: Text(title),
-          subtitle: Text(file == null ? subtitle : file!.name),
-          trailing: file == null
+          subtitle: Text(fileName == null ? subtitle : fileName!),
+          trailing: fileName == null
               ? const Icon(Icons.add_circle_outline)
               : const Icon(Icons.check_circle, color: FoodNovaColors.success),
           onTap: onTap,
