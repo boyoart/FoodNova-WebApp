@@ -308,6 +308,9 @@ ADMIN_PASSWORD = "Admin123!"
 JWT_SECRET = os.environ.get("JWT_SECRET") or "foodnova-dev-secret-change-me"
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "10080"))
+LAST_ADMIN_LOGIN_ERROR = ""
+LAST_ADMIN_LOGIN_TRACEBACK = ""
+LAST_ADMIN_LOGIN_AT = ""
 
 if not os.environ.get("JWT_SECRET"):
     print("WARNING: JWT_SECRET is not set. Using development secret.")
@@ -3851,6 +3854,37 @@ def admin_debug():
     }
 
 
+@app.get("/admin/login-diagnostics")
+def admin_login_diagnostics():
+    db_connected = False
+    admin_user_exists = False
+    db_error = ""
+    try:
+        db = SessionLocal()
+        try:
+            db.execute(text("SELECT 1"))
+            db_connected = True
+            admin_user_exists = bool(get_db_user_by_email(db, ADMIN_EMAIL))
+        finally:
+            db.close()
+    except Exception as error:
+        db_error = f"{type(error).__name__}: {error}"
+
+    return {
+        "admin_email_configured": bool(ADMIN_EMAIL),
+        "admin_user_exists": admin_user_exists,
+        "database_connected": db_connected,
+        "jwt_secret_loaded": bool(os.environ.get("JWT_SECRET")),
+        "last_login_error": LAST_ADMIN_LOGIN_ERROR,
+        "last_login_traceback": LAST_ADMIN_LOGIN_TRACEBACK,
+        "last_login_at": LAST_ADMIN_LOGIN_AT,
+        "admin_email_env_loaded": bool(os.environ.get("ADMIN_EMAIL")),
+        "admin_password_env_loaded": bool(os.environ.get("ADMIN_PASSWORD")),
+        "configured_admin_email": ADMIN_EMAIL,
+        "database_error": db_error,
+    }
+
+
 @app.get("/debug/db")
 def debug_db():
     db = SessionLocal()
@@ -5167,24 +5201,48 @@ def login(payload: LoginPayload, request: Request):
 @app.post("/auth/admin/login")
 @app.post("/api/admin/login")
 def admin_login(payload: LoginPayload, request: Request):
-    if not payload.email:
-        print("ADMIN_LOGIN_FAILURE", json_dump({
-            "email": "",
-            "reason": "email_missing",
+    global LAST_ADMIN_LOGIN_ERROR, LAST_ADMIN_LOGIN_TRACEBACK, LAST_ADMIN_LOGIN_AT
+    email = (payload.email or "").lower().strip()
+    db = None
+    try:
+        print("ADMIN_LOGIN_REQUEST", json_dump({
+            "email": email,
+            "has_email": bool(email),
+            "has_password": bool(payload.password),
             "ip_address": get_request_ip(request),
+            "route": request.url.path,
             "timestamp": iso(datetime.utcnow()),
         }))
-        raise HTTPException(status_code=400, detail="Admin email is required")
-    email = payload.email.lower().strip()
-    print("ADMIN_LOGIN_ATTEMPT", json_dump({
-        "email": email,
-        "ip_address": get_request_ip(request),
-        "route": request.url.path,
-        "timestamp": iso(datetime.utcnow()),
-    }))
-    db = SessionLocal()
-    try:
+        if not email:
+            print("ADMIN_LOGIN_FAILURE", json_dump({
+                "email": "",
+                "reason": "email_missing",
+                "ip_address": get_request_ip(request),
+                "timestamp": iso(datetime.utcnow()),
+            }))
+            raise HTTPException(status_code=400, detail="Admin email is required")
+
+        print("ADMIN_LOGIN_ATTEMPT", json_dump({
+            "email": email,
+            "ip_address": get_request_ip(request),
+            "route": request.url.path,
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        db = SessionLocal()
+        print("ADMIN_USER_LOOKUP", json_dump({
+            "email": email,
+            "stage": "start",
+            "timestamp": iso(datetime.utcnow()),
+        }))
         user = get_db_user_by_email(db, email)
+        print("ADMIN_USER_LOOKUP", json_dump({
+            "email": email,
+            "stage": "complete",
+            "user_exists": bool(user),
+            "user_id": getattr(user, "id", None),
+            "role": getattr(user, "role", None),
+            "timestamp": iso(datetime.utcnow()),
+        }))
         if not user:
             print("ADMIN_LOGIN_FAILURE", json_dump({
                 "email": email,
@@ -5202,7 +5260,21 @@ def admin_login(payload: LoginPayload, request: Request):
                 "timestamp": iso(datetime.utcnow()),
             }))
             raise HTTPException(status_code=401, detail="Invalid admin email or password")
-        if not _password_matches(payload.password, user.password):
+        print("ADMIN_PASSWORD_VERIFY", json_dump({
+            "email": email,
+            "user_id": user.id,
+            "stage": "start",
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        password_valid = _password_matches(payload.password, user.password)
+        print("ADMIN_PASSWORD_VERIFY", json_dump({
+            "email": email,
+            "user_id": user.id,
+            "stage": "complete",
+            "password_valid": bool(password_valid),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        if not password_valid:
             print("ADMIN_LOGIN_FAILURE", json_dump({
                 "email": email,
                 "user_id": user.id,
@@ -5221,7 +5293,21 @@ def admin_login(payload: LoginPayload, request: Request):
             }))
             raise HTTPException(status_code=403, detail="Admin account is inactive")
 
+        print("ADMIN_TOKEN_GENERATE", json_dump({
+            "email": email,
+            "user_id": user.id,
+            "stage": "start",
+            "jwt_secret_loaded": bool(os.environ.get("JWT_SECRET")),
+            "timestamp": iso(datetime.utcnow()),
+        }))
         token = create_access_token(user)
+        print("ADMIN_TOKEN_GENERATE", json_dump({
+            "email": email,
+            "user_id": user.id,
+            "stage": "complete",
+            "token_created": bool(token),
+            "timestamp": iso(datetime.utcnow()),
+        }))
         user_data = db_user_to_dict(user)
         create_admin_audit_log(request, user_data, "admin_login", "admin", user.id, "Admin logged in")
         print("ADMIN_LOGIN_SUCCESS", json_dump({
@@ -5232,20 +5318,45 @@ def admin_login(payload: LoginPayload, request: Request):
             "route": request.url.path,
             "timestamp": iso(datetime.utcnow()),
         }))
+        LAST_ADMIN_LOGIN_ERROR = ""
+        LAST_ADMIN_LOGIN_TRACEBACK = ""
+        LAST_ADMIN_LOGIN_AT = iso(datetime.utcnow())
         return auth_response("Admin login successful", user_data, token)
-    except HTTPException:
+    except HTTPException as error:
+        LAST_ADMIN_LOGIN_ERROR = f"HTTPException: {error.detail}"
+        LAST_ADMIN_LOGIN_TRACEBACK = traceback.format_exc()
+        LAST_ADMIN_LOGIN_AT = iso(datetime.utcnow())
+        print("ADMIN_LOGIN_FAILURE", json_dump({
+            "email": email,
+            "reason": "http_exception",
+            "exception_type": type(error).__name__,
+            "exception_message": str(error.detail),
+            "status_code": error.status_code,
+            "traceback": LAST_ADMIN_LOGIN_TRACEBACK,
+            "ip_address": get_request_ip(request),
+            "route": request.url.path,
+            "timestamp": LAST_ADMIN_LOGIN_AT,
+        }))
         raise
     except Exception as error:
+        LAST_ADMIN_LOGIN_ERROR = f"{type(error).__name__}: {error}"
+        LAST_ADMIN_LOGIN_TRACEBACK = traceback.format_exc()
+        LAST_ADMIN_LOGIN_AT = iso(datetime.utcnow())
+        traceback.print_exception(type(error), error, error.__traceback__)
         print("ADMIN_LOGIN_FAILURE", json_dump({
             "email": email,
             "reason": "unexpected_backend_error",
             "error_type": type(error).__name__,
+            "exception_message": str(error),
+            "traceback": LAST_ADMIN_LOGIN_TRACEBACK,
             "ip_address": get_request_ip(request),
-            "timestamp": iso(datetime.utcnow()),
+            "route": request.url.path,
+            "timestamp": LAST_ADMIN_LOGIN_AT,
         }))
         raise
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
 
 def update_worker_location(worker: DBDeliveryWorker, payload: LocationPingPayload, db) -> bool:
