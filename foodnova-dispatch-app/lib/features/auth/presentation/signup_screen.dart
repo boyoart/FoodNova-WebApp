@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/state/session_controller.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/widgets/fn_widgets.dart';
 import '../data/auth_repository.dart';
+import 'onboarding_progress_stepper.dart';
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -37,6 +39,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   bool ninConsent = false;
   bool verifyingNin = false;
   bool loading = false;
+  bool submitted = false;
+  int currentStep = 1;
   String message = '';
   String verificationMessage = '';
   NinVerificationResult? verifiedNin;
@@ -48,11 +52,74 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   bool get isWalker => riderType == 'walker';
 
   @override
+  void initState() {
+    super.initState();
+    _restoreStep();
+    for (final controller in fields.values) {
+      controller.addListener(_refreshProgress);
+    }
+  }
+
+  @override
   void dispose() {
     for (final controller in fields.values) {
+      controller.removeListener(_refreshProgress);
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _restoreStep() async {
+    final savedStep = await ref
+        .read(sessionControllerProvider.notifier)
+        .currentOnboardingStep();
+    if (!mounted) return;
+    setState(() => currentStep = savedStep);
+  }
+
+  void _refreshProgress() {
+    if (!mounted) return;
+    final next = _calculateStep();
+    if (next == currentStep) return;
+    setState(() => currentStep = next);
+    ref.read(sessionControllerProvider.notifier).saveOnboardingStep(next);
+  }
+
+  int _calculateStep() {
+    if (submitted || loading) return 5;
+    if (selfie != null && driverLicense != null) return 4;
+    if (_personalInformationComplete) return 3;
+    if (verifiedNin?.verified == true) return 2;
+    return 1;
+  }
+
+  bool get _personalInformationComplete {
+    final requiredKeys = [
+      'first_name',
+      'last_name',
+      'phone',
+      'email',
+      'password',
+      'confirm_password',
+      'residential_address',
+    ];
+    if (fields['password']!.text != fields['confirm_password']!.text) {
+      return false;
+    }
+    return verifiedNin?.verified == true &&
+        requiredKeys.every((key) => fields[key]!.text.trim().isNotEmpty);
+  }
+
+  String get _stepStatus {
+    final step = currentStep.clamp(1, 5);
+    final status = [
+      'Create rider account',
+      'Verify NIN with consent',
+      'Complete profile details',
+      'Upload selfie and documents',
+      'Submit for admin review',
+    ][step - 1];
+    return status;
   }
 
   @override
@@ -66,6 +133,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           padding: const EdgeInsets.all(22),
           children: [
             const Center(child: BrandLogo(width: 210, height: 82)),
+            const SizedBox(height: 18),
+            OnboardingProgressStepper(
+              currentStep: currentStep,
+              status: _stepStatus,
+            ),
             const SizedBox(height: 18),
             FnCard(
               child: Column(
@@ -111,6 +183,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     verifiedNin = null;
                     verificationMessage = '';
                   });
+                  _refreshProgress();
                 }
               },
             ),
@@ -119,7 +192,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               value: ninConsent,
               onChanged: verified
                   ? null
-                  : (value) => setState(() => ninConsent = value ?? false),
+                  : (value) {
+                      setState(() => ninConsent = value ?? false);
+                      _refreshProgress();
+                    },
               title: const Text('I consent to FoodNova verifying my NIN.'),
               subtitle:
                   const Text('Required for rider identity and safety review.'),
@@ -172,8 +248,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   child: Text('Vehicle Rider'),
                 ),
               ],
-              onChanged: (value) =>
-                  setState(() => riderType = value ?? riderType),
+              onChanged: (value) {
+                setState(() => riderType = value ?? riderType);
+                _refreshProgress();
+              },
             ),
             const SizedBox(height: 12),
             _field('residential_address'),
@@ -311,15 +389,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       }
       debugPrint(
           'VERIFY_NIN_SUCCESS nin_last4=${result.ninLast4} full_name=${result.fullName}');
-      if (result.fullName.isNotEmpty) {
-        final parts = result.fullName
-            .split(RegExp(r'\s+'))
-            .where((part) => part.trim().isNotEmpty)
-            .toList();
-        if (parts.isNotEmpty) {
+      if (result.firstName.isNotEmpty) {
+        fields['first_name']!.text = result.firstName;
+      }
+      if (result.surname.isNotEmpty) {
+        fields['last_name']!.text = result.surname;
+      } else if (result.fullName.isNotEmpty) {
+        final parts = result.fullName.split(RegExp(r'\s+'));
+        if (parts.isNotEmpty && fields['first_name']!.text.trim().isEmpty) {
           fields['first_name']!.text = parts.first;
-          fields['last_name']!.text =
-              parts.length > 1 ? parts.sublist(1).join(' ') : '';
+        }
+        if (parts.length > 1 && fields['last_name']!.text.trim().isEmpty) {
+          fields['last_name']!.text = parts.last;
         }
       }
       if (result.phone.isNotEmpty && fields['phone']!.text.trim().isEmpty) {
@@ -329,6 +410,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         verifiedNin = result;
         verificationMessage = '';
       });
+      _refreshProgress();
     } catch (e) {
       if (!mounted) return;
       debugPrint('VERIFY_NIN_FAILURE error=$e');
@@ -339,6 +421,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   }
 
   Future<void> _pickSelfie() async {
+    debugPrint('SELFIE_UPLOAD_START source=camera');
     final file = await picker.pickImage(
       source: ImageSource.camera,
       imageQuality: 82,
@@ -347,13 +430,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final length = await file.length();
     if (!mounted) return;
     if (length > 5 * 1024 * 1024) {
+      debugPrint('SELFIE_UPLOAD_FAILURE reason=file_too_large bytes=$length');
       setState(() => message = 'Selfie must be 5MB or smaller.');
       return;
     }
+    debugPrint('SELFIE_UPLOAD_SUCCESS filename=${file.name} bytes=$length');
     setState(() => selfie = file);
+    _refreshProgress();
   }
 
   Future<void> _pickDriverLicense() async {
+    debugPrint('LICENSE_UPLOAD_START source=file_picker');
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
@@ -362,14 +449,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     if (!mounted || result == null || result.files.isEmpty) return;
     final file = result.files.single;
     if (file.path == null || file.path!.trim().isEmpty) {
+      debugPrint('LICENSE_UPLOAD_FAILURE reason=file_path_missing');
       setState(() => message = 'FoodNova could not access that file.');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
+      debugPrint(
+          'LICENSE_UPLOAD_FAILURE reason=file_too_large bytes=${file.size}');
       setState(() => message = 'Driver license file must be 5MB or smaller.');
       return;
     }
+    debugPrint(
+        'LICENSE_UPLOAD_SUCCESS filename=${file.name} bytes=${file.size}');
     setState(() => driverLicense = file);
+    _refreshProgress();
   }
 
   Future<void> _submit() async {
@@ -379,6 +472,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       setState(() => message = validation);
       return;
     }
+    debugPrint('SUBMIT_APPLICATION_START');
+    debugPrint('ONBOARDING_SUBMIT_START');
     setState(() {
       loading = true;
       message = '';
@@ -412,20 +507,32 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             requiresVehicleDetails ? fields['plate_number']!.text.trim() : '',
         'driver_license_number': '',
       };
-      await ref.read(authRepositoryProvider).signup(
+      final response = await ref.read(authRepositoryProvider).signup(
             fields: payload,
             selfiePath: selfie!.path,
             driverLicensePath: driverLicense!.path!,
           );
       if (!mounted) return;
+      final worker = response['worker'] is Map
+          ? Map<String, dynamic>.from(response['worker'] as Map)
+          : response['data'] is Map
+              ? Map<String, dynamic>.from(response['data'] as Map)
+              : <String, dynamic>{};
+      if (worker['id'] == null) {
+        debugPrint('RIDER_CREATE_FAILURE reason=missing_worker_id');
+        setState(() => message =
+            'FoodNova created no rider record. Please retry or contact support.');
+        return;
+      }
       setState(
         () => message =
             'Application submitted. FoodNova admin will review your account before dashboard access.',
       );
-      await Future.delayed(const Duration(milliseconds: 1500));
+      submitted = true;
+      await ref.read(sessionControllerProvider.notifier).saveOnboardingStep(5);
       if (!mounted) return;
-      debugPrint('RIDER_ONBOARDING_COMPLETE_REDIRECT_TO_LOGIN');
-      context.go('/login');
+      debugPrint('NAVIGATION_TO_PENDING_REVIEW worker_id=${worker['id']}');
+      context.go('/pending-review');
     } catch (e) {
       if (!mounted) return;
       setState(() => message = _friendlyError(e));
@@ -540,11 +647,19 @@ class _VerifiedIdentityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rows = [
-      ('Full Name', result.fullName),
-      ('Date of Birth', result.dateOfBirth),
+      ('Verified Name', result.fullName),
       ('Gender', result.gender),
+      ('Date of Birth', result.dateOfBirth),
       ('Phone Number', result.phone),
-    ];
+      (
+        'Verified NIN',
+        result.nin.isNotEmpty
+            ? result.nin
+            : result.ninLast4.isEmpty
+                ? ''
+                : '*******${result.ninLast4}'
+      ),
+    ].where((row) => row.$2.trim().isNotEmpty).toList();
     return FnCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -581,7 +696,7 @@ class _VerifiedIdentityCard extends StatelessWidget {
                   ),
                   Expanded(
                     child: Text(
-                      row.$2.isEmpty ? 'Provided by NIN provider' : row.$2,
+                      row.$2,
                       style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),

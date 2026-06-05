@@ -95,6 +95,9 @@ class AuthRepository {
           onboardingCompleted: true,
           profileExists: true,
           profileSource: 'backend',
+          currentStep: int.tryParse(
+                  '${profile['current_step'] ?? profile['onboarding_current_step'] ?? 5}') ??
+              5,
         );
     debugPrint('RIDER_LOGIN_SUCCESS ${profile['id']}');
     debugPrint('RIDER_APPROVAL_STATUS $liveApprovalStatus');
@@ -108,12 +111,32 @@ class AuthRepository {
     required String nin,
     required bool consent,
   }) async {
+    debugPrint('NIN_VERIFY_REQUEST nin_length=${nin.trim().length}');
     final response = await _dio.post(
       '/delivery-workers/verify-nin',
       data: {'nin': nin.trim(), 'consent': consent},
     );
     final data = Map<String, dynamic>.from(response.data as Map);
-    return NinVerificationResult(data);
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(data));
+    debugPrint('NIN_RAW_RESPONSE ${jsonEncode(data)}');
+    final parsed = NinVerificationResult(data);
+    debugPrint('NIN_PARSED_RESPONSE ${jsonEncode({
+          'verified': parsed.verified,
+          'first_name': parsed.firstName,
+          'surname': parsed.surname,
+          'gender': parsed.gender,
+          'birthdate': parsed.dateOfBirth,
+          'telephoneno': parsed.phone,
+          'nin': parsed.nin.isNotEmpty
+              ? parsed.nin
+              : parsed.ninLast4.isEmpty
+                  ? ''
+                  : '*******${parsed.ninLast4}',
+        })}');
+    debugPrint('NIN_VERIFY_RESPONSE ${jsonEncode(data)}');
+    return parsed;
   }
 
   Future<Map<String, dynamic>> signup({
@@ -121,15 +144,33 @@ class AuthRepository {
     required String selfiePath,
     required String driverLicensePath,
   }) async {
+    debugPrint('SUBMIT_APPLICATION_START');
+    debugPrint('ONBOARDING_SUBMIT_START');
+    debugPrint(
+        'LICENSE_UPLOAD_START path_present=${driverLicensePath.isNotEmpty}');
+    debugPrint('SELFIE_UPLOAD_START path_present=${selfiePath.isNotEmpty}');
     final formMap = <String, dynamic>{
       ...fields,
       'nin_consent': fields['nin_consent'] == true ? 'true' : 'false',
       'selfie': await MultipartFile.fromFile(selfiePath),
       'id_document': await MultipartFile.fromFile(driverLicensePath),
     };
+    debugPrint('LICENSE_UPLOAD_SUCCESS multipart_prepared=true');
+    debugPrint('SELFIE_UPLOAD_SUCCESS multipart_prepared=true');
+    debugPrint('RIDER_CREATE_START endpoint=/delivery-workers/signup');
     final form = FormData.fromMap(formMap);
-    final response = await _dio.post('/delivery-workers/signup', data: form);
+    Response<dynamic> response;
+    try {
+      debugPrint(
+          'ONBOARDING_API_REQUEST fields=${jsonEncode(_safeSignupLog(fields))}');
+      response = await _dio.post('/delivery-workers/signup', data: form);
+    } catch (error) {
+      debugPrint('ONBOARDING_API_RESPONSE error=$error');
+      debugPrint('RIDER_CREATE_FAILURE $error');
+      rethrow;
+    }
     final body = Map<String, dynamic>.from(response.data as Map);
+    debugPrint('ONBOARDING_API_RESPONSE ${jsonEncode(body)}');
     await ref
         .read(sessionControllerProvider.notifier)
         .recordLastApiResponse(jsonEncode(body));
@@ -139,17 +180,30 @@ class AuthRepository {
     debugPrint('Created rider ID ${worker['id'] ?? ''}');
     debugPrint(
         'Backend record created ${worker.isNotEmpty && worker['id'] != null}');
+    debugPrint('RIDER_CREATE_SUCCESS worker_id=${worker['id'] ?? ''}');
     if (worker.isNotEmpty) {
+      debugPrint('RIDER_STATUS_UPDATE_START');
+      debugPrint('PENDING_REVIEW_SAVE_START');
       await ref.read(sessionControllerProvider.notifier).saveRiderState(
             riderId: '${worker['id'] ?? ''}',
-            approvalStatus: '${worker['kyc_status'] ?? 'KYC_PENDING'}',
+            approvalStatus: '${worker['kyc_status'] ?? 'PENDING_REVIEW'}',
             onboardingCompleted: true,
             profileExists: true,
             profileSource: 'backend',
+            currentStep: int.tryParse(
+                    '${worker['current_step'] ?? worker['onboarding_current_step'] ?? 5}') ??
+                5,
           );
+      debugPrint(
+          'RIDER_STATUS_UPDATE_SUCCESS status=${worker['kyc_status'] ?? 'PENDING_REVIEW'}');
+      debugPrint(
+          'PENDING_REVIEW_SAVE_SUCCESS status=${worker['kyc_status'] ?? 'PENDING_REVIEW'} rider_id=${worker['id'] ?? ''}');
       debugPrint('RIDER_ONBOARDING_COMPLETE ${worker['id']}');
       debugPrint(
-          'RIDER_APPROVAL_STATUS ${worker['kyc_status'] ?? 'KYC_PENDING'}');
+          'RIDER_APPROVAL_STATUS ${worker['kyc_status'] ?? 'PENDING_REVIEW'}');
+    } else {
+      debugPrint('RIDER_STATUS_UPDATE_FAILURE worker_missing=true');
+      debugPrint('PENDING_REVIEW_SAVE_FAILURE worker_missing=true');
     }
     return body;
   }
@@ -164,31 +218,118 @@ class AuthRepository {
   }
 }
 
+Map<String, dynamic> _safeSignupLog(Map<String, dynamic> fields) {
+  return {
+    'field_keys': fields.keys.toList(),
+    'email_present': '${fields['email'] ?? ''}'.trim().isNotEmpty,
+    'phone_present': '${fields['phone'] ?? ''}'.trim().isNotEmpty,
+    'worker_type': fields['worker_type'],
+    'rider_type': fields['rider_type'],
+    'nin_last4': '${fields['nin_number'] ?? ''}'
+                .replaceAll(RegExp(r'\D'), '')
+                .length >=
+            4
+        ? '${fields['nin_number']}'.replaceAll(RegExp(r'\D'), '').substring(
+            '${fields['nin_number']}'.replaceAll(RegExp(r'\D'), '').length - 4)
+        : '',
+    'has_confirm_password': fields.containsKey('confirm_password'),
+    'has_emergency_contact_name': fields.containsKey('emergency_contact_name'),
+    'has_emergency_contact_phone':
+        fields.containsKey('emergency_contact_phone'),
+  };
+}
+
 class NinVerificationResult {
   NinVerificationResult(this.raw);
   final Map<String, dynamic> raw;
 
   bool get verified => raw['verified'] == true || raw['success'] == true;
   String get message => '${raw['message'] ?? ''}'.trim();
-  String get reportId => '${raw['report_id'] ?? ''}'.trim();
-  String get ninLast4 => '${raw['nin_last4'] ?? ''}'.trim();
+  String get reportId =>
+      _readString(raw, const ['report_id', 'reportId', 'reportID']);
+  String get ninLast4 => _readString(raw, const ['nin_last4', 'ninLast4']);
 
-  Map<String, dynamic> get data =>
-      Map<String, dynamic>.from((raw['data'] as Map?) ?? {});
-
-  String get fullName {
-    final first = '${data['first_name'] ?? ''}'.trim();
-    final middle = '${data['middle_name'] ?? ''}'.trim();
-    final last = '${data['last_name'] ?? data['surname'] ?? ''}'.trim();
-    return [first, middle, last].where((part) => part.isNotEmpty).join(' ');
+  Map<String, dynamic> get data {
+    final nested = raw['data'];
+    if (nested is Map) return Map<String, dynamic>.from(nested);
+    return raw;
   }
 
-  String get phone => '${data['phone'] ?? ''}'.trim();
-  String get address => '${data['address'] ?? ''}'.trim();
-  String get state =>
-      '${data['state'] ?? data['residence_state'] ?? ''}'.trim();
-  String get dateOfBirth =>
-      '${data['date_of_birth'] ?? data['birthdate'] ?? data['dob'] ?? ''}'
-          .trim();
-  String get gender => '${data['gender'] ?? ''}'.trim();
+  String get firstName => _readString(data, const [
+        'first_name',
+        'firstname',
+        'firstName',
+        'FirstName',
+        'First Name',
+      ]);
+  String get middleName => _readString(data, const [
+        'middle_name',
+        'middlename',
+        'middleName',
+        'MiddleName',
+        'Middle Name',
+      ]);
+  String get surname => _readString(data, const [
+        'surname',
+        'last_name',
+        'lastname',
+        'lastName',
+        'LastName',
+        'Last Name',
+      ]);
+  String get fullName {
+    final direct = _readString(data, const [
+      'full_name',
+      'fullname',
+      'fullName',
+      'FullName',
+      'Full Name',
+      'name',
+    ]);
+    if (direct.isNotEmpty) return direct;
+    return [firstName, middleName, surname]
+        .where((part) => part.isNotEmpty)
+        .join(' ');
+  }
+
+  String get phone => _readString(data, const [
+        'phone',
+        'phone_number',
+        'phoneNumber',
+        'telephoneno',
+        'telephoneNo',
+      ]);
+  String get address => _readString(data, const [
+        'address',
+        'residence_address',
+        'residential_address',
+        'residenceAddress',
+      ]);
+  String get state => _readString(data, const [
+        'state',
+        'residence_state',
+        'residenceState',
+      ]);
+  String get dateOfBirth => _readString(data, const [
+        'date_of_birth',
+        'dateOfBirth',
+        'DateOfBirth',
+        'Date Of Birth',
+        'birthdate',
+        'birthDate',
+        'dob',
+        'DOB',
+      ]);
+  String get gender => _readString(data, const ['gender', 'Gender', 'sex']);
+  String get nin => _readString(data, const ['nin', 'NIN', 'number']);
+}
+
+String _readString(Map<String, dynamic> source, List<String> keys) {
+  for (final key in keys) {
+    final value = source[key];
+    if (value != null && '$value'.trim().isNotEmpty) {
+      return '$value'.trim();
+    }
+  }
+  return '';
 }

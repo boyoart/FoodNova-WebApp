@@ -62,6 +62,7 @@ class DispatchRepository {
           onboardingCompleted: profile.onboardingCompleted,
           profileExists: true,
           profileSource: 'backend',
+          currentStep: profile.currentStep,
         );
     debugPrint('RIDER_APPROVAL_STATUS ${profile.kycStatus}');
     return profile;

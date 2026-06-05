@@ -10,6 +10,7 @@ const _approvalStatusKey = 'foodnova_dispatch_approval_status';
 const _profileExistsKey = 'foodnova_dispatch_profile_exists';
 const _profileSourceKey = 'foodnova_dispatch_profile_source';
 const _lastApiResponseKey = 'foodnova_dispatch_last_api_response';
+const _currentOnboardingStepKey = 'foodnova_dispatch_current_step';
 
 final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 
@@ -43,6 +44,7 @@ class SessionController extends AsyncNotifier<bool> {
       'rider_id': prefs.getString(_riderIdKey) ?? '',
       'onboarding_complete': prefs.getBool(_onboardingCompletedKey) ?? false,
       'approval_status': prefs.getString(_approvalStatusKey) ?? '',
+      'current_step': prefs.getInt(_currentOnboardingStepKey) ?? 1,
       'profile_exists': prefs.getBool(_profileExistsKey) ?? false,
       'profile_source': prefs.getString(_profileSourceKey) ?? '',
       'last_api_response': prefs.getString(_lastApiResponseKey) ?? '',
@@ -52,6 +54,16 @@ class SessionController extends AsyncNotifier<bool> {
   Future<void> recordLastApiResponse(String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_lastApiResponseKey, value);
+  }
+
+  Future<int> currentOnboardingStep() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_currentOnboardingStepKey) ?? 1;
+  }
+
+  Future<void> saveOnboardingStep(int step) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_currentOnboardingStepKey, step.clamp(1, 5).toInt());
   }
 
   Future<void> save(String token, {bool remember = true}) async {
@@ -72,6 +84,7 @@ class SessionController extends AsyncNotifier<bool> {
     required bool onboardingCompleted,
     bool profileExists = true,
     String profileSource = 'backend',
+    int currentStep = 5,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_riderIdKey, riderId);
@@ -79,6 +92,10 @@ class SessionController extends AsyncNotifier<bool> {
     await prefs.setBool(_onboardingCompletedKey, onboardingCompleted);
     await prefs.setBool(_profileExistsKey, profileExists);
     await prefs.setString(_profileSourceKey, profileSource);
+    await prefs.setInt(
+      _currentOnboardingStepKey,
+      currentStep.clamp(1, 5).toInt(),
+    );
   }
 
   Future<void> markProfileMissing({String profileSource = 'backend'}) async {
@@ -96,6 +113,7 @@ class SessionController extends AsyncNotifier<bool> {
     await prefs.remove(_profileSourceKey);
     if (clearOnboarding) {
       await prefs.remove(_onboardingCompletedKey);
+      await prefs.remove(_currentOnboardingStepKey);
     }
     state = const AsyncData(false);
   }
@@ -109,6 +127,7 @@ class SessionController extends AsyncNotifier<bool> {
     await prefs.remove(_approvalStatusKey);
     await prefs.remove(_profileExistsKey);
     await prefs.remove(_profileSourceKey);
+    await prefs.remove(_currentOnboardingStepKey);
   }
 
   Future<void> logoutAndReset() => clear(clearOnboarding: true);

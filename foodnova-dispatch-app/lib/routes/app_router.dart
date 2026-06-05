@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../core/state/session_controller.dart';
 import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/pending_review_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
@@ -26,6 +27,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final authRoute = [
         '/login',
         '/signup',
+        '/pending-review',
         '/forgot-password',
         '/onboarding',
       ].contains(path);
@@ -41,6 +43,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
+      GoRoute(
+        path: '/pending-review',
+        builder: (_, __) => const PendingReviewScreen(),
+      ),
       GoRoute(
         path: '/forgot-password',
         builder: (_, __) => const ForgotPasswordScreen(),
@@ -68,5 +74,6 @@ bool _requiresSession(String path) => ![
       '/onboarding',
       '/login',
       '/signup',
+      '/pending-review',
       '/forgot-password',
     ].contains(path);

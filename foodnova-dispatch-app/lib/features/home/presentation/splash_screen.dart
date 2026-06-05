@@ -48,8 +48,19 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     if (!mounted) return;
     if (hasToken == null || hasToken.isEmpty) {
       final completed = await session.onboardingCompleted();
+      final currentStep = await session.currentOnboardingStep();
+      final approvalStatus =
+          '${startupDiagnostics['approval_status'] ?? ''}'.toUpperCase();
       if (!mounted) return;
-      final destination = completed ? '/login' : '/onboarding';
+      final destination = completed &&
+              approvalStatus != 'APPROVED' &&
+              approvalStatus.trim().isNotEmpty
+          ? '/pending-review'
+          : currentStep > 1
+              ? '/signup'
+              : completed
+                  ? '/login'
+                  : '/onboarding';
       debugPrint('ROUTE_REDIRECT reason=no_token destination=$destination');
       context.go(destination);
       return;

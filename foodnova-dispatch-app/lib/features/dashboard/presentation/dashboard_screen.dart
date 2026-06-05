@@ -7,6 +7,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/utils/location_service.dart';
 import '../../../core/widgets/fn_widgets.dart';
+import '../../auth/presentation/onboarding_progress_stepper.dart';
 import '../../delivery/data/dispatch_repository.dart';
 import '../../delivery/domain/dispatch_models.dart';
 
@@ -274,6 +275,13 @@ class _AccessLockedCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          OnboardingProgressStepper(
+            currentStep: rider.currentStep,
+            status: rider.onboardingStage.isEmpty
+                ? 'Awaiting FoodNova admin review'
+                : rider.onboardingStage.replaceAll('_', ' '),
+          ),
+          const SizedBox(height: 14),
           Text('Status: ${rider.kycStatus}'),
           const SizedBox(height: 8),
           Text(detail),

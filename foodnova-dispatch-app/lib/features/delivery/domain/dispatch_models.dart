@@ -17,6 +17,20 @@ class RiderProfile {
   bool get isSuspended => normalizedKycStatus == 'SUSPENDED';
   bool get isDeleted => normalizedKycStatus == 'DELETED';
   bool get onboardingCompleted => id != null && id! > 0;
+  int get currentStep =>
+      int.tryParse(
+        '${raw['current_step'] ?? raw['onboarding_current_step'] ?? 1}',
+      )?.clamp(1, 5).toInt() ??
+      1;
+  int get onboardingStepTotal =>
+      int.tryParse('${raw['onboarding_step_total'] ?? 5}')
+          ?.clamp(1, 5)
+          .toInt() ??
+      5;
+  int get onboardingProgressPercent =>
+      int.tryParse('${raw['onboarding_progress_percent'] ?? ''}') ??
+      ((currentStep / onboardingStepTotal) * 100).round();
+  String get onboardingStage => '${raw['onboarding_stage'] ?? ''}';
   bool get isOnline => accountStatus.toUpperCase() == 'ONLINE';
   double get rating =>
       double.tryParse('${raw['rating'] ?? raw['current_rating'] ?? 0}') ?? 0;
