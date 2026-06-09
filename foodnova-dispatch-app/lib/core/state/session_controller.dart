@@ -11,6 +11,8 @@ const _profileExistsKey = 'foodnova_dispatch_profile_exists';
 const _profileSourceKey = 'foodnova_dispatch_profile_source';
 const _lastApiResponseKey = 'foodnova_dispatch_last_api_response';
 const _currentOnboardingStepKey = 'foodnova_dispatch_current_step';
+const _onboardingDraftKey = 'foodnova_dispatch_onboarding_draft';
+const _verifiedIdentityKey = 'foodnova_dispatch_verified_identity';
 
 final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 
@@ -58,12 +60,47 @@ class SessionController extends AsyncNotifier<bool> {
 
   Future<int> currentOnboardingStep() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getInt(_currentOnboardingStepKey) ?? 1;
+    return (prefs.getInt(_currentOnboardingStepKey) ?? 1).clamp(1, 7).toInt();
   }
 
   Future<void> saveOnboardingStep(int step) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_currentOnboardingStepKey, step.clamp(1, 5).toInt());
+    await prefs.setInt(_currentOnboardingStepKey, step.clamp(1, 7).toInt());
+  }
+
+  Future<String> onboardingDraft() async {
+    return await ref
+            .read(secureStorageProvider)
+            .read(key: _onboardingDraftKey) ??
+        '';
+  }
+
+  Future<void> saveOnboardingDraft(String value) async {
+    await ref
+        .read(secureStorageProvider)
+        .write(key: _onboardingDraftKey, value: value);
+  }
+
+  Future<String> verifiedIdentity() async {
+    final secureValue =
+        await ref.read(secureStorageProvider).read(key: _verifiedIdentityKey);
+    if (secureValue != null && secureValue.trim().isNotEmpty) {
+      return secureValue;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_verifiedIdentityKey) ?? '';
+  }
+
+  Future<void> saveVerifiedIdentity(String value) async {
+    await ref
+        .read(secureStorageProvider)
+        .write(key: _verifiedIdentityKey, value: value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_verifiedIdentityKey, value);
+  }
+
+  Future<void> clearOnboardingDraft() async {
+    await ref.read(secureStorageProvider).delete(key: _onboardingDraftKey);
   }
 
   Future<void> save(String token, {bool remember = true}) async {
@@ -84,7 +121,7 @@ class SessionController extends AsyncNotifier<bool> {
     required bool onboardingCompleted,
     bool profileExists = true,
     String profileSource = 'backend',
-    int currentStep = 5,
+    int currentStep = 7,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_riderIdKey, riderId);
@@ -94,7 +131,7 @@ class SessionController extends AsyncNotifier<bool> {
     await prefs.setString(_profileSourceKey, profileSource);
     await prefs.setInt(
       _currentOnboardingStepKey,
-      currentStep.clamp(1, 5).toInt(),
+      currentStep.clamp(1, 7).toInt(),
     );
   }
 
@@ -114,6 +151,9 @@ class SessionController extends AsyncNotifier<bool> {
     if (clearOnboarding) {
       await prefs.remove(_onboardingCompletedKey);
       await prefs.remove(_currentOnboardingStepKey);
+      await prefs.remove(_verifiedIdentityKey);
+      await ref.read(secureStorageProvider).delete(key: _onboardingDraftKey);
+      await ref.read(secureStorageProvider).delete(key: _verifiedIdentityKey);
     }
     state = const AsyncData(false);
   }
@@ -128,6 +168,9 @@ class SessionController extends AsyncNotifier<bool> {
     await prefs.remove(_profileExistsKey);
     await prefs.remove(_profileSourceKey);
     await prefs.remove(_currentOnboardingStepKey);
+    await prefs.remove(_verifiedIdentityKey);
+    await ref.read(secureStorageProvider).delete(key: _onboardingDraftKey);
+    await ref.read(secureStorageProvider).delete(key: _verifiedIdentityKey);
   }
 
   Future<void> logoutAndReset() => clear(clearOnboarding: true);

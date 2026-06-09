@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Camera, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -13,8 +13,6 @@ const emptyForm = {
   password: '',
   confirm_password: '',
   home_address: '',
-  emergency_contact_name: '',
-  emergency_contact_phone: '',
   nin_number: '',
   nin_consent: false,
   id_type: '',
@@ -153,7 +151,7 @@ export default function DeliveryWorkerSignup({ workerType }) {
       setForm((current) => ({
         ...current,
         full_name: verifiedName || current.full_name,
-        phone: identity.phone || current.phone,
+        phone: identity.telephoneno || identity.phone || current.phone,
         home_address: identity.address || current.home_address,
       }))
       setNinVerification(result)
@@ -180,7 +178,6 @@ export default function DeliveryWorkerSignup({ workerType }) {
       if (!form.vehicle_type.trim()) return 'Vehicle type is required'
       if (!form.plate_number.trim()) return 'Plate number is required'
       if (!form.driver_license_number.trim()) return 'Driver license number is required'
-      if (!files.vehicle_photo) return 'Vehicle photo is required'
     }
     return ''
   }
@@ -198,9 +195,17 @@ export default function DeliveryWorkerSignup({ workerType }) {
         ...form,
         nin_number: form.nin_number.replace(/\D/g, ''),
         worker_type: type,
+        nin_verification_token: ninVerification?.nin_verification_token || '',
+        nin_verified_firstname: ninVerification?.data?.firstname || ninVerification?.data?.first_name || '',
+        nin_verified_middlename: ninVerification?.data?.middlename || ninVerification?.data?.middle_name || '',
+        nin_verified_surname: ninVerification?.data?.surname || ninVerification?.data?.last_name || '',
+        nin_verified_full_name: form.full_name,
+        nin_verified_birthdate: ninVerification?.data?.birthdate || ninVerification?.data?.date_of_birth || '',
+        nin_verified_gender: ninVerification?.data?.gender || '',
+        nin_verified_phone: ninVerification?.data?.telephoneno || ninVerification?.data?.phone || form.phone,
+        nin_report_id: ninVerification?.report_id || '',
         selfie: files.selfie,
         id_document: files.id_document,
-        vehicle_photo: files.vehicle_photo,
       })
       toast.success('Delivery account submitted for review')
       setSubmitted(true)
@@ -252,8 +257,6 @@ export default function DeliveryWorkerSignup({ workerType }) {
             <label>Home Address<input value={form.home_address} onChange={(event) => update('home_address', event.target.value)} readOnly={verifiedIdentity && Boolean(ninVerification?.data?.address)} required /></label>
             <label>Password<input type="password" value={form.password} onChange={(event) => update('password', event.target.value)} required /></label>
             <label>Confirm Password<input type="password" value={form.confirm_password} onChange={(event) => update('confirm_password', event.target.value)} required /></label>
-            <label>Emergency Contact Name<input value={form.emergency_contact_name} onChange={(event) => update('emergency_contact_name', event.target.value)} required /></label>
-            <label>Emergency Contact Phone<input value={form.emergency_contact_phone} onChange={(event) => update('emergency_contact_phone', event.target.value)} required /></label>
             <label>NIN Number<input inputMode="numeric" maxLength="11" value={form.nin_number} onChange={(event) => update('nin_number', event.target.value.replace(/\D/g, ''))} readOnly={verifiedIdentity} required /></label>
             <label>ID Type<input value={form.id_type} onChange={(event) => update('id_type', event.target.value)} placeholder="NIN, Passport, Driver License" required /></label>
             <label>ID Number<input value={form.id_number} onChange={(event) => update('id_number', event.target.value)} required /></label>
@@ -268,14 +271,16 @@ export default function DeliveryWorkerSignup({ workerType }) {
             <button type="button" onClick={verifyNin} disabled={verifyingNin || verifiedIdentity || !form.nin_consent || form.nin_number.length !== 11}>
               <ShieldCheck size={18} /> {verifyingNin ? 'Verifying...' : 'Verify NIN'}
             </button>
-            {verifiedIdentity && <span className="worker-verified-badge">✓ NIN Verified Successfully - *******{ninVerification.nin_last4}</span>}
+            {verifiedIdentity && <span className="worker-verified-badge">NIN Verified Successfully - *******{ninVerification.nin_last4}</span>}
           </div>
           {verifiedIdentity && (
             <div className="worker-verification-card">
               <strong>Verified identity</strong>
-              <span>{form.full_name || 'Full name verified'}</span>
-              <span>{ninVerification?.data?.gender || 'Gender from provider'} · {ninVerification?.data?.phone || form.phone || 'Phone from provider'}</span>
-              <span>{ninVerification?.data?.state || ninVerification?.data?.residence_state || ninVerification?.data?.address || 'Address details received'}</span>
+              <span>{form.full_name}</span>
+              <span>{ninVerification?.data?.gender || ''}</span>
+              <span>{ninVerification?.data?.birthdate || ninVerification?.data?.date_of_birth || ''}</span>
+              <span>{ninVerification?.data?.telephoneno || ninVerification?.data?.phone || form.phone}</span>
+              <span>{ninVerification?.data?.state || ninVerification?.data?.residence_state || ninVerification?.data?.address || ''}</span>
             </div>
           )}
 
@@ -296,7 +301,6 @@ export default function DeliveryWorkerSignup({ workerType }) {
               <label>Delivery Company Optional<input value={form.partner_company} onChange={(event) => update('partner_company', event.target.value)} placeholder="Company or partner name" /></label>
               <label>Plate Number<input value={form.plate_number} onChange={(event) => update('plate_number', event.target.value)} required /></label>
               <label>License Number<input value={form.driver_license_number} onChange={(event) => update('driver_license_number', event.target.value)} required /></label>
-              <label>Vehicle Photo<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => updateFile('vehicle_photo', event.target.files?.[0])} required /></label>
             </div>
           )}
 

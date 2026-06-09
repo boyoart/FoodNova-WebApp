@@ -267,14 +267,13 @@ export default function AdminWorkforce() {
               <p><strong>Emergency:</strong> {worker.emergency_contact_name || 'N/A'} - {worker.emergency_contact_phone || 'N/A'}{worker.emergency_contact_relationship ? ` (${worker.emergency_contact_relationship})` : ''}</p>
               <p><strong>NIN:</strong> {worker.masked_nin || 'Not verified'} - {worker.nin_verified ? 'Verified' : 'Not verified'}</p>
               {worker.nin_verified && (
-                <p><strong>Verified Identity:</strong> {[worker.verified_first_name, worker.verified_middle_name, worker.verified_surname].filter(Boolean).join(' ') || 'N/A'}</p>
+                <p><strong>Verified Identity:</strong> {[worker.verified_first_name, worker.verified_middle_name, worker.verified_surname].filter(Boolean).join(' ') || 'N/A'}{worker.verified_birthdate ? ` • DOB: ${worker.verified_birthdate}` : ''}{worker.verified_gender ? ` • Gender: ${worker.verified_gender}` : ''}{worker.verified_phone ? ` • Phone: ${worker.verified_phone}` : ''}</p>
               )}
               {worker.nin_report_id && <p><strong>NIN Report:</strong> {worker.nin_report_id}</p>}
               {worker.worker_type === 'rider' && <p><strong>Motorcycle:</strong> {[worker.vehicle_type, worker.plate_number].filter(Boolean).join(' - ') || 'Not required'}</p>}
               <p><strong>Operational:</strong> {worker.operational_status} - {worker.assignment_eligibility_reason || 'N/A'}</p>
               {locationHref(worker) && <a href={locationHref(worker)} target="_blank" rel="noopener noreferrer">View live GPS location</a>}
               {canViewKycDocuments && worker.selfie_url && <a href={resolveMediaUrl(worker.selfie_url)} target="_blank" rel="noopener noreferrer">View selfie</a>}
-              {canViewKycDocuments && worker.vehicle_photo_url && <a href={resolveMediaUrl(worker.vehicle_photo_url)} target="_blank" rel="noopener noreferrer">View vehicle photo</a>}
               {canManage && (
                 <div className="worker-review-actions">
                   <input placeholder="Admin note optional" value={reviewNotes[worker.id] || ''} onChange={(event) => setReviewNotes({ ...reviewNotes, [worker.id]: event.target.value })} />

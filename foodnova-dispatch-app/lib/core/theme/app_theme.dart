@@ -26,6 +26,9 @@ class FoodNovaAppTheme {
           isDark ? FoodNovaColors.darkBg : FoodNovaColors.bg,
       textTheme: GoogleFonts.interTextTheme(
         isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+      ).apply(
+        bodyColor: isDark ? Colors.white : FoodNovaColors.text,
+        displayColor: isDark ? Colors.white : FoodNovaColors.text,
       ),
       appBarTheme: const AppBarTheme(centerTitle: false, elevation: 0),
       cardTheme: CardThemeData(

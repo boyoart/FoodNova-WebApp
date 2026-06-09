@@ -59,7 +59,8 @@ class DispatchRepository {
     await ref.read(sessionControllerProvider.notifier).saveRiderState(
           riderId: '${profile.id ?? ''}',
           approvalStatus: profile.kycStatus,
-          onboardingCompleted: profile.onboardingCompleted,
+          onboardingCompleted: profile.isApproved ||
+              profile.normalizedKycStatus == 'PENDING_REVIEW',
           profileExists: true,
           profileSource: 'backend',
           currentStep: profile.currentStep,

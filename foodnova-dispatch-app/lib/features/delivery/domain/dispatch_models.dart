@@ -20,13 +20,13 @@ class RiderProfile {
   int get currentStep =>
       int.tryParse(
         '${raw['current_step'] ?? raw['onboarding_current_step'] ?? 1}',
-      )?.clamp(1, 5).toInt() ??
+      )?.clamp(1, 7).toInt() ??
       1;
   int get onboardingStepTotal =>
-      int.tryParse('${raw['onboarding_step_total'] ?? 5}')
-          ?.clamp(1, 5)
+      int.tryParse('${raw['onboarding_step_total'] ?? 7}')
+          ?.clamp(1, 7)
           .toInt() ??
-      5;
+      7;
   int get onboardingProgressPercent =>
       int.tryParse('${raw['onboarding_progress_percent'] ?? ''}') ??
       ((currentStep / onboardingStepTotal) * 100).round();

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../core/state/session_controller.dart';
 import '../../../core/widgets/fn_widgets.dart';
 import '../data/auth_repository.dart';
 
@@ -114,8 +115,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             remember: remember,
           );
       if (!mounted) return;
-      debugPrint('RIDER_LOGIN_SUCCESS route_redirect=/dashboard');
-      if (mounted) context.go('/dashboard');
+      final diagnostics =
+          await ref.read(sessionControllerProvider.notifier).diagnostics();
+      final status = '${diagnostics['approval_status'] ?? ''}'.toUpperCase();
+      final step = int.tryParse('${diagnostics['current_step'] ?? 1}') ?? 1;
+      final destination = status == 'APPROVED'
+          ? '/dashboard'
+          : status == 'PENDING_REVIEW'
+              ? '/pending-review'
+              : '/signup';
+      debugPrint(
+          'RIDER_LOGIN_SUCCESS route_redirect=$destination current_step=$step status=$status');
+      if (mounted) context.go(destination);
     } catch (e) {
       if (!mounted) return;
       debugPrint('RIDER_LOGIN_FAILURE error=$e');

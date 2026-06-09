@@ -81,9 +81,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         context.go('/login');
         return;
       }
+      final destination = rider.isApproved
+          ? '/dashboard'
+          : rider.normalizedKycStatus == 'PENDING_REVIEW'
+              ? '/pending-review'
+              : '/signup';
       debugPrint(
-          'ROUTE_REDIRECT reason=authenticated_and_valid destination=/dashboard');
-      context.go('/dashboard');
+          'ROUTE_REDIRECT reason=authenticated_and_valid destination=$destination');
+      context.go(destination);
     } catch (error) {
       if (!mounted) return;
       final friendlyMessage = apiMessage(error);

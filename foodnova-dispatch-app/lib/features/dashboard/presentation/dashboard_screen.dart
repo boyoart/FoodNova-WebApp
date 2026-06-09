@@ -236,11 +236,14 @@ class _AccessLockedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRejected = rider.isRejected;
     final isSuspended = rider.isSuspended;
+    final displayStatus = rider.kycStatus == 'PENDING_REVIEW'
+        ? 'Pending Review'
+        : rider.kycStatus.replaceAll('_', ' ');
     final title = isRejected
         ? 'Application rejected'
         : isSuspended
             ? 'Account suspended'
-            : 'Your application is under review.';
+            : 'Pending Review';
     final detail = isRejected
         ? (rider.rejectionReason.isEmpty
             ? 'FoodNova admin rejected this application. Update your documents and resubmit when requested.'
@@ -282,9 +285,16 @@ class _AccessLockedCard extends StatelessWidget {
                 : rider.onboardingStage.replaceAll('_', ' '),
           ),
           const SizedBox(height: 14),
-          Text('Status: ${rider.kycStatus}'),
+          Text(
+            'Status: $displayStatus',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           Text(detail),
+          if (!isRejected && !isSuspended) ...[
+            const SizedBox(height: 14),
+            const _LockedCapabilities(),
+          ],
           if (isRejected) ...[
             const SizedBox(height: 14),
             OutlinedButton.icon(
@@ -295,6 +305,47 @@ class _AccessLockedCard extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+class _LockedCapabilities extends StatelessWidget {
+  const _LockedCapabilities();
+
+  @override
+  Widget build(BuildContext context) {
+    const items = [
+      'Go Online disabled',
+      'Accept Orders disabled',
+      'Receive Deliveries disabled',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final item in items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.lock_outline,
+                  size: 17,
+                  color: FoodNovaColors.muted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item,
+                    style: const TextStyle(
+                      color: FoodNovaColors.muted,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }

@@ -224,6 +224,7 @@ class RiderKyc(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     delivery_worker_id = Column(Integer, ForeignKey("delivery_workers.id"), nullable=False, unique=True, index=True)
+    current_step = Column(Integer, default=1, index=True)
     onboarding_stage = Column(String(50), default="account_created", index=True)
     identity_status = Column(String(30), default="not_started", index=True)
     address_status = Column(String(30), default="not_started", index=True)

@@ -208,6 +208,78 @@ def _provider_response_log(data: dict) -> dict:
     }
 
 
+def _identity_key(value: str) -> str:
+    return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
+
+
+def _identity_value(source: dict, aliases: list[str]) -> str:
+    if not isinstance(source, dict):
+        return ""
+    direct = {_identity_key(key): value for key, value in source.items()}
+    for alias in aliases:
+        value = direct.get(_identity_key(alias))
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _normalize_nin_identity_data(source: dict) -> dict:
+    first_name = _identity_value(source, ["first_name", "firstname", "firstName", "given_name", "givenName"])
+    middle_name = _identity_value(source, ["middle_name", "middlename", "middleName", "other_name", "otherName"])
+    surname = _identity_value(source, ["surname", "last_name", "lastname", "lastName", "family_name", "familyName"])
+    full_name = _identity_value(source, ["full_name", "fullname", "fullName", "name", "display_name", "displayName"])
+    if not full_name:
+        full_name = " ".join(part for part in [first_name, middle_name, surname] if part).strip()
+    return {
+        "first_name": first_name,
+        "middle_name": middle_name,
+        "surname": surname,
+        "firstname": first_name,
+        "middlename": middle_name,
+        "last_name": surname,
+        "full_name": full_name,
+        "phone": _identity_value(source, ["phone", "phone_number", "phoneNumber", "telephoneno", "telephone_no", "telephoneNo", "mobile", "mobile_number"]),
+        "phone_number": _identity_value(source, ["phone", "phone_number", "phoneNumber", "telephoneno", "telephone_no", "telephoneNo", "mobile", "mobile_number"]),
+        "telephoneno": _identity_value(source, ["phone", "phone_number", "phoneNumber", "telephoneno", "telephone_no", "telephoneNo", "mobile", "mobile_number"]),
+        "gender": _identity_value(source, ["gender", "sex"]),
+        "birthdate": _identity_value(source, ["birthdate", "birth_date", "date_of_birth", "dateOfBirth", "dob"]),
+        "date_of_birth": _identity_value(source, ["birthdate", "birth_date", "date_of_birth", "dateOfBirth", "dob"]),
+        "dob": _identity_value(source, ["birthdate", "birth_date", "date_of_birth", "dateOfBirth", "dob"]),
+        "address": _identity_value(source, ["address", "residence_address", "residential_address", "residenceAddress", "home_address"]),
+        "residence_state": _identity_value(source, ["residence_state", "state"]),
+        "residence_town": _identity_value(source, ["residence_town", "town", "city"]),
+        "residence_lga": _identity_value(source, ["residence_lga", "lga", "local_government"]),
+        "photo": _identity_value(source, ["photo", "photograph", "image", "portrait"]),
+        "nin": _identity_value(source, ["nin", "nin_number", "ninNumber", "number"]),
+    }
+
+
+def _extract_nin_identity_data(data: dict) -> dict:
+    candidates = []
+
+    def collect(value):
+        if isinstance(value, dict):
+            candidates.append(value)
+            for nested in value.values():
+                collect(nested)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+        elif isinstance(value, str) and value.strip().startswith(("{", "[")):
+            try:
+                collect(json.loads(value))
+            except Exception:
+                pass
+
+    collect(data or {})
+    identity_keys = {"firstname", "givenname", "surname", "lastname", "middlename", "fullname", "birthdate", "dateofbirth", "dob", "telephoneno", "telephone", "phonenumber", "mobile", "gender", "sex", "address"}
+    for candidate in candidates:
+        compact_keys = {_identity_key(key) for key in candidate.keys()}
+        if compact_keys.intersection(identity_keys):
+            return candidate
+    return candidates[0] if candidates else {}
+
+
 def _sanitized_unavailable_message() -> str:
     return "Identity verification currently unavailable."
 
@@ -467,6 +539,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         request_body = {"nin": nin, "consent": True}
         payload = json.dumps(request_body).encode("utf-8")
         url = f"{config['base_url']}/nin-verification"
+        print("REQUEST BODY", json.dumps(request_body, default=str))
 
         _log_provider_event(
             "request",
@@ -665,8 +738,15 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         verified = status == "success"
         print(("NIN_VERIFY_SUCCESS" if verified else "NIN_VERIFY_FAILURE"), json.dumps({"request_id": request_id, "status": status, "message": provider_message, "http_status": response_status}))
         print(("NIN_VERIFICATION_SUCCESS" if verified else "NIN_VERIFICATION_FAILED"), json.dumps({"request_id": request_id, "status": status, "message": provider_message, "http_status": response_status}))
-        data = result.get("data") or {}
-        address = data.get("residence_address") or data.get("address") or data.get("residential_address") or ""
+        print("RAW PROVIDER RESPONSE", raw_body)
+        print("NIN_PROVIDER_RAW_RESPONSE", json.dumps(_redact_provider_body(result), default=str))
+        print("NIN_RAW_PROVIDER_RESPONSE", json.dumps(_redact_provider_body(result), default=str))
+        data = _extract_nin_identity_data(result)
+        normalized_identity = _normalize_nin_identity_data(data)
+        print("PARSED PROVIDER RESPONSE", json.dumps(_redact_provider_body(data), default=str))
+        print("NIN_PROVIDER_PARSED_RESPONSE", json.dumps(_redact_provider_body(data), default=str))
+        print("NIN_PARSED_PROVIDER_DATA", json.dumps(_redact_provider_body(data), default=str))
+        print("NIN_NORMALIZED_DATA", json.dumps(_redact_provider_body(normalized_identity), default=str))
         return {
             "verified": verified,
             "message": result.get("message") or ("NIN verified successfully." if verified else "NIN verification failed."),
@@ -685,21 +765,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             "failure_stage": "" if verified else "provider_rejection",
             "raw_response": result,
             "provider_attempts": attempts,
-            "data": {
-                "first_name": data.get("firstname") or data.get("first_name") or "",
-                "middle_name": data.get("middlename") or data.get("middle_name") or "",
-                "surname": data.get("surname") or data.get("lastname") or "",
-                "phone": data.get("telephoneno") or data.get("phone") or "",
-                "gender": data.get("gender") or "",
-                "birthdate": data.get("birthdate") or data.get("dob") or "",
-                "dob": data.get("birthdate") or data.get("dob") or "",
-                "address": address,
-                "full_name": " ".join([data.get("firstname") or data.get("first_name") or "", data.get("middlename") or data.get("middle_name") or "", data.get("surname") or data.get("lastname") or ""]).strip(),
-                "residence_state": data.get("residence_state") or "",
-                "residence_town": data.get("residence_town") or "",
-                "residence_lga": data.get("residence_lga") or "",
-                "photo": data.get("photo") or "",
-            },
+            "data": normalized_identity,
         }
     finally:
         with _ACTIVE_NIN_REQUESTS_LOCK:
