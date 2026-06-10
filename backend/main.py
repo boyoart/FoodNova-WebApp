@@ -2084,7 +2084,7 @@ def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
 
 RIDER_ONBOARDING_TOTAL_STEPS = 7
 RIDER_ONBOARDING_STAGE_STEPS = {
-    "account_created": 1,
+    "account_created": 2,
     "identity_submitted": 2,
     "address_uploaded": 3,
     "emergency_contact_added": 3,
@@ -3042,9 +3042,19 @@ def rider_documents_map(db, worker: DBDeliveryWorker) -> dict:
     return documents
 
 
-def rider_identity_data(worker: DBDeliveryWorker, kyc: Optional[DBRiderKyc] = None) -> dict:
+def rider_identity_data(db, worker: DBDeliveryWorker, kyc: Optional[DBRiderKyc] = None) -> dict:
     response = json_load(kyc.nin_response_json if kyc else "{}", {}) if kyc else {}
     provider_data = normalize_nin_provider_data(extract_nin_identity_payload(response))
+    if not any(provider_data.get(key) for key in ["full_name", "first_name", "surname", "phone", "birthdate", "gender"]):
+        latest_log = db.query(DBVerificationLog).filter(
+            DBVerificationLog.delivery_worker_id == worker.id,
+            DBVerificationLog.verification_type == "nin",
+            DBVerificationLog.success == True,
+        ).order_by(DBVerificationLog.created_at.desc()).first()
+        if latest_log:
+            provider_data = normalize_nin_provider_data(
+                extract_nin_identity_payload(json_load(latest_log.response_json, {}))
+            )
     first_name = worker.verified_first_name or provider_data.get("first_name") or ""
     middle_name = worker.verified_middle_name or provider_data.get("middle_name") or ""
     surname = worker.verified_surname or provider_data.get("surname") or ""
@@ -3093,7 +3103,7 @@ def onboarding_progress_payload(db, worker: DBDeliveryWorker) -> dict:
         "progress_percent": rider_onboarding_progress_percent(kyc.current_step if kyc else 1),
         "nin_verified": bool(worker.nin_verified),
         "nin_report_id": worker.nin_report_id or "",
-        "nin_data": rider_identity_data(worker, kyc),
+        "nin_data": rider_identity_data(db, worker, kyc),
         "profile_data": profile_data,
         "documents": documents,
         "training_completed": (kyc.onboarding_stage if kyc else "") in {"training_completed", "admin_review", "approved"},
@@ -3102,6 +3112,21 @@ def onboarding_progress_payload(db, worker: DBDeliveryWorker) -> dict:
         "onboarding_stage": kyc.onboarding_stage if kyc else "account_created",
         "last_updated": iso((kyc.updated_at if kyc else None) or worker.updated_at),
     }
+    identity_log = data["nin_data"]
+    print("ONBOARDING_PROGRESS_TRACE", json_dump({
+        "rider_id": data["rider_id"],
+        "status": data["approval_status"],
+        "current_step": data["current_step"],
+        "progress_percent": data["progress_percent"],
+        "application_submitted": data["application_submitted"],
+        "nin_verified": data["nin_verified"],
+        "full_name": identity_log.get("full_name") or profile_data.get("full_name") or "",
+        "dob": identity_log.get("date_of_birth") or identity_log.get("birthdate") or "",
+        "phone": identity_log.get("phone") or data.get("phone") or "",
+        "gender": identity_log.get("gender") or "",
+        "nin_report_id": data["nin_report_id"],
+        "documents": sorted(list(documents.keys())),
+    }))
     return data
 
 
@@ -5121,7 +5146,9 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
         auto_activated = maybe_auto_activate_delivery_worker(worker)
         worker.updated_at = datetime.utcnow()
         progress = onboarding_progress_payload(db, worker)
-        response_identity = nin_identity_response_data(normalize_nin_provider_data(rider_identity_data(worker, rider_kyc)))
+        response_identity = nin_identity_response_data(
+            normalize_nin_provider_data(rider_identity_data(db, worker, rider_kyc))
+        )
         db.commit()
         db.refresh(worker)
 
@@ -5454,8 +5481,8 @@ def delivery_onboarding_verify_nin(payload: NINVerificationPayload, request: Req
     db, user, worker = get_delivery_worker_record_for_request(request)
     try:
         _, rider_kyc = ensure_rider_records(db, worker)
-        cached_identity = rider_identity_data(worker, rider_kyc)
-        if worker.nin_verified and (worker.nin_report_id or (rider_kyc and rider_kyc.nin_provider_report_id)) and any(cached_identity.get(key) for key in ["full_name", "first_name", "surname", "phone", "date_of_birth", "gender"]):
+        cached_identity = rider_identity_data(db, worker, rider_kyc)
+        if worker.nin_verified and (worker.nin_report_id or (rider_kyc and rider_kyc.nin_provider_report_id)):
             response = {
                 "success": True,
                 "verified": True,

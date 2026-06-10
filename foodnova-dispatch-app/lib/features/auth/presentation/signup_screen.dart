@@ -51,6 +51,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   bool verifyingNin = false;
   bool loading = false;
   bool restoringDraft = true;
+  bool authenticatedRider = false;
   int currentStep = 1;
   String message = '';
   String verificationMessage = '';
@@ -71,9 +72,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
 
   bool get requiresVehicleDetails => riderType == 'motorcycle';
   bool get _accountComplete =>
+      authenticatedRider ||
       fields['email']!.text.contains('@') &&
-      fields['phone']!.text.replaceAll(RegExp(r'\D'), '').length >= 10 &&
-      fields['password']!.text.length >= 8;
+          fields['phone']!.text.replaceAll(RegExp(r'\D'), '').length >= 10 &&
+          fields['password']!.text.length >= 8;
   bool get _addressComplete =>
       fields['residential_address']!.text.trim().isNotEmpty &&
       fields['state']!.text.trim().isNotEmpty &&
@@ -137,6 +139,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     final savedStep = await session.currentOnboardingStep();
     final token = await session.token();
     if (token != null && token.isNotEmpty) {
+      authenticatedRider = true;
       try {
         final progress =
             await ref.read(authRepositoryProvider).onboardingProgress();
@@ -221,24 +224,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     final profile = Map<String, dynamic>.from(progress['profile_data'] ?? {});
     final ninData = Map<String, dynamic>.from(progress['nin_data'] ?? {});
     final documents = Map<String, dynamic>.from(progress['documents'] ?? {});
-    fields['email']!.text = '${progress['email'] ?? fields['email']!.text}';
-    fields['phone']!.text = '${progress['phone'] ?? fields['phone']!.text}';
-    fields['first_name']!.text =
-        '${ninData['first_name'] ?? fields['first_name']!.text}';
-    fields['last_name']!.text =
-        '${ninData['surname'] ?? ninData['last_name'] ?? fields['last_name']!.text}';
-    fields['residential_address']!.text =
-        '${profile['address'] ?? ninData['address'] ?? fields['residential_address']!.text}';
-    fields['emergency_contact_name']!.text =
-        '${profile['emergency_contact_name'] ?? fields['emergency_contact_name']!.text}';
-    fields['emergency_contact_phone']!.text =
-        '${profile['emergency_contact_phone'] ?? fields['emergency_contact_phone']!.text}';
-    fields['emergency_contact_relationship']!.text =
-        '${profile['emergency_contact_relationship'] ?? fields['emergency_contact_relationship']!.text}';
-    fields['vehicle_type']!.text =
-        '${profile['vehicle_type'] ?? fields['vehicle_type']!.text}';
-    fields['plate_number']!.text =
-        '${profile['plate_number'] ?? fields['plate_number']!.text}';
+    _setFieldIfPresent('email', progress['email']);
+    _setFieldIfPresent('phone', progress['phone']);
+    _setFieldIfPresent('first_name', ninData['first_name']);
+    _setFieldIfPresent('last_name', ninData['surname'] ?? ninData['last_name']);
+    _setFieldIfPresent(
+      'residential_address',
+      profile['address'] ?? ninData['address'],
+    );
+    _setFieldIfPresent(
+        'emergency_contact_name', profile['emergency_contact_name']);
+    _setFieldIfPresent(
+        'emergency_contact_phone', profile['emergency_contact_phone']);
+    _setFieldIfPresent('emergency_contact_relationship',
+        profile['emergency_contact_relationship']);
+    _setFieldIfPresent('vehicle_type', profile['vehicle_type']);
+    _setFieldIfPresent('plate_number', profile['plate_number']);
     riderType = '${profile['rider_type'] ?? riderType}'.trim().isEmpty
         ? riderType
         : '${profile['rider_type']}';
@@ -261,8 +262,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       }
     }
     final backendStep = int.tryParse('${progress['current_step'] ?? ''}');
-    if (backendStep != null) currentStep = backendStep.clamp(1, _totalSteps);
+    if (backendStep != null) {
+      final hasServerAccount = progress['rider_id'] != null;
+      final minimumStep = hasServerAccount ? 2 : 1;
+      currentStep = backendStep.clamp(minimumStep, _totalSteps);
+    }
     debugPrint('RESTORED_IDENTITY_MODEL ${jsonEncode(ninData)}');
+    debugPrint('ONBOARDING_UI_MODEL ${jsonEncode(_onboardingDebugState())}');
+  }
+
+  void _setFieldIfPresent(String key, dynamic value) {
+    final text = '$value'.trim();
+    if (text.isNotEmpty && text != 'null') {
+      fields[key]?.text = text;
+    }
   }
 
   String _documentUrl(Map<String, dynamic> documents, String key) {
@@ -398,66 +411,84 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: FoodNovaColors.bg,
-      body: SafeArea(
-        child: Form(
-          key: formKey,
-          child: Column(
-            children: [
-              _Header(
-                currentStep: currentStep,
-                title: _stepTitle,
-                status: _completionStatus,
-                percent: _progressPercent,
-              ),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  transitionBuilder: (child, animation) {
-                    final offset = Tween<Offset>(
-                      begin: const Offset(0.08, 0),
-                      end: Offset.zero,
-                    ).animate(CurvedAnimation(
-                        parent: animation, curve: Curves.easeOutCubic));
-                    return FadeTransition(
-                      opacity: animation,
-                      child: SlideTransition(position: offset, child: child),
-                    );
-                  },
-                  child: SingleChildScrollView(
-                    key: ValueKey(currentStep),
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-                    child: _PremiumCard(child: _currentStepPage()),
-                  ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleSystemBack();
+      },
+      child: Scaffold(
+        backgroundColor: FoodNovaColors.bg,
+        body: SafeArea(
+          child: Form(
+            key: formKey,
+            child: Column(
+              children: [
+                _Header(
+                  currentStep: currentStep,
+                  title: _stepTitle,
+                  status: _completionStatus,
+                  percent: _progressPercent,
                 ),
-              ),
-              if (message.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                  child: Text(
-                    message,
-                    style: TextStyle(
-                      color: message.toLowerCase().contains('submitted')
-                          ? FoodNovaColors.success
-                          : FoodNovaColors.danger,
-                      fontWeight: FontWeight.w700,
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 280),
+                    transitionBuilder: (child, animation) {
+                      final offset = Tween<Offset>(
+                        begin: const Offset(0.08, 0),
+                        end: Offset.zero,
+                      ).animate(CurvedAnimation(
+                          parent: animation, curve: Curves.easeOutCubic));
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(position: offset, child: child),
+                      );
+                    },
+                    child: SingleChildScrollView(
+                      key: ValueKey(currentStep),
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+                      child: _PremiumCard(child: _currentStepPage()),
                     ),
                   ),
                 ),
-              _Controls(
-                step: currentStep,
-                loading: loading,
-                canContinue: _canContinueCurrentStep,
-                onBack:
-                    currentStep == 1 ? null : () => _goToStep(currentStep - 1),
-                onNext: currentStep == _totalSteps ? _submit : _nextStep,
-              ),
-            ],
+                if (message.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                    child: Text(
+                      message,
+                      style: TextStyle(
+                        color: message.toLowerCase().contains('submitted')
+                            ? FoodNovaColors.success
+                            : FoodNovaColors.danger,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                _Controls(
+                  step: currentStep,
+                  loading: loading,
+                  canContinue: _canContinueCurrentStep,
+                  onBack: currentStep == 1
+                      ? null
+                      : () => _goToStep(currentStep - 1),
+                  onNext: currentStep == _totalSteps ? _submit : _nextStep,
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _handleSystemBack() async {
+    if (loading || verifyingNin) return;
+    if (currentStep > 1) {
+      await _goToStep(currentStep - 1);
+      return;
+    }
+    final token = await ref.read(sessionControllerProvider.notifier).token();
+    if (!mounted) return;
+    context.go(token == null || token.isEmpty ? '/login' : '/dashboard');
   }
 
   Widget _currentStepPage() => switch (currentStep) {
@@ -785,12 +816,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       message = '';
     });
     try {
+      final token = await ref.read(sessionControllerProvider.notifier).token();
+      if (token != null && token.isNotEmpty) {
+        final progress =
+            await ref.read(authRepositoryProvider).onboardingProgress();
+        _applyBackendProgress(progress);
+        final nextStep = int.tryParse('${progress['current_step'] ?? 2}') ?? 2;
+        await _goToStep(nextStep.clamp(2, _totalSteps).toInt());
+        return;
+      }
       final progress =
           await ref.read(authRepositoryProvider).createRiderAccount(
                 email: fields['email']!.text,
                 phone: fields['phone']!.text,
                 password: fields['password']!.text,
               );
+      authenticatedRider = true;
       _applyBackendProgress(Map<String, dynamic>.from(
           progress['onboarding_progress'] ?? progress['data'] ?? {}));
       await _goToStep(2);
@@ -1784,7 +1825,7 @@ class _ReviewLine extends StatelessWidget {
               width: 120,
               child: Text(label,
                   style: const TextStyle(
-                      color: FoodNovaColors.muted,
+                      color: FoodNovaColors.secondaryText,
                       fontWeight: FontWeight.w700))),
           Expanded(
               child: Text(value,

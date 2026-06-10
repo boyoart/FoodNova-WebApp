@@ -119,11 +119,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           await ref.read(sessionControllerProvider.notifier).diagnostics();
       final status = '${diagnostics['approval_status'] ?? ''}'.toUpperCase();
       final step = int.tryParse('${diagnostics['current_step'] ?? 1}') ?? 1;
-      final destination = status == 'APPROVED'
-          ? '/dashboard'
+      final incomplete = status == 'ONBOARDING' || step < 7;
+      final destination = incomplete
+          ? '/signup'
           : status == 'PENDING_REVIEW'
               ? '/pending-review'
-              : '/signup';
+              : '/dashboard';
       debugPrint(
           'RIDER_LOGIN_SUCCESS route_redirect=$destination current_step=$step status=$status');
       if (mounted) context.go(destination);

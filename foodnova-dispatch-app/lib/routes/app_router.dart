@@ -24,14 +24,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final authenticated =
           ref.watch(sessionControllerProvider).valueOrNull == true;
       final path = state.uri.path;
-      final authRoute = [
+      final completedAuthRoute = [
         '/login',
-        '/signup',
-        '/pending-review',
         '/forgot-password',
         '/onboarding',
       ].contains(path);
-      if (authenticated && authRoute) return '/dashboard';
+      if (authenticated && completedAuthRoute) return '/dashboard';
       if (!authenticated && _requiresSession(path)) return '/login';
       return null;
     },

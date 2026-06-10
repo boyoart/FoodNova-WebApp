@@ -13,6 +13,8 @@ class RiderProfile {
   String get rejectionReason =>
       '${raw['rejection_reason'] ?? raw['deleted_reason'] ?? ''}'.trim();
   bool get isApproved => normalizedKycStatus == 'APPROVED';
+  bool get isPendingReview => normalizedKycStatus == 'PENDING_REVIEW';
+  bool get isOnboarding => normalizedKycStatus == 'ONBOARDING';
   bool get isRejected => normalizedKycStatus == 'REJECTED';
   bool get isSuspended => normalizedKycStatus == 'SUSPENDED';
   bool get isDeleted => normalizedKycStatus == 'DELETED';
@@ -31,6 +33,12 @@ class RiderProfile {
       int.tryParse('${raw['onboarding_progress_percent'] ?? ''}') ??
       ((currentStep / onboardingStepTotal) * 100).round();
   String get onboardingStage => '${raw['onboarding_stage'] ?? ''}';
+  bool get applicationSubmitted =>
+      isPendingReview || isApproved || normalizedKycStatus == 'REJECTED';
+  bool get shouldContinueOnboarding =>
+      isOnboarding ||
+      !applicationSubmitted ||
+      currentStep < onboardingStepTotal;
   bool get isOnline => accountStatus.toUpperCase() == 'ONLINE';
   double get rating =>
       double.tryParse('${raw['rating'] ?? raw['current_rating'] ?? 0}') ?? 0;

@@ -239,18 +239,23 @@ class _AccessLockedCard extends StatelessWidget {
     final displayStatus = rider.kycStatus == 'PENDING_REVIEW'
         ? 'Pending Review'
         : rider.kycStatus.replaceAll('_', ' ');
-    final title = isRejected
-        ? 'Application rejected'
-        : isSuspended
-            ? 'Account suspended'
-            : 'Pending Review';
-    final detail = isRejected
-        ? (rider.rejectionReason.isEmpty
-            ? 'FoodNova admin rejected this application. Update your documents and resubmit when requested.'
-            : rider.rejectionReason)
-        : isSuspended
-            ? 'FoodNova has temporarily blocked dashboard access. Contact support for the next step.'
-            : 'FoodNova admin is reviewing your verified NIN, selfie, and driver license before unlocking deliveries.';
+    final continueOnboarding = rider.shouldContinueOnboarding;
+    final title = continueOnboarding
+        ? 'Pending Review'
+        : isRejected
+            ? 'Application rejected'
+            : isSuspended
+                ? 'Account suspended'
+                : 'Pending Review';
+    final detail = continueOnboarding
+        ? 'Your rider setup is saved. Continue onboarding to submit your application for FoodNova admin review.'
+        : isRejected
+            ? (rider.rejectionReason.isEmpty
+                ? 'FoodNova admin rejected this application. Update your documents and resubmit when requested.'
+                : rider.rejectionReason)
+            : isSuspended
+                ? 'FoodNova has temporarily blocked dashboard access. Contact support for the next step.'
+                : 'FoodNova admin is reviewing your verified NIN, selfie, and driver license before unlocking deliveries.';
     return FnCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -286,6 +291,16 @@ class _AccessLockedCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
+            'Progress: ${rider.onboardingProgressPercent}%',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Current Step: ${rider.currentStep} of ${rider.onboardingStepTotal}',
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 8),
+          Text(
             'Status: $displayStatus',
             style: const TextStyle(fontWeight: FontWeight.w900),
           ),
@@ -294,6 +309,14 @@ class _AccessLockedCard extends StatelessWidget {
           if (!isRejected && !isSuspended) ...[
             const SizedBox(height: 14),
             const _LockedCapabilities(),
+          ],
+          if (continueOnboarding) ...[
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: () => context.go('/signup'),
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('Continue Onboarding'),
+            ),
           ],
           if (isRejected) ...[
             const SizedBox(height: 14),
