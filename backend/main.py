@@ -651,6 +651,13 @@ class BulkOrderStatusPayload(BaseModel):
     status: str
 
 
+class BulkAssignRiderPayload(BaseModel):
+    orderIds: List[int] = []
+    rider_id: int
+    delivery_note: Optional[str] = ""
+    mark_out_for_delivery: Optional[bool] = False
+
+
 def rider_lifecycle_status(worker: DBDeliveryWorker, rider_status: str = "") -> str:
     raw_status = (getattr(worker, "kyc_status", "") or "").upper()
     linked_status = (rider_status or "").upper()
@@ -8123,6 +8130,92 @@ def bulk_update_admin_order_status(payload: BulkOrderStatusPayload, request: Req
             "failed": len(invalid_ids),
             "orderIds": processed_ids,
             "invalidOrderIds": invalid_ids,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/orders/bulk-assign-rider")
+def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Request):
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    order_ids = normalized_bulk_order_ids(payload.orderIds)
+    db = SessionLocal()
+    try:
+        rider = db.query(DBDeliveryWorker).filter(
+            DBDeliveryWorker.id == payload.rider_id,
+            DBDeliveryWorker.deleted_at.is_(None),
+            DBDeliveryWorker.kyc_status != "DELETED",
+        ).first()
+        if not rider:
+            linked_payload_rider = db.query(DBRider).filter(DBRider.id == payload.rider_id).first()
+            if linked_payload_rider:
+                rider = db.query(DBDeliveryWorker).filter(
+                    DBDeliveryWorker.id == linked_payload_rider.delivery_worker_id,
+                    DBDeliveryWorker.deleted_at.is_(None),
+                    DBDeliveryWorker.kyc_status != "DELETED",
+                ).first()
+        if not rider:
+            raise HTTPException(status_code=404, detail="Rider not found")
+        linked_rider = db.query(DBRider).filter(DBRider.delivery_worker_id == rider.id).first()
+        lifecycle_status = "ACTIVE" if (rider.kyc_status or "").upper() == "ACTIVE" else rider_lifecycle_status(rider, (linked_rider.status if linked_rider else "") or "")
+        if lifecycle_status != "ACTIVE":
+            raise HTTPException(status_code=400, detail="Rider must be ACTIVE before assignment")
+        if not order_ids:
+            return {"success": True, "processed": 0, "failed": 0, "invalidOrderIds": []}
+        orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.id.in_(order_ids)).all()
+        found_ids = {order.id for order in orders}
+        invalid_ids = [order_id for order_id in order_ids if order_id not in found_ids]
+        processed_ids = []
+        now = datetime.utcnow()
+        for order in orders:
+            ensure_order_delivery_pin(db, order)
+            order.delivery_worker_id = rider.id
+            order.delivery_worker_type = rider.worker_type or "rider"
+            order.delivery_status = "ASSIGNED"
+            order.rider_id = rider.id
+            order.rider_name = rider.full_name
+            order.rider_phone = rider.phone
+            order.rider_vehicle_type = rider.vehicle_type or ""
+            order.rider_vehicle_number = rider.plate_number or ""
+            order.delivery_note = payload.delivery_note or ""
+            order.delivery_assigned_at = now
+            if payload.mark_out_for_delivery:
+                order.status = "out_for_delivery"
+                order.order_status = "out_for_delivery"
+                order.fulfillment_status = "out_for_delivery"
+                order.delivery_status = "IN_TRANSIT"
+                order.delivery_started_at = order.delivery_started_at or now
+                ensure_order_delivery_pin(db, order)
+            order.updated_at = now
+            processed_ids.append(order.id)
+        if processed_ids:
+            rider.operational_status = "ON_DELIVERY" if payload.mark_out_for_delivery else "ASSIGNED"
+            rider.updated_at = now
+        db.commit()
+        rider_data = worker_to_dict(rider)
+        create_admin_audit_log(
+            request,
+            admin,
+            "orders_bulk_rider_assigned",
+            "order",
+            "bulk",
+            f"Admin bulk assigned rider {rider.full_name} to {len(processed_ids)} orders",
+            {
+                "order_ids": processed_ids,
+                "invalid_order_ids": invalid_ids,
+                "rider": rider_data,
+                "delivery_note": payload.delivery_note or "",
+                "mark_out_for_delivery": bool(payload.mark_out_for_delivery),
+                "timestamp": iso(now),
+            },
+        )
+        return {
+            "success": True,
+            "processed": len(processed_ids),
+            "failed": len(invalid_ids),
+            "orderIds": processed_ids,
+            "invalidOrderIds": invalid_ids,
+            "rider": rider_data,
         }
     finally:
         db.close()

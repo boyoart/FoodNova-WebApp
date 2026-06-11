@@ -261,6 +261,11 @@ export const adminAPI = {
     return response.data;
   },
 
+  bulkAssignRider: async (orderIds = [], payload = {}) => {
+    const response = await api.post("/admin/orders/bulk-assign-rider", { orderIds, ...payload });
+    return response.data;
+  },
+
   getProducts: async () => {
     const response = await api.get("/admin/products");
     const products = normalizeList(response.data, ["products"]);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI, resolveMediaUrl } from '../services/api'
@@ -26,6 +26,15 @@ const ORDER_STATUS_OPTIONS = [
   { value: 'cancelled', label: 'Cancelled' },
 ]
 
+const DASHBOARD_CARDS = [
+  { key: 'total', label: 'Total Orders' },
+  { key: 'pending_payment', label: 'Pending Payment' },
+  { key: 'processing', label: 'Processing' },
+  { key: 'out_for_delivery', label: 'Out For Delivery' },
+  { key: 'delivered', label: 'Delivered' },
+  { key: 'cancelled', label: 'Cancelled' },
+]
+
 export default function AdminOrders() {
   const { isAdmin, admin } = useAuthStore()
   const [orders, setOrders] = useState([])
@@ -46,6 +55,13 @@ export default function AdminOrders() {
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '', mark_out_for_delivery: true })
   const [selectedOrderIds, setSelectedOrderIds] = useState([])
   const [bulkProcessing, setBulkProcessing] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [paymentFilter, setPaymentFilter] = useState('all')
+  const [deliveryFilter, setDeliveryFilter] = useState('all')
+  const [dateRange, setDateRange] = useState({ from: '', to: '' })
+  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false)
+  const [bulkAssignmentForm, setBulkAssignmentForm] = useState({ rider_id: '', delivery_note: '', mark_out_for_delivery: true })
+  const [bulkAssigningRider, setBulkAssigningRider] = useState(false)
 
   useEffect(() => {
     if (isAdmin) {
@@ -57,9 +73,53 @@ export default function AdminOrders() {
   const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || adminPermissions.length === 0))
   const canDeleteOrders = isSuperAdmin || adminPermissions.includes('orders:delete')
   const canUpdateOrders = isSuperAdmin || adminPermissions.includes('orders:update')
-  const selectableOrderIds = orders.filter(order => !order.is_deleted).map(order => Number(order.id)).filter(Boolean)
+  const canAssignRiders = isSuperAdmin || adminPermissions.includes('orders:delivery') || adminPermissions.includes('delivery:manage')
+  const getOrderStatus = (order = {}) => order.order_status || order.fulfillment_status || order.delivery_status || order.status || 'order_placed'
+  const filteredOrders = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase()
+    const fromDate = dateRange.from ? new Date(`${dateRange.from}T00:00:00`) : null
+    const toDate = dateRange.to ? new Date(`${dateRange.to}T23:59:59`) : null
+    return orders.filter((order) => {
+      const paymentStatus = order.payment_status || order.status || ''
+      const deliveryStatus = getOrderStatus(order)
+      const createdAt = order.created_at ? new Date(order.created_at) : null
+      const searchable = [
+        order.order_code,
+        order.customer_name,
+        order.customer_phone,
+        order.phone,
+        order.rider_name,
+      ].filter(Boolean).join(' ').toLowerCase()
+      if (term && !searchable.includes(term)) return false
+      if (paymentFilter !== 'all' && paymentStatus !== paymentFilter) return false
+      if (deliveryFilter !== 'all' && deliveryStatus !== deliveryFilter) return false
+      if (fromDate && (!createdAt || createdAt < fromDate)) return false
+      if (toDate && (!createdAt || createdAt > toDate)) return false
+      return true
+    })
+  }, [orders, searchTerm, paymentFilter, deliveryFilter, dateRange])
+  const dashboardCounts = useMemo(() => {
+    const counts = { total: orders.length, pending_payment: 0, processing: 0, out_for_delivery: 0, delivered: 0, cancelled: 0 }
+    orders.forEach((order) => {
+      const paymentStatus = order.payment_status || order.status || ''
+      const orderStatus = getOrderStatus(order)
+      if (paymentStatus === 'pending_payment') counts.pending_payment += 1
+      if (orderStatus === 'processing') counts.processing += 1
+      if (orderStatus === 'out_for_delivery' || order.delivery_status === 'IN_TRANSIT') counts.out_for_delivery += 1
+      if (orderStatus === 'delivered') counts.delivered += 1
+      if (orderStatus === 'cancelled') counts.cancelled += 1
+    })
+    return counts
+  }, [orders])
+  const selectableOrderIds = filteredOrders.filter(order => !order.is_deleted).map(order => Number(order.id)).filter(Boolean)
+  const selectedOrders = useMemo(() => orders.filter(order => selectedOrderIds.includes(Number(order.id))), [orders, selectedOrderIds])
   const selectedCount = selectedOrderIds.length
   const allVisibleSelected = selectableOrderIds.length > 0 && selectableOrderIds.every(id => selectedOrderIds.includes(id))
+
+  useEffect(() => {
+    const filteredIds = new Set(filteredOrders.filter(order => !order.is_deleted).map(order => Number(order.id)).filter(Boolean))
+    setSelectedOrderIds((current) => current.filter(id => filteredIds.has(id)))
+  }, [filteredOrders])
 
   const normalizeOrderResponse = (res) => {
     if (Array.isArray(res)) return res
@@ -209,8 +269,68 @@ export default function AdminOrders() {
     })
   }
 
+  const selectCurrentPageOrders = () => {
+    setSelectedOrderIds(selectableOrderIds)
+  }
+
+  const selectAllFilteredOrders = () => {
+    setSelectedOrderIds(selectableOrderIds)
+  }
+
   const clearBulkSelection = () => {
     setSelectedOrderIds([])
+  }
+
+  const exportRows = selectedOrders.map((order) => ({
+    'Order Code': order.order_code || `#${order.id}`,
+    Customer: order.customer_name || '',
+    Phone: order.phone || order.customer_phone || '',
+    Rider: order.rider_name || '',
+    Amount: order.total_amount || 0,
+    Payment: order.payment_status || order.status || '',
+    Status: getOrderStatus(order),
+    Created: order.created_at || '',
+  }))
+
+  const escapeCsv = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`
+
+  const downloadBlob = (content, filename, type) => {
+    const blob = new Blob([content], { type })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportSelectedCsv = () => {
+    if (!selectedOrders.length) return
+    const headers = Object.keys(exportRows[0])
+    const csv = [headers.map(escapeCsv).join(','), ...exportRows.map(row => headers.map(header => escapeCsv(row[header])).join(','))].join('\n')
+    downloadBlob(csv, `foodnova-orders-${Date.now()}.csv`, 'text/csv;charset=utf-8')
+  }
+
+  const exportSelectedExcel = () => {
+    if (!selectedOrders.length) return
+    const headers = Object.keys(exportRows[0])
+    const rows = exportRows.map(row => `<tr>${headers.map(header => `<td>${String(row[header] ?? '').replace(/[<>&]/g, char => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[char]))}</td>`).join('')}</tr>`).join('')
+    const table = `<table><thead><tr>${headers.map(header => `<th>${header}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`
+    downloadBlob(table, `foodnova-orders-${Date.now()}.xls`, 'application/vnd.ms-excel;charset=utf-8')
+  }
+
+  const bulkSendWhatsApp = () => {
+    const targets = selectedOrders.filter(order => order.customer_phone || order.phone)
+    if (!targets.length) {
+      toast.error('No selected orders have customer phone numbers')
+      return
+    }
+    targets.forEach((order) => {
+      const phone = normalizePhoneForWhatsApp(order.customer_phone || order.phone)
+      const message = `Hello ${order.customer_name || 'Customer'}, this is FoodNova regarding your order ${order.order_code || `#${order.id}`}.`
+      window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
+    })
+    toast.success(`${targets.length} WhatsApp message${targets.length === 1 ? '' : 's'} generated`)
   }
 
   const runBulkDelete = async () => {
@@ -220,7 +340,7 @@ export default function AdminOrders() {
     try {
       setBulkProcessing(true)
       const response = await adminAPI.bulkDeleteOrders(selectedOrderIds)
-      toast.success(`Bulk delete complete: ${response.processed || 0} processed, ${response.failed || 0} failed`)
+      toast.success(`${response.processed || 0} Orders Deleted Successfully`)
       clearBulkSelection()
       await fetchOrders()
     } catch (error) {
@@ -235,12 +355,45 @@ export default function AdminOrders() {
     try {
       setBulkProcessing(true)
       const response = await adminAPI.bulkUpdateOrderStatus(selectedOrderIds, status)
-      toast.success(`Bulk status update complete: ${response.processed || 0} processed, ${response.failed || 0} failed`)
+      toast.success(`${response.processed || 0} Orders Updated Successfully`)
       clearBulkSelection()
       await fetchOrders()
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Bulk status update failed')
     } finally {
+      setBulkProcessing(false)
+    }
+  }
+
+  const openBulkAssignModal = () => {
+    if (!selectedOrderIds.length) return
+    setBulkAssignmentForm({ rider_id: '', delivery_note: '', mark_out_for_delivery: true })
+    setBulkAssignModalOpen(true)
+    loadRiders()
+  }
+
+  const submitBulkRiderAssignment = async (event) => {
+    event.preventDefault()
+    if (!bulkAssignmentForm.rider_id) {
+      toast.error('Please select a rider')
+      return
+    }
+    try {
+      setBulkAssigningRider(true)
+      setBulkProcessing(true)
+      const response = await adminAPI.bulkAssignRider(selectedOrderIds, {
+        rider_id: Number(bulkAssignmentForm.rider_id),
+        delivery_note: bulkAssignmentForm.delivery_note,
+        mark_out_for_delivery: bulkAssignmentForm.mark_out_for_delivery,
+      })
+      toast.success(`${response.processed || 0} Orders Assigned Successfully`)
+      setBulkAssignModalOpen(false)
+      clearBulkSelection()
+      await fetchOrders()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Bulk rider assignment failed')
+    } finally {
+      setBulkAssigningRider(false)
       setBulkProcessing(false)
     }
   }
@@ -357,12 +510,60 @@ export default function AdminOrders() {
     <div className="admin-page">
       <h1>Order Management</h1>
 
+      <div className="order-count-dashboard">
+        {DASHBOARD_CARDS.map((card) => (
+          <div key={card.key} className="order-count-card">
+            <span>{card.label}</span>
+            <strong>{dashboardCounts[card.key] || 0}</strong>
+          </div>
+        ))}
+      </div>
+
       {canDeleteOrders && (
         <div className="order-scope-tabs">
           <button type="button" className={orderScope === 'active' ? 'active' : ''} onClick={() => setOrderScope('active')}>Active Orders</button>
           <button type="button" className={orderScope === 'deleted' ? 'active' : ''} onClick={() => setOrderScope('deleted')}>Deleted Orders</button>
         </div>
       )}
+
+      <div className="order-management-controls">
+        <label className="order-search-field">
+          <span>Quick Search</span>
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Order code, customer, phone, rider"
+          />
+        </label>
+        <label>
+          <span>Payment Status</span>
+          <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}>
+            <option value="all">All payments</option>
+            {PAYMENT_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>Delivery Status</span>
+          <select value={deliveryFilter} onChange={(event) => setDeliveryFilter(event.target.value)}>
+            <option value="all">All delivery statuses</option>
+            {ORDER_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label>
+        <label>
+          <span>From</span>
+          <input type="date" value={dateRange.from} onChange={(event) => setDateRange({ ...dateRange, from: event.target.value })} />
+        </label>
+        <label>
+          <span>To</span>
+          <input type="date" value={dateRange.to} onChange={(event) => setDateRange({ ...dateRange, to: event.target.value })} />
+        </label>
+      </div>
+
+      <div className="order-selection-shortcuts">
+        <button type="button" onClick={selectCurrentPageOrders} disabled={!selectableOrderIds.length || bulkProcessing}>Select Current Page</button>
+        <button type="button" onClick={selectAllFilteredOrders} disabled={!selectableOrderIds.length || bulkProcessing}>Select All Filtered Orders</button>
+      </div>
 
       <div className="filter-tabs">
         {[
@@ -408,6 +609,20 @@ export default function AdminOrders() {
                 </button>
               </>
             )}
+            {canAssignRiders && (
+              <button type="button" className="btn-view" onClick={openBulkAssignModal} disabled={bulkProcessing}>
+                Bulk Assign Rider
+              </button>
+            )}
+            <button type="button" className="btn-view" onClick={exportSelectedCsv} disabled={bulkProcessing}>
+              Export Selected to CSV
+            </button>
+            <button type="button" className="btn-view" onClick={exportSelectedExcel} disabled={bulkProcessing}>
+              Export Selected to Excel
+            </button>
+            <button type="button" className="btn-view" onClick={bulkSendWhatsApp} disabled={bulkProcessing}>
+              Bulk Send WhatsApp
+            </button>
             <button type="button" className="btn-cancel" onClick={clearBulkSelection} disabled={bulkProcessing}>
               Cancel Selection
             </button>
@@ -419,7 +634,7 @@ export default function AdminOrders() {
         <div className="loading">Loading orders...</div>
       ) : loadError ? (
         <div className="empty-state">{loadError}</div>
-      ) : orders.length === 0 ? (
+      ) : filteredOrders.length === 0 ? (
         <div className="empty-state">No orders found</div>
       ) : (
         <div className="orders-table">
@@ -447,7 +662,7 @@ export default function AdminOrders() {
               </tr>
             </thead>
             <tbody>
-              {orders.map(order => {
+              {filteredOrders.map(order => {
                 const paymentStatus = order.payment_status || order.status || 'pending_payment'
                 const orderStatus = order.order_status || order.fulfillment_status || order.status || 'order_placed'
                 const deliveryCode = order.delivery_code
@@ -516,6 +731,43 @@ export default function AdminOrders() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {bulkAssignModalOpen && (
+        <div className="assign-rider-modal">
+          <div className="assign-rider-card">
+            <div className="assign-rider-header">
+              <h3>Bulk Assign Rider</h3>
+              <button type="button" onClick={() => setBulkAssignModalOpen(false)}>×</button>
+            </div>
+            <form onSubmit={submitBulkRiderAssignment}>
+              <p className="muted">{selectedCount} {selectedCount === 1 ? 'order' : 'orders'} selected</p>
+              <label>
+                Active Rider
+                <select value={bulkAssignmentForm.rider_id} onChange={(event) => setBulkAssignmentForm({ ...bulkAssignmentForm, rider_id: event.target.value })} required>
+                  <option value="">Select rider</option>
+                  {riders.map((rider) => (
+                    <option key={rider.id} value={rider.id}>
+                      {rider.full_name || rider.name} - {rider.phone}{rider.vehicle_type ? ` (${rider.vehicle_type})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Delivery Note
+                <textarea rows="3" value={bulkAssignmentForm.delivery_note} onChange={(event) => setBulkAssignmentForm({ ...bulkAssignmentForm, delivery_note: event.target.value })} placeholder="Optional note for these orders" />
+              </label>
+              <label className="assign-rider-check">
+                <input type="checkbox" checked={bulkAssignmentForm.mark_out_for_delivery} onChange={(event) => setBulkAssignmentForm({ ...bulkAssignmentForm, mark_out_for_delivery: event.target.checked })} />
+                <span>Mark orders as Out for Delivery</span>
+              </label>
+              <div className="assign-rider-actions">
+                <button type="button" className="btn-cancel" onClick={() => setBulkAssignModalOpen(false)} disabled={bulkAssigningRider}>Cancel</button>
+                <button type="submit" className="btn-primary" disabled={bulkAssigningRider}>{bulkAssigningRider ? 'Assigning...' : 'Assign Rider to Orders'}</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
