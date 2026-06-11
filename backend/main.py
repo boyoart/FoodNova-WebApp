@@ -13,6 +13,7 @@ import os
 import random
 import traceback
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -2495,49 +2496,169 @@ def dispatch_order_to_dict(order: DBOrder) -> dict:
     return data
 
 
+def valid_tracking_coordinate(lat, lng) -> bool:
+    try:
+        lat = float(lat)
+        lng = float(lng)
+    except (TypeError, ValueError):
+        return False
+    if lat == 0 and lng == 0:
+        return False
+    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+        return False
+    # FoodNova deliveries currently operate in Nigeria; reject obvious fallback/test coordinates.
+    if not (3.0 <= lat <= 14.5 and 2.0 <= lng <= 15.0):
+        return False
+    return True
+
+
+def decode_google_polyline(encoded: str) -> List[dict]:
+    points = []
+    index = 0
+    lat = 0
+    lng = 0
+    while index < len(encoded or ""):
+        for coord in ("lat", "lng"):
+            shift = 0
+            result = 0
+            while index < len(encoded):
+                byte = ord(encoded[index]) - 63
+                index += 1
+                result |= (byte & 0x1F) << shift
+                shift += 5
+                if byte < 0x20:
+                    break
+            delta = ~(result >> 1) if result & 1 else result >> 1
+            if coord == "lat":
+                lat += delta
+            else:
+                lng += delta
+        points.append({"latitude": lat / 1e5, "longitude": lng / 1e5})
+    return points
+
+
+def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: float, customer_lng: float) -> dict:
+    google_key = (
+        os.getenv("GOOGLE_DIRECTIONS_API_KEY")
+        or os.getenv("GOOGLE_MAPS_API_KEY")
+        or os.getenv("GOOGLE_PLACES_API_KEY")
+        or ""
+    ).strip()
+    if google_key:
+        params = urllib.parse.urlencode({
+            "origin": f"{rider_lat},{rider_lng}",
+            "destination": f"{customer_lat},{customer_lng}",
+            "mode": "driving",
+            "key": google_key,
+        })
+        url = f"https://maps.googleapis.com/maps/api/directions/json?{params}"
+        try:
+            with urllib.request.urlopen(url, timeout=8) as response:
+                body = json.loads(response.read().decode("utf-8"))
+            route = (body.get("routes") or [{}])[0]
+            leg = (route.get("legs") or [{}])[0]
+            distance_meters_value = (leg.get("distance") or {}).get("value")
+            duration_seconds = (leg.get("duration") or {}).get("value")
+            polyline = ((route.get("overview_polyline") or {}).get("points") or "")
+            if distance_meters_value is not None and duration_seconds is not None and polyline:
+                return {
+                    "distance_meters": float(distance_meters_value),
+                    "eta_minutes": max(1, math.ceil(float(duration_seconds) / 60)),
+                    "route_polyline": decode_google_polyline(polyline),
+                    "route_provider": "google_directions",
+                    "route_status": body.get("status") or "OK",
+                }
+            return {"route_provider": "google_directions", "route_status": body.get("status") or "NO_ROUTE"}
+        except Exception as error:
+            print("TRACK_RIDER_ROUTE_ERROR", json_dump({"provider": "google_directions", "error": repr(error)}))
+
+    osrm_url = (
+        "https://router.project-osrm.org/route/v1/driving/"
+        f"{rider_lng},{rider_lat};{customer_lng},{customer_lat}"
+        "?overview=full&geometries=geojson"
+    )
+    try:
+        with urllib.request.urlopen(osrm_url, timeout=8) as response:
+            body = json.loads(response.read().decode("utf-8"))
+        route = (body.get("routes") or [{}])[0]
+        coordinates = (((route.get("geometry") or {}).get("coordinates")) or [])
+        if route.get("distance") is not None and route.get("duration") is not None and coordinates:
+            return {
+                "distance_meters": float(route.get("distance")),
+                "eta_minutes": max(1, math.ceil(float(route.get("duration")) / 60)),
+                "route_polyline": [{"latitude": lat, "longitude": lng} for lng, lat in coordinates],
+                "route_provider": "osrm",
+                "route_status": body.get("code") or "Ok",
+            }
+        return {"route_provider": "osrm", "route_status": body.get("code") or "NO_ROUTE"}
+    except Exception as error:
+        print("TRACK_RIDER_ROUTE_ERROR", json_dump({"provider": "osrm", "error": repr(error)}))
+    return {"route_provider": "none", "route_status": "UNAVAILABLE"}
+
+
 def order_rider_location_payload(order: DBOrder, db) -> dict:
     worker_id = getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None)
     worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id).first() if worker_id else None
     customer_lat, customer_lng = get_order_delivery_coordinates(order)
     rider_lat = getattr(worker, "latest_latitude", None) if worker else None
     rider_lng = getattr(worker, "latest_longitude", None) if worker else None
+    rider_valid = valid_tracking_coordinate(rider_lat, rider_lng)
+    customer_valid = valid_tracking_coordinate(customer_lat, customer_lng)
     distance_remaining = None
     eta_minutes = None
     route_polyline = []
-    if rider_lat is not None and rider_lng is not None and customer_lat is not None and customer_lng is not None:
-        distance_remaining = distance_meters(rider_lat, rider_lng, customer_lat, customer_lng)
-        eta_minutes = max(1, math.ceil((distance_remaining / 1000) / 25 * 60))
-        route_polyline = [
-            {"latitude": rider_lat, "longitude": rider_lng},
-            {"latitude": customer_lat, "longitude": customer_lng},
-        ]
+    route_provider = "none"
+    route_status = "WAITING_FOR_COORDINATES"
+    if rider_valid and customer_valid:
+        route = tracking_route_service(float(rider_lat), float(rider_lng), float(customer_lat), float(customer_lng))
+        distance_remaining = route.get("distance_meters")
+        eta_minutes = route.get("eta_minutes")
+        route_polyline = route.get("route_polyline") or []
+        route_provider = route.get("route_provider") or "none"
+        route_status = route.get("route_status") or "UNAVAILABLE"
 
     dispatch_status = canonical_dispatch_status(order)
     tracking_visible = dispatch_status in {"PICKED_UP", "IN_TRANSIT", "ARRIVED"}
+    tracking_available = tracking_visible and rider_valid and customer_valid and bool(route_polyline)
     if getattr(order, "delivery_confirmed_at", None):
         tracking_visible = False
+        tracking_available = False
+
+    print("TRACK_RIDER_COORDINATES", json_dump({
+        "order_id": order.id,
+        "rider_id": worker_id,
+        "rider_coordinates": {"latitude": rider_lat, "longitude": rider_lng, "valid": rider_valid},
+        "customer_coordinates": {"latitude": customer_lat, "longitude": customer_lng, "valid": customer_valid},
+        "route_provider": route_provider,
+        "route_status": route_status,
+        "calculated_distance_meters": distance_remaining,
+        "calculated_eta_minutes": eta_minutes,
+    }))
 
     return {
         "order_id": order.id,
         "order_code": order.order_code or "",
         "delivery_status": dispatch_status,
         "tracking_visible": tracking_visible,
+        "tracking_available": tracking_available,
+        "route_provider": route_provider,
+        "route_status": route_status,
         "rider": {
             "id": worker.id if worker else worker_id,
             "name": (worker.full_name if worker else None) or getattr(order, "rider_name", "") or "",
             "phone": (worker.phone if worker else None) or getattr(order, "rider_phone", "") or "",
             "vehicle_type": (worker.vehicle_type if worker else None) or getattr(order, "rider_vehicle_type", "") or "",
             "vehicle_number": (worker.plate_number if worker else None) or getattr(order, "rider_vehicle_number", "") or "",
-            "latitude": rider_lat,
-            "longitude": rider_lng,
+            "latitude": float(rider_lat) if rider_valid else None,
+            "longitude": float(rider_lng) if rider_valid else None,
             "accuracy": getattr(worker, "latest_accuracy", None) if worker else None,
             "heading": getattr(worker, "latest_heading", None) if worker else None,
             "speed": getattr(worker, "latest_speed", None) if worker else None,
             "last_updated_at": iso(getattr(worker, "last_seen_at", None)) if worker else "",
         },
         "customer": {
-            "latitude": customer_lat,
-            "longitude": customer_lng,
+            "latitude": float(customer_lat) if customer_valid else None,
+            "longitude": float(customer_lng) if customer_valid else None,
             "address": order.delivery_address or "",
         },
         "distance_meters": distance_remaining,
@@ -2566,6 +2687,7 @@ def order_rider_location_response(order: DBOrder, db) -> dict:
         "location": location,
         "deliveryStatus": data.get("delivery_status") or "",
         "updatedAt": rider.get("last_updated_at") or "",
+        "trackingAvailable": bool(data.get("tracking_available")),
         "tracking": data,
         "data": data,
     }
@@ -6267,6 +6389,13 @@ def admin_login(payload: LoginPayload, request: Request):
 
 
 def update_worker_location(worker: DBDeliveryWorker, payload: LocationPingPayload, db) -> bool:
+    if not valid_tracking_coordinate(payload.latitude, payload.longitude):
+        print("TRACK_RIDER_INVALID_PING", json_dump({
+            "worker_id": getattr(worker, "id", None),
+            "latitude": payload.latitude,
+            "longitude": payload.longitude,
+        }))
+        raise HTTPException(status_code=400, detail="Invalid rider GPS coordinates")
     inside_zone = worker_inside_zone(worker, payload.latitude, payload.longitude, db)
     worker.latest_latitude = payload.latitude
     worker.latest_longitude = payload.longitude

@@ -46,7 +46,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   @override
   void initState() {
     super.initState();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       ref.invalidate(orderDetailProvider(widget.orderId));
       ref.invalidate(riderLocationProvider(widget.orderId));
     });
@@ -792,47 +792,38 @@ class _RiderTrackingCard extends StatelessWidget {
               'Tracking will appear when your rider picks up the order.',
             );
           }
+          if (!data.trackingAvailable ||
+              !data.hasRiderCoordinates ||
+              !data.hasCustomerCoordinates ||
+              data.routePolyline.length < 2) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _MutedText('Waiting for rider location...'),
+                if (order.riderPhone.trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _RiderContactButtons(
+                    onCallRider: onCallRider,
+                    onMessageRider: onMessageRider,
+                  ),
+                ],
+              ],
+            );
+          }
           final riderPoint = data.hasRiderCoordinates
               ? LatLng(data.riderLatitude!, data.riderLongitude!)
               : null;
           final customerPoint = data.hasCustomerCoordinates
               ? LatLng(data.customerLatitude!, data.customerLongitude!)
               : null;
-          final mapCenter =
-              riderPoint ?? customerPoint ?? const LatLng(6.5244, 3.3792);
-          final markers = <Marker>{};
-          if (riderPoint != null) {
-            markers.add(Marker(
-              markerId: const MarkerId('rider'),
-              position: riderPoint,
-              infoWindow: InfoWindow(
-                title: data.riderName.isEmpty ? 'Rider' : data.riderName,
-              ),
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueGreen,
-              ),
-            ));
-          }
-          if (customerPoint != null) {
-            markers.add(Marker(
-              markerId: const MarkerId('customer'),
-              position: customerPoint,
-              infoWindow: const InfoWindow(title: 'Delivery address'),
-            ));
-          }
           final routePoints = data.routePolyline
               .map((point) => LatLng(point['latitude']!, point['longitude']!))
               .toList();
-          final polylines = routePoints.length >= 2
-              ? {
-                  Polyline(
-                    polylineId: const PolylineId('route'),
-                    points: routePoints,
-                    width: 5,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                }
-              : <Polyline>{};
+          debugPrint(
+            'TRACK_RIDER_RENDER rider=${data.riderLatitude},${data.riderLongitude} '
+            'customer=${data.customerLatitude},${data.customerLongitude} '
+            'distance=${data.distanceMeters} eta=${data.etaMinutes}',
+          );
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -855,22 +846,12 @@ class _RiderTrackingCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
                 child: SizedBox(
                   height: 240,
-                  child: riderPoint == null && customerPoint == null
-                      ? const Center(
-                          child: _MutedText(
-                            'Waiting for rider GPS from the dispatch app.',
-                          ),
-                        )
-                      : GoogleMap(
-                          initialCameraPosition: CameraPosition(
-                            target: mapCenter,
-                            zoom: 13,
-                          ),
-                          markers: markers,
-                          polylines: polylines,
-                          zoomControlsEnabled: false,
-                          myLocationButtonEnabled: false,
-                        ),
+                  child: _TrackingMap(
+                    riderPoint: riderPoint!,
+                    customerPoint: customerPoint!,
+                    routePoints: routePoints,
+                    riderName: data.riderName,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -881,16 +862,12 @@ class _RiderTrackingCard extends StatelessWidget {
               const SizedBox(height: 8),
               _InfoRow(
                 label: 'ETA',
-                value: data.etaMinutes == null
-                    ? 'Estimating'
-                    : '~${data.etaMinutes} min',
+                value: _formatEta(data.etaMinutes),
               ),
               const SizedBox(height: 8),
               _InfoRow(
                 label: 'Last updated',
-                value: data.lastUpdatedAt.isEmpty
-                    ? 'Waiting for update'
-                    : data.lastUpdatedAt,
+                value: _formatRelativeTime(data.lastUpdatedAt),
               ),
               if (order.riderPhone.trim().isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -936,6 +913,118 @@ class _RiderContactButtons extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TrackingMap extends StatefulWidget {
+  const _TrackingMap({
+    required this.riderPoint,
+    required this.customerPoint,
+    required this.routePoints,
+    required this.riderName,
+  });
+
+  final LatLng riderPoint;
+  final LatLng customerPoint;
+  final List<LatLng> routePoints;
+  final String riderName;
+
+  @override
+  State<_TrackingMap> createState() => _TrackingMapState();
+}
+
+class _TrackingMapState extends State<_TrackingMap> {
+  GoogleMapController? _controller;
+
+  @override
+  void didUpdateWidget(covariant _TrackingMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.riderPoint != widget.riderPoint ||
+        oldWidget.customerPoint != widget.customerPoint) {
+      _fitBounds();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fitBounds() async {
+    final controller = _controller;
+    if (controller == null) return;
+    final south =
+        math.min(widget.riderPoint.latitude, widget.customerPoint.latitude);
+    final west =
+        math.min(widget.riderPoint.longitude, widget.customerPoint.longitude);
+    final north =
+        math.max(widget.riderPoint.latitude, widget.customerPoint.latitude);
+    final east =
+        math.max(widget.riderPoint.longitude, widget.customerPoint.longitude);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    if (!mounted) return;
+    try {
+      if ((north - south).abs() < 0.0001 && (east - west).abs() < 0.0001) {
+        await controller.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(target: widget.riderPoint, zoom: 16),
+          ),
+        );
+        return;
+      }
+      await controller.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(south, west),
+            northeast: LatLng(north, east),
+          ),
+          56,
+        ),
+      );
+    } catch (error) {
+      debugPrint('TRACK_RIDER_MAP_FIT_ERROR $error');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final markers = {
+      Marker(
+        markerId: const MarkerId('rider'),
+        position: widget.riderPoint,
+        infoWindow: InfoWindow(
+          title: widget.riderName.isEmpty ? 'Rider' : widget.riderName,
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      ),
+      Marker(
+        markerId: const MarkerId('customer'),
+        position: widget.customerPoint,
+        infoWindow: const InfoWindow(title: 'Delivery address'),
+      ),
+    };
+    final polylines = {
+      Polyline(
+        polylineId: const PolylineId('route'),
+        points: widget.routePoints,
+        width: 5,
+        color: scheme.primary,
+      ),
+    };
+    return GoogleMap(
+      initialCameraPosition:
+          CameraPosition(target: widget.riderPoint, zoom: 13),
+      markers: markers,
+      polylines: polylines,
+      zoomControlsEnabled: false,
+      myLocationButtonEnabled: false,
+      onMapCreated: (controller) {
+        _controller = controller;
+        _fitBounds();
+      },
     );
   }
 }
@@ -1311,9 +1400,31 @@ int _activeIndex(OrderSummary order) {
 }
 
 String _formatDistance(double? meters) {
-  if (meters == null) return 'Calculating';
+  if (meters == null) return 'Waiting for rider location...';
   if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
   return '${math.max(0, meters).round()} m';
+}
+
+String _formatEta(int? minutes) {
+  if (minutes == null) return 'Waiting for rider location...';
+  return '$minutes min';
+}
+
+String _formatRelativeTime(String value) {
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return 'Waiting for update';
+  final diff = DateTime.now().difference(parsed.toLocal());
+  if (diff.inSeconds < 45) return 'Just now';
+  if (diff.inMinutes < 60) {
+    final minutes = diff.inMinutes;
+    return '$minutes min${minutes == 1 ? '' : 's'} ago';
+  }
+  if (diff.inHours < 24) {
+    final hours = diff.inHours;
+    return '$hours hour${hours == 1 ? '' : 's'} ago';
+  }
+  final days = diff.inDays;
+  return '$days day${days == 1 ? '' : 's'} ago';
 }
 
 String _labelize(String value) {

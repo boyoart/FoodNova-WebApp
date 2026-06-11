@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,6 +15,7 @@ class RiderLocation {
   const RiderLocation({
     required this.deliveryStatus,
     required this.trackingVisible,
+    required this.trackingAvailable,
     required this.riderName,
     required this.riderPhone,
     required this.riderLatitude,
@@ -27,6 +30,7 @@ class RiderLocation {
 
   final String deliveryStatus;
   final bool trackingVisible;
+  final bool trackingAvailable;
   final String riderName;
   final String riderPhone;
   final double? riderLatitude;
@@ -72,6 +76,8 @@ class RiderLocation {
       trackingVisible: json['tracking_visible'] == true ||
           {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}
               .contains('${json['deliveryStatus'] ?? ''}'.toUpperCase()),
+      trackingAvailable: json['tracking_available'] == true ||
+          json['trackingAvailable'] == true,
       riderName: '${rider['name'] ?? ''}',
       riderPhone: '${rider['phone'] ?? ''}',
       riderLatitude:
@@ -150,6 +156,7 @@ class OrdersRepository {
     final body = response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};
+    developer.log('TRACK_RIDER_API_RESPONSE order=$orderId body=$body');
     final data = body['tracking'] is Map
         ? Map<String, dynamic>.from(body['tracking'])
         : body['data'] is Map
