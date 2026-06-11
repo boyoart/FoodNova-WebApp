@@ -757,6 +757,20 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     );
   }
 
+  String _documentDisplayName(
+    String fallback,
+    PlatformFile? file,
+    String uploadedUrl,
+  ) {
+    final localName = file?.name.trim() ?? '';
+    if (localName.isNotEmpty) return localName;
+    final uri = Uri.tryParse(uploadedUrl);
+    final remoteName = uri?.pathSegments.isNotEmpty == true
+        ? uri!.pathSegments.last.trim()
+        : '';
+    return remoteName.isEmpty ? fallback : remoteName;
+  }
+
   Widget _reviewStep() {
     debugPrint('NIN_REVIEW_MODEL ${jsonEncode(_onboardingDebugState())}');
     return Column(
@@ -778,17 +792,51 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
         _SummaryBadge(
             title: 'Documents Uploaded', complete: _documentsComplete),
         _SummaryBadge(title: 'Training Completed', complete: _trainingComplete),
-        const SizedBox(height: 14),
-        _ReviewLine(label: 'Selfie', value: '✓ Selfie Uploaded'),
-        _ReviewLine(
-            label: 'Driver License', value: '✓ Driver License Uploaded'),
-        _ReviewLine(
-            label: 'Proof Of Address', value: '✓ Proof Of Address Uploaded'),
-        const SizedBox(height: 8),
-        _ReviewLine(label: 'Rider type', value: _riderTypeLabel),
-        _ReviewLine(label: 'Phone', value: fields['phone']!.text.trim()),
-        _ReviewLine(label: 'Email', value: fields['email']!.text.trim()),
-        _ReviewLine(label: 'Address', value: _fullAddress),
+        const SizedBox(height: 16),
+        Text('Uploaded documents',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 10),
+        _DocumentReviewTile(
+          title: 'Selfie',
+          uploadedText: 'Selfie Uploaded',
+          fileName: _documentDisplayName('Selfie photo', null, selfieUrl),
+          file: selfie == null ? null : File(selfie!.path),
+          uploaded: selfie != null || selfieUrl.isNotEmpty,
+        ),
+        _DocumentReviewTile(
+          title: 'Driver License',
+          uploadedText: 'Driver License Uploaded',
+          fileName: _documentDisplayName(
+              'Driver license', driverLicense, driverLicenseUrl),
+          file: driverLicense?.path == null ? null : File(driverLicense!.path!),
+          uploaded: driverLicense != null || driverLicenseUrl.isNotEmpty,
+        ),
+        _DocumentReviewTile(
+          title: 'Proof Of Address',
+          uploadedText: 'Proof Of Address Uploaded',
+          fileName: _documentDisplayName(
+              'Proof of address', proofOfAddress, proofOfAddressUrl),
+          file:
+              proofOfAddress?.path == null ? null : File(proofOfAddress!.path!),
+          uploaded: proofOfAddress != null || proofOfAddressUrl.isNotEmpty,
+        ),
+        const SizedBox(height: 16),
+        FnCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _CompletionBadge(text: 'APPLICATION READY FOR SUBMISSION'),
+              const SizedBox(height: 14),
+              _ReviewLine(label: 'Rider type', value: _riderTypeLabel),
+              _ReviewLine(label: 'Phone', value: fields['phone']!.text.trim()),
+              _ReviewLine(label: 'Email', value: fields['email']!.text.trim()),
+              _ReviewLine(label: 'Address', value: _fullAddress),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1717,6 +1765,96 @@ class _UploadCard extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DocumentReviewTile extends StatelessWidget {
+  const _DocumentReviewTile({
+    required this.title,
+    required this.uploadedText,
+    required this.fileName,
+    required this.file,
+    required this.uploaded,
+  });
+
+  final String title;
+  final String uploadedText;
+  final String fileName;
+  final File? file;
+  final bool uploaded;
+
+  @override
+  Widget build(BuildContext context) {
+    final isImage = file != null && !file!.path.toLowerCase().endsWith('.pdf');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: FoodNovaColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: uploaded ? FoodNovaColors.success : FoodNovaColors.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              width: 64,
+              height: 64,
+              color: FoodNovaColors.surface2,
+              child: isImage
+                  ? Image.file(file!, fit: BoxFit.cover)
+                  : Icon(
+                      uploaded
+                          ? Icons.check_circle_outline
+                          : Icons.description_outlined,
+                      color: uploaded
+                          ? FoodNovaColors.success
+                          : FoodNovaColors.primary,
+                    ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                      color: FoodNovaColors.text,
+                      fontWeight: FontWeight.w900,
+                    )),
+                const SizedBox(height: 4),
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: FoodNovaColors.secondaryText,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _StatusPill(
+                  text: uploaded ? uploadedText : 'Missing document',
+                  color:
+                      uploaded ? FoodNovaColors.success : FoodNovaColors.danger,
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

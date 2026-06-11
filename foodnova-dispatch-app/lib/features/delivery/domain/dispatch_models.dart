@@ -12,12 +12,15 @@ class RiderProfile {
   String get accountStatus => '${raw['operational_status'] ?? 'OFFLINE'}';
   String get rejectionReason =>
       '${raw['rejection_reason'] ?? raw['deleted_reason'] ?? ''}'.trim();
-  bool get isApproved => normalizedKycStatus == 'APPROVED';
+  bool get isApproved =>
+      normalizedKycStatus == 'APPROVED' || normalizedKycStatus == 'ACTIVE';
   bool get isPendingReview => normalizedKycStatus == 'PENDING_REVIEW';
   bool get isOnboarding => normalizedKycStatus == 'ONBOARDING';
   bool get isRejected => normalizedKycStatus == 'REJECTED';
   bool get isSuspended => normalizedKycStatus == 'SUSPENDED';
   bool get isDeleted => normalizedKycStatus == 'DELETED';
+  String get submittedAt =>
+      '${raw['submitted_at'] ?? raw['application_submitted_at'] ?? raw['updated_at'] ?? raw['created_at'] ?? ''}';
   bool get onboardingCompleted => id != null && id! > 0;
   int get currentStep =>
       int.tryParse(
@@ -34,7 +37,10 @@ class RiderProfile {
       ((currentStep / onboardingStepTotal) * 100).round();
   String get onboardingStage => '${raw['onboarding_stage'] ?? ''}';
   bool get applicationSubmitted =>
-      isPendingReview || isApproved || normalizedKycStatus == 'REJECTED';
+      isPendingReview ||
+      isApproved ||
+      normalizedKycStatus == 'REJECTED' ||
+      raw['application_submitted'] == true;
   bool get shouldContinueOnboarding =>
       isOnboarding ||
       !applicationSubmitted ||

@@ -2048,7 +2048,7 @@ def as_naive_utc(value: datetime) -> datetime:
 def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
     worker_type = (worker.worker_type or "messenger").lower()
     deleted = bool(getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED")
-    approved = (worker.kyc_status or "") == "APPROVED" and not deleted
+    approved = (worker.kyc_status or "") in {"APPROVED", "ACTIVE"} and not deleted
     online = (worker.operational_status or "") in ["ONLINE", "ASSIGNED", "ON_DELIVERY"]
     gps_recent = worker_has_recent_gps(worker)
     is_messenger = worker_type == "messenger"
@@ -2120,7 +2120,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     admin_override = review_meta.get("admin_override") or {}
     rejection_reason = admin_override.get("note") or identity_meta.get("rejection_reason") or review_meta.get("rejection_reason") or ""
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
-    rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if (worker.kyc_status or "") == "APPROVED" else "rejected" if (worker.kyc_status or "") == "REJECTED" else "suspended" if (worker.kyc_status or "") == "SUSPENDED" else "deactivated" if (worker.kyc_status or "") == "DEACTIVATED" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
+    rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if (worker.kyc_status or "") in {"APPROVED", "ACTIVE"} else "rejected" if (worker.kyc_status or "") == "REJECTED" else "suspended" if (worker.kyc_status or "") == "SUSPENDED" else "deactivated" if (worker.kyc_status or "") == "DEACTIVATED" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
     current_step = rider_onboarding_step_for_stage(rider_stage)
     progress_percent = rider_onboarding_progress_percent(current_step)
     return {
@@ -2191,8 +2191,8 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "assignment_eligibility_reason": assignment_policy["reason"],
         "can_receive_delivery_notifications": assignment_policy["can_receive_delivery_notifications"],
         "can_accept_delivery_requests": assignment_policy["can_accept_delivery_requests"],
-        "can_go_online": (worker.kyc_status or "") == "APPROVED",
-        "wallet_enabled": (worker.kyc_status or "") == "APPROVED",
+        "can_go_online": (worker.kyc_status or "") in {"APPROVED", "ACTIVE"},
+        "wallet_enabled": (worker.kyc_status or "") in {"APPROVED", "ACTIVE"},
         "gps_ping_interval_seconds": assignment_policy["gps_ping_interval_seconds"],
         "active_delivery_ping_interval_seconds": assignment_policy["active_delivery_ping_interval_seconds"],
         "approved_at": iso(worker.approved_at),
@@ -2421,7 +2421,7 @@ def worker_has_active_assignment(db, worker: DBDeliveryWorker, exclude_offer_id:
 def worker_eligible_for_offer(db, worker: DBDeliveryWorker, delivery_type: str, exclude_offer_id: Optional[int] = None) -> bool:
     if delivery_worker_access_block_reason(worker):
         return False
-    if worker.kyc_status != "APPROVED" or worker.operational_status != "ONLINE":
+    if worker.kyc_status not in {"APPROVED", "ACTIVE"} or worker.operational_status != "ONLINE":
         return False
     if worker_has_active_assignment(db, worker, exclude_offer_id):
         return False
@@ -2441,7 +2441,7 @@ def find_available_delivery_worker(db, delivery_type: str, excluded_worker_ids: 
     for worker_type in type_order:
         workers = db.query(DBDeliveryWorker).filter(
             DBDeliveryWorker.worker_type == worker_type,
-            DBDeliveryWorker.kyc_status == "APPROVED",
+            DBDeliveryWorker.kyc_status.in_(["APPROVED", "ACTIVE"]),
             DBDeliveryWorker.operational_status == "ONLINE",
             DBDeliveryWorker.deleted_at.is_(None),
         ).order_by(DBDeliveryWorker.last_seen_at.desc(), DBDeliveryWorker.id.asc()).all()
@@ -2907,7 +2907,7 @@ def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker, reques
         progress = onboarding_progress_payload(db, attached_worker) if attached_worker else {}
     finally:
         db.close()
-    requires_verification = (worker.kyc_status or "") != "APPROVED"
+    requires_verification = (worker.kyc_status or "") not in {"APPROVED", "ACTIVE"}
     print("RIDER_LOGIN_SUCCESS", json_dump({
         "worker_id": worker.id,
         "user_id": user.id,
@@ -3107,7 +3107,7 @@ def onboarding_progress_payload(db, worker: DBDeliveryWorker) -> dict:
         "profile_data": profile_data,
         "documents": documents,
         "training_completed": (kyc.onboarding_stage if kyc else "") in {"training_completed", "admin_review", "approved"},
-        "application_submitted": (worker.kyc_status or "") in {"PENDING_REVIEW", "APPROVED", "REJECTED"} or (kyc.onboarding_stage if kyc else "") in {"admin_review", "approved", "rejected"},
+        "application_submitted": (worker.kyc_status or "") in {"PENDING_REVIEW", "APPROVED", "ACTIVE", "REJECTED"} or (kyc.onboarding_stage if kyc else "") in {"admin_review", "approved", "rejected"},
         "approval_status": worker.kyc_status or "ONBOARDING",
         "onboarding_stage": kyc.onboarding_stage if kyc else "account_created",
         "last_updated": iso((kyc.updated_at if kyc else None) or worker.updated_at),
@@ -3227,7 +3227,7 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
         kyc.emergency_contact_added_at = kyc.emergency_contact_added_at or datetime.utcnow()
     if kyc.selfie_status == "verified":
         kyc.selfie_verified_at = kyc.selfie_verified_at or datetime.utcnow()
-    if (worker.kyc_status or "") == "APPROVED":
+    if (worker.kyc_status or "") in {"APPROVED", "ACTIVE"}:
         stage = "approved"
     elif (worker.kyc_status or "") == "REJECTED":
         stage = "rejected"
@@ -3576,7 +3576,7 @@ def verification_status_response(worker: DBDeliveryWorker) -> dict:
     identity = meta.get("identity_verification") or {}
     address = meta.get("address_verification") or {}
     emergency = meta.get("emergency_contact") or {}
-    worker_approved = (worker.kyc_status or "") == "APPROVED"
+    worker_approved = (worker.kyc_status or "") in {"APPROVED", "ACTIVE"}
     submitted_statuses = {"submitted", "pending_review", "verified", "approved", "completed"}
     identity_status = "approved" if worker_approved else identity.get("status") or "not_started"
     address_status = "verified" if worker_approved else address.get("status") or "not_started"
@@ -5319,7 +5319,7 @@ def delivery_auth_check_phone(payload: DeliveryAuthCheckPhonePayload):
             "success": True,
             "exists": bool(worker),
             "phone_number": phone,
-            "requires_verification": bool(worker and (worker.kyc_status or "") != "APPROVED"),
+            "requires_verification": bool(worker and (worker.kyc_status or "") not in {"APPROVED", "ACTIVE"}),
             "approval_status": worker.kyc_status if worker else None,
         }
     finally:
@@ -6090,7 +6090,7 @@ def delivery_me(request: Request):
 def messenger_go_online(payload: LocationPingPayload, request: Request):
     db, user, worker = get_current_worker_record(request, "messenger")
     try:
-        if worker.kyc_status != "APPROVED":
+        if worker.kyc_status not in {"APPROVED", "ACTIVE"}:
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
         if not payload_has_recent_timestamp(payload):
             worker.operational_status = "OFFLINE"
@@ -6115,7 +6115,7 @@ def messenger_go_online(payload: LocationPingPayload, request: Request):
 def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = None):
     db, user, worker = get_current_worker_record(request, "rider")
     try:
-        if worker.kyc_status != "APPROVED":
+        if worker.kyc_status not in {"APPROVED", "ACTIVE"}:
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
         if payload:
             if payload_has_recent_timestamp(payload):
@@ -6153,7 +6153,7 @@ def delivery_go_offline(request: Request):
 def delivery_location_ping(payload: LocationPingPayload, request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
-        if worker.kyc_status != "APPROVED":
+        if worker.kyc_status not in {"APPROVED", "ACTIVE"}:
             raise HTTPException(status_code=403, detail="Delivery account is not approved.")
         if not payload_has_recent_timestamp(payload):
             raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds.")
@@ -7121,7 +7121,7 @@ def get_eligible_delivery_workforce(request: Request, delivery_type: Optional[st
     db = SessionLocal()
     try:
         workers = db.query(DBDeliveryWorker).filter(
-            DBDeliveryWorker.kyc_status == "APPROVED",
+            DBDeliveryWorker.kyc_status.in_(["APPROVED", "ACTIVE"]),
             DBDeliveryWorker.deleted_at.is_(None),
         ).all()
         eligible_workers = []
@@ -7899,7 +7899,7 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         ).first()
         if not rider:
             raise HTTPException(status_code=404, detail="Rider not found")
-        if (rider.kyc_status or "") != "APPROVED":
+        if (rider.kyc_status or "") not in {"APPROVED", "ACTIVE"}:
             raise HTTPException(status_code=400, detail="Rider must be approved before assignment")
 
         order.rider_id = rider.id

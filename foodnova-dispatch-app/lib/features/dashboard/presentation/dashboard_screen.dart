@@ -26,6 +26,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = ref.watch(riderProfileProvider);
+    final riderForNavigation = profile.valueOrNull;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Dispatch'),
@@ -87,6 +88,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (i) {
+          if (riderForNavigation != null && !riderForNavigation.isApproved) {
+            final blocked = i == 1 || i == 2;
+            if (blocked) {
+              setState(() {
+                error = riderForNavigation.applicationSubmitted
+                    ? 'Dashboard tools unlock after admin approval.'
+                    : 'Complete onboarding before using dispatch tools.';
+              });
+              return;
+            }
+          }
           if (i == 1) {
             context.go('/earnings');
           }
@@ -236,26 +248,28 @@ class _AccessLockedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isRejected = rider.isRejected;
     final isSuspended = rider.isSuspended;
+    final isSubmitted =
+        rider.applicationSubmitted && !rider.shouldContinueOnboarding;
     final displayStatus = rider.kycStatus == 'PENDING_REVIEW'
         ? 'Pending Review'
         : rider.kycStatus.replaceAll('_', ' ');
     final continueOnboarding = rider.shouldContinueOnboarding;
-    final title = continueOnboarding
-        ? 'Pending Review'
-        : isRejected
-            ? 'Application rejected'
-            : isSuspended
-                ? 'Account suspended'
-                : 'Pending Review';
-    final detail = continueOnboarding
-        ? 'Your rider setup is saved. Continue onboarding to submit your application for FoodNova admin review.'
-        : isRejected
-            ? (rider.rejectionReason.isEmpty
-                ? 'FoodNova admin rejected this application. Update your documents and resubmit when requested.'
-                : rider.rejectionReason)
-            : isSuspended
-                ? 'FoodNova has temporarily blocked dashboard access. Contact support for the next step.'
-                : 'FoodNova admin is reviewing your verified NIN, selfie, and driver license before unlocking deliveries.';
+    final title = isRejected
+        ? 'Application rejected'
+        : isSuspended
+            ? 'Account suspended'
+            : isSubmitted
+                ? 'Application Submitted'
+                : 'Continue Onboarding';
+    final detail = isRejected
+        ? (rider.rejectionReason.isEmpty
+            ? 'FoodNova admin rejected this application. Update your documents and resubmit when requested.'
+            : rider.rejectionReason)
+        : isSuspended
+            ? 'FoodNova has temporarily blocked dashboard access. Contact support for the next step.'
+            : isSubmitted
+                ? 'Awaiting Admin Review. FoodNova operations will review your application in 24-72 hours.'
+                : 'Your rider setup is saved. Continue onboarding to submit your application for FoodNova admin review.';
     return FnCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -306,6 +320,19 @@ class _AccessLockedCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(detail),
+          if (isSubmitted) ...[
+            const SizedBox(height: 10),
+            _ReviewStatusRow(
+              label: 'Submission Date',
+              value: rider.submittedAt.isEmpty
+                  ? 'Saved by backend'
+                  : rider.submittedAt,
+            ),
+            const _ReviewStatusRow(
+              label: 'Estimated Review Time',
+              value: '24-72 hours',
+            ),
+          ],
           if (!isRejected && !isSuspended) ...[
             const SizedBox(height: 14),
             const _LockedCapabilities(),
@@ -341,6 +368,7 @@ class _LockedCapabilities extends StatelessWidget {
       'Go Online disabled',
       'Accept Orders disabled',
       'Receive Deliveries disabled',
+      'Earnings disabled',
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,6 +397,39 @@ class _LockedCapabilities extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _ReviewStatusRow extends StatelessWidget {
+  const _ReviewStatusRow({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 150,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: FoodNovaColors.secondaryText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

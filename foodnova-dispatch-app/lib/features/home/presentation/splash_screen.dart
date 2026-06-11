@@ -54,6 +54,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       if (!mounted) return;
       final destination = completed &&
               approvalStatus != 'APPROVED' &&
+              approvalStatus != 'ACTIVE' &&
               approvalStatus.trim().isNotEmpty
           ? '/pending-review'
           : currentStep > 1
