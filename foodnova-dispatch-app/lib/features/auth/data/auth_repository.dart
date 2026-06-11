@@ -6,12 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/state/session_controller.dart';
+import '../../../services/notification_service.dart';
+import '../../notifications/data/notifications_repository.dart';
 
 final authRepositoryProvider = Provider(AuthRepository.new);
 
 class AuthRepository {
   AuthRepository(this.ref);
   final Ref ref;
+  static bool _pushRefreshListenerAttached = false;
 
   Dio get _dio => ref.read(dioProvider);
 
@@ -108,6 +111,7 @@ class AuthRepository {
         );
     debugPrint('RIDER_LOGIN_SUCCESS ${profile['id']}');
     debugPrint('RIDER_APPROVAL_STATUS $liveApprovalStatus');
+    await _registerPushToken();
   }
 
   Future<void> forgotPassword(String email) async {
@@ -369,6 +373,7 @@ class AuthRepository {
       debugPrint('SUBMIT_COMPLETED worker_id=${worker['id']}');
       debugPrint(
           'RIDER_APPROVAL_STATUS ${worker['kyc_status'] ?? 'PENDING_REVIEW'}');
+      await _registerPushToken();
     } else {
       debugPrint('RIDER_STATUS_UPDATE_FAILURE worker_missing=true');
       debugPrint('PENDING_REVIEW_SAVE_FAILURE worker_missing=true');
@@ -383,6 +388,24 @@ class AuthRepository {
       // Local session clearing still needs to happen when the token is stale.
     }
     await ref.read(sessionControllerProvider.notifier).clear();
+  }
+
+  Future<void> _registerPushToken() async {
+    final token = await DispatchNotificationService.currentToken();
+    if (token != null && token.trim().isNotEmpty) {
+      await ref.read(notificationsRepositoryProvider).registerFcmToken(token);
+    }
+    if (!_pushRefreshListenerAttached) {
+      _pushRefreshListenerAttached = true;
+      DispatchNotificationService.tokenRefreshStream.listen((nextToken) {
+        ref
+            .read(notificationsRepositoryProvider)
+            .registerFcmToken(nextToken)
+            .catchError((error) {
+          debugPrint('DISPATCH_FCM_TOKEN_REFRESH_FAILED $error');
+        });
+      });
+    }
   }
 }
 

@@ -14,6 +14,12 @@ class RiderProfile {
       '${raw['rejection_reason'] ?? raw['deleted_reason'] ?? ''}'.trim();
   bool get isApproved =>
       normalizedKycStatus == 'APPROVED' || normalizedKycStatus == 'ACTIVE';
+  bool get dashboardAccessAllowed =>
+      raw['dashboard_access_allowed'] == true ||
+      (isApproved &&
+          raw['nin_verified'] == true &&
+          raw['documents_uploaded'] == true &&
+          raw['profile_completed'] == true);
   bool get isPendingReview => normalizedKycStatus == 'PENDING_REVIEW';
   bool get isOnboarding => normalizedKycStatus == 'ONBOARDING';
   bool get isRejected => normalizedKycStatus == 'REJECTED';

@@ -6,40 +6,37 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 
-import '../firebase_options.dart';
-
 @pragma('vm:entry-point')
-Future<void> foodNovaFirebaseMessagingBackgroundHandler(
-    RemoteMessage message) async {
+Future<void> foodNovaDispatchFirebaseMessagingBackgroundHandler(
+  RemoteMessage message,
+) async {
   try {
     if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
+      await Firebase.initializeApp();
     }
   } catch (error) {
-    // Native Firebase config is injected per release environment.
-    debugPrint('[FoodNova Push] background Firebase skipped: $error');
+    debugPrint('[FoodNova Dispatch Push] background Firebase skipped: $error');
   }
 }
 
-class NotificationService {
+class DispatchNotificationService {
   static bool _bootstrapped = false;
-  static bool _routerAttached = false;
   static bool _firebaseReady = false;
+  static bool _routerAttached = false;
   static bool _localNotificationsReady = false;
-  static String? _pendingLocalPayload;
+  static String? _pendingPayload;
   static GoRouter? _router;
   static final StreamController<void> _refreshController =
       StreamController<void>.broadcast();
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
-  static const AndroidNotificationChannel _androidChannel =
+
+  static const AndroidNotificationChannel _deliveryChannel =
       AndroidNotificationChannel(
-    'foodnova_customer_updates',
-    'FoodNova updates',
-    description: 'Order, payment, promotion, and delivery updates.',
-    importance: Importance.high,
+    'foodnova_dispatch_delivery',
+    'FoodNova dispatch alerts',
+    description: 'Delivery assignments, updates, cancellations, and messages.',
+    importance: Importance.max,
     playSound: true,
     enableVibration: true,
   );
@@ -50,32 +47,34 @@ class NotificationService {
     _firebaseReady = firebaseReady;
     try {
       await _localNotifications.initialize(
-        InitializationSettings(
+        const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
           iOS: DarwinInitializationSettings(),
         ),
         onDidReceiveNotificationResponse: (response) {
-          final payload = response.payload;
           final router = _router;
           if (router == null) {
-            _pendingLocalPayload = payload;
+            _pendingPayload = response.payload;
             return;
           }
-          _routeFromPayload(router, payload);
+          _routeFromPayload(router, response.payload);
         },
       );
       _localNotificationsReady = true;
       await _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
-          ?.createNotificationChannel(_androidChannel);
-      if (!_firebaseReady) {
+          ?.createNotificationChannel(_deliveryChannel);
+
+      if (!_firebaseReady || Firebase.apps.isEmpty) {
         debugPrint(
-            '[FoodNova Push] Firebase not configured; push notifications disabled for this build.');
+          '[FoodNova Dispatch Push] Firebase not configured; push disabled.',
+        );
         return;
       }
       FirebaseMessaging.onBackgroundMessage(
-          foodNovaFirebaseMessagingBackgroundHandler);
+        foodNovaDispatchFirebaseMessagingBackgroundHandler,
+      );
       await FirebaseMessaging.instance.requestPermission(
         alert: true,
         badge: true,
@@ -92,8 +91,7 @@ class NotificationService {
         _refreshController.add(null);
       });
     } catch (error) {
-      // Firebase options are environment-specific and will be wired during Android release setup.
-      debugPrint('[FoodNova Push] bootstrap skipped: $error');
+      debugPrint('[FoodNova Dispatch Push] bootstrap skipped: $error');
     }
   }
 
@@ -102,7 +100,7 @@ class NotificationService {
     try {
       return await FirebaseMessaging.instance.getToken();
     } catch (error) {
-      debugPrint('[FoodNova Push] token unavailable: $error');
+      debugPrint('[FoodNova Dispatch Push] token unavailable: $error');
       return null;
     }
   }
@@ -118,9 +116,9 @@ class NotificationService {
     _router = router;
     if (_routerAttached) return;
     _routerAttached = true;
-    if (_pendingLocalPayload != null) {
-      _routeFromPayload(router, _pendingLocalPayload);
-      _pendingLocalPayload = null;
+    if (_pendingPayload != null) {
+      _routeFromPayload(router, _pendingPayload);
+      _pendingPayload = null;
     }
     if (!_firebaseReady || Firebase.apps.isEmpty) return;
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
@@ -140,15 +138,15 @@ class NotificationService {
     if (title.trim().isEmpty && body.trim().isEmpty) return;
     await _localNotifications.show(
       message.hashCode,
-      title.trim().isEmpty ? 'FoodNova update' : title,
+      title.trim().isEmpty ? 'FoodNova delivery update' : title,
       body,
       NotificationDetails(
         android: AndroidNotificationDetails(
-          _androidChannel.id,
-          _androidChannel.name,
-          channelDescription: _androidChannel.description,
-          importance: Importance.high,
-          priority: Priority.high,
+          _deliveryChannel.id,
+          _deliveryChannel.name,
+          channelDescription: _deliveryChannel.description,
+          importance: Importance.max,
+          priority: Priority.max,
           playSound: true,
           enableVibration: true,
           icon: '@mipmap/ic_launcher',
@@ -159,19 +157,20 @@ class NotificationService {
           presentBadge: true,
         ),
       ),
-      payload: message.data['order_id'] == null
-          ? '/notifications'
-          : '/tracking/${message.data['order_id']}',
+      payload: _targetFromData(message.data),
     );
   }
 
   static void _routeFromMessage(GoRouter router, RemoteMessage message) {
-    final orderId = '${message.data['order_id'] ?? ''}'.trim();
-    if (orderId.isNotEmpty && orderId != 'null') {
-      Future<void>.microtask(() => router.go('/tracking/$orderId'));
-      return;
-    }
-    Future<void>.microtask(() => router.go('/notifications'));
+    _routeFromPayload(router, _targetFromData(message.data));
+  }
+
+  static String _targetFromData(Map<String, dynamic> data) {
+    final orderId = '${data['order_id'] ?? ''}'.trim();
+    final offerId = '${data['offer_id'] ?? ''}'.trim();
+    if (orderId.isNotEmpty && orderId != 'null') return '/orders';
+    if (offerId.isNotEmpty && offerId != 'null') return '/orders';
+    return '/notifications';
   }
 
   static void _routeFromPayload(GoRouter router, String? payload) {

@@ -10,6 +10,7 @@ import '../../../core/widgets/fn_widgets.dart';
 import '../../auth/presentation/onboarding_progress_stepper.dart';
 import '../../delivery/data/dispatch_repository.dart';
 import '../../delivery/domain/dispatch_models.dart';
+import '../../notifications/data/notifications_repository.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -25,6 +26,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(notificationRefreshProvider, (_, __) {
+      ref.invalidate(deliveryOffersProvider);
+      ref.invalidate(riderProfileProvider);
+    });
     final profile = ref.watch(riderProfileProvider);
     final riderForNavigation = profile.valueOrNull;
     return Scaffold(
@@ -55,7 +60,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 debugPrint('Rider ID ${rider.id ?? ''}');
                 debugPrint('Rider Name ${rider.name}');
                 debugPrint('Data source backend');
-                if (!rider.isApproved) {
+                if (!rider.dashboardAccessAllowed) {
                   return _AccessLockedCard(rider: rider);
                 }
                 return Column(
@@ -88,7 +93,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: 0,
         onDestinationSelected: (i) {
-          if (riderForNavigation != null && !riderForNavigation.isApproved) {
+          if (riderForNavigation != null &&
+              !riderForNavigation.dashboardAccessAllowed) {
             final blocked = i == 1 || i == 2;
             if (blocked) {
               setState(() {
@@ -132,11 +138,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _toggleOnline(RiderProfile rider) async {
-    if (!rider.isApproved) {
+    if (!rider.dashboardAccessAllowed) {
       setState(() {
         error = rider.isRejected
             ? 'Your rider account was rejected.${rider.rejectionReason.isEmpty ? '' : ' ${rider.rejectionReason}'}'
-            : 'Your rider account is still pending approval.';
+            : 'Complete onboarding requirements before going online.';
       });
       return;
     }
@@ -477,12 +483,13 @@ class _Header extends StatelessWidget {
               backgroundColor:
                   online ? FoodNovaColors.success : FoodNovaColors.offline,
             ),
-            onPressed: loading || !rider.isApproved ? null : onToggle,
+            onPressed:
+                loading || !rider.dashboardAccessAllowed ? null : onToggle,
             icon: Icon(online ? Icons.toggle_on : Icons.toggle_off),
             label: Text(
               loading
                   ? 'Updating...'
-                  : !rider.isApproved
+                  : !rider.dashboardAccessAllowed
                       ? rider.isRejected
                           ? 'Rejected'
                           : 'Pending Approval'

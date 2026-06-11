@@ -74,7 +74,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       debugPrint('PROFILE EXISTS: true');
       debugPrint('PROFILE SOURCE: backend');
       debugPrint('APPROVAL STATUS: ${rider.kycStatus}');
-      if (rider.isDeleted || rider.isSuspended) {
+      if (rider.isDeleted) {
         debugPrint('TOKEN_INVALID reason=rider_deleted_or_suspended');
         await ref.read(sessionControllerProvider.notifier).clear();
         if (!mounted) return;
@@ -82,11 +82,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         context.go('/login');
         return;
       }
-      final destination = rider.shouldContinueOnboarding
-          ? '/signup'
-          : rider.isPendingReview
-              ? '/pending-review'
-              : '/dashboard';
+      final destination = rider.isSuspended
+          ? '/suspended'
+          : rider.normalizedKycStatus == 'DEACTIVATED' ||
+                  rider.normalizedKycStatus == 'INACTIVE'
+              ? '/deactivated'
+              : rider.shouldContinueOnboarding
+                  ? '/signup'
+                  : rider.isPendingReview
+                      ? '/pending-review'
+                      : '/dashboard';
       debugPrint(
           'ROUTE_REDIRECT reason=authenticated_and_valid destination=$destination');
       context.go(destination);

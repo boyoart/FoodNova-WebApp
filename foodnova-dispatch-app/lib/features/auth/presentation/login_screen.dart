@@ -120,11 +120,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final status = '${diagnostics['approval_status'] ?? ''}'.toUpperCase();
       final step = int.tryParse('${diagnostics['current_step'] ?? 1}') ?? 1;
       final incomplete = status == 'ONBOARDING' || step < 7;
-      final destination = incomplete
-          ? '/signup'
-          : status == 'PENDING_REVIEW'
-              ? '/pending-review'
-              : '/dashboard';
+      final destination = status == 'SUSPENDED'
+          ? '/suspended'
+          : status == 'DEACTIVATED' || status == 'INACTIVE'
+              ? '/deactivated'
+              : incomplete
+                  ? '/signup'
+                  : status == 'PENDING_REVIEW'
+                      ? '/pending-review'
+                      : '/dashboard';
       debugPrint(
           'RIDER_LOGIN_SUCCESS route_redirect=$destination current_step=$step status=$status');
       if (mounted) context.go(destination);

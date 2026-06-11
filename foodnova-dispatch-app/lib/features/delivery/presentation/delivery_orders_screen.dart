@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/widgets/fn_widgets.dart';
+import '../../notifications/data/notifications_repository.dart';
 import '../data/dispatch_repository.dart';
 import '../domain/dispatch_models.dart';
 
@@ -13,6 +14,9 @@ class DeliveryOrdersScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(notificationRefreshProvider, (_, __) {
+      ref.invalidate(deliveryOrdersProvider);
+    });
     final orders = ref.watch(deliveryOrdersProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Assigned Orders')),
@@ -80,7 +84,7 @@ class _DeliveryOrderCard extends StatelessWidget {
             const SizedBox(height: 14),
             FilledButton.icon(
               onPressed: () =>
-                  context.go('/active-delivery', extra: order.asOffer().raw),
+                  context.push('/active-delivery', extra: order.asOffer().raw),
               icon: const Icon(Icons.local_shipping_outlined),
               label: const Text('Open Delivery Workflow'),
             ),

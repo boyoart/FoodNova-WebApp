@@ -20,6 +20,10 @@ final sessionControllerProvider =
     AsyncNotifierProvider<SessionController, bool>(SessionController.new);
 
 class SessionController extends AsyncNotifier<bool> {
+  Map<String, dynamic> _cachedDiagnostics = const {};
+
+  Map<String, dynamic> get cachedDiagnosticsOrEmpty => _cachedDiagnostics;
+
   @override
   Future<bool> build() async {
     final token = await this.token();
@@ -37,7 +41,7 @@ class SessionController extends AsyncNotifier<bool> {
   Future<Map<String, dynamic>> diagnostics() async {
     final token = await this.token();
     final prefs = await SharedPreferences.getInstance();
-    return {
+    _cachedDiagnostics = {
       'token_present': token != null && token.isNotEmpty,
       'token_length': token?.length ?? 0,
       'token_preview': token == null || token.isEmpty
@@ -51,6 +55,7 @@ class SessionController extends AsyncNotifier<bool> {
       'profile_source': prefs.getString(_profileSourceKey) ?? '',
       'last_api_response': prefs.getString(_lastApiResponseKey) ?? '',
     };
+    return _cachedDiagnostics;
   }
 
   Future<void> recordLastApiResponse(String value) async {
@@ -133,6 +138,15 @@ class SessionController extends AsyncNotifier<bool> {
       _currentOnboardingStepKey,
       currentStep.clamp(1, 7).toInt(),
     );
+    _cachedDiagnostics = {
+      ..._cachedDiagnostics,
+      'rider_id': riderId,
+      'approval_status': approvalStatus,
+      'onboarding_complete': onboardingCompleted,
+      'profile_exists': profileExists,
+      'profile_source': profileSource,
+      'current_step': currentStep.clamp(1, 7).toInt(),
+    };
   }
 
   Future<void> markProfileMissing({String profileSource = 'backend'}) async {
@@ -155,6 +169,7 @@ class SessionController extends AsyncNotifier<bool> {
       await ref.read(secureStorageProvider).delete(key: _onboardingDraftKey);
       await ref.read(secureStorageProvider).delete(key: _verifiedIdentityKey);
     }
+    _cachedDiagnostics = const {};
     state = const AsyncData(false);
   }
 

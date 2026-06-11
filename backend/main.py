@@ -1316,6 +1316,7 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         data = notification_to_dict(notif)
         user = db.query(DBUser).filter(func.lower(DBUser.email) == email).first()
         if user:
+            is_dispatch_user = (getattr(user, "role", "") or "") in {"rider", "messenger"}
             tokens = []
             if getattr(user, "fcm_token", ""):
                 tokens.append(user.fcm_token)
@@ -1328,6 +1329,11 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
                     "category": category,
                     "notification_id": str(notif.id),
                     "order_id": str(order.get("id") if order else ""),
+                    "title": title,
+                    "body": message,
+                    "sound": "default",
+                    "android_channel_id": "foodnova_dispatch_delivery" if is_dispatch_user else "foodnova_customer_updates",
+                    "android_click_action": "OPEN_WORKER_DASHBOARD" if is_dispatch_user else "OPEN_FOODNOVA",
                     "click_action": "/notifications",
                 })
         return data
@@ -1568,7 +1574,12 @@ def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) ->
                 notification=messaging.Notification(title=title, body=body),
                 data=data,
                 webpush=messaging.WebpushConfig(fcm_options=messaging.WebpushFCMOptions(link=data.get("click_action") or "/")),
-                android=messaging.AndroidConfig(notification=messaging.AndroidNotification(click_action="OPEN_WORKER_DASHBOARD")),
+                android=messaging.AndroidConfig(notification=messaging.AndroidNotification(
+                    click_action=data.get("android_click_action") or "OPEN_FOODNOVA",
+                    channel_id=data.get("android_channel_id") or "foodnova_customer_updates",
+                    sound=data.get("sound") or "default",
+                )),
+                apns=messaging.APNSConfig(payload=messaging.APNSPayload(aps=messaging.Aps(sound=data.get("sound") or "default"))),
             ))
             return True
         except Exception as error:
@@ -1579,7 +1590,7 @@ def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) ->
         return False
     payload = json.dumps({
         "to": token,
-        "notification": {"title": title, "body": body, "click_action": data.get("click_action") or "/"},
+        "notification": {"title": title, "body": body, "click_action": data.get("click_action") or "/", "sound": data.get("sound") or "default"},
         "data": data,
     }).encode("utf-8")
     request_obj = urllib.request.Request(
@@ -1615,6 +1626,9 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
                 "offer_id": offer.id,
                 "order_id": offer.order_id,
                 "worker_type": offer.worker_type,
+                "sound": "default",
+                "android_channel_id": "foodnova_dispatch_delivery",
+                "android_click_action": "OPEN_WORKER_DASHBOARD",
                 "click_action": "/rider/dashboard" if offer.worker_type == "rider" else "/messenger/dashboard",
             },
         )
@@ -2116,7 +2130,7 @@ def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
     promote_verified_approved_rider(worker)
     deleted = bool(getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED")
     approved = rider_lifecycle_status(worker) == "ACTIVE" and not deleted
-    online = (worker.operational_status or "") in ["ONLINE", "ASSIGNED", "ON_DELIVERY"]
+    online = (worker.operational_status or "") in ["ONLINE", "BUSY"]
     gps_recent = worker_has_recent_gps(worker)
     is_messenger = worker_type == "messenger"
     inside_zone = bool(worker.inside_zone)
@@ -2192,6 +2206,17 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if lifecycle_status == "ACTIVE" else "suspended" if lifecycle_status == "SUSPENDED" else "deactivated" if lifecycle_status == "INACTIVE" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
     current_step = rider_onboarding_step_for_stage(rider_stage)
     progress_percent = rider_onboarding_progress_percent(current_step)
+    documents_complete = bool(
+        getattr(worker, "selfie_url", None)
+        and getattr(worker, "id_document_url", None)
+        and (address_meta.get("status") or "") in submitted_statuses
+    )
+    profile_completed = bool(
+        (identity_meta.get("status") or "") in submitted_statuses
+        and (emergency_meta.get("status") or "") in submitted_statuses
+        and (worker.full_name or "").strip()
+        and (worker.phone or "").strip()
+    )
     return {
         "id": worker.id,
         "user_id": worker.user_id,
@@ -2223,6 +2248,14 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "selfie_url": getattr(worker, "selfie_url", "") or "",
         "profile_photo_url": worker.profile_photo_url or "",
         "id_document_url": worker.id_document_url or "",
+        "documents_uploaded": documents_complete,
+        "profile_completed": profile_completed,
+        "dashboard_access_allowed": bool(
+            lifecycle_status == "ACTIVE"
+            and getattr(worker, "nin_verified", False)
+            and documents_complete
+            and profile_completed
+        ),
         "vehicle_type": worker.vehicle_type or "",
         "rider_type": identity_meta.get("rider_type") or ("walking" if (worker.worker_type or "") == "messenger" else "motorcycle"),
         "partner_company": getattr(worker, "partner_company", "") or "",
@@ -2260,7 +2293,12 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "assignment_eligibility_reason": assignment_policy["reason"],
         "can_receive_delivery_notifications": assignment_policy["can_receive_delivery_notifications"],
         "can_accept_delivery_requests": assignment_policy["can_accept_delivery_requests"],
-        "can_go_online": lifecycle_status == "ACTIVE",
+        "can_go_online": bool(
+            lifecycle_status == "ACTIVE"
+            and getattr(worker, "nin_verified", False)
+            and documents_complete
+            and profile_completed
+        ),
         "wallet_enabled": lifecycle_status == "ACTIVE",
         "gps_ping_interval_seconds": assignment_policy["gps_ping_interval_seconds"],
         "active_delivery_ping_interval_seconds": assignment_policy["active_delivery_ping_interval_seconds"],
@@ -2274,6 +2312,31 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "created_at": iso(worker.created_at),
         "updated_at": iso(worker.updated_at),
     }
+
+
+def worker_dashboard_access_allowed(worker: DBDeliveryWorker) -> bool:
+    review_meta = delivery_worker_review_meta(worker)
+    identity_meta = review_meta.get("identity_verification") or {}
+    address_meta = review_meta.get("address_verification") or {}
+    emergency_meta = review_meta.get("emergency_contact") or {}
+    submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
+    documents_complete = bool(
+        getattr(worker, "selfie_url", None)
+        and getattr(worker, "id_document_url", None)
+        and (address_meta.get("status") or "") in submitted_statuses
+    )
+    profile_completed = bool(
+        (identity_meta.get("status") or "") in submitted_statuses
+        and (emergency_meta.get("status") or "") in submitted_statuses
+        and (worker.full_name or "").strip()
+        and (worker.phone or "").strip()
+    )
+    return bool(
+        rider_lifecycle_status(worker) == "ACTIVE"
+        and getattr(worker, "nin_verified", False)
+        and documents_complete
+        and profile_completed
+    )
 
 
 def order_item_to_dict(item: DBOrderItem) -> dict:
@@ -2880,7 +2943,7 @@ def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliver
     order.rider_vehicle_number = worker.plate_number or ""
     order.delivery_assigned_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()
-    worker.operational_status = "ASSIGNED"
+    worker.operational_status = "BUSY"
     worker.updated_at = datetime.utcnow()
     db.flush()
     order_data = order_to_dict(order)
@@ -6482,6 +6545,8 @@ def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = N
             sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved rider on go-online")
         if rider_lifecycle_status(worker) != "ACTIVE":
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
+        if not worker_dashboard_access_allowed(worker):
+            raise HTTPException(status_code=403, detail="Complete NIN verification, profile, selfie, and document uploads before going online.")
         if payload:
             if payload_has_recent_timestamp(payload):
                 update_worker_location(worker, payload, db)
@@ -6522,6 +6587,8 @@ def delivery_location_ping(payload: LocationPingPayload, request: Request):
             sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved worker on location ping")
         if rider_lifecycle_status(worker) != "ACTIVE":
             raise HTTPException(status_code=403, detail="Delivery account is not approved.")
+        if not worker_dashboard_access_allowed(worker):
+            raise HTTPException(status_code=403, detail="Complete onboarding before sending delivery GPS updates.")
         if not payload_has_recent_timestamp(payload):
             raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds.")
         inside_zone = update_worker_location(worker, payload, db)
@@ -6610,6 +6677,8 @@ def accept_delivery_offer(offer_id: int, request: Request):
         offer.status = "ACCEPTED"
         offer.accepted_at = datetime.utcnow()
         offer.updated_at = datetime.utcnow()
+        worker.operational_status = "BUSY"
+        worker.updated_at = datetime.utcnow()
         order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
         order_data = order_to_dict(order) if order else {"id": offer.order_id, "order_code": offer.order_code}
         worker_type_label = "Rider" if (worker.worker_type or "") == "rider" else "Messenger"
@@ -6643,6 +6712,9 @@ def decline_delivery_offer(offer_id: int, request: Request, payload: DeliveryOff
             offer.status = "DECLINED"
             offer.declined_at = datetime.utcnow()
             offer.updated_at = datetime.utcnow()
+            if not worker_has_active_assignment(db, worker, offer.id):
+                worker.operational_status = "ONLINE"
+                worker.updated_at = datetime.utcnow()
             create_admin_audit_log(request, user, "delivery_offer_declined", "delivery_offer", offer.id, f"{worker.full_name} declined order {offer.order_code}", {"offer": delivery_offer_to_dict(offer, worker)})
             order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
             if order:
@@ -7382,7 +7454,7 @@ def get_delivery_workforce(request: Request, worker_type: Optional[str] = None, 
             data["address"] = identity.get("address") or data.get("home_address") or ""
             data["nin"] = identity.get("nin") or data.get("masked_nin") or ""
             assigned_order = active_order_filter(db.query(DBOrder)).filter(DBOrder.delivery_worker_id == worker.id, DBOrder.delivery_status == "ASSIGNED").order_by(DBOrder.delivery_assigned_at.desc(), DBOrder.id.desc()).first()
-            data["availability_status"] = "ASSIGNED" if assigned_order or worker.operational_status in ["ASSIGNED", "ON_DELIVERY"] else "AVAILABLE" if worker.operational_status == "ONLINE" else "OFFLINE"
+            data["availability_status"] = "BUSY" if assigned_order or worker.operational_status in ["BUSY", "ASSIGNED", "ON_DELIVERY"] else "AVAILABLE" if worker.operational_status == "ONLINE" else "OFFLINE"
             data["active_order"] = order_to_dict(assigned_order) if assigned_order else None
             workers.append(data)
         return {"success": True, "workers": workers, "data": workers}
@@ -7566,7 +7638,7 @@ def get_admin_dispatch_board(request: Request):
             data = worker_to_dict(worker)
             data["company"] = getattr(worker, "partner_company", "") or "FoodNova"
             lifecycle_status = rider_lifecycle_status(worker)
-            data["status_label"] = "Pending Approval" if lifecycle_status != "ACTIVE" else "Busy" if worker.operational_status in {"ASSIGNED", "ON_DELIVERY"} else "Available" if worker.operational_status == "ONLINE" else "Offline"
+            data["status_label"] = "Pending Approval" if lifecycle_status != "ACTIVE" else "Busy" if worker.operational_status in {"BUSY", "ASSIGNED", "ON_DELIVERY"} else "Available" if worker.operational_status == "ONLINE" else "Offline"
             data["current_location"] = {"latitude": getattr(worker, "latest_latitude", None), "longitude": getattr(worker, "latest_longitude", None)}
             data["last_active_time"] = iso(getattr(worker, "last_seen_at", None) or getattr(worker, "updated_at", None))
             riders.append(data)
@@ -8318,7 +8390,7 @@ def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Reques
             order.updated_at = now
             processed_ids.append(order.id)
         if processed_ids:
-            rider.operational_status = "ON_DELIVERY" if payload.mark_out_for_delivery else "ASSIGNED"
+            rider.operational_status = "BUSY"
             rider.updated_at = now
         db.commit()
         rider_data = worker_to_dict(rider)
@@ -8733,7 +8805,7 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
             order.delivery_status = "IN_TRANSIT"
             order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
             ensure_order_delivery_pin(db, order)
-        rider.operational_status = "ON_DELIVERY" if payload.mark_out_for_delivery else "ASSIGNED"
+        rider.operational_status = "BUSY"
         rider.updated_at = datetime.utcnow()
         order.updated_at = datetime.utcnow()
         db.commit()
@@ -9071,18 +9143,21 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
             existing_note = order.service_note or order.admin_note or ""
             order.service_note = f"{existing_note}\nRider note: {payload.note}".strip()
         order.updated_at = datetime.utcnow()
-        worker.operational_status = "ON_DELIVERY" if raw_status not in {"delivered", "cancelled"} else "ONLINE"
+        worker.operational_status = "BUSY" if raw_status not in {"delivered", "cancelled"} else "ONLINE"
         worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)
         data = order_to_dict(order)
-        _create_order_notification(
-            data,
-            "Delivery update",
-            f"Your order {order.order_code} is now {raw_status.replace('_', ' ')}.",
-            "delivery_update",
-            "delivery",
-        )
+        customer_event = {
+            "accepted": ("Delivery Accepted", f"Your rider accepted order {order.order_code}.", "delivery_accepted"),
+            "picked_up": ("Order Picked Up", f"Your order {order.order_code} has been picked up.", "order_picked_up"),
+            "in_transit": ("Out for Delivery", f"Your order {order.order_code} is out for delivery.", "out_for_delivery"),
+            "en_route_to_customer": ("Out for Delivery", f"Your order {order.order_code} is out for delivery.", "out_for_delivery"),
+            "arrived": ("Rider Nearby", f"Your rider has arrived with order {order.order_code}.", "rider_nearby"),
+            "delivered": ("Delivery Completed", f"Your order {order.order_code} has been delivered.", "delivered"),
+            "cancelled": ("Delivery Cancelled", f"Delivery for order {order.order_code} was cancelled.", "delivery_cancelled"),
+        }.get(raw_status, ("Delivery update", f"Your order {order.order_code} is now {raw_status.replace('_', ' ')}.", "delivery_update"))
+        _create_order_notification(data, customer_event[0], customer_event[1], customer_event[2], "delivery")
         create_admin_audit_log(request, user, "delivery_status_update", "order", order.id, f"{worker.full_name} updated delivery status for {order.order_code}", {"delivery_status": raw_status, "order": data})
         return {"success": True, "order": data, "data": data}
     finally:
@@ -9110,7 +9185,7 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
                 raise HTTPException(status_code=400, detail="Invalid delivery confirmation code")
             order.delivery_confirmed_at = datetime.utcnow()
         elif not proof["signature_present"] and not proof["photo_url"]:
-            raise HTTPException(status_code=400, detail="Delivery proof requires OTP, signature, or photo")
+            raise HTTPException(status_code=400, detail="Delivery proof requires a 4-digit Delivery PIN, signature, or photo")
 
         order.status = "delivered"
         order.order_status = "delivered"

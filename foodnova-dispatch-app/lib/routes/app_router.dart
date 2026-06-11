@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -25,13 +26,38 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final authenticated =
           ref.watch(sessionControllerProvider).valueOrNull == true;
       final path = state.uri.path;
+      final diagnostics = ref
+          .watch(sessionControllerProvider.notifier)
+          .cachedDiagnosticsOrEmpty;
+      final approvalStatus =
+          '${diagnostics['approval_status'] ?? ''}'.toUpperCase();
+      final currentStep =
+          int.tryParse('${diagnostics['current_step'] ?? 1}') ?? 1;
+      final onboardingComplete =
+          diagnostics['onboarding_complete'] == true || currentStep >= 7;
       final completedAuthRoute = [
         '/login',
         '/forgot-password',
-        '/onboarding',
       ].contains(path);
       if (authenticated && completedAuthRoute) return '/dashboard';
       if (!authenticated && _requiresSession(path)) return '/login';
+      if (authenticated && approvalStatus == 'SUSPENDED') {
+        return path == '/suspended' ? null : '/suspended';
+      }
+      if (authenticated && approvalStatus == 'DEACTIVATED') {
+        return path == '/deactivated' ? null : '/deactivated';
+      }
+      if (authenticated &&
+          approvalStatus == 'ONBOARDING' &&
+          !onboardingComplete &&
+          path != '/signup') {
+        return '/signup';
+      }
+      if (authenticated &&
+          approvalStatus == 'PENDING_REVIEW' &&
+          path == '/dashboard') {
+        return null;
+      }
       return null;
     },
     routes: [
@@ -45,6 +71,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pending-review',
         builder: (_, __) => const PendingReviewScreen(),
+      ),
+      GoRoute(
+        path: '/suspended',
+        builder: (_, __) => const _BlockedDispatchScreen(
+          title: 'Account Suspended',
+          message:
+              'Your FoodNova Dispatch account is suspended. Contact FoodNova support before accepting deliveries.',
+        ),
+      ),
+      GoRoute(
+        path: '/deactivated',
+        builder: (_, __) => const _BlockedDispatchScreen(
+          title: 'Account Deactivated',
+          message:
+              'Your FoodNova Dispatch account is deactivated and cannot receive deliveries.',
+        ),
       ),
       GoRoute(
         path: '/forgot-password',
@@ -78,5 +120,60 @@ bool _requiresSession(String path) => ![
       '/login',
       '/signup',
       '/pending-review',
+      '/suspended',
+      '/deactivated',
       '/forgot-password',
     ].contains(path);
+
+class _BlockedDispatchScreen extends ConsumerWidget {
+  const _BlockedDispatchScreen({
+    required this.title,
+    required this.message,
+  });
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Padding(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.block_rounded,
+              size: 72,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () async {
+                await ref.read(sessionControllerProvider.notifier).clear();
+                if (context.mounted) context.go('/login');
+              },
+              child: const Text('Return to Login'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
