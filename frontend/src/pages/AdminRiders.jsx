@@ -11,9 +11,15 @@ const emptyForm = {
   email: '',
   vehicle_type: '',
   vehicle_number: '',
-  status: 'active',
+  status: 'ONBOARDING',
   notes: '',
 }
+
+const lifecycleStatuses = ['active', 'inactive', 'onboarding', 'suspended']
+
+const displayStatus = (status = '') => String(status || 'ONBOARDING').toUpperCase()
+
+const statusClass = (status = '') => displayStatus(status).toLowerCase()
 
 export default function AdminRiders() {
   const { isAdmin, admin } = useAuthStore()
@@ -51,7 +57,7 @@ export default function AdminRiders() {
   const filteredRiders = useMemo(() => {
     const term = search.trim().toLowerCase()
     return riders.filter((rider) => {
-      const matchesStatus = statusFilter === 'all' || rider.status === statusFilter
+      const matchesStatus = statusFilter === 'all' || statusClass(rider.status) === statusFilter
       const matchesSearch = !term || [rider.full_name, rider.name, rider.phone, rider.email, rider.vehicle_type, rider.vehicle_number]
         .some((value) => String(value || '').toLowerCase().includes(term))
       return matchesStatus && matchesSearch
@@ -72,7 +78,7 @@ export default function AdminRiders() {
       email: rider.email || '',
       vehicle_type: rider.vehicle_type || '',
       vehicle_number: rider.vehicle_number || '',
-      status: rider.status || 'active',
+      status: displayStatus(rider.status || 'ONBOARDING'),
       notes: rider.notes || '',
     })
     setModalOpen(true)
@@ -162,9 +168,9 @@ export default function AdminRiders() {
       <div className="rider-toolbar">
         <label className="rider-search"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, phone, vehicle" /></label>
         <div className="rider-status-tabs">
-          {['all', 'pending', 'approved', 'rejected', 'suspended', 'deactivated', 'deleted'].map((status) => (
+          {['all', ...lifecycleStatuses, 'deleted'].map((status) => (
             <button key={status} type="button" className={statusFilter === status ? 'active' : ''} onClick={() => setStatusFilter(status)}>
-              {status}
+              {status.toUpperCase()}
             </button>
           ))}
         </div>
@@ -194,12 +200,12 @@ export default function AdminRiders() {
                   <td>{rider.phone}</td>
                   <td>{[rider.vehicle_type, rider.vehicle_number || rider.plate_number].filter(Boolean).join(' - ') || 'N/A'}</td>
                   <td><span className={`rider-status ${rider.nin_verified ? 'active' : 'inactive'}`}>{rider.nin_status || (rider.nin_verified ? 'verified' : 'not verified')}</span></td>
-                  <td><span className={`rider-status ${rider.status}`}>{rider.approval_status || rider.status}</span></td>
+                  <td><span className={`rider-status ${statusClass(rider.status)}`}>{displayStatus(rider.approval_status || rider.status)}</span></td>
                   <td>
                     <div className="rider-actions">
                       <button type="button" className="btn-view" onClick={() => openEdit(rider)}>Edit</button>
-                      {rider.status !== 'deleted' && <button type="button" className="btn-delete" onClick={() => deactivateRider(rider)}>Soft Delete</button>}
-                      {rider.status === 'deleted' && <button type="button" className="btn-delete" onClick={() => deleteRider(rider)} style={{ background: '#dc3545' }}>Permanent Delete</button>}
+                      {statusClass(rider.status) !== 'deleted' && <button type="button" className="btn-delete" onClick={() => deactivateRider(rider)}>Soft Delete</button>}
+                      {statusClass(rider.status) === 'deleted' && <button type="button" className="btn-delete" onClick={() => deleteRider(rider)} style={{ background: '#dc3545' }}>Permanent Delete</button>}
                     </div>
                   </td>
                 </tr>
@@ -228,7 +234,12 @@ export default function AdminRiders() {
                 <label>Email<input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} /></label>
                 <label>Vehicle Type<input placeholder="Bike, Van, Car" value={form.vehicle_type} onChange={(event) => updateForm('vehicle_type', event.target.value)} /></label>
                 <label>Vehicle Number<input value={form.vehicle_number} onChange={(event) => updateForm('vehicle_number', event.target.value)} /></label>
-                <label>Status<select value={form.status} onChange={(event) => updateForm('status', event.target.value)}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
+                <label>Status<select value={form.status} onChange={(event) => updateForm('status', event.target.value)}>
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">INACTIVE</option>
+                  <option value="ONBOARDING">ONBOARDING</option>
+                  <option value="SUSPENDED">SUSPENDED</option>
+                </select></label>
                 <label className="rider-form-wide">Notes<textarea rows="3" value={form.notes} onChange={(event) => updateForm('notes', event.target.value)} /></label>
               </div>
               <div className="rider-modal-footer">

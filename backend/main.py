@@ -23,7 +23,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import func, inspect, or_, text
+from sqlalchemy import and_, func, inspect, or_, text
 
 from database import Base, SessionLocal, engine
 from email_service import (
@@ -636,6 +636,54 @@ class AssignRiderPayload(BaseModel):
     rider_id: int
     delivery_note: Optional[str] = ""
     mark_out_for_delivery: Optional[bool] = False
+
+
+def rider_lifecycle_status(worker: DBDeliveryWorker, rider_status: str = "") -> str:
+    raw_status = (getattr(worker, "kyc_status", "") or "").upper()
+    linked_status = (rider_status or "").upper()
+    if getattr(worker, "deleted_at", None) or raw_status == "DELETED":
+        return "SUSPENDED"
+    if raw_status in {"SUSPENDED", "REJECTED"}:
+        return "SUSPENDED"
+    if raw_status in {"INACTIVE", "DEACTIVATED"}:
+        return "INACTIVE"
+    if raw_status == "ACTIVE" and bool(getattr(worker, "nin_verified", False)):
+        return "ACTIVE"
+    if raw_status == "APPROVED" and bool(getattr(worker, "nin_verified", False)):
+        return "ACTIVE"
+    if linked_status in {"ACTIVE", "APPROVED"} and bool(getattr(worker, "nin_verified", False)):
+        return "ACTIVE"
+    return "ONBOARDING"
+
+
+def rider_status_input_to_lifecycle(value: str, default: str = "ONBOARDING") -> str:
+    normalized = (value or "").strip().lower()
+    status_map = {
+        "active": "ACTIVE",
+        "approved": "ACTIVE",
+        "reactivated": "ACTIVE",
+        "inactive": "INACTIVE",
+        "deactivated": "INACTIVE",
+        "onboarding": "ONBOARDING",
+        "pending": "ONBOARDING",
+        "pending_review": "ONBOARDING",
+        "kyc_pending": "ONBOARDING",
+        "rejected": "SUSPENDED",
+        "suspended": "SUSPENDED",
+    }
+    return status_map.get(normalized, default)
+
+
+def promote_verified_approved_rider(worker: DBDeliveryWorker) -> bool:
+    if (
+        (getattr(worker, "kyc_status", "") or "").upper() == "APPROVED"
+        and bool(getattr(worker, "nin_verified", False))
+        and not getattr(worker, "deleted_at", None)
+    ):
+        worker.kyc_status = "ACTIVE"
+        worker.approved_at = worker.approved_at or datetime.utcnow()
+        return True
+    return False
 
 
 class DeliveryOfferActionPayload(BaseModel):
@@ -2047,8 +2095,9 @@ def as_naive_utc(value: datetime) -> datetime:
 
 def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
     worker_type = (worker.worker_type or "messenger").lower()
+    promote_verified_approved_rider(worker)
     deleted = bool(getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED")
-    approved = (worker.kyc_status or "") in {"APPROVED", "ACTIVE"} and not deleted
+    approved = rider_lifecycle_status(worker) == "ACTIVE" and not deleted
     online = (worker.operational_status or "") in ["ONLINE", "ASSIGNED", "ON_DELIVERY"]
     gps_recent = worker_has_recent_gps(worker)
     is_messenger = worker_type == "messenger"
@@ -2120,7 +2169,9 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     admin_override = review_meta.get("admin_override") or {}
     rejection_reason = admin_override.get("note") or identity_meta.get("rejection_reason") or review_meta.get("rejection_reason") or ""
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
-    rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if (worker.kyc_status or "") in {"APPROVED", "ACTIVE"} else "rejected" if (worker.kyc_status or "") == "REJECTED" else "suspended" if (worker.kyc_status or "") == "SUSPENDED" else "deactivated" if (worker.kyc_status or "") == "DEACTIVATED" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
+    promote_verified_approved_rider(worker)
+    lifecycle_status = rider_lifecycle_status(worker)
+    rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if lifecycle_status == "ACTIVE" else "suspended" if lifecycle_status == "SUSPENDED" else "deactivated" if lifecycle_status == "INACTIVE" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
     current_step = rider_onboarding_step_for_stage(rider_stage)
     progress_percent = rider_onboarding_progress_percent(current_step)
     return {
@@ -2191,8 +2242,8 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "assignment_eligibility_reason": assignment_policy["reason"],
         "can_receive_delivery_notifications": assignment_policy["can_receive_delivery_notifications"],
         "can_accept_delivery_requests": assignment_policy["can_accept_delivery_requests"],
-        "can_go_online": (worker.kyc_status or "") in {"APPROVED", "ACTIVE"},
-        "wallet_enabled": (worker.kyc_status or "") in {"APPROVED", "ACTIVE"},
+        "can_go_online": lifecycle_status == "ACTIVE",
+        "wallet_enabled": lifecycle_status == "ACTIVE",
         "gps_ping_interval_seconds": assignment_policy["gps_ping_interval_seconds"],
         "active_delivery_ping_interval_seconds": assignment_policy["active_delivery_ping_interval_seconds"],
         "approved_at": iso(worker.approved_at),
@@ -2476,7 +2527,9 @@ def worker_has_active_assignment(db, worker: DBDeliveryWorker, exclude_offer_id:
 def worker_eligible_for_offer(db, worker: DBDeliveryWorker, delivery_type: str, exclude_offer_id: Optional[int] = None) -> bool:
     if delivery_worker_access_block_reason(worker):
         return False
-    if worker.kyc_status not in {"APPROVED", "ACTIVE"} or worker.operational_status != "ONLINE":
+    if promote_verified_approved_rider(worker):
+        sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved rider for delivery offer")
+    if rider_lifecycle_status(worker) != "ACTIVE" or worker.operational_status != "ONLINE":
         return False
     if worker_has_active_assignment(db, worker, exclude_offer_id):
         return False
@@ -2496,7 +2549,10 @@ def find_available_delivery_worker(db, delivery_type: str, excluded_worker_ids: 
     for worker_type in type_order:
         workers = db.query(DBDeliveryWorker).filter(
             DBDeliveryWorker.worker_type == worker_type,
-            DBDeliveryWorker.kyc_status.in_(["APPROVED", "ACTIVE"]),
+            or_(
+                DBDeliveryWorker.kyc_status == "ACTIVE",
+                and_(DBDeliveryWorker.kyc_status == "APPROVED", DBDeliveryWorker.nin_verified == True),
+            ),
             DBDeliveryWorker.operational_status == "ONLINE",
             DBDeliveryWorker.deleted_at.is_(None),
         ).order_by(DBDeliveryWorker.last_seen_at.desc(), DBDeliveryWorker.id.asc()).all()
@@ -2967,7 +3023,7 @@ def delivery_worker_auth_response(user: DBUser, worker: DBDeliveryWorker, reques
         progress = onboarding_progress_payload(db, attached_worker) if attached_worker else {}
     finally:
         db.close()
-    requires_verification = (worker.kyc_status or "") not in {"APPROVED", "ACTIVE"}
+    requires_verification = rider_lifecycle_status(worker) != "ACTIVE"
     print("RIDER_LOGIN_SUCCESS", json_dump({
         "worker_id": worker.id,
         "user_id": user.id,
@@ -3287,13 +3343,15 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
         kyc.emergency_contact_added_at = kyc.emergency_contact_added_at or datetime.utcnow()
     if kyc.selfie_status == "verified":
         kyc.selfie_verified_at = kyc.selfie_verified_at or datetime.utcnow()
-    if (worker.kyc_status or "") in {"APPROVED", "ACTIVE"}:
+    promote_verified_approved_rider(worker)
+    lifecycle_status = rider_lifecycle_status(worker)
+    if lifecycle_status == "ACTIVE":
         stage = "approved"
     elif (worker.kyc_status or "") == "REJECTED":
         stage = "rejected"
-    elif (worker.kyc_status or "") == "SUSPENDED":
+    elif lifecycle_status == "SUSPENDED":
         stage = "suspended"
-    elif (worker.kyc_status or "") == "DEACTIVATED":
+    elif lifecycle_status == "INACTIVE":
         stage = "deactivated"
     elif (worker.kyc_status or "") == "DELETED":
         stage = "deleted"
@@ -3321,7 +3379,7 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
         rider.full_name = worker.full_name or rider.full_name
         rider.phone = worker.phone or rider.phone
         rider.email = worker.email or rider.email
-        rider.status = "approved" if stage == "approved" else "rejected" if stage == "rejected" else "suspended" if stage == "suspended" else "deactivated" if stage == "deactivated" else "deleted" if stage == "deleted" else "pending"
+        rider.status = "active" if stage == "approved" else "suspended" if stage in {"rejected", "suspended"} else "inactive" if stage == "deactivated" else "deleted" if stage == "deleted" else "onboarding"
         rider.onboarding_stage = stage
         rider.can_go_online = stage == "approved"
         rider.can_accept_orders = stage == "approved"
@@ -3616,7 +3674,7 @@ def maybe_auto_activate_delivery_worker(worker: DBDeliveryWorker) -> bool:
         and (emergency.get("status") or "") in submitted_statuses
     )
     if ready and (worker.worker_type or "").lower() == "messenger":
-        worker.kyc_status = "APPROVED"
+        worker.kyc_status = "ACTIVE"
         worker.approved_at = worker.approved_at or datetime.utcnow()
         worker.approved_by_admin_id = None
         worker.approved_by_admin_name = "FoodNova Auto Verification"
@@ -3636,7 +3694,7 @@ def verification_status_response(worker: DBDeliveryWorker) -> dict:
     identity = meta.get("identity_verification") or {}
     address = meta.get("address_verification") or {}
     emergency = meta.get("emergency_contact") or {}
-    worker_approved = (worker.kyc_status or "") in {"APPROVED", "ACTIVE"}
+    worker_approved = (worker.kyc_status or "") in {"ACTIVE"}
     submitted_statuses = {"submitted", "pending_review", "verified", "approved", "completed"}
     identity_status = "approved" if worker_approved else identity.get("status") or "not_started"
     address_status = "verified" if worker_approved else address.get("status") or "not_started"
@@ -6150,7 +6208,9 @@ def delivery_me(request: Request):
 def messenger_go_online(payload: LocationPingPayload, request: Request):
     db, user, worker = get_current_worker_record(request, "messenger")
     try:
-        if worker.kyc_status not in {"APPROVED", "ACTIVE"}:
+        if promote_verified_approved_rider(worker):
+            sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved messenger on go-online")
+        if rider_lifecycle_status(worker) != "ACTIVE":
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
         if not payload_has_recent_timestamp(payload):
             worker.operational_status = "OFFLINE"
@@ -6175,7 +6235,9 @@ def messenger_go_online(payload: LocationPingPayload, request: Request):
 def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = None):
     db, user, worker = get_current_worker_record(request, "rider")
     try:
-        if worker.kyc_status not in {"APPROVED", "ACTIVE"}:
+        if promote_verified_approved_rider(worker):
+            sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved rider on go-online")
+        if rider_lifecycle_status(worker) != "ACTIVE":
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
         if payload:
             if payload_has_recent_timestamp(payload):
@@ -6213,7 +6275,9 @@ def delivery_go_offline(request: Request):
 def delivery_location_ping(payload: LocationPingPayload, request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
-        if worker.kyc_status not in {"APPROVED", "ACTIVE"}:
+        if promote_verified_approved_rider(worker):
+            sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved worker on location ping")
+        if rider_lifecycle_status(worker) != "ACTIVE":
             raise HTTPException(status_code=403, detail="Delivery account is not approved.")
         if not payload_has_recent_timestamp(payload):
             raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds.")
@@ -7182,7 +7246,10 @@ def get_eligible_delivery_workforce(request: Request, delivery_type: Optional[st
     db = SessionLocal()
     try:
         workers = db.query(DBDeliveryWorker).filter(
-            DBDeliveryWorker.kyc_status.in_(["APPROVED", "ACTIVE"]),
+            or_(
+                DBDeliveryWorker.kyc_status == "ACTIVE",
+                and_(DBDeliveryWorker.kyc_status == "APPROVED", DBDeliveryWorker.nin_verified == True),
+            ),
             DBDeliveryWorker.deleted_at.is_(None),
         ).all()
         eligible_workers = []
@@ -7243,7 +7310,8 @@ def get_admin_dispatch_board(request: Request):
         ).order_by(DBDeliveryWorker.operational_status.asc(), DBDeliveryWorker.full_name.asc()).all():
             data = worker_to_dict(worker)
             data["company"] = getattr(worker, "partner_company", "") or "FoodNova"
-            data["status_label"] = "Pending Approval" if (worker.kyc_status or "") not in {"APPROVED", "ACTIVE"} else "Busy" if worker.operational_status in {"ASSIGNED", "ON_DELIVERY"} else "Available" if worker.operational_status == "ONLINE" else "Offline"
+            lifecycle_status = rider_lifecycle_status(worker)
+            data["status_label"] = "Pending Approval" if lifecycle_status != "ACTIVE" else "Busy" if worker.operational_status in {"ASSIGNED", "ON_DELIVERY"} else "Available" if worker.operational_status == "ONLINE" else "Offline"
             data["current_location"] = {"latitude": getattr(worker, "latest_latitude", None), "longitude": getattr(worker, "latest_longitude", None)}
             data["last_active_time"] = iso(getattr(worker, "last_seen_at", None) or getattr(worker, "updated_at", None))
             riders.append(data)
@@ -7336,9 +7404,9 @@ def get_rider_verification_queue(
         count_query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type.in_(worker_types))
         all_count_workers = count_query.all()
         counts = {
-            "pending": sum(1 for worker in all_count_workers if (worker.kyc_status or "PENDING_REVIEW") not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED"] and not worker.deleted_at),
-            "approved": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "APPROVED" and not worker.deleted_at),
-            "rejected": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "REJECTED" and not worker.deleted_at),
+            "pending": sum(1 for worker in all_count_workers if rider_lifecycle_status(worker) == "ONBOARDING" and not worker.deleted_at),
+            "approved": sum(1 for worker in all_count_workers if rider_lifecycle_status(worker) == "ACTIVE" and not worker.deleted_at),
+            "rejected": 0,
             "suspended": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "SUSPENDED" and not worker.deleted_at),
             "deleted": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "DELETED" or bool(worker.deleted_at)),
         }
@@ -7350,8 +7418,12 @@ def get_rider_verification_queue(
             query = query.filter(DBDeliveryWorker.deleted_at.is_(None), DBDeliveryWorker.kyc_status != "DELETED")
         if status:
             wanted = status.strip().upper()
-            if wanted in ["PENDING", "ADMIN_REVIEW"]:
-                query = query.filter(DBDeliveryWorker.kyc_status.in_(["KYC_PENDING", "PENDING_REVIEW"]))
+            if wanted in ["PENDING", "ADMIN_REVIEW", "ONBOARDING"]:
+                query = query.filter(DBDeliveryWorker.kyc_status.in_(["ONBOARDING", "KYC_PENDING", "PENDING_REVIEW"]))
+            elif wanted == "ACTIVE":
+                query = query.filter(or_(DBDeliveryWorker.kyc_status == "ACTIVE", and_(DBDeliveryWorker.kyc_status == "APPROVED", DBDeliveryWorker.nin_verified == True)))
+            elif wanted == "INACTIVE":
+                query = query.filter(DBDeliveryWorker.kyc_status.in_(["INACTIVE", "DEACTIVATED"]))
             elif wanted in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED"]:
                 query = query.filter(DBDeliveryWorker.kyc_status == wanted)
         if search:
@@ -7386,14 +7458,14 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
     admin = require_workforce_manage(request)
     action = (action or "").strip().lower().replace("-", "_")
     action_map = {
-        "approve": "APPROVED",
-        "reject": "REJECTED",
-        "request_resubmission": "PENDING_REVIEW",
-        "reactivate": "PENDING_REVIEW",
+        "approve": "ACTIVE",
+        "reject": "SUSPENDED",
+        "request_resubmission": "ONBOARDING",
+        "reactivate": "ONBOARDING",
         "suspend": "SUSPENDED",
-        "deactivate": "DEACTIVATED",
+        "deactivate": "INACTIVE",
         "delete": "DELETED",
-        "reset_onboarding": "PENDING_REVIEW",
+        "reset_onboarding": "ONBOARDING",
         "force_logout": "FORCE_LOGOUT",
     }
     if action not in action_map:
@@ -7404,7 +7476,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         if not worker:
             raise HTTPException(status_code=404, detail="Rider verification profile not found")
         new_status = action_map[action]
-        if new_status == "APPROVED":
+        if new_status == "ACTIVE":
             blockers = rider_approval_blockers(db, worker)
             if blockers:
                 raise HTTPException(status_code=422, detail="Rider cannot be approved yet: " + " ".join(blockers))
@@ -7457,12 +7529,12 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             ))
         elif action == "reset_onboarding":
             revoke_rider_sessions(db, worker, admin, review_note or "KYC reset")
-            worker.kyc_status = "PENDING_REVIEW"
+            worker.kyc_status = "ONBOARDING"
             worker.operational_status = "OFFLINE"
             worker.nin_verified = False
             worker.nin_report_id = ""
             worker.nin_last4 = ""
-            worker.review_note = json_dump({"admin_override": {"status": "PENDING_REVIEW", "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}})
+            worker.review_note = json_dump({"admin_override": {"status": "ONBOARDING", "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}})
             kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
             if kyc:
                 kyc.current_step = 1
@@ -7486,7 +7558,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
                 kyc.resubmission_requested = True
         else:
             worker.kyc_status = new_status
-        if new_status == "APPROVED":
+        if new_status == "ACTIVE":
             worker.operational_status = "OFFLINE"
             worker.approved_at = datetime.utcnow()
             worker.approved_by_admin_id = admin.get("id")
@@ -7496,7 +7568,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             revoke_rider_sessions(db, worker, admin, review_note or "Rider suspended")
             worker.operational_status = "OFFLINE"
             worker.suspended_at = datetime.utcnow()
-        elif new_status == "DEACTIVATED":
+        elif new_status == "INACTIVE":
             revoke_rider_sessions(db, worker, admin, review_note or "Rider deactivated")
             worker.operational_status = "OFFLINE"
             worker.deactivated_at = datetime.utcnow()
@@ -7504,14 +7576,14 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             worker.operational_status = "OFFLINE"
         meta = delivery_worker_review_meta(worker)
         meta["admin_override"] = {"status": new_status, "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}
-        if new_status == "REJECTED":
+        if action == "reject":
             meta["rejection_reason"] = review_note
         worker.review_note = json_dump(meta)
         worker.updated_at = datetime.utcnow()
         _, rider_kyc = ensure_rider_records(db, worker)
         if rider_kyc:
-            rider_kyc.rejection_reason = review_note if new_status == "REJECTED" else rider_kyc.rejection_reason
-            rider_kyc.resubmission_requested = new_status in ["KYC_PENDING", "PENDING_REVIEW"]
+            rider_kyc.rejection_reason = review_note if action == "reject" else rider_kyc.rejection_reason
+            rider_kyc.resubmission_requested = new_status == "ONBOARDING"
             rider_kyc.admin_reviewed_at = datetime.utcnow()
             if new_status == "DELETED":
                 rider_kyc.onboarding_stage = "deleted"
@@ -7635,7 +7707,15 @@ def permanently_delete_rider(worker_id: int, request: Request):
 def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request: Request):
     admin = require_workforce_manage(request)
     new_status = (payload.status or "").strip().upper()
-    if new_status not in ["APPROVED", "REJECTED", "SUSPENDED", "DEACTIVATED", "DELETED", "KYC_PENDING", "PENDING_REVIEW"]:
+    legacy_status_map = {
+        "APPROVED": "ACTIVE",
+        "REJECTED": "SUSPENDED",
+        "DEACTIVATED": "INACTIVE",
+        "KYC_PENDING": "ONBOARDING",
+        "PENDING_REVIEW": "ONBOARDING",
+    }
+    new_status = legacy_status_map.get(new_status, new_status)
+    if new_status not in ["ACTIVE", "INACTIVE", "SUSPENDED", "DELETED", "ONBOARDING"]:
         raise HTTPException(status_code=400, detail="Invalid worker status")
     db = SessionLocal()
     try:
@@ -7643,7 +7723,7 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
         if not worker:
             raise HTTPException(status_code=404, detail="Delivery worker not found")
         old_data = worker_to_dict(worker)
-        if (worker.worker_type or "").lower() in ["rider", "messenger"] and new_status == "APPROVED":
+        if (worker.worker_type or "").lower() in ["rider", "messenger"] and new_status == "ACTIVE":
             blockers = rider_approval_blockers(db, worker)
             if blockers:
                 raise HTTPException(status_code=422, detail="Rider cannot be approved yet: " + " ".join(blockers))
@@ -7658,16 +7738,16 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
             }
         worker.kyc_status = new_status
         worker.review_note = json_dump(review_meta)
-        if new_status == "APPROVED":
+        if new_status == "ACTIVE":
             worker.approved_at = datetime.utcnow()
             worker.approved_by_admin_id = admin.get("id")
             worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
             worker.suspended_at = None
-        if new_status in ["SUSPENDED", "DEACTIVATED", "DELETED"]:
+        if new_status in ["SUSPENDED", "INACTIVE", "DELETED"]:
             worker.operational_status = "OFFLINE"
             if new_status == "SUSPENDED":
                 worker.suspended_at = datetime.utcnow()
-            if new_status == "DEACTIVATED":
+            if new_status == "INACTIVE":
                 worker.deactivated_at = datetime.utcnow()
             if new_status == "DELETED":
                 worker.deleted_at = datetime.utcnow()
@@ -7697,14 +7777,13 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
                         }),
                         hard_deleted=False,
                     ))
-        if new_status in ["REJECTED", "KYC_PENDING", "PENDING_REVIEW"]:
+        if new_status == "ONBOARDING":
             worker.operational_status = "OFFLINE"
         worker.updated_at = datetime.utcnow()
         if (worker.worker_type or "").lower() in ["rider", "messenger"]:
             _, rider_kyc = ensure_rider_records(db, worker)
             if rider_kyc:
-                rider_kyc.rejection_reason = (payload.review_note or "").strip() if new_status == "REJECTED" else rider_kyc.rejection_reason
-                rider_kyc.resubmission_requested = new_status in ["KYC_PENDING", "PENDING_REVIEW"]
+                rider_kyc.resubmission_requested = new_status == "ONBOARDING"
                 rider_kyc.admin_reviewed_at = datetime.utcnow()
                 if new_status == "DELETED":
                     rider_kyc.onboarding_stage = "deleted"
@@ -7722,12 +7801,11 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
         db.refresh(worker)
         data = worker_to_dict(worker)
         action = {
-            "APPROVED": "worker_approved",
-            "REJECTED": "worker_rejected",
+            "ACTIVE": "worker_approved",
             "SUSPENDED": "worker_suspended",
-            "DEACTIVATED": "worker_deactivated",
+            "INACTIVE": "worker_deactivated",
             "DELETED": "worker_deleted",
-            "KYC_PENDING": "worker_reactivated",
+            "ONBOARDING": "worker_reactivated",
         }.get(new_status, "worker_status_updated")
         create_admin_audit_log(request, admin, action, "delivery_worker", worker.id, f"Admin set {worker.full_name} to {new_status}", {"before": old_data, "after": data})
         return {"success": True, "worker": data, "data": data}
@@ -7815,8 +7893,8 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
                 "deleted_status_excluded": not bool(include_deleted),
             },
             "active_status_rule": {
-                "delivery_workers.kyc_status": ["APPROVED", "ACTIVE"],
-                "riders.status": ["approved", "active", "APPROVED", "ACTIVE"],
+                "delivery_workers.kyc_status": ["ACTIVE"],
+                "legacy_auto_activation": "APPROVED + nin_verified => ACTIVE",
                 "nin_verified_required_for_assignment": True,
                 "online_required": False,
                 "available_required": False,
@@ -7830,47 +7908,54 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
         if status and (status or "").lower() not in ["all", "deleted"]:
             requested_status = (status or "").lower()
             status_map = {
-                "pending": ["PENDING_REVIEW", "KYC_PENDING"],
-                "pending_review": ["PENDING_REVIEW", "KYC_PENDING"],
-                "inactive": ["PENDING_REVIEW", "KYC_PENDING"],
-                "rejected": ["REJECTED"],
+                "onboarding": ["ONBOARDING", "PENDING_REVIEW", "KYC_PENDING"],
+                "pending": ["ONBOARDING", "PENDING_REVIEW", "KYC_PENDING"],
+                "pending_review": ["ONBOARDING", "PENDING_REVIEW", "KYC_PENDING"],
+                "inactive": ["INACTIVE", "DEACTIVATED"],
                 "suspended": ["SUSPENDED"],
-                "deactivated": ["DEACTIVATED"],
+                "rejected": ["SUSPENDED", "REJECTED"],
+                "deactivated": ["INACTIVE", "DEACTIVATED"],
             }
             if requested_status in ["active", "approved"]:
                 query = query.filter(or_(
-                    DBDeliveryWorker.kyc_status.in_(["APPROVED", "ACTIVE"]),
-                    DBRider.status.in_(["approved", "active", "APPROVED", "ACTIVE"]),
+                    DBDeliveryWorker.kyc_status == "ACTIVE",
+                    and_(DBDeliveryWorker.kyc_status == "APPROVED", DBDeliveryWorker.nin_verified == True),
                 )).filter(DBDeliveryWorker.nin_verified == True)
             else:
                 wanted_values = status_map.get(requested_status, [(status or "").upper()])
                 query = query.filter(DBDeliveryWorker.kyc_status.in_(wanted_values))
-            if requested_status in ["pending", "pending_review", "inactive"]:
-                query = query.filter(DBDeliveryWorker.kyc_status.in_(["PENDING_REVIEW", "KYC_PENDING"]))
         riders = []
         worker_rows = query.order_by(DBDeliveryWorker.kyc_status.asc(), DBDeliveryWorker.full_name.asc()).all()
+        changed_statuses = False
         for worker in worker_rows:
             linked_rider = db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).first()
+            if promote_verified_approved_rider(worker):
+                changed_statuses = True
+                sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved rider")
             data = worker_to_dict(worker)
             rider_status = (linked_rider.status if linked_rider else "") or ""
-            worker_status = data.get("kyc_status") or "KYC_PENDING"
-            active_status = worker_status in ["APPROVED", "ACTIVE"] or rider_status.upper() in ["APPROVED", "ACTIVE"]
+            raw_worker_status = data.get("kyc_status") or "ONBOARDING"
+            lifecycle_status = "DELETED" if data.get("deleted_at") else rider_lifecycle_status(worker, rider_status)
             data.update({
-                "status": "deleted" if data.get("deleted_at") else "active" if active_status else "rejected" if worker_status == "REJECTED" else "suspended" if worker_status == "SUSPENDED" else "deactivated" if worker_status == "DEACTIVATED" else "pending",
+                "raw_kyc_status": raw_worker_status,
+                "kyc_status": lifecycle_status,
+                "status": lifecycle_status,
                 "rider_id": worker.id,
                 "database_rider_id": linked_rider.id if linked_rider else None,
                 "nin_status": "verified" if data.get("nin_verified") else "not_verified",
-                "approval_status": worker_status,
+                "approval_status": lifecycle_status,
                 "rider_table_status": rider_status,
                 "vehicle_number": data.get("plate_number") or "",
                 "source": "delivery_workers",
             })
             riders.append(data)
+        if changed_statuses:
+            db.commit()
         print("ADMIN_RIDERS_FETCH", json_dump({
             "total_riders_found": len(worker_rows),
             "rider_ids_returned": [item.get("id") for item in riders],
             "rider_status_values_returned": [
-                {"id": item.get("id"), "status": item.get("status"), "kyc_status": item.get("kyc_status"), "rider_table_status": item.get("rider_table_status")}
+                {"id": item.get("id"), "status": item.get("status"), "kyc_status": item.get("kyc_status"), "raw_kyc_status": item.get("raw_kyc_status"), "rider_table_status": item.get("rider_table_status")}
                 for item in riders
             ],
             "status_filter": status or "all",
@@ -7884,7 +7969,7 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
                     "rider_id": item.get("id"),
                     "database_rider_id": item.get("database_rider_id"),
                     "name": item.get("full_name") or item.get("name"),
-                    "status": item.get("kyc_status") or item.get("approval_status"),
+                    "status": item.get("status") or item.get("approval_status"),
                     "rider_table_status": item.get("rider_table_status"),
                     "nin_verified": bool(item.get("nin_verified")),
                     "online": item.get("operational_status") == "ONLINE",
@@ -7927,16 +8012,6 @@ def create_rider(payload: RiderPayload, request: Request):
         db.add(user)
         db.flush()
         ensure_profile(db, user)
-        status_map = {
-            "active": "APPROVED",
-            "approved": "APPROVED",
-            "inactive": "PENDING_REVIEW",
-            "pending": "PENDING_REVIEW",
-            "pending_review": "PENDING_REVIEW",
-            "rejected": "REJECTED",
-            "suspended": "SUSPENDED",
-            "deactivated": "DEACTIVATED",
-        }
         worker = DBDeliveryWorker(
             user_id=user.id,
             worker_type="rider",
@@ -7945,7 +8020,7 @@ def create_rider(payload: RiderPayload, request: Request):
             email=clean_email,
             vehicle_type=(payload.vehicle_type or "").strip(),
             plate_number=(payload.vehicle_number or "").strip(),
-            kyc_status=status_map.get((payload.status or "active").strip().lower(), "APPROVED"),
+            kyc_status=rider_status_input_to_lifecycle(payload.status or "ONBOARDING"),
             operational_status="OFFLINE",
             review_note=(payload.notes or "").strip(),
         )
@@ -7957,7 +8032,8 @@ def create_rider(payload: RiderPayload, request: Request):
         db.refresh(worker)
         data = worker_to_dict(worker)
         data.update({
-            "status": "approved" if data.get("kyc_status") == "APPROVED" else "rejected" if data.get("kyc_status") == "REJECTED" else "suspended" if data.get("kyc_status") == "SUSPENDED" else "deactivated" if data.get("kyc_status") == "DEACTIVATED" else "pending",
+            "status": rider_lifecycle_status(worker),
+            "approval_status": rider_lifecycle_status(worker),
             "rider_id": worker.id,
             "vehicle_number": data.get("plate_number") or "",
             "source": "delivery_workers",
@@ -7991,20 +8067,8 @@ def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
         if "notes" in updates and updates["notes"] is not None:
             worker.review_note = updates["notes"].strip()
         if "status" in updates and updates["status"] is not None:
-            value = str(updates["status"] or "").lower()
-            status_map = {
-                "active": "APPROVED",
-                "approved": "APPROVED",
-                "reactivated": "APPROVED",
-                "inactive": "PENDING_REVIEW",
-                "pending": "PENDING_REVIEW",
-                "pending_review": "PENDING_REVIEW",
-                "rejected": "REJECTED",
-                "suspended": "SUSPENDED",
-                "deactivated": "DEACTIVATED",
-            }
-            worker.kyc_status = status_map.get(value, worker.kyc_status)
-            if worker.kyc_status == "APPROVED":
+            worker.kyc_status = rider_status_input_to_lifecycle(str(updates["status"] or ""), worker.kyc_status or "ONBOARDING")
+            if worker.kyc_status == "ACTIVE":
                 worker.approved_at = worker.approved_at or datetime.utcnow()
                 worker.approved_by_admin_id = admin.get("id")
                 worker.approved_by_admin_name = admin.get("full_name") or admin.get("email") or ""
@@ -8014,7 +8078,7 @@ def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
                 if user:
                     user.is_active = True
                     user.updated_at = datetime.utcnow()
-            if worker.kyc_status in ["REJECTED", "SUSPENDED", "DEACTIVATED"]:
+            if worker.kyc_status in ["INACTIVE", "SUSPENDED", "ONBOARDING"]:
                 worker.operational_status = "OFFLINE"
         worker.updated_at = datetime.utcnow()
         sync_rider_onboarding_state(db, worker, admin, "Admin updated rider")
@@ -8139,19 +8203,23 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         if not rider:
             raise HTTPException(status_code=404, detail="Rider not found")
         linked_rider = db.query(DBRider).filter(DBRider.delivery_worker_id == rider.id).first()
+        if promote_verified_approved_rider(rider):
+            sync_rider_onboarding_state(db, rider, admin, "Auto-activated verified approved rider during assignment")
         worker_status = (rider.kyc_status or "").upper()
         rider_table_status = ((linked_rider.status if linked_rider else "") or "").upper()
+        lifecycle_status = rider_lifecycle_status(rider, rider_table_status)
         print("ASSIGN_RIDER_CANDIDATE", json_dump({
             "order_id": order_id,
             "rider_id": rider.id,
             "worker_status": worker_status,
             "rider_table_status": rider_table_status,
+            "lifecycle_status": lifecycle_status,
             "nin_verified": bool(getattr(rider, "nin_verified", False)),
             "deleted_at": iso(getattr(rider, "deleted_at", None)),
-            "allowed": bool(getattr(rider, "nin_verified", False)) and (worker_status in {"APPROVED", "ACTIVE"} or rider_table_status in {"APPROVED", "ACTIVE"}),
+            "allowed": bool(getattr(rider, "nin_verified", False)) and lifecycle_status == "ACTIVE",
         }))
-        if worker_status not in {"APPROVED", "ACTIVE"} and rider_table_status not in {"APPROVED", "ACTIVE"}:
-            raise HTTPException(status_code=400, detail="Rider must be approved before assignment")
+        if lifecycle_status != "ACTIVE":
+            raise HTTPException(status_code=400, detail="Rider must be ACTIVE before assignment")
         if not bool(getattr(rider, "nin_verified", False)):
             raise HTTPException(status_code=400, detail="Rider must be NIN verified before assignment")
 
