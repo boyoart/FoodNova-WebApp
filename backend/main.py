@@ -642,6 +642,15 @@ class AssignRiderPayload(BaseModel):
     mark_out_for_delivery: Optional[bool] = False
 
 
+class BulkOrderIdsPayload(BaseModel):
+    orderIds: List[int] = []
+
+
+class BulkOrderStatusPayload(BaseModel):
+    orderIds: List[int] = []
+    status: str
+
+
 def rider_lifecycle_status(worker: DBDeliveryWorker, rider_status: str = "") -> str:
     raw_status = (getattr(worker, "kyc_status", "") or "").upper()
     linked_status = (rider_status or "").upper()
@@ -7983,6 +7992,138 @@ def delete_admin_order(order_id: int, request: Request):
             {"order_id": order.id, "order_code": order.order_code, "before": old_data, "after": order_to_dict(order)},
         )
         return {"success": True, "message": "Order deleted successfully"}
+    finally:
+        db.close()
+
+
+def normalized_bulk_order_ids(order_ids: List[int]) -> List[int]:
+    ids = []
+    seen = set()
+    for raw_id in order_ids or []:
+        try:
+            order_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if order_id > 0 and order_id not in seen:
+            ids.append(order_id)
+            seen.add(order_id)
+    return ids[:1000]
+
+
+def apply_bulk_order_status(order: DBOrder, status: str, db) -> bool:
+    old_values = (order.status, order.order_status, order.fulfillment_status)
+    if status == "processing":
+        order.status = "processing"
+        order.order_status = "processing"
+        order.fulfillment_status = "processing"
+        if (order.delivery_method or "delivery") == "delivery":
+            classify_and_save_order_delivery(order, db)
+    elif status == "out_for_delivery":
+        order.status = "out_for_delivery"
+        order.order_status = "out_for_delivery"
+        order.fulfillment_status = "out_for_delivery"
+        if (order.delivery_method or "delivery") == "delivery":
+            ensure_order_delivery_pin(db, order)
+        order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
+    elif status == "delivered":
+        order.status = "delivered"
+        order.order_status = "delivered"
+        order.fulfillment_status = "delivered"
+        order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
+    else:
+        raise HTTPException(status_code=400, detail="Invalid bulk status")
+    order.updated_at = datetime.utcnow()
+    return old_values != (order.status, order.order_status, order.fulfillment_status)
+
+
+@app.post("/admin/orders/bulk-delete")
+def bulk_delete_admin_orders(payload: BulkOrderIdsPayload, request: Request):
+    admin = require_permission(request, "orders:delete")
+    order_ids = normalized_bulk_order_ids(payload.orderIds)
+    db = SessionLocal()
+    try:
+        if not order_ids:
+            return {"success": True, "processed": 0, "failed": 0, "invalidOrderIds": []}
+        orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.id.in_(order_ids)).all()
+        found_ids = {order.id for order in orders}
+        invalid_ids = [order_id for order_id in order_ids if order_id not in found_ids]
+        now = datetime.utcnow()
+        processed_ids = []
+        for order in orders:
+            order.is_deleted = True
+            order.deleted_at = now
+            order.deleted_by_admin_id = admin.get("id")
+            order.deleted_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
+            order.updated_at = now
+            processed_ids.append(order.id)
+        db.commit()
+        create_admin_audit_log(
+            request,
+            admin,
+            "orders_bulk_deleted",
+            "order",
+            "bulk",
+            f"Admin bulk deleted {len(processed_ids)} orders",
+            {"order_ids": processed_ids, "invalid_order_ids": invalid_ids, "timestamp": iso(now)},
+        )
+        return {
+            "success": True,
+            "processed": len(processed_ids),
+            "failed": len(invalid_ids),
+            "orderIds": processed_ids,
+            "invalidOrderIds": invalid_ids,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/admin/orders/bulk-status")
+def bulk_update_admin_order_status(payload: BulkOrderStatusPayload, request: Request):
+    admin = require_permission(request, "orders:update")
+    order_ids = normalized_bulk_order_ids(payload.orderIds)
+    status_input = (payload.status or "").strip().lower()
+    status_map = {
+        "processing": "processing",
+        "bulk_mark_processing": "processing",
+        "out_for_delivery": "out_for_delivery",
+        "out for delivery": "out_for_delivery",
+        "OUT_FOR_DELIVERY".lower(): "out_for_delivery",
+        "delivered": "delivered",
+    }
+    status = status_map.get(status_input, status_input)
+    if status not in {"processing", "out_for_delivery", "delivered"}:
+        raise HTTPException(status_code=400, detail="Invalid bulk status")
+    db = SessionLocal()
+    try:
+        if not order_ids:
+            return {"success": True, "processed": 0, "failed": 0, "invalidOrderIds": []}
+        orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.id.in_(order_ids)).all()
+        found_ids = {order.id for order in orders}
+        invalid_ids = [order_id for order_id in order_ids if order_id not in found_ids]
+        processed_ids = []
+        changed_ids = []
+        now = datetime.utcnow()
+        for order in orders:
+            if apply_bulk_order_status(order, status, db):
+                changed_ids.append(order.id)
+            processed_ids.append(order.id)
+        db.commit()
+        create_admin_audit_log(
+            request,
+            admin,
+            "orders_bulk_status_updated",
+            "order",
+            "bulk",
+            f"Admin bulk marked {len(processed_ids)} orders as {status}",
+            {"order_ids": processed_ids, "changed_order_ids": changed_ids, "invalid_order_ids": invalid_ids, "status": status, "timestamp": iso(now)},
+        )
+        return {
+            "success": True,
+            "processed": len(processed_ids),
+            "failed": len(invalid_ids),
+            "orderIds": processed_ids,
+            "invalidOrderIds": invalid_ids,
+        }
     finally:
         db.close()
 

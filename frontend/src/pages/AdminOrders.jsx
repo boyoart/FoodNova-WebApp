@@ -44,6 +44,8 @@ export default function AdminOrders() {
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assigningRider, setAssigningRider] = useState(false)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '', mark_out_for_delivery: true })
+  const [selectedOrderIds, setSelectedOrderIds] = useState([])
+  const [bulkProcessing, setBulkProcessing] = useState(false)
 
   useEffect(() => {
     if (isAdmin) {
@@ -54,6 +56,10 @@ export default function AdminOrders() {
   const adminPermissions = Array.isArray(admin?.permissions) ? admin.permissions : []
   const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || adminPermissions.length === 0))
   const canDeleteOrders = isSuperAdmin || adminPermissions.includes('orders:delete')
+  const canUpdateOrders = isSuperAdmin || adminPermissions.includes('orders:update')
+  const selectableOrderIds = orders.filter(order => !order.is_deleted).map(order => Number(order.id)).filter(Boolean)
+  const selectedCount = selectedOrderIds.length
+  const allVisibleSelected = selectableOrderIds.length > 0 && selectableOrderIds.every(id => selectedOrderIds.includes(id))
 
   const normalizeOrderResponse = (res) => {
     if (Array.isArray(res)) return res
@@ -72,7 +78,12 @@ export default function AdminOrders() {
         ...(orderScope === 'deleted' && canDeleteOrders ? { include_deleted: true } : {}),
       }
       const res = await adminAPI.getOrders(params)
-      setOrders(normalizeOrderResponse(res))
+      const nextOrders = normalizeOrderResponse(res)
+      setOrders(nextOrders)
+      setSelectedOrderIds((current) => {
+        const visibleIds = new Set(nextOrders.filter(order => !order.is_deleted).map(order => Number(order.id)).filter(Boolean))
+        return current.filter(id => visibleIds.has(id))
+      })
     } catch (error) {
       const message = [401, 403].includes(error?.response?.status)
         ? 'Session expired. Please log in again.'
@@ -178,6 +189,59 @@ export default function AdminOrders() {
       toast.error(error?.response?.data?.detail || 'Failed to delete order')
     } finally {
       setDeletingOrder(false)
+    }
+  }
+
+  const toggleOrderSelection = (orderId) => {
+    const id = Number(orderId)
+    if (!id) return
+    setSelectedOrderIds((current) => (
+      current.includes(id) ? current.filter(item => item !== id) : [...current, id]
+    ))
+  }
+
+  const toggleSelectAllOrders = () => {
+    setSelectedOrderIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter(id => !selectableOrderIds.includes(id))
+      }
+      return Array.from(new Set([...current, ...selectableOrderIds]))
+    })
+  }
+
+  const clearBulkSelection = () => {
+    setSelectedOrderIds([])
+  }
+
+  const runBulkDelete = async () => {
+    if (!selectedOrderIds.length || bulkProcessing) return
+    const confirmed = window.confirm(`Are you sure you want to delete ${selectedOrderIds.length} selected orders?`)
+    if (!confirmed) return
+    try {
+      setBulkProcessing(true)
+      const response = await adminAPI.bulkDeleteOrders(selectedOrderIds)
+      toast.success(`Bulk delete complete: ${response.processed || 0} processed, ${response.failed || 0} failed`)
+      clearBulkSelection()
+      await fetchOrders()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Bulk delete failed')
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
+  const runBulkStatusUpdate = async (status) => {
+    if (!selectedOrderIds.length || bulkProcessing) return
+    try {
+      setBulkProcessing(true)
+      const response = await adminAPI.bulkUpdateOrderStatus(selectedOrderIds, status)
+      toast.success(`Bulk status update complete: ${response.processed || 0} processed, ${response.failed || 0} failed`)
+      clearBulkSelection()
+      await fetchOrders()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Bulk status update failed')
+    } finally {
+      setBulkProcessing(false)
     }
   }
 
@@ -322,6 +386,35 @@ export default function AdminOrders() {
         ))}
       </div>
 
+      {selectedCount > 0 && (
+        <div className="bulk-order-toolbar" role="region" aria-label="Bulk order actions">
+          <strong>{selectedCount} {selectedCount === 1 ? 'order' : 'orders'} selected</strong>
+          <div className="bulk-order-actions">
+            {canDeleteOrders && (
+              <button type="button" className="btn-delete" onClick={runBulkDelete} disabled={bulkProcessing}>
+                Bulk Delete
+              </button>
+            )}
+            {canUpdateOrders && (
+              <>
+                <button type="button" className="btn-view" onClick={() => runBulkStatusUpdate('PROCESSING')} disabled={bulkProcessing}>
+                  Bulk Mark Processing
+                </button>
+                <button type="button" className="btn-view" onClick={() => runBulkStatusUpdate('OUT_FOR_DELIVERY')} disabled={bulkProcessing}>
+                  Bulk Mark Out For Delivery
+                </button>
+                <button type="button" className="btn-view" onClick={() => runBulkStatusUpdate('DELIVERED')} disabled={bulkProcessing}>
+                  Bulk Mark Delivered
+                </button>
+              </>
+            )}
+            <button type="button" className="btn-cancel" onClick={clearBulkSelection} disabled={bulkProcessing}>
+              Cancel Selection
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="loading">Loading orders...</div>
       ) : loadError ? (
@@ -333,6 +426,15 @@ export default function AdminOrders() {
           <table>
             <thead>
               <tr>
+                <th className="order-select-column">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all visible orders"
+                    checked={allVisibleSelected}
+                    disabled={!selectableOrderIds.length || bulkProcessing}
+                    onChange={toggleSelectAllOrders}
+                  />
+                </th>
                 <th>Order Code</th>
                 <th>Customer</th>
                 <th>Phone</th>
@@ -351,7 +453,16 @@ export default function AdminOrders() {
                 const deliveryCode = order.delivery_code
 
                 return (
-                  <tr key={order.id}>
+                  <tr key={order.id} className={selectedOrderIds.includes(Number(order.id)) ? 'order-row-selected' : ''}>
+                    <td className="order-select-column">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select order ${order.order_code || order.id}`}
+                        checked={selectedOrderIds.includes(Number(order.id))}
+                        disabled={order.is_deleted || bulkProcessing}
+                        onChange={() => toggleOrderSelection(order.id)}
+                      />
+                    </td>
                     <td><span className="copyable-value">{order.order_code || `#${order.id}`} <CopyButton value={order.order_code || `#${order.id}`} label="Copy" /></span></td>
                     <td>{order.customer_name || 'Unknown'}</td>
                     <td>{order.phone || order.customer_phone || 'N/A'}</td>

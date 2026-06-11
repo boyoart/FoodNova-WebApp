@@ -1345,6 +1345,76 @@ tbody tr:hover {
   color: #fff;
 }
 
+.bulk-order-toolbar {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 8px;
+  background: var(--fn-surface);
+  box-shadow: var(--fn-shadow);
+}
+
+.bulk-order-toolbar strong {
+  color: var(--fn-heading);
+  white-space: nowrap;
+}
+
+.bulk-order-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
+.bulk-order-actions button {
+  min-height: 38px;
+}
+
+.order-select-column {
+  width: 44px;
+  min-width: 44px;
+  text-align: center;
+}
+
+.order-select-column input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--fn-primary);
+  cursor: pointer;
+}
+
+.order-row-selected td {
+  background: color-mix(in srgb, var(--fn-primary) 12%, var(--fn-surface));
+}
+
+.order-row-selected:hover td {
+  background: color-mix(in srgb, var(--fn-primary) 18%, var(--fn-surface));
+}
+
+@media (max-width: 760px) {
+  .bulk-order-toolbar {
+    position: static;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .bulk-order-actions {
+    justify-content: stretch;
+  }
+
+  .bulk-order-actions button {
+    flex: 1 1 160px;
+  }
+}
+
 .order-delete-modal {
   align-items: center;
   background: rgba(0, 0, 0, 0.55);

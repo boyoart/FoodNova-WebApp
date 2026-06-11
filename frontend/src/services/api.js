@@ -251,6 +251,16 @@ export const adminAPI = {
     return response.data;
   },
 
+  bulkDeleteOrders: async (orderIds = []) => {
+    const response = await api.post("/admin/orders/bulk-delete", { orderIds });
+    return response.data;
+  },
+
+  bulkUpdateOrderStatus: async (orderIds = [], status) => {
+    const response = await api.post("/admin/orders/bulk-status", { orderIds, status });
+    return response.data;
+  },
+
   getProducts: async () => {
     const response = await api.get("/admin/products");
     const products = normalizeList(response.data, ["products"]);
