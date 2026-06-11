@@ -7804,40 +7804,60 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
     require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:view", "workforce:manage"])
     db = SessionLocal()
     try:
-        query = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.worker_type.in_(["rider", "messenger"]))
+        query = db.query(DBDeliveryWorker).outerjoin(DBRider, DBRider.delivery_worker_id == DBDeliveryWorker.id).filter(DBDeliveryWorker.worker_type.in_(["rider", "messenger"]))
         if include_deleted or (status or "").lower() == "deleted":
             query = query.filter(or_(DBDeliveryWorker.deleted_at.isnot(None), DBDeliveryWorker.kyc_status == "DELETED"))
         else:
             query = query.filter(DBDeliveryWorker.deleted_at.is_(None), DBDeliveryWorker.kyc_status != "DELETED")
         if status and (status or "").lower() not in ["all", "deleted"]:
+            requested_status = (status or "").lower()
             status_map = {
-                "active": "APPROVED",
-                "approved": "APPROVED",
-                "pending": "PENDING_REVIEW",
-                "pending_review": "PENDING_REVIEW",
-                "inactive": "PENDING_REVIEW",
-                "rejected": "REJECTED",
-                "suspended": "SUSPENDED",
-                "deactivated": "DEACTIVATED",
+                "pending": ["PENDING_REVIEW", "KYC_PENDING"],
+                "pending_review": ["PENDING_REVIEW", "KYC_PENDING"],
+                "inactive": ["PENDING_REVIEW", "KYC_PENDING"],
+                "rejected": ["REJECTED"],
+                "suspended": ["SUSPENDED"],
+                "deactivated": ["DEACTIVATED"],
             }
-            wanted = status_map.get((status or "").lower(), (status or "").upper())
-            if wanted == "PENDING_REVIEW":
-                query = query.filter(DBDeliveryWorker.kyc_status.in_(["PENDING_REVIEW", "KYC_PENDING"]))
+            if requested_status in ["active", "approved"]:
+                query = query.filter(or_(
+                    DBDeliveryWorker.kyc_status.in_(["APPROVED", "ACTIVE"]),
+                    DBRider.status.in_(["approved", "active", "APPROVED", "ACTIVE"]),
+                ))
             else:
-                query = query.filter(DBDeliveryWorker.kyc_status == wanted)
+                wanted_values = status_map.get(requested_status, [(status or "").upper()])
+                query = query.filter(DBDeliveryWorker.kyc_status.in_(wanted_values))
+            if requested_status in ["pending", "pending_review", "inactive"]:
+                query = query.filter(DBDeliveryWorker.kyc_status.in_(["PENDING_REVIEW", "KYC_PENDING"]))
         riders = []
-        for worker in query.order_by(DBDeliveryWorker.kyc_status.asc(), DBDeliveryWorker.full_name.asc()).all():
+        worker_rows = query.order_by(DBDeliveryWorker.kyc_status.asc(), DBDeliveryWorker.full_name.asc()).all()
+        for worker in worker_rows:
+            linked_rider = db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).first()
             data = worker_to_dict(worker)
+            rider_status = (linked_rider.status if linked_rider else "") or ""
+            worker_status = data.get("kyc_status") or "KYC_PENDING"
+            active_status = worker_status in ["APPROVED", "ACTIVE"] or rider_status.upper() in ["APPROVED", "ACTIVE"]
             data.update({
-                "status": "deleted" if data.get("deleted_at") else "approved" if data.get("kyc_status") == "APPROVED" else "rejected" if data.get("kyc_status") == "REJECTED" else "suspended" if data.get("kyc_status") == "SUSPENDED" else "deactivated" if data.get("kyc_status") == "DEACTIVATED" else "pending",
+                "status": "deleted" if data.get("deleted_at") else "active" if active_status else "rejected" if worker_status == "REJECTED" else "suspended" if worker_status == "SUSPENDED" else "deactivated" if worker_status == "DEACTIVATED" else "pending",
                 "rider_id": worker.id,
                 "nin_status": "verified" if data.get("nin_verified") else "not_verified",
-                "approval_status": data.get("kyc_status") or "KYC_PENDING",
+                "approval_status": worker_status,
+                "rider_table_status": rider_status,
                 "vehicle_number": data.get("plate_number") or "",
                 "source": "delivery_workers",
             })
             riders.append(data)
-        print("ADMIN_RIDERS_FETCH", json_dump({"count": len(riders), "status": status or "all", "source": "delivery_workers"}))
+        print("ADMIN_RIDERS_FETCH", json_dump({
+            "total_riders_found": len(worker_rows),
+            "rider_ids_returned": [item.get("id") for item in riders],
+            "rider_status_values_returned": [
+                {"id": item.get("id"), "status": item.get("status"), "kyc_status": item.get("kyc_status"), "rider_table_status": item.get("rider_table_status")}
+                for item in riders
+            ],
+            "status_filter": status or "all",
+            "include_deleted": bool(include_deleted),
+            "source": "delivery_workers+riders",
+        }))
         return {"success": True, "riders": riders, "data": riders}
     finally:
         db.close()
@@ -8074,7 +8094,18 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         ).first()
         if not rider:
             raise HTTPException(status_code=404, detail="Rider not found")
-        if (rider.kyc_status or "") not in {"APPROVED", "ACTIVE"}:
+        linked_rider = db.query(DBRider).filter(DBRider.delivery_worker_id == rider.id).first()
+        worker_status = (rider.kyc_status or "").upper()
+        rider_table_status = ((linked_rider.status if linked_rider else "") or "").upper()
+        print("ASSIGN_RIDER_CANDIDATE", json_dump({
+            "order_id": order_id,
+            "rider_id": rider.id,
+            "worker_status": worker_status,
+            "rider_table_status": rider_table_status,
+            "deleted_at": iso(getattr(rider, "deleted_at", None)),
+            "allowed": worker_status in {"APPROVED", "ACTIVE"} or rider_table_status in {"APPROVED", "ACTIVE"},
+        }))
+        if worker_status not in {"APPROVED", "ACTIVE"} and rider_table_status not in {"APPROVED", "ACTIVE"}:
             raise HTTPException(status_code=400, detail="Rider must be approved before assignment")
 
         ensure_order_delivery_pin(db, order)

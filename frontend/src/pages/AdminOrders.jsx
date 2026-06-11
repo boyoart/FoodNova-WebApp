@@ -216,8 +216,25 @@ export default function AdminOrders() {
 
   const loadRiders = async () => {
     try {
-      const response = await adminAPI.getRiders()
-      setRiders((response.data || []).filter((rider) => rider.status === 'active'))
+      const response = await adminAPI.getRiders({ status: 'active' })
+      const assignable = (response.data || []).filter((rider) => {
+        const workerStatus = String(rider.kyc_status || rider.approval_status || '').toUpperCase()
+        const riderStatus = String(rider.rider_table_status || rider.status || '').toUpperCase()
+        const workerType = String(rider.worker_type || '').toLowerCase()
+        return workerType === 'rider' && (['APPROVED', 'ACTIVE'].includes(workerStatus) || ['APPROVED', 'ACTIVE'].includes(riderStatus))
+      })
+      console.info('ADMIN_ORDER_ASSIGNMENT_RIDERS', {
+        total_riders_found: response.data?.length || 0,
+        rider_ids_returned: assignable.map((rider) => rider.id),
+        rider_status_values_returned: assignable.map((rider) => ({
+          id: rider.id,
+          status: rider.status,
+          kyc_status: rider.kyc_status,
+          approval_status: rider.approval_status,
+          rider_table_status: rider.rider_table_status,
+        })),
+      })
+      setRiders(assignable)
     } catch (error) {
       if (![401, 403].includes(error?.response?.status)) console.error(error)
       setRiders([])
