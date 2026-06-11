@@ -52,13 +52,22 @@
 }
 
 .settings-status {
+  align-items: center;
   background: rgba(8, 122, 52, 0.1);
   border: 1px solid rgba(8, 122, 52, 0.18);
   border-radius: 999px;
   color: #087a34;
+  display: flex;
+  gap: 0.5rem;
   font-weight: 900;
   margin: 0 0 1rem;
   padding: 0.8rem 1rem;
+}
+
+.settings-status-warning {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.25);
+  color: #92400e;
 }
 
 .settings-card {

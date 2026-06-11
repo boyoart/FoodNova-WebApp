@@ -1,26 +1,46 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
-import { CalendarClock, Image, Megaphone, Sparkles, ToggleLeft } from 'lucide-react'
-import { adminAPI } from '../services/api'
-import { WEBSITE_SETTINGS_EVENT, fetchWebsiteSettings, getWebsiteSettings, saveWebsiteSettings } from '../utils/websiteSettings'
+import { AlertTriangle, CalendarClock, Image, Megaphone, Settings, Sparkles, ToggleLeft } from 'lucide-react'
+import { websiteSettingsAPI } from '../services/api'
+import { WEBSITE_SETTINGS_EVENT, defaultWebsiteSettings, fetchWebsiteSettings, getWebsiteSettings, saveWebsiteSettings } from '../utils/websiteSettings'
 import { useAuthStore } from '../store/authStore'
 import './AdminPages.css'
 import './AdminSettings.css'
 
 export default function AdminSettings() {
   const { isAdmin } = useAuthStore()
-  const [settings, setSettings] = useState(getWebsiteSettings)
+  const [settings, setSettings] = useState(() => getWebsiteSettings())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    const update = () => setSettings(getWebsiteSettings())
+    let mounted = true
+    const update = (event) => setSettings({ ...defaultWebsiteSettings, ...(event.detail || getWebsiteSettings()) })
     window.addEventListener(WEBSITE_SETTINGS_EVENT, update)
-    adminAPI.getWebsiteSettings()
-      .then((remote) => setSettings(saveWebsiteSettings(remote)))
-      .catch(() => fetchWebsiteSettings().then(setSettings))
-      .finally(() => setLoading(false))
-    return () => window.removeEventListener(WEBSITE_SETTINGS_EVENT, update)
+
+    const loadSettings = async () => {
+      try {
+        const remote = await websiteSettingsAPI.getAdmin()
+        if (!mounted) return
+        setLoadError('')
+        setSettings(saveWebsiteSettings(remote))
+      } catch (error) {
+        console.error('Failed to load admin website settings:', error)
+        const fallback = await fetchWebsiteSettings()
+        if (!mounted) return
+        setLoadError(error?.response?.data?.detail || 'Live settings could not be loaded. Showing the last saved settings.')
+        setSettings({ ...defaultWebsiteSettings, ...fallback })
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+
+    loadSettings()
+    return () => {
+      mounted = false
+      window.removeEventListener(WEBSITE_SETTINGS_EVENT, update)
+    }
   }, [])
 
   const update = async (patch) => {
@@ -28,17 +48,32 @@ export default function AdminSettings() {
     setSettings(optimistic)
     setSaving(true)
     try {
-      const remote = await adminAPI.updateWebsiteSettings(patch)
+      const remote = await websiteSettingsAPI.update(patch)
       const next = saveWebsiteSettings(remote)
       setSettings(next)
+      setLoadError('')
       toast.success('Website settings updated')
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to update website settings')
-      const refreshed = await fetchWebsiteSettings()
-      setSettings(refreshed)
+      try {
+        const refreshed = await fetchWebsiteSettings()
+        setSettings({ ...defaultWebsiteSettings, ...refreshed })
+      } catch {
+        setSettings(getWebsiteSettings())
+      }
     } finally {
       setSaving(false)
     }
+  }
+
+  const updateLaunchDate = (value) => {
+    if (!value) return update({ launchDate: '' })
+    const nextDate = new Date(value)
+    if (Number.isNaN(nextDate.getTime())) {
+      toast.error('Enter a valid launch date')
+      return
+    }
+    update({ launchDate: nextDate.toISOString() })
   }
 
   if (!isAdmin) return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
@@ -57,6 +92,13 @@ export default function AdminSettings() {
       {(loading || saving) && (
         <div className="settings-status">
           {loading ? 'Loading live website settings...' : 'Applying website mode across the app...'}
+        </div>
+      )}
+
+      {loadError && (
+        <div className="settings-status settings-status-warning">
+          <AlertTriangle size={18} />
+          <span>{loadError}</span>
         </div>
       )}
 
@@ -84,6 +126,36 @@ export default function AdminSettings() {
             <span />
           </label>
         </article>
+
+        <article className="settings-card">
+          <AlertTriangle size={24} />
+          <div>
+            <h2>Maintenance Mode</h2>
+            <p>Stores the maintenance flag used by the website settings API.</p>
+          </div>
+          <label className="settings-switch">
+            <input type="checkbox" checked={Boolean(settings.maintenanceMode)} onChange={(event) => update({ maintenanceMode: event.target.checked })} disabled={saving} />
+            <span />
+          </label>
+        </article>
+      </section>
+
+      <section className="settings-form-card">
+        <div className="settings-form-title">
+          <Settings size={24} />
+          <div>
+            <h2>Site Configuration</h2>
+            <p>Manage the public site name and description stored in website settings.</p>
+          </div>
+        </div>
+        <label>
+          Site name
+          <input value={settings.siteName || ''} onChange={(event) => update({ siteName: event.target.value })} disabled={saving} />
+        </label>
+        <label>
+          Site description
+          <textarea value={settings.siteDescription || ''} onChange={(event) => update({ siteDescription: event.target.value })} rows={3} disabled={saving} />
+        </label>
       </section>
 
       <section className="settings-form-card">
@@ -99,7 +171,7 @@ export default function AdminSettings() {
           <input
             type="datetime-local"
             value={settings.launchDate ? settings.launchDate.slice(0, 16) : ''}
-            onChange={(event) => update({ launchDate: new Date(event.target.value).toISOString() })}
+            onChange={(event) => updateLaunchDate(event.target.value)}
             disabled={saving}
           />
         </label>

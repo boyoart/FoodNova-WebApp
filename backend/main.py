@@ -187,8 +187,11 @@ def default_website_settings() -> dict:
     launch_date = launch_date.replace(hour=9, minute=0, second=0, microsecond=0)
     return {
         "comingSoonEnabled": False,
+        "maintenanceMode": False,
         "splashEnabled": True,
         "launchDate": launch_date.isoformat() + "Z",
+        "siteName": "FoodNova",
+        "siteDescription": "Premium grocery delivery for your neighborhood.",
         "headline": "Launching Soon",
         "subtext": "FoodNova is preparing a premium grocery experience for your neighborhood.",
         "homepageBanners": "",
@@ -203,10 +206,11 @@ def normalize_website_settings(raw: dict = None) -> dict:
     if isinstance(raw, dict):
         settings.update({key: value for key, value in raw.items() if value is not None})
     settings["comingSoonEnabled"] = bool(settings.get("comingSoonEnabled"))
+    settings["maintenanceMode"] = bool(settings.get("maintenanceMode"))
     settings["splashEnabled"] = bool(settings.get("splashEnabled"))
     if not isinstance(settings.get("subscribers"), list):
         settings["subscribers"] = []
-    for key in ["headline", "subtext", "launchDate", "homepageBanners", "featuredPacks", "homepageAnnouncement"]:
+    for key in ["siteName", "siteDescription", "headline", "subtext", "launchDate", "homepageBanners", "featuredPacks", "homepageAnnouncement"]:
         settings[key] = str(settings.get(key) or default_website_settings().get(key, ""))
     return settings
 
@@ -1411,8 +1415,11 @@ def set_app_setting(db, key: str, value: str) -> DBAppSetting:
 
 class WebsiteSettingsPayload(BaseModel):
     comingSoonEnabled: Optional[bool] = None
+    maintenanceMode: Optional[bool] = None
     splashEnabled: Optional[bool] = None
     launchDate: Optional[str] = None
+    siteName: Optional[str] = None
+    siteDescription: Optional[str] = None
     headline: Optional[str] = None
     subtext: Optional[str] = None
     homepageBanners: Optional[str] = None
@@ -1440,12 +1447,6 @@ def get_public_website_settings():
             "timestamp": iso(datetime.utcnow()),
         }))
         public_settings = {key: value for key, value in normalize_website_settings().items() if key != "subscribers"}
-        worker_data = worker_to_dict(worker)
-        worker_data["current_step"] = progress.get("current_step")
-        worker_data["onboarding_current_step"] = progress.get("current_step")
-        worker_data["onboarding_step_total"] = progress.get("step_total")
-        worker_data["onboarding_progress_percent"] = progress.get("progress_percent")
-        worker_data["onboarding_stage"] = progress.get("onboarding_stage")
         return {
             "success": True,
             "settings": public_settings,

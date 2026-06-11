@@ -12,8 +12,11 @@ const defaultLaunchDate = () => {
 
 export const defaultWebsiteSettings = {
   comingSoonEnabled: false,
+  maintenanceMode: false,
   splashEnabled: true,
   launchDate: defaultLaunchDate(),
+  siteName: 'FoodNova',
+  siteDescription: 'Premium grocery delivery for your neighborhood.',
   headline: 'Launching Soon',
   subtext: 'FoodNova is preparing a premium grocery experience for your neighborhood.',
   homepageBanners: '',
