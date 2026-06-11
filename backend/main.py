@@ -2413,9 +2413,13 @@ def delivery_area_for_order(order: DBOrder) -> str:
     return area or "Customer area"
 
 
+DELIVERY_PIN_LENGTH = 4
+LEGACY_DELIVERY_PIN_LENGTHS = {6}
+
+
 def generate_delivery_pin(db) -> str:
     for _ in range(20):
-        code = f"{random.randint(0, 9999):04d}"
+        code = f"{random.randint(0, 10 ** DELIVERY_PIN_LENGTH - 1):0{DELIVERY_PIN_LENGTH}d}"
         exists = db.query(DBOrder).filter(
             DBOrder.delivery_code == code,
             DBOrder.delivery_confirmed_at.is_(None),
@@ -2423,7 +2427,19 @@ def generate_delivery_pin(db) -> str:
         ).first()
         if not exists:
             return code
-    return f"{random.randint(0, 9999):04d}"
+    return f"{random.randint(0, 10 ** DELIVERY_PIN_LENGTH - 1):0{DELIVERY_PIN_LENGTH}d}"
+
+
+def validate_delivery_pin_input(submitted_code: str, stored_code: str) -> str:
+    submitted = str(submitted_code or "").strip()
+    stored = str(stored_code or "").strip()
+    expected_lengths = {DELIVERY_PIN_LENGTH}
+    if len(stored) in LEGACY_DELIVERY_PIN_LENGTHS:
+        expected_lengths.add(len(stored))
+    if not submitted.isdigit() or len(submitted) not in expected_lengths:
+        expected = " or ".join(f"{length} digits" for length in sorted(expected_lengths))
+        raise HTTPException(status_code=400, detail=f"Delivery confirmation code must be exactly {expected}")
+    return submitted
 
 
 def ensure_order_delivery_pin(db, order: DBOrder) -> str:
@@ -8502,12 +8518,12 @@ def confirm_delivery(order_id: int, payload: dict):
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        delivery_code = str(payload.get("delivery_code", "")).strip()
         stored_code = str(order.delivery_code or "").strip()
 
         if not stored_code:
             raise HTTPException(status_code=400, detail="No delivery code generated for this order")
 
+        delivery_code = validate_delivery_pin_input(payload.get("delivery_code", ""), stored_code)
         if delivery_code != stored_code:
             raise HTTPException(status_code=400, detail="Invalid delivery confirmation code")
 
@@ -8632,7 +8648,8 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
             stored_code = str(order.delivery_code or "").strip()
             if not stored_code:
                 raise HTTPException(status_code=400, detail="No delivery code generated for this order")
-            if str(payload.delivery_code).strip() != stored_code:
+            delivery_code = validate_delivery_pin_input(payload.delivery_code, stored_code)
+            if delivery_code != stored_code:
                 raise HTTPException(status_code=400, detail="Invalid delivery confirmation code")
             order.delivery_confirmed_at = datetime.utcnow()
         elif not proof["signature_present"] and not proof["photo_url"]:

@@ -181,14 +181,15 @@ export default function OrderHistoryPage() {
 
   const handleDeliveryConfirmation = async (e) => {
     e.preventDefault()
-    if (!deliveryCode.trim()) {
-      toast.error('Please enter the delivery confirmation code')
+    const code = deliveryCode.trim()
+    if (!/^\d{4}$/.test(code)) {
+      toast.error('Please enter the 4-digit delivery confirmation code')
       return
     }
 
     try {
       setConfirmingDelivery(true)
-      const response = await ordersAPI.confirmDelivery(selectedOrder.id, deliveryCode)
+      const response = await ordersAPI.confirmDelivery(selectedOrder.id, code)
       const updatedOrder = response?.order || response?.data || response
       toast.success('Delivery confirmed successfully!')
       await fetchOrders()
@@ -611,8 +612,8 @@ export default function OrderHistoryPage() {
                   <form onSubmit={handleDeliveryConfirmation}>
                     <div className="form-group">
                       <label>Delivery Confirmation Code</label>
-                      <input type="text" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value)} placeholder="Enter 6-digit code" maxLength="6" inputMode="numeric" required disabled={confirmingDelivery} />
-                      <p className="code-format-hint">6-digit numeric code</p>
+                      <input type="text" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit OTP" maxLength="4" inputMode="numeric" pattern="\d{4}" required disabled={confirmingDelivery} />
+                      <p className="code-format-hint">Enter the 4-digit code from your rider</p>
                     </div>
                     <button type="submit" className="btn btn-primary" disabled={confirmingDelivery}>{confirmingDelivery ? 'Confirming...' : 'Confirm Delivery'}</button>
                   </form>

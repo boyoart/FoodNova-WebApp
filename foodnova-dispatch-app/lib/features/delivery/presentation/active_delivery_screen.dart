@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -184,7 +185,16 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
             const SizedBox(height: 12),
             TextField(
               controller: otp,
-              decoration: const InputDecoration(labelText: 'Customer OTP'),
+              decoration: const InputDecoration(
+                labelText: 'Customer OTP',
+                hintText: '4-digit OTP',
+              ),
+              keyboardType: TextInputType.number,
+              maxLength: 4,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ],
             ),
             const SizedBox(height: 12),
             Container(
@@ -225,6 +235,10 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   Future<void> _completeDelivery() async {
     try {
       if (otp.text.trim().isNotEmpty) {
+        if (!RegExp(r'^\d{4}$').hasMatch(otp.text.trim())) {
+          setState(() => message = 'Enter the 4-digit OTP from the customer.');
+          return;
+        }
         await ref
             .read(dispatchRepositoryProvider)
             .confirmDeliveryOtp(offer.orderId, otp.text.trim());
