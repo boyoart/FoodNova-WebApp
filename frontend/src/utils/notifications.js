@@ -35,7 +35,7 @@ export const saveBroadcastForCustomers = (broadcast) => {
 }
 
 export const getOutForDeliveryMessage = (orderCode) =>
-  `Your order ${orderCode} is out for delivery. The dispatch rider will provide the delivery confirmation code when they arrive. Enter it in the app only after you have received your order.`
+  `Your order ${orderCode} is out for delivery. The dispatch rider will provide the 4-digit delivery PIN when they arrive. Enter it in the app only after you have received your order.`
 
 export const sanitizeBackendNotifications = (items = []) =>
   items

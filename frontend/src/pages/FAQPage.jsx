@@ -53,12 +53,12 @@ const faqGroups = [
         answer: 'If a rider is assigned, rider information may appear in your order details.',
       },
       {
-        question: 'What is the delivery confirmation code?',
-        answer: 'When the order is out for delivery, the dispatch rider provides a delivery confirmation code. Enter the code only after receiving your order.',
+        question: 'What is the 4-digit delivery PIN?',
+        answer: 'When the order is out for delivery, the dispatch rider provides a 4-digit delivery PIN. Enter the PIN only after receiving your order.',
       },
       {
         question: 'Should I share the delivery code before receiving my order?',
-        answer: 'No. Only enter or share the delivery confirmation code after your order has been received.',
+        answer: 'No. Only enter or share the 4-digit delivery PIN after your order has been received.',
       },
     ],
   },

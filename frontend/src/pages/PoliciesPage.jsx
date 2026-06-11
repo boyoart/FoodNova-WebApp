@@ -53,7 +53,7 @@ const policies = [
       'Provide correct name, phone number, and address.',
       'Upload correct payment receipt.',
       'Keep order code for support inquiries.',
-      'Do not share or enter delivery confirmation code before receiving the order.',
+      'Do not share or enter the 4-digit delivery PIN before receiving the order.',
     ],
   },
 ]

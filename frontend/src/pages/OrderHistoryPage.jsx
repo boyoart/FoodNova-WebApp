@@ -183,7 +183,7 @@ export default function OrderHistoryPage() {
     e.preventDefault()
     const code = deliveryCode.trim()
     if (!/^\d{4}$/.test(code)) {
-      toast.error('Please enter the 4-digit delivery confirmation code')
+      toast.error('Enter the 4-digit delivery PIN.')
       return
     }
 
@@ -608,12 +608,12 @@ export default function OrderHistoryPage() {
               {selectedOrder.delivery_method === 'delivery' && normalizeOrderStatusValue(selectedOrder) === 'out_for_delivery' && !selectedOrder.delivery_confirmed_at && (
                 <div className="delivery-confirmation-section">
                   <h4>Confirm Delivery</h4>
-                  <p className="confirmation-instruction">✓ Your order is out for delivery! Enter the confirmation code provided by the rider to confirm delivery.</p>
+                  <p className="confirmation-instruction">✓ Your order is out for delivery! Enter the 4-digit PIN from your rider to confirm delivery.</p>
                   <form onSubmit={handleDeliveryConfirmation}>
                     <div className="form-group">
                       <label>Delivery Confirmation Code</label>
-                      <input type="text" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit OTP" maxLength="4" inputMode="numeric" pattern="\d{4}" required disabled={confirmingDelivery} />
-                      <p className="code-format-hint">Enter the 4-digit code from your rider</p>
+                      <input type="text" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit PIN" maxLength="4" inputMode="numeric" pattern="\d{4}" required disabled={confirmingDelivery} />
+                      <p className="code-format-hint">Enter the 4-digit PIN from your rider to confirm delivery.</p>
                     </div>
                     <button type="submit" className="btn btn-primary" disabled={confirmingDelivery}>{confirmingDelivery ? 'Confirming...' : 'Confirm Delivery'}</button>
                   </form>
