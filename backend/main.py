@@ -2479,6 +2479,57 @@ def dispatch_order_to_dict(order: DBOrder) -> dict:
     return data
 
 
+def order_rider_location_payload(order: DBOrder, db) -> dict:
+    worker_id = getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None)
+    worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id).first() if worker_id else None
+    customer_lat, customer_lng = get_order_delivery_coordinates(order)
+    rider_lat = getattr(worker, "latest_latitude", None) if worker else None
+    rider_lng = getattr(worker, "latest_longitude", None) if worker else None
+    distance_remaining = None
+    eta_minutes = None
+    route_polyline = []
+    if rider_lat is not None and rider_lng is not None and customer_lat is not None and customer_lng is not None:
+        distance_remaining = distance_meters(rider_lat, rider_lng, customer_lat, customer_lng)
+        eta_minutes = max(1, math.ceil((distance_remaining / 1000) / 25 * 60))
+        route_polyline = [
+            {"latitude": rider_lat, "longitude": rider_lng},
+            {"latitude": customer_lat, "longitude": customer_lng},
+        ]
+
+    dispatch_status = canonical_dispatch_status(order)
+    tracking_visible = dispatch_status in {"PICKED_UP", "IN_TRANSIT", "ARRIVED"}
+    if getattr(order, "delivery_confirmed_at", None):
+        tracking_visible = False
+
+    return {
+        "order_id": order.id,
+        "order_code": order.order_code or "",
+        "delivery_status": dispatch_status,
+        "tracking_visible": tracking_visible,
+        "rider": {
+            "id": worker.id if worker else worker_id,
+            "name": (worker.full_name if worker else None) or getattr(order, "rider_name", "") or "",
+            "phone": (worker.phone if worker else None) or getattr(order, "rider_phone", "") or "",
+            "vehicle_type": (worker.vehicle_type if worker else None) or getattr(order, "rider_vehicle_type", "") or "",
+            "vehicle_number": (worker.plate_number if worker else None) or getattr(order, "rider_vehicle_number", "") or "",
+            "latitude": rider_lat,
+            "longitude": rider_lng,
+            "accuracy": getattr(worker, "latest_accuracy", None) if worker else None,
+            "heading": getattr(worker, "latest_heading", None) if worker else None,
+            "speed": getattr(worker, "latest_speed", None) if worker else None,
+            "last_updated_at": iso(getattr(worker, "last_seen_at", None)) if worker else "",
+        },
+        "customer": {
+            "latitude": customer_lat,
+            "longitude": customer_lng,
+            "address": order.delivery_address or "",
+        },
+        "distance_meters": distance_remaining,
+        "eta_minutes": eta_minutes,
+        "route_polyline": route_polyline,
+    }
+
+
 def worker_inside_zone(worker: DBDeliveryWorker, latitude: float, longitude: float, db) -> bool:
     if (worker.worker_type or "") != "messenger":
         return False
@@ -6953,6 +7004,19 @@ def get_order(order_id: int):
         db.close()
 
     raise HTTPException(status_code=404, detail="Order not found")
+
+
+@app.get("/orders/{order_id}/rider-location")
+def get_order_rider_location(order_id: int):
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        data = order_rider_location_payload(order, db)
+        return {"success": True, "tracking": data, "data": data}
+    finally:
+        db.close()
 
 
 @app.post("/orders/{order_id}/receipt")

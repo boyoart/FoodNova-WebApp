@@ -861,7 +861,7 @@ void _showSupportSheet(BuildContext context) {
           const _FaqTile(
             question: 'How do I confirm delivery?',
             answer:
-                'When your order is out for delivery, enter the 6-digit code provided by the delivery worker in your order details.',
+                'When your order is out for delivery, enter the 4-digit PIN from your rider to confirm delivery.',
           ),
           const _FaqTile(
             question: 'Can I request a refund?',

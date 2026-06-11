@@ -41,7 +41,8 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   @override
   void initState() {
     super.initState();
-    timer = Timer.periodic(const Duration(seconds: 30), (_) => _ping());
+    _ping();
+    timer = Timer.periodic(const Duration(seconds: 10), (_) => _ping());
   }
 
   @override
@@ -150,6 +151,10 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
       stage = next;
       message = '';
     });
+    if (next == DeliveryStage.delivered) {
+      timer?.cancel();
+      timer = null;
+    }
     try {
       await ref
           .read(dispatchRepositoryProvider)
@@ -186,8 +191,8 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
             TextField(
               controller: otp,
               decoration: const InputDecoration(
-                labelText: 'Customer OTP',
-                hintText: '4-digit OTP',
+                labelText: 'Customer PIN',
+                hintText: '4-digit PIN',
               ),
               keyboardType: TextInputType.number,
               maxLength: 4,
@@ -236,7 +241,7 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
     try {
       if (otp.text.trim().isNotEmpty) {
         if (!RegExp(r'^\d{4}$').hasMatch(otp.text.trim())) {
-          setState(() => message = 'Enter the 4-digit OTP from the customer.');
+          setState(() => message = 'Enter the 4-digit PIN from the customer.');
           return;
         }
         await ref
@@ -251,7 +256,7 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
         if (!mounted) return;
         setState(
           () => message =
-              'Add OTP, signature, or delivery photo before marking delivered.',
+              'Add PIN, signature, or delivery photo before marking delivered.',
         );
         return;
       }
@@ -265,6 +270,7 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   }
 
   Future<void> _ping() async {
+    if (stage == DeliveryStage.delivered) return;
     try {
       final pos = await LocationService().current();
       await ref

@@ -1,7 +1,11 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -14,6 +18,11 @@ import '../../orders/data/orders_repository.dart';
 
 final orderDetailProvider = FutureProvider.family<OrderSummary, int>((ref, id) {
   return ref.watch(ordersRepositoryProvider).order(id);
+});
+
+final riderLocationProvider =
+    FutureProvider.family<RiderLocation?, int>((ref, id) {
+  return ref.watch(ordersRepositoryProvider).riderLocation(id);
 });
 
 class TrackingScreen extends ConsumerStatefulWidget {
@@ -32,9 +41,20 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   bool _verifying = false;
   bool _verified = false;
   double _progress = 0;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      ref.invalidate(riderLocationProvider(widget.orderId));
+    });
+  }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     _deliveryCode.dispose();
     super.dispose();
   }
@@ -99,8 +119,8 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
   Future<void> _verifyDelivery() async {
     final code = _deliveryCode.text.trim();
-    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
-      _toast('Enter the 6-digit delivery verification code.');
+    if (!RegExp(r'^\d{4}$').hasMatch(code)) {
+      _toast('Enter the 4-digit PIN from your rider to confirm delivery.');
       return;
     }
     if (!mounted) return;
@@ -115,10 +135,31 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
       ref.invalidate(ordersProvider);
       _toast('Delivery verified. Your order is now delivered.');
     } catch (error) {
-      _toast('Delivery verification failed: $error');
+      _toast('Delivery confirmation failed: $error');
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
+  }
+
+  Future<void> _callRider(OrderSummary order) async {
+    final phone = order.riderPhone.trim();
+    if (phone.isEmpty) return;
+    await launchUrl(Uri(scheme: 'tel', path: phone));
+  }
+
+  Future<void> _messageRider(OrderSummary order) async {
+    final digits = order.riderPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (digits.isEmpty) return;
+    final appUri = Uri.parse('whatsapp://send?phone=$digits');
+    if (await canLaunchUrl(appUri)) {
+      await launchUrl(appUri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    final webDigits = digits.startsWith('+') ? digits.substring(1) : digits;
+    await launchUrl(
+      Uri.parse('https://wa.me/$webDigits'),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   void _toast(String message) {
@@ -137,8 +178,10 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
         actions: [
           IconButton(
             tooltip: 'Refresh',
-            onPressed: () =>
-                ref.invalidate(orderDetailProvider(widget.orderId)),
+            onPressed: () {
+              ref.invalidate(orderDetailProvider(widget.orderId));
+              ref.invalidate(riderLocationProvider(widget.orderId));
+            },
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
@@ -153,25 +196,37 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
             icon: Icons.wifi_off_rounded,
           ),
         ),
-        data: (order) => RefreshIndicator(
-          onRefresh: () async => ref.invalidate(orderDetailProvider(order.id)),
-          child: _OrderDetailsView(
-            order: order,
-            selectedReceipt: _selectedReceipt,
-            uploading: _uploading,
-            uploadProgress: _progress,
-            deliveryCode: _deliveryCode,
-            verifying: _verifying,
-            verified: _verified,
-            onPickCamera: () => _pickImage(ImageSource.camera),
-            onPickGallery: () => _pickImage(ImageSource.gallery),
-            onPickFile: _pickFile,
-            onUpload: _uploadReceipt,
-            onVerifyDelivery: _verifyDelivery,
-            onRefresh: () => ref.invalidate(orderDetailProvider(order.id)),
-            onCancel: () => _showCancelRequestSheet(context, ref, order),
-          ),
-        ),
+        data: (order) {
+          final riderLocation = ref.watch(riderLocationProvider(order.id));
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(orderDetailProvider(order.id));
+              ref.invalidate(riderLocationProvider(order.id));
+            },
+            child: _OrderDetailsView(
+              order: order,
+              riderLocation: riderLocation,
+              selectedReceipt: _selectedReceipt,
+              uploading: _uploading,
+              uploadProgress: _progress,
+              deliveryCode: _deliveryCode,
+              verifying: _verifying,
+              verified: _verified,
+              onPickCamera: () => _pickImage(ImageSource.camera),
+              onPickGallery: () => _pickImage(ImageSource.gallery),
+              onPickFile: _pickFile,
+              onUpload: _uploadReceipt,
+              onVerifyDelivery: _verifyDelivery,
+              onCallRider: () => _callRider(order),
+              onMessageRider: () => _messageRider(order),
+              onRefresh: () {
+                ref.invalidate(orderDetailProvider(order.id));
+                ref.invalidate(riderLocationProvider(order.id));
+              },
+              onCancel: () => _showCancelRequestSheet(context, ref, order),
+            ),
+          );
+        },
       ),
     );
   }
@@ -207,6 +262,7 @@ class _OrderSkeleton extends StatelessWidget {
 class _OrderDetailsView extends StatelessWidget {
   const _OrderDetailsView({
     required this.order,
+    required this.riderLocation,
     required this.selectedReceipt,
     required this.uploading,
     required this.uploadProgress,
@@ -218,11 +274,14 @@ class _OrderDetailsView extends StatelessWidget {
     required this.onPickFile,
     required this.onUpload,
     required this.onVerifyDelivery,
+    required this.onCallRider,
+    required this.onMessageRider,
     required this.onRefresh,
     required this.onCancel,
   });
 
   final OrderSummary order;
+  final AsyncValue<RiderLocation?> riderLocation;
   final _ReceiptFile? selectedReceipt;
   final bool uploading;
   final double uploadProgress;
@@ -234,6 +293,8 @@ class _OrderDetailsView extends StatelessWidget {
   final VoidCallback onPickFile;
   final VoidCallback onUpload;
   final VoidCallback onVerifyDelivery;
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
   final VoidCallback onRefresh;
   final VoidCallback onCancel;
 
@@ -244,8 +305,11 @@ class _OrderDetailsView extends StatelessWidget {
       symbol: 'NGN ',
       decimalDigits: 0,
     );
-    final showVerification =
-        order.isOutForDelivery || order.isDelivered || verified;
+    final showVerification = order.isOutForDelivery ||
+        order.riderArrived ||
+        order.isDelivered ||
+        verified;
+    final showTracking = order.isDeliveryTrackingVisible;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 118),
@@ -270,7 +334,20 @@ class _OrderDetailsView extends StatelessWidget {
           onUpload: onUpload,
         ),
         const SizedBox(height: 14),
-        _DeliveryCard(order: order),
+        _DeliveryCard(
+          order: order,
+          onCallRider: onCallRider,
+          onMessageRider: onMessageRider,
+        ),
+        if (showTracking) ...[
+          const SizedBox(height: 14),
+          _RiderTrackingCard(
+            order: order,
+            location: riderLocation,
+            onCallRider: onCallRider,
+            onMessageRider: onMessageRider,
+          ),
+        ],
         if (showVerification) ...[
           const SizedBox(height: 14),
           _VerificationCard(
@@ -278,6 +355,7 @@ class _OrderDetailsView extends StatelessWidget {
             controller: deliveryCode,
             loading: verifying,
             verified: verified || order.isDelivered,
+            highlight: order.riderArrived,
             onVerify: onVerifyDelivery,
           ),
         ],
@@ -358,13 +436,13 @@ class _TimelineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = [
-      _Step('Order placed', Icons.receipt_long_rounded),
-      _Step('Payment confirmed', Icons.verified_rounded),
-      _Step('Processing', Icons.inventory_2_rounded),
+      _Step('Assigned', Icons.assignment_turned_in_rounded),
+      _Step('Picked up', Icons.shopping_bag_rounded),
       _Step('Out for delivery', Icons.local_shipping_rounded),
+      _Step('Arrived', Icons.place_rounded),
       _Step('Delivered', Icons.check_circle_rounded),
     ];
-    final active = _activeIndex(order.status, order.paymentStatus);
+    final active = _activeIndex(order);
     return _Card(
       title: 'Order timeline',
       icon: Icons.timeline_rounded,
@@ -578,9 +656,15 @@ class _ReceiptCard extends StatelessWidget {
 }
 
 class _DeliveryCard extends StatelessWidget {
-  const _DeliveryCard({required this.order});
+  const _DeliveryCard({
+    required this.order,
+    required this.onCallRider,
+    required this.onMessageRider,
+  });
 
   final OrderSummary order;
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
 
   @override
   Widget build(BuildContext context) {
@@ -609,9 +693,50 @@ class _DeliveryCard extends StatelessWidget {
                 ? 'Not available'
                 : order.customerPhone,
           ),
-          if (order.dispatcherName.isNotEmpty) ...[
+          if (order.hasAssignedRider) ...[
             const SizedBox(height: 8),
-            _InfoRow(label: 'Rider', value: order.dispatcherName),
+            _InfoRow(
+              label: 'Rider Name',
+              value: order.riderName.trim().isEmpty
+                  ? 'Assigned rider'
+                  : order.riderName,
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(
+              label: 'Rider Phone',
+              value: order.riderPhone.trim().isEmpty
+                  ? 'Not available'
+                  : order.riderPhone,
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(
+              label: 'Delivery Status',
+              value: _labelize(order.deliveryStatus.isEmpty
+                  ? order.status
+                  : order.deliveryStatus),
+            ),
+            if (order.riderPhone.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onCallRider,
+                      icon: const Icon(Icons.call_rounded),
+                      label: const Text('Contact Rider'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onMessageRider,
+                      icon: const Icon(Icons.chat_rounded),
+                      label: const Text('WhatsApp'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
           if (order.deliveryNotes.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -623,12 +748,205 @@ class _DeliveryCard extends StatelessWidget {
   }
 }
 
+class _RiderTrackingCard extends StatelessWidget {
+  const _RiderTrackingCard({
+    required this.order,
+    required this.location,
+    required this.onCallRider,
+    required this.onMessageRider,
+  });
+
+  final OrderSummary order;
+  final AsyncValue<RiderLocation?> location;
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Card(
+      title: order.riderArrived ? 'Rider has arrived' : 'Track Rider',
+      icon: order.riderArrived
+          ? Icons.delivery_dining_rounded
+          : Icons.map_rounded,
+      child: location.when(
+        loading: () => const SizedBox(
+          height: 220,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+        error: (error, _) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _MutedText('Rider tracking is temporarily unavailable. $error'),
+            if (order.riderPhone.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              _RiderContactButtons(
+                onCallRider: onCallRider,
+                onMessageRider: onMessageRider,
+              ),
+            ],
+          ],
+        ),
+        data: (data) {
+          if (data == null || !data.trackingVisible) {
+            return const _MutedText(
+              'Tracking will appear when your rider picks up the order.',
+            );
+          }
+          final riderPoint = data.hasRiderCoordinates
+              ? LatLng(data.riderLatitude!, data.riderLongitude!)
+              : null;
+          final customerPoint = data.hasCustomerCoordinates
+              ? LatLng(data.customerLatitude!, data.customerLongitude!)
+              : null;
+          final mapCenter =
+              riderPoint ?? customerPoint ?? const LatLng(6.5244, 3.3792);
+          final markers = <Marker>{};
+          if (riderPoint != null) {
+            markers.add(Marker(
+              markerId: const MarkerId('rider'),
+              position: riderPoint,
+              infoWindow: InfoWindow(
+                title: data.riderName.isEmpty ? 'Rider' : data.riderName,
+              ),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueGreen,
+              ),
+            ));
+          }
+          if (customerPoint != null) {
+            markers.add(Marker(
+              markerId: const MarkerId('customer'),
+              position: customerPoint,
+              infoWindow: const InfoWindow(title: 'Delivery address'),
+            ));
+          }
+          final routePoints = data.routePolyline
+              .map((point) => LatLng(point['latitude']!, point['longitude']!))
+              .toList();
+          final polylines = routePoints.length >= 2
+              ? {
+                  Polyline(
+                    polylineId: const PolylineId('route'),
+                    points: routePoints,
+                    width: 5,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                }
+              : <Polyline>{};
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (order.riderArrived) ...[
+                Text(
+                  'Rider has arrived',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                const _MutedText(
+                  'Meet your rider and use the delivery PIN card below to confirm delivery.',
+                ),
+                const SizedBox(height: 12),
+              ],
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: SizedBox(
+                  height: 240,
+                  child: riderPoint == null && customerPoint == null
+                      ? const Center(
+                          child: _MutedText(
+                            'Waiting for rider GPS from the dispatch app.',
+                          ),
+                        )
+                      : GoogleMap(
+                          initialCameraPosition: CameraPosition(
+                            target: mapCenter,
+                            zoom: 13,
+                          ),
+                          markers: markers,
+                          polylines: polylines,
+                          zoomControlsEnabled: false,
+                          myLocationButtonEnabled: false,
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _InfoRow(
+                label: 'Distance remaining',
+                value: _formatDistance(data.distanceMeters),
+              ),
+              const SizedBox(height: 8),
+              _InfoRow(
+                label: 'ETA',
+                value: data.etaMinutes == null
+                    ? 'Estimating'
+                    : '~${data.etaMinutes} min',
+              ),
+              const SizedBox(height: 8),
+              _InfoRow(
+                label: 'Last updated',
+                value: data.lastUpdatedAt.isEmpty
+                    ? 'Waiting for update'
+                    : data.lastUpdatedAt,
+              ),
+              if (order.riderPhone.trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _RiderContactButtons(
+                  onCallRider: onCallRider,
+                  onMessageRider: onMessageRider,
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RiderContactButtons extends StatelessWidget {
+  const _RiderContactButtons({
+    required this.onCallRider,
+    required this.onMessageRider,
+  });
+
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onCallRider,
+            icon: const Icon(Icons.call_rounded),
+            label: const Text('Contact Rider'),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: onMessageRider,
+            icon: const Icon(Icons.chat_rounded),
+            label: const Text('WhatsApp'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _VerificationCard extends StatelessWidget {
   const _VerificationCard({
     required this.order,
     required this.controller,
     required this.loading,
     required this.verified,
+    required this.highlight,
     required this.onVerify,
   });
 
@@ -636,33 +954,38 @@ class _VerificationCard extends StatelessWidget {
   final TextEditingController controller;
   final bool loading;
   final bool verified;
+  final bool highlight;
   final VoidCallback onVerify;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return _Card(
-      title: verified ? 'Delivery verified' : 'Delivery verification',
+      title: verified ? 'Delivery verified' : 'Confirm Delivery',
       icon: verified ? Icons.verified_rounded : Icons.password_rounded,
+      highlighted: highlight && !verified,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _MutedText(
             verified
                 ? 'This order has been securely confirmed as delivered.'
-                : 'Your order is out for delivery. Enter the 6-digit code from your rider to confirm receipt.',
+                : 'Your order is out for delivery. Enter the 4-digit PIN from your rider to confirm delivery.',
           ),
           if (!verified) ...[
             const SizedBox(height: 14),
             TextField(
               controller: controller,
               enabled: !loading,
-              maxLength: 6,
+              maxLength: 4,
               keyboardType: TextInputType.number,
               textInputAction: TextInputAction.done,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(4),
+              ],
               decoration: const InputDecoration(
-                labelText: '6-digit OTP',
+                hintText: '4-digit PIN',
                 counterText: '',
                 prefixIcon: Icon(Icons.pin_rounded),
               ),
@@ -772,11 +1095,18 @@ class _CancellationCard extends StatelessWidget {
 }
 
 class _Card extends StatelessWidget {
-  const _Card({this.title, this.icon, this.trailing, required this.child});
+  const _Card({
+    this.title,
+    this.icon,
+    this.trailing,
+    this.highlighted = false,
+    required this.child,
+  });
 
   final String? title;
   final IconData? icon;
   final Widget? trailing;
+  final bool highlighted;
   final Widget child;
 
   @override
@@ -785,9 +1115,14 @@ class _Card extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: scheme.surface,
+        color: highlighted
+            ? scheme.primaryContainer.withValues(alpha: .28)
+            : scheme.surface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: scheme.outlineVariant),
+        border: Border.all(
+          color: highlighted ? scheme.primary : scheme.outlineVariant,
+          width: highlighted ? 1.4 : 1,
+        ),
         boxShadow: [
           BoxShadow(
             color: scheme.shadow.withValues(alpha: .08),
@@ -959,18 +1294,26 @@ class _Step {
   final IconData icon;
 }
 
-int _activeIndex(String status, String paymentStatus) {
-  final value = '$status $paymentStatus'.toLowerCase();
+int _activeIndex(OrderSummary order) {
+  final value = '${order.status} ${order.deliveryStatus}'.toLowerCase();
   if (value.contains('delivered')) return 4;
+  if (value.contains('arrived')) return 3;
   if (value.contains('out_for_delivery') ||
-      value.contains('out for delivery')) {
-    return 3;
+      value.contains('out for delivery') ||
+      value.contains('in_transit') ||
+      value.contains('in transit')) {
+    return 2;
   }
-  if (value.contains('processing')) return 2;
-  if (value.contains('payment_confirmed') || value.contains('confirmed')) {
+  if (value.contains('picked_up') || value.contains('picked up')) {
     return 1;
   }
   return 0;
+}
+
+String _formatDistance(double? meters) {
+  if (meters == null) return 'Calculating';
+  if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
+  return '${math.max(0, meters).round()} m';
 }
 
 String _labelize(String value) {

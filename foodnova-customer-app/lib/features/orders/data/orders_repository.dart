@@ -9,6 +9,77 @@ final ordersRepositoryProvider =
 final ordersProvider =
     FutureProvider((ref) => ref.watch(ordersRepositoryProvider).myOrders());
 
+class RiderLocation {
+  const RiderLocation({
+    required this.deliveryStatus,
+    required this.trackingVisible,
+    required this.riderName,
+    required this.riderPhone,
+    required this.riderLatitude,
+    required this.riderLongitude,
+    required this.customerLatitude,
+    required this.customerLongitude,
+    required this.distanceMeters,
+    required this.etaMinutes,
+    required this.lastUpdatedAt,
+    required this.routePolyline,
+  });
+
+  final String deliveryStatus;
+  final bool trackingVisible;
+  final String riderName;
+  final String riderPhone;
+  final double? riderLatitude;
+  final double? riderLongitude;
+  final double? customerLatitude;
+  final double? customerLongitude;
+  final double? distanceMeters;
+  final int? etaMinutes;
+  final String lastUpdatedAt;
+  final List<Map<String, double>> routePolyline;
+
+  bool get hasRiderCoordinates =>
+      riderLatitude != null && riderLongitude != null;
+
+  bool get hasCustomerCoordinates =>
+      customerLatitude != null && customerLongitude != null;
+
+  factory RiderLocation.fromJson(Map<String, dynamic> json) {
+    final rider = json['rider'] is Map
+        ? Map<String, dynamic>.from(json['rider'])
+        : <String, dynamic>{};
+    final customer = json['customer'] is Map
+        ? Map<String, dynamic>.from(json['customer'])
+        : <String, dynamic>{};
+    final route = json['route_polyline'] is List
+        ? (json['route_polyline'] as List)
+            .whereType<Map>()
+            .map((point) {
+              final lat = double.tryParse('${point['latitude']}');
+              final lng = double.tryParse('${point['longitude']}');
+              if (lat == null || lng == null) return null;
+              return {'latitude': lat, 'longitude': lng};
+            })
+            .whereType<Map<String, double>>()
+            .toList()
+        : <Map<String, double>>[];
+    return RiderLocation(
+      deliveryStatus: '${json['delivery_status'] ?? ''}',
+      trackingVisible: json['tracking_visible'] == true,
+      riderName: '${rider['name'] ?? ''}',
+      riderPhone: '${rider['phone'] ?? ''}',
+      riderLatitude: double.tryParse('${rider['latitude']}'),
+      riderLongitude: double.tryParse('${rider['longitude']}'),
+      customerLatitude: double.tryParse('${customer['latitude']}'),
+      customerLongitude: double.tryParse('${customer['longitude']}'),
+      distanceMeters: double.tryParse('${json['distance_meters']}'),
+      etaMinutes: int.tryParse('${json['eta_minutes']}'),
+      lastUpdatedAt: '${rider['last_updated_at'] ?? ''}',
+      routePolyline: route,
+    );
+  }
+}
+
 class OrdersRepository {
   OrdersRepository(this._dio);
 
@@ -51,6 +122,20 @@ class OrdersRepository {
         : <String, dynamic>{};
     return OrderSummary.fromJson(
         Map<String, dynamic>.from(body['order'] ?? data['order'] ?? body));
+  }
+
+  Future<RiderLocation?> riderLocation(int orderId) async {
+    final response = await _dio.get('/orders/$orderId/rider-location');
+    final body = response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+    final data = body['tracking'] is Map
+        ? Map<String, dynamic>.from(body['tracking'])
+        : body['data'] is Map
+            ? Map<String, dynamic>.from(body['data'])
+            : body;
+    if (data.isEmpty) return null;
+    return RiderLocation.fromJson(data);
   }
 
   Future<OrderSummary> requestCancellation({

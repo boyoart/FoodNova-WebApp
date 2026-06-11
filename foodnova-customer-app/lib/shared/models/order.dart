@@ -39,6 +39,37 @@ class OrderSummary {
   String get deliveryMethod => '${raw['delivery_method'] ?? ''}';
   String get deliveryNotes =>
       '${raw['delivery_notes'] ?? raw['delivery_note'] ?? ''}';
+  String get riderName =>
+      '${raw['rider_name'] ?? raw['assigned_worker_name'] ?? dispatcherName}';
+  String get riderPhone =>
+      '${raw['rider_phone'] ?? raw['assigned_worker_phone'] ?? ''}';
+  String get riderVehicleType =>
+      '${raw['rider_vehicle_type'] ?? raw['assigned_worker_type'] ?? ''}';
+  String get riderVehicleNumber => '${raw['rider_vehicle_number'] ?? ''}';
+  bool get hasAssignedRider {
+    final riderId = raw['rider_id'] ?? raw['delivery_worker_id'];
+    return riderId != null ||
+        riderName.trim().isNotEmpty ||
+        riderPhone.trim().isNotEmpty;
+  }
+
+  bool get isDeliveryTrackingVisible {
+    final value = '$status $deliveryStatus'.toLowerCase();
+    if (isDelivered) return false;
+    return value.contains('picked_up') ||
+        value.contains('picked up') ||
+        value.contains('out_for_delivery') ||
+        value.contains('out for delivery') ||
+        value.contains('in_transit') ||
+        value.contains('in transit') ||
+        value.contains('arrived');
+  }
+
+  bool get riderArrived {
+    final value = '$status $deliveryStatus'.toLowerCase();
+    return !isDelivered && value.contains('arrived');
+  }
+
   String get cancellationStatus => '${raw['cancellation_status'] ?? 'none'}';
   String get refundStatus => '${raw['refund_status'] ?? 'none'}';
   String get cancellationReason => '${raw['cancellation_reason'] ?? ''}';
