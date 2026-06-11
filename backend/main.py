@@ -2362,6 +2362,55 @@ def delivery_area_for_order(order: DBOrder) -> str:
     return area or "Customer area"
 
 
+def generate_delivery_pin(db) -> str:
+    for _ in range(20):
+        code = f"{random.randint(0, 9999):04d}"
+        exists = db.query(DBOrder).filter(
+            DBOrder.delivery_code == code,
+            DBOrder.delivery_confirmed_at.is_(None),
+            DBOrder.order_status.notin_(["delivered", "cancelled"]),
+        ).first()
+        if not exists:
+            return code
+    return f"{random.randint(0, 9999):04d}"
+
+
+def ensure_order_delivery_pin(db, order: DBOrder) -> str:
+    if (order.delivery_method or "delivery") != "delivery":
+        return ""
+    if not (order.delivery_code or "").strip():
+        order.delivery_code = generate_delivery_pin(db)
+        order.delivery_code_created_at = datetime.utcnow()
+    return order.delivery_code or ""
+
+
+def canonical_dispatch_status(order: DBOrder) -> str:
+    raw_delivery = str(getattr(order, "delivery_status", "") or "").strip().lower()
+    raw_order = str(order.fulfillment_status or order.order_status or order.status or "").strip().lower()
+    if raw_order == "cancelled" or raw_delivery == "cancelled":
+        return "CANCELLED"
+    if raw_order == "delivered" or raw_delivery == "delivered":
+        return "DELIVERED"
+    if raw_delivery in {"arrived", "arrived_at_customer"}:
+        return "ARRIVED"
+    if raw_delivery in {"in_transit", "en_route_to_customer", "out_for_delivery"}:
+        return "IN_TRANSIT"
+    if raw_delivery in {"picked_up", "pickedup"}:
+        return "PICKED_UP"
+    if raw_delivery == "accepted":
+        return "ACCEPTED"
+    if raw_delivery == "assigned" or getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None):
+        return "ASSIGNED"
+    return "NEW"
+
+
+def dispatch_order_to_dict(order: DBOrder) -> dict:
+    data = order_to_dict(order)
+    data["dispatch_status"] = canonical_dispatch_status(order)
+    data["delivery_pin"] = order.delivery_code or ""
+    return data
+
+
 def worker_inside_zone(worker: DBDeliveryWorker, latitude: float, longitude: float, db) -> bool:
     if (worker.worker_type or "") != "messenger":
         return False
@@ -2381,12 +2430,18 @@ def delivery_offer_to_dict(offer: DBDeliveryOffer, worker: DBDeliveryWorker = No
         "worker_name": worker.full_name if worker else "",
         "worker_phone": worker.phone if worker else "",
         "worker_status": worker.operational_status if worker else "",
+        "customer_name": order.customer_name if order else "",
+        "customer_phone": (order.customer_phone or order.phone) if order else "",
         "status": offer.status or "PENDING",
         "delivery_type": offer.delivery_type or "needs_admin_review",
         "estimated_distance_meters": offer.estimated_distance_meters,
         "pickup_area": offer.pickup_area or "FoodNova pickup",
         "delivery_area": offer.delivery_area or "",
         "delivery_address": order.delivery_address if order and offer.status == "ASSIGNED" else "",
+        "delivery_notes": order.delivery_notes if order else "",
+        "delivery_note": order.delivery_note if order else "",
+        "delivery_code": order.delivery_code if order else "",
+        "delivery_pin": order.delivery_code if order else "",
         "accepted_at": iso(offer.accepted_at),
         "declined_at": iso(offer.declined_at),
         "expires_at": iso(offer.expires_at),
@@ -2527,6 +2582,7 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
 def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliveryWorker, order: DBOrder, request: Request, actor: dict, automatic: bool = False) -> dict:
     offer.status = "ASSIGNED"
     offer.updated_at = datetime.utcnow()
+    ensure_order_delivery_pin(db, order)
     order.delivery_worker_id = worker.id
     order.delivery_worker_type = worker.worker_type or ""
     order.delivery_status = "ASSIGNED"
@@ -2639,6 +2695,10 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
         "payment_status": order.payment_status or "pending_payment",
         "order_status": order.order_status or "order_placed",
         "fulfillment_status": order.fulfillment_status or "order_placed",
+        "dispatch_status": canonical_dispatch_status(order),
+        "delivery_status": getattr(order, "delivery_status", "") or "",
+        "delivery_code": order.delivery_code or "",
+        "delivery_pin": order.delivery_code or "",
         "delivery_method": order.delivery_method or "delivery",
         "total_amount": order.total_amount or 0,
         "created_at": iso(order.created_at),
@@ -6712,6 +6772,7 @@ def create_order(payload: OrderPayload, request: Request):
         db.add(order)
         db.flush()
         classify_and_save_order_delivery(order, db)
+        ensure_order_delivery_pin(db, order)
 
         for item in normalized_items:
             db.add(DBOrderItem(
@@ -7143,6 +7204,120 @@ def get_eligible_delivery_workforce(request: Request, delivery_type: Optional[st
             "workers": eligible_workers,
             "data": eligible_workers,
         }
+    finally:
+        db.close()
+
+
+@app.get("/admin/dispatch-board")
+def get_admin_dispatch_board(request: Request):
+    require_any_permission(request, ["orders:view", "orders:delivery", "delivery:manage", "workforce:view", "workforce:manage"])
+    db = SessionLocal()
+    try:
+        expire_stale_delivery_offers(db)
+        active_orders = active_order_filter(db.query(DBOrder)).filter(
+            DBOrder.delivery_method == "delivery",
+            DBOrder.order_status.notin_(["delivered", "cancelled"]),
+        ).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
+        completed_orders = active_order_filter(db.query(DBOrder)).filter(
+            DBOrder.delivery_method == "delivery",
+            DBOrder.order_status.in_(["delivered", "cancelled"]),
+        ).order_by(DBOrder.updated_at.desc(), DBOrder.id.desc()).limit(50).all()
+        queue = {
+            "NEW": [],
+            "ASSIGNED": [],
+            "ACCEPTED": [],
+            "PICKED_UP": [],
+            "IN_TRANSIT": [],
+            "ARRIVED": [],
+            "DELIVERED": [],
+            "CANCELLED": [],
+        }
+        for order in active_orders + completed_orders:
+            item = dispatch_order_to_dict(order)
+            queue.setdefault(item["dispatch_status"], []).append(item)
+
+        riders = []
+        for worker in db.query(DBDeliveryWorker).filter(
+            DBDeliveryWorker.worker_type.in_(["rider", "messenger"]),
+            DBDeliveryWorker.deleted_at.is_(None),
+        ).order_by(DBDeliveryWorker.operational_status.asc(), DBDeliveryWorker.full_name.asc()).all():
+            data = worker_to_dict(worker)
+            data["company"] = getattr(worker, "partner_company", "") or "FoodNova"
+            data["status_label"] = "Pending Approval" if (worker.kyc_status or "") not in {"APPROVED", "ACTIVE"} else "Busy" if worker.operational_status in {"ASSIGNED", "ON_DELIVERY"} else "Available" if worker.operational_status == "ONLINE" else "Offline"
+            data["current_location"] = {"latitude": getattr(worker, "latest_latitude", None), "longitude": getattr(worker, "latest_longitude", None)}
+            data["last_active_time"] = iso(getattr(worker, "last_seen_at", None) or getattr(worker, "updated_at", None))
+            riders.append(data)
+
+        offers = []
+        for offer in db.query(DBDeliveryOffer).filter(DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"])).order_by(DBDeliveryOffer.created_at.desc(), DBDeliveryOffer.id.desc()).all():
+            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == offer.worker_id).first()
+            order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
+            item = delivery_offer_to_dict(offer, worker, order)
+            if order:
+                item["order"] = dispatch_order_to_dict(order)
+            offers.append(item)
+
+        stats = {status: len(items) for status, items in queue.items()}
+        stats.update({
+            "online_riders": len([rider for rider in riders if rider.get("operational_status") == "ONLINE"]),
+            "available_riders": len([rider for rider in riders if rider.get("status_label") == "Available"]),
+            "busy_riders": len([rider for rider in riders if rider.get("status_label") == "Busy"]),
+            "pending_approval": len([rider for rider in riders if rider.get("status_label") == "Pending Approval"]),
+        })
+        db.commit()
+        return {"success": True, "queue": queue, "riders": riders, "offers": offers, "stats": stats, "data": {"queue": queue, "riders": riders, "offers": offers, "stats": stats}}
+    finally:
+        db.close()
+
+
+@app.post("/admin/dispatch-board/orders/{order_id}/auto-assign")
+def admin_dispatch_auto_assign(order_id: int, request: Request):
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        classify_and_save_order_delivery(order, db)
+        ensure_order_delivery_pin(db, order)
+        offer = start_delivery_matching(db, order, request)
+        if not offer:
+            raise HTTPException(status_code=400, detail="No eligible rider is currently available for this order")
+        db.commit()
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == offer.worker_id).first()
+        create_admin_audit_log(request, admin, "dispatch_auto_assign_requested", "order", order.id, f"Admin requested auto assignment for {order.order_code}", {"offer_id": offer.id})
+        return {"success": True, "offer": delivery_offer_to_dict(offer, worker, order), "order": dispatch_order_to_dict(order), "data": dispatch_order_to_dict(order)}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/dispatch-board/orders/{order_id}/cancel")
+def admin_dispatch_cancel_order(order_id: int, payload: DeliveryOfferActionPayload, request: Request):
+    admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        order.delivery_status = "CANCELLED"
+        order.order_status = "cancelled"
+        order.fulfillment_status = "cancelled"
+        order.status = "cancelled"
+        order.cancellation_status = "approved"
+        order.cancellation_reason = (payload.reason if payload else "") or order.cancellation_reason or "Cancelled by dispatch admin"
+        order.updated_at = datetime.utcnow()
+        if order.delivery_worker_id:
+            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == order.delivery_worker_id).first()
+            if worker:
+                worker.operational_status = "ONLINE"
+                worker.updated_at = datetime.utcnow()
+        db.query(DBDeliveryOffer).filter(DBDeliveryOffer.order_id == order.id, DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"])).update({"status": "DECLINED", "updated_at": datetime.utcnow()}, synchronize_session=False)
+        db.commit()
+        db.refresh(order)
+        data = dispatch_order_to_dict(order)
+        _create_order_notification(data, "Delivery Cancelled", f"Delivery for order {order.order_code} has been cancelled.", "delivery_update", "delivery")
+        create_admin_audit_log(request, admin, "dispatch_delivery_cancelled", "order", order.id, f"Admin cancelled delivery for {order.order_code}", {"reason": payload.reason if payload else ""})
+        return {"success": True, "order": data, "data": data}
     finally:
         db.close()
 
@@ -7902,6 +8077,10 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         if (rider.kyc_status or "") not in {"APPROVED", "ACTIVE"}:
             raise HTTPException(status_code=400, detail="Rider must be approved before assignment")
 
+        ensure_order_delivery_pin(db, order)
+        order.delivery_worker_id = rider.id
+        order.delivery_worker_type = rider.worker_type or "rider"
+        order.delivery_status = "ASSIGNED"
         order.rider_id = rider.id
         order.rider_name = rider.full_name
         order.rider_phone = rider.phone
@@ -7913,10 +8092,11 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
             order.status = "out_for_delivery"
             order.order_status = "out_for_delivery"
             order.fulfillment_status = "out_for_delivery"
+            order.delivery_status = "IN_TRANSIT"
             order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
-            if order.delivery_method == "delivery" and not order.delivery_code:
-                order.delivery_code = "{:06d}".format(random.randint(0, 999999))
-                order.delivery_code_created_at = datetime.utcnow()
+            ensure_order_delivery_pin(db, order)
+        rider.operational_status = "ON_DELIVERY" if payload.mark_out_for_delivery else "ASSIGNED"
+        rider.updated_at = datetime.utcnow()
         order.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)
@@ -7991,8 +8171,7 @@ def update_order(order_id: int, payload: dict, request: Request):
         generated_delivery_code = False
         new_status = payload.get("status") or payload.get("order_status") or payload.get("fulfillment_status")
         if new_status == "out_for_delivery" and order.delivery_method == "delivery" and not order.delivery_code:
-            order.delivery_code = "{:06d}".format(random.randint(0, 999999))
-            order.delivery_code_created_at = datetime.utcnow()
+            ensure_order_delivery_pin(db, order)
             generated_delivery_code = True
 
         allowed_fields = {
@@ -8196,6 +8375,21 @@ def _delivery_worker_order_or_404(db, worker: DBDeliveryWorker, order_id: int) -
     return order
 
 
+@app.get("/delivery/orders")
+def delivery_worker_orders(request: Request, status: Optional[str] = None):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        query = active_order_filter(db.query(DBOrder)).filter(
+            or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id)
+        )
+        clean_status = (status or "").strip().upper()
+        orders = query.order_by(DBOrder.delivery_assigned_at.desc(), DBOrder.updated_at.desc(), DBOrder.id.desc()).all()
+        items = [dispatch_order_to_dict(order) for order in orders if not clean_status or canonical_dispatch_status(order) == clean_status]
+        return {"success": True, "orders": items, "data": items}
+    finally:
+        db.close()
+
+
 @app.patch("/delivery/orders/{order_id}/status")
 def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderStatusPayload, request: Request):
     db, user, worker = get_current_worker_record(request)
@@ -8208,6 +8402,8 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
             "en_route_to_pickup",
             "arrived_at_pickup",
             "picked_up",
+            "in_transit",
+            "arrived",
             "en_route_to_customer",
             "delivered",
             "cancelled",
@@ -8215,11 +8411,17 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
         if raw_status not in allowed:
             raise HTTPException(status_code=400, detail="Invalid delivery status")
 
-        order.delivery_status = raw_status.upper()
-        if raw_status in {"picked_up", "en_route_to_customer"}:
+        status_map = {
+            "en_route_to_customer": "IN_TRANSIT",
+            "en_route_to_pickup": "ACCEPTED",
+            "arrived_at_pickup": "ACCEPTED",
+        }
+        order.delivery_status = status_map.get(raw_status, raw_status.upper())
+        if raw_status in {"picked_up", "en_route_to_customer", "in_transit", "arrived"}:
             order.status = "out_for_delivery"
             order.order_status = "out_for_delivery"
             order.fulfillment_status = "out_for_delivery"
+            order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
         if raw_status == "delivered":
             order.status = "delivered"
             order.order_status = "delivered"

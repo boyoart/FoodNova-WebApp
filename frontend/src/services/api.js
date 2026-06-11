@@ -246,6 +246,11 @@ export const adminAPI = {
     return response.data;
   },
 
+  assignRider: async (id, payload) => {
+    const response = await api.patch(`/admin/orders/${id}/assign-rider`, payload);
+    return response.data;
+  },
+
   getProducts: async () => {
     const response = await api.get("/admin/products");
     const products = normalizeList(response.data, ["products"]);
@@ -490,6 +495,21 @@ export const adminAPI = {
 
   updateDeliveryAssignmentMode: async (mode) => {
     const response = await api.patch("/admin/delivery-assignment-mode", { mode });
+    return response.data;
+  },
+
+  getDispatchBoard: async () => {
+    const response = await api.get("/admin/dispatch-board");
+    return response.data;
+  },
+
+  autoAssignDispatchOrder: async (id) => {
+    const response = await api.post(`/admin/dispatch-board/orders/${id}/auto-assign`);
+    return response.data;
+  },
+
+  cancelDispatchOrder: async (id, payload = {}) => {
+    const response = await api.patch(`/admin/dispatch-board/orders/${id}/cancel`, payload);
     return response.data;
   },
 };

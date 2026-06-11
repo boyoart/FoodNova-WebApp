@@ -86,7 +86,13 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
                 const SizedBox(height: 8),
                 Text('Pickup: ${offer.pickup}'),
                 Text('Customer: ${offer.customerName}'),
+                if (offer.customerPhone.isNotEmpty)
+                  Text('Phone: ${offer.customerPhone}'),
                 Text('Dropoff: ${offer.dropoff}'),
+                if (offer.instructions.isNotEmpty)
+                  Text('Instructions: ${offer.instructions}'),
+                if (offer.deliveryPin.isNotEmpty)
+                  Text('Delivery PIN: ${offer.deliveryPin}'),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,

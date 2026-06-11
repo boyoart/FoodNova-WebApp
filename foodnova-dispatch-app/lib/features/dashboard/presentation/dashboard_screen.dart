@@ -103,7 +103,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             context.go('/earnings');
           }
           if (i == 2) {
-            context.go('/history');
+            context.go('/orders');
           }
           if (i == 3) {
             context.go('/settings');
@@ -118,7 +118,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             icon: Icon(Icons.payments_outlined),
             label: 'Earnings',
           ),
-          NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_outlined),
+            label: 'Orders',
+          ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
             label: 'Settings',

@@ -1,0 +1,425 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.1.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon JVM discovery is an incubating feature.
+Daemon will be stopped at the end of the build 
+
+> Configure project :gradle
+WARNING: Unsupported Kotlin plugin version.
+The `embedded-kotlin` and `kotlin-dsl` plugins rely on features of Kotlin `2.2.0` that might work differently than in the requested version `2.2.20`.
+
+> Task :gradle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :gradle:compileKotlin UP-TO-DATE
+> Task :gradle:compileJava NO-SOURCE
+> Task :gradle:compileGroovy NO-SOURCE
+> Task :gradle:pluginDescriptors UP-TO-DATE
+> Task :gradle:processResources
+> Task :gradle:classes
+> Task :gradle:jar
+
+> Configure project :app
+WARNING: The option setting 'android.builtInKotlin=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+WARNING: The option setting 'android.newDsl=false' is deprecated.
+The current default is 'true'.
+It will be removed in version 10.0 of the Android Gradle plugin.
+FoodNova Firebase: android/app/google-services.json is missing; Google Services plugin is not applied for this local build.
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':app' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :file_picker
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':file_picker' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :firebase_core
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':firebase_core' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :firebase_messaging
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':firebase_messaging' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :flutter_local_notifications
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':flutter_local_notifications' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :flutter_plugin_android_lifecycle
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':flutter_plugin_android_lifecycle' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :flutter_secure_storage
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':flutter_secure_storage' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :geolocator_android
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':geolocator_android' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :google_maps_flutter_android
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':google_maps_flutter_android' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :image_picker_android
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':image_picker_android' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :jni
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':jni' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :jni_flutter
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':jni_flutter' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :local_auth_android
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':local_auth_android' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :shared_preferences_android
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':shared_preferences_android' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :sqflite_android
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':sqflite_android' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+
+> Configure project :url_launcher_android
+w: [33m[1mDeprecated 'org.jetbrains.kotlin.android' plugin usage[0m[0m
+The 'org.jetbrains.kotlin.android' plugin in project ':url_launcher_android' is no longer required for Kotlin support since AGP 9.0.
+[32m[1mSolution:[0m[0m
+[32m[3mRemove both `android.builtInKotlin=true` and `android.newDsl=false` from `gradle.properties`, then migrate to built-in Kotlin.[0m[0m
+[36mSee [0m[34mhttps://kotl.in/gradle/agp-built-in-kotlin[0m[36m for more details.[0m
+
+WARNING: Your app uses the following plugins that apply Kotlin Gradle Plugin (KGP): file_picker, google_maps_flutter_android, image_picker_android, shared_preferences_android, url_launcher_android
+Future versions of Flutter will fail to build if your app uses plugins that apply KGP.
+
+Please check the changelogs of these plugins and upgrade to a version that supports Built-in Kotlin.
+If no such version exists, report the issue to the plugin. If necessary, here is a guide on filing 
+an issue against a plugin: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-app-developers#report-incompatible-kotlin-gradle-plugin-usage-to-plugin-authors
+
+If you are a plugin author, please migrate your plugin to Built-in Kotlin using this guide: https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+
+> Task :app:DebugMinSdkCheck
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:cleanMergeDebugAssets UP-TO-DATE
+> Task :app:compileFlutterBuildDebug
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :file_picker:generateDebugAssets UP-TO-DATE
+> Task :file_picker:preBuild UP-TO-DATE
+> Task :file_picker:preDebugBuild UP-TO-DATE
+> Task :file_picker:mergeDebugAssets
+> Task :firebase_core:generateDebugAssets UP-TO-DATE
+> Task :firebase_core:preBuild UP-TO-DATE
+> Task :firebase_core:preDebugBuild UP-TO-DATE
+> Task :firebase_core:mergeDebugAssets
+> Task :firebase_messaging:generateDebugAssets UP-TO-DATE
+> Task :firebase_messaging:preBuild UP-TO-DATE
+> Task :firebase_messaging:preDebugBuild UP-TO-DATE
+> Task :firebase_messaging:mergeDebugAssets
+> Task :flutter_local_notifications:generateDebugAssets UP-TO-DATE
+> Task :flutter_local_notifications:preBuild UP-TO-DATE
+> Task :flutter_local_notifications:preDebugBuild UP-TO-DATE
+> Task :flutter_local_notifications:mergeDebugAssets
+> Task :flutter_plugin_android_lifecycle:generateDebugAssets UP-TO-DATE
+> Task :flutter_plugin_android_lifecycle:preBuild UP-TO-DATE
+> Task :flutter_plugin_android_lifecycle:preDebugBuild UP-TO-DATE
+> Task :flutter_plugin_android_lifecycle:mergeDebugAssets
+> Task :flutter_secure_storage:generateDebugAssets UP-TO-DATE
+> Task :flutter_secure_storage:preBuild UP-TO-DATE
+> Task :flutter_secure_storage:preDebugBuild UP-TO-DATE
+> Task :flutter_secure_storage:mergeDebugAssets
+> Task :geolocator_android:generateDebugAssets UP-TO-DATE
+> Task :geolocator_android:preBuild UP-TO-DATE
+> Task :geolocator_android:preDebugBuild UP-TO-DATE
+> Task :geolocator_android:mergeDebugAssets
+> Task :google_maps_flutter_android:generateDebugAssets UP-TO-DATE
+> Task :google_maps_flutter_android:preBuild UP-TO-DATE
+> Task :google_maps_flutter_android:preDebugBuild UP-TO-DATE
+> Task :google_maps_flutter_android:mergeDebugAssets
+> Task :image_picker_android:generateDebugAssets UP-TO-DATE
+> Task :image_picker_android:preBuild UP-TO-DATE
+> Task :image_picker_android:preDebugBuild UP-TO-DATE
+> Task :image_picker_android:mergeDebugAssets
+> Task :jni:generateDebugAssets UP-TO-DATE
+> Task :jni:preBuild UP-TO-DATE
+> Task :jni:preDebugBuild UP-TO-DATE
+> Task :jni:mergeDebugAssets
+> Task :jni_flutter:generateDebugAssets UP-TO-DATE
+> Task :jni_flutter:preBuild UP-TO-DATE
+> Task :jni_flutter:preDebugBuild UP-TO-DATE
+> Task :jni_flutter:mergeDebugAssets
+> Task :local_auth_android:generateDebugAssets UP-TO-DATE
+> Task :local_auth_android:preBuild UP-TO-DATE
+> Task :local_auth_android:preDebugBuild UP-TO-DATE
+> Task :local_auth_android:mergeDebugAssets
+> Task :shared_preferences_android:generateDebugAssets UP-TO-DATE
+> Task :shared_preferences_android:preBuild UP-TO-DATE
+> Task :shared_preferences_android:preDebugBuild UP-TO-DATE
+> Task :shared_preferences_android:mergeDebugAssets
+> Task :sqflite_android:generateDebugAssets UP-TO-DATE
+> Task :sqflite_android:preBuild UP-TO-DATE
+> Task :sqflite_android:preDebugBuild UP-TO-DATE
+> Task :sqflite_android:mergeDebugAssets
+> Task :url_launcher_android:generateDebugAssets UP-TO-DATE
+> Task :url_launcher_android:preBuild UP-TO-DATE
+> Task :url_launcher_android:preDebugBuild UP-TO-DATE
+> Task :url_launcher_android:mergeDebugAssets
+> Task :app:mergeDebugAssets
+> Task :app:copyFlutterAssetsDebug
+> Task :app:generateDebugResources
+> Task :app:packageDebugResources
+> Task :file_picker:processDebugNavigationResources
+> Task :firebase_core:processDebugNavigationResources
+> Task :firebase_messaging:processDebugNavigationResources
+> Task :flutter_local_notifications:processDebugNavigationResources
+> Task :flutter_plugin_android_lifecycle:processDebugNavigationResources
+> Task :flutter_secure_storage:processDebugNavigationResources
+> Task :geolocator_android:processDebugNavigationResources
+> Task :google_maps_flutter_android:processDebugNavigationResources
+> Task :image_picker_android:processDebugNavigationResources
+> Task :jni:processDebugNavigationResources
+> Task :jni_flutter:processDebugNavigationResources
+> Task :local_auth_android:processDebugNavigationResources
+> Task :shared_preferences_android:processDebugNavigationResources
+> Task :sqflite_android:processDebugNavigationResources
+> Task :url_launcher_android:processDebugNavigationResources
+> Task :app:processDebugNavigationResources
+> Task :app:parseDebugLocalResources
+> Task :app:generateDebugRFile
+> Task :file_picker:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :file_picker:generateDebugResources
+> Task :file_picker:packageDebugResources
+> Task :file_picker:parseDebugLocalResources
+> Task :file_picker:generateDebugRFile
+> Task :flutter_plugin_android_lifecycle:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :flutter_plugin_android_lifecycle:generateDebugResources
+> Task :flutter_plugin_android_lifecycle:packageDebugResources
+> Task :flutter_plugin_android_lifecycle:parseDebugLocalResources
+> Task :flutter_plugin_android_lifecycle:generateDebugRFile
+> Task :flutter_plugin_android_lifecycle:compileDebugKotlin NO-SOURCE
+> Task :flutter_plugin_android_lifecycle:javaPreCompileDebug
+> Task :flutter_plugin_android_lifecycle:compileDebugJavaWithJavac
+> Task :flutter_plugin_android_lifecycle:bundleLibCompileToJarDebug
+> Task :file_picker:compileDebugKotlin
+w: file:///C:/Users/saljo/AppData/Local/Pub/Cache/hosted/pub.dev/file_picker-10.3.10/android/src/main/kotlin/com/mr/flutter/plugin/filepicker/FilePickerDelegate.kt:71:83 Elvis operator (?:) always returns the left operand of non-nullable type 'Uri'.
+w: file:///C:/Users/saljo/AppData/Local/Pub/Cache/hosted/pub.dev/file_picker-10.3.10/android/src/main/kotlin/com/mr/flutter/plugin/filepicker/FilePickerPlugin.kt:135:49 Unnecessary safe call on a non-null receiver of type 'HashMap<*, *>'.
+w: file:///C:/Users/saljo/AppData/Local/Pub/Cache/hosted/pub.dev/file_picker-10.3.10/android/src/main/kotlin/com/mr/flutter/plugin/filepicker/FilePickerPlugin.kt:136:38 Unnecessary safe call on a non-null receiver of type 'HashMap<*, *>'.
+w: file:///C:/Users/saljo/AppData/Local/Pub/Cache/hosted/pub.dev/file_picker-10.3.10/android/src/main/kotlin/com/mr/flutter/plugin/filepicker/FilePickerPlugin.kt:137:60 Unnecessary safe call on a non-null receiver of type 'HashMap<*, *>'.
+w: file:///C:/Users/saljo/AppData/Local/Pub/Cache/hosted/pub.dev/file_picker-10.3.10/android/src/main/kotlin/com/mr/flutter/plugin/filepicker/FilePickerPlugin.kt:148:70 Unchecked cast of 'Any?' to 'ArrayList<String>?'.
+w: file:///C:/Users/saljo/AppData/Local/Pub/Cache/hosted/pub.dev/file_picker-10.3.10/android/src/main/kotlin/com/mr/flutter/plugin/filepicker/FilePickerPlugin.kt:170:70 Unchecked cast of 'Any?' to 'ArrayList<String>?'.
+
+> Task :file_picker:javaPreCompileDebug
+> Task :file_picker:compileDebugJavaWithJavac NO-SOURCE
+> Task :file_picker:bundleLibCompileToJarDebug
+> Task :firebase_core:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :firebase_core:generateDebugBuildConfig
+> Task :firebase_core:generateDebugResources
+> Task :firebase_core:packageDebugResources
+> Task :firebase_core:parseDebugLocalResources
+> Task :firebase_core:generateDebugRFile
+> Task :firebase_core:compileDebugKotlin NO-SOURCE
+> Task :firebase_core:javaPreCompileDebug
+> Task :firebase_core:compileDebugJavaWithJavac
+> Task :firebase_core:bundleLibCompileToJarDebug
+> Task :firebase_messaging:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :firebase_messaging:generateDebugBuildConfig
+> Task :firebase_messaging:generateDebugResources
+> Task :firebase_messaging:packageDebugResources
+> Task :firebase_messaging:parseDebugLocalResources
+> Task :firebase_messaging:generateDebugRFile
+> Task :firebase_messaging:compileDebugKotlin NO-SOURCE
+> Task :firebase_messaging:javaPreCompileDebug
+
+> Task :firebase_messaging:compileDebugJavaWithJavac
+Note: Some input files use or override a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :firebase_messaging:bundleLibCompileToJarDebug
+> Task :flutter_local_notifications:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :flutter_local_notifications:generateDebugResources
+> Task :flutter_local_notifications:packageDebugResources
+> Task :flutter_local_notifications:parseDebugLocalResources
+> Task :flutter_local_notifications:generateDebugRFile
+> Task :flutter_local_notifications:compileDebugKotlin NO-SOURCE
+> Task :flutter_local_notifications:javaPreCompileDebug
+> Task :flutter_local_notifications:compileDebugJavaWithJavac
+> Task :flutter_local_notifications:bundleLibCompileToJarDebug
+> Task :flutter_secure_storage:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :flutter_secure_storage:generateDebugBuildConfig
+> Task :flutter_secure_storage:generateDebugResources
+> Task :flutter_secure_storage:packageDebugResources
+> Task :flutter_secure_storage:parseDebugLocalResources
+> Task :flutter_secure_storage:generateDebugRFile
+> Task :flutter_secure_storage:compileDebugKotlin NO-SOURCE
+> Task :flutter_secure_storage:javaPreCompileDebug
+> Task :flutter_secure_storage:compileDebugJavaWithJavac
+> Task :flutter_secure_storage:bundleLibCompileToJarDebug
+> Task :geolocator_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :geolocator_android:generateDebugResources
+> Task :geolocator_android:packageDebugResources
+> Task :geolocator_android:parseDebugLocalResources
+> Task :geolocator_android:generateDebugRFile
+> Task :geolocator_android:compileDebugKotlin NO-SOURCE
+> Task :geolocator_android:javaPreCompileDebug
+> Task :geolocator_android:compileDebugJavaWithJavac
+> Task :geolocator_android:bundleLibCompileToJarDebug
+> Task :google_maps_flutter_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :google_maps_flutter_android:generateDebugResources
+> Task :google_maps_flutter_android:packageDebugResources
+> Task :google_maps_flutter_android:parseDebugLocalResources
+> Task :google_maps_flutter_android:generateDebugRFile
+> Task :google_maps_flutter_android:compileDebugKotlin
+> Task :google_maps_flutter_android:javaPreCompileDebug
+> Task :google_maps_flutter_android:compileDebugJavaWithJavac
+> Task :google_maps_flutter_android:bundleLibCompileToJarDebug
+> Task :image_picker_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :image_picker_android:generateDebugResources
+> Task :image_picker_android:packageDebugResources
+> Task :image_picker_android:parseDebugLocalResources
+> Task :image_picker_android:generateDebugRFile
+> Task :image_picker_android:compileDebugKotlin
+> Task :image_picker_android:javaPreCompileDebug
+> Task :image_picker_android:compileDebugJavaWithJavac
+> Task :image_picker_android:bundleLibCompileToJarDebug
+> Task :jni:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :jni:generateDebugResources
+> Task :jni:packageDebugResources
+> Task :jni:parseDebugLocalResources
+> Task :jni:generateDebugRFile
+> Task :jni:compileDebugKotlin NO-SOURCE
+> Task :jni:javaPreCompileDebug
+> Task :jni:compileDebugJavaWithJavac
+> Task :jni:bundleLibCompileToJarDebug
+> Task :jni_flutter:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :jni_flutter:generateDebugResources
+> Task :jni_flutter:packageDebugResources
+> Task :jni_flutter:parseDebugLocalResources
+> Task :jni_flutter:generateDebugRFile
+> Task :jni_flutter:compileDebugKotlin NO-SOURCE
+> Task :jni_flutter:javaPreCompileDebug
+> Task :jni_flutter:compileDebugJavaWithJavac
+> Task :jni_flutter:bundleLibCompileToJarDebug
+> Task :local_auth_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :local_auth_android:generateDebugResources
+> Task :local_auth_android:packageDebugResources
+> Task :local_auth_android:parseDebugLocalResources
+> Task :local_auth_android:generateDebugRFile
+> Task :local_auth_android:compileDebugKotlin NO-SOURCE
+> Task :local_auth_android:javaPreCompileDebug
+> Task :local_auth_android:compileDebugJavaWithJavac
+> Task :local_auth_android:bundleLibCompileToJarDebug
+> Task :shared_preferences_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :shared_preferences_android:generateDebugResources
+> Task :shared_preferences_android:packageDebugResources
+> Task :shared_preferences_android:parseDebugLocalResources
+> Task :shared_preferences_android:generateDebugRFile
+
+> Task :shared_preferences_android:compileDebugKotlin
+w: file:///C:/Users/saljo/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences_android-2.4.23/android/src/main/kotlin/io/flutter/plugins/sharedpreferences/SharedPreferencesPlugin.kt:451:52 Unnecessary non-null assertion (!!) on a non-null receiver of type 'String'.
+
+> Task :shared_preferences_android:javaPreCompileDebug
+> Task :shared_preferences_android:compileDebugJavaWithJavac
+> Task :shared_preferences_android:bundleLibCompileToJarDebug
+> Task :sqflite_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :sqflite_android:generateDebugResources
+> Task :sqflite_android:packageDebugResources
+> Task :sqflite_android:parseDebugLocalResources
+> Task :sqflite_android:generateDebugRFile
+> Task :sqflite_android:compileDebugKotlin NO-SOURCE
+> Task :sqflite_android:javaPreCompileDebug
+> Task :sqflite_android:compileDebugJavaWithJavac
+> Task :sqflite_android:bundleLibCompileToJarDebug
+> Task :url_launcher_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :url_launcher_android:generateDebugBuildConfig
+> Task :url_launcher_android:generateDebugResources
+> Task :url_launcher_android:packageDebugResources
+> Task :url_launcher_android:parseDebugLocalResources
+> Task :url_launcher_android:generateDebugRFile
+> Task :url_launcher_android:compileDebugKotlin
+> Task :url_launcher_android:javaPreCompileDebug
+> Task :url_launcher_android:compileDebugJavaWithJavac
+> Task :url_launcher_android:bundleLibCompileToJarDebug
+> Task :app:compileDebugKotlin
+> Task :app:javaPreCompileDebug
+> Task :app:compileDebugJavaWithJavac
+> Task :app:compressDebugAssets
+> Task :app:l8DexDesugarLibDebug
+> Task :file_picker:bundleLibRuntimeToJarDebug
+> Task :firebase_messaging:bundleLibRuntimeToJarDebug
+> Task :firebase_core:bundleLibRuntimeToJarDebug
+> Task :flutter_local_notifications:bundleLibRuntimeToJarDebug
+> Task :google_maps_flutter_android:bundleLibRuntimeToJarDebug
+> Task :image_picker_android:bundleLibRuntimeToJarDebug
+> Task :local_auth_android:bundleLibRuntimeToJarDebug
+> Task :flutter_plugin_android_lifecycle:bundleLibRuntimeToJarDebug
+> Task :flutter_secure_storage:bundleLibRuntimeToJarDebug
+> Task :geolocator_android:bundleLibRuntimeToJarDebug
+> Task :jni_flutter:bundleLibRuntimeToJarDebug
+> Task :jni:bundleLibRuntimeToJarDebug
+> Task :shared_preferences_android:bundleLibRuntimeToJarDebug
+> Task :sqflite_android:bundleLibRuntimeToJarDebug
+> Task :url_launcher_android:bundleLibRuntimeToJarDebug
+> Task :app:desugarDebugFileDependencies
+Terminate batch job (Y/N)? 

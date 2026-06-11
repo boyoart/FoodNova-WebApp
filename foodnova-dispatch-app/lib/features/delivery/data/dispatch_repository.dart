@@ -20,6 +20,12 @@ final deliveryOffersProvider = FutureProvider.autoDispose<List<DeliveryOffer>>((
   return ref.read(dispatchRepositoryProvider).offers();
 });
 
+final deliveryOrdersProvider = FutureProvider.autoDispose<List<DeliveryOrder>>((
+  ref,
+) {
+  return ref.read(dispatchRepositoryProvider).orders();
+});
+
 class DispatchRepository {
   DispatchRepository(this.ref);
   final Ref ref;
@@ -101,6 +107,15 @@ class DispatchRepository {
     final items = (body['offers'] ?? body['data'] ?? []) as List;
     return items
         .map((item) => DeliveryOffer(Map<String, dynamic>.from(item)))
+        .toList();
+  }
+
+  Future<List<DeliveryOrder>> orders() async {
+    final response = await _dio.get('/delivery/orders');
+    final body = response.data as Map;
+    final items = (body['orders'] ?? body['data'] ?? []) as List;
+    return items
+        .map((item) => DeliveryOrder(Map<String, dynamic>.from(item)))
         .toList();
   }
 

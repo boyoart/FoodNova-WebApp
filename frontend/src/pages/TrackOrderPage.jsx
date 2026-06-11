@@ -25,6 +25,11 @@ const orderLabels = {
   processing: 'Processing',
   ready_for_pickup: 'Ready for Pickup',
   out_for_delivery: 'Out for Delivery',
+  assigned: 'Assigned',
+  accepted: 'Accepted',
+  picked_up: 'Picked Up',
+  in_transit: 'In Transit',
+  arrived: 'Arrived',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
 }
@@ -42,7 +47,7 @@ const badgeTone = (value) => {
   return 'warning'
 }
 
-const getLifecycle = (order) => String(order?.order_status || order?.fulfillment_status || '').toLowerCase()
+const getLifecycle = (order) => String(order?.dispatch_status || order?.delivery_status || order?.order_status || order?.fulfillment_status || '').toLowerCase()
 const getPayment = (order) => String(order?.payment_status || '').toLowerCase()
 
 const getTimelineSteps = (order) => {
@@ -50,15 +55,19 @@ const getTimelineSteps = (order) => {
   const lifecycle = getLifecycle(order)
   const paymentConfirmed = ['payment_confirmed', 'confirmed'].includes(payment)
   const receiptUploaded = payment === 'receipt_submitted' || paymentConfirmed
-  const processing = ['processing', 'ready_for_pickup', 'out_for_delivery', 'delivered'].includes(lifecycle)
-  const outForDelivery = ['out_for_delivery', 'delivered'].includes(lifecycle)
+  const processing = ['processing', 'ready_for_pickup', 'assigned', 'accepted', 'picked_up', 'in_transit', 'arrived', 'out_for_delivery', 'delivered'].includes(lifecycle)
+  const assigned = ['assigned', 'accepted', 'picked_up', 'in_transit', 'arrived', 'out_for_delivery', 'delivered'].includes(lifecycle)
+  const pickedUp = ['picked_up', 'in_transit', 'arrived', 'out_for_delivery', 'delivered'].includes(lifecycle)
+  const outForDelivery = ['in_transit', 'arrived', 'out_for_delivery', 'delivered'].includes(lifecycle)
   const delivered = lifecycle === 'delivered'
 
   return [
     { label: 'Order Placed', done: true, icon: PackageCheck },
     { label: paymentConfirmed ? 'Payment Confirmed' : receiptUploaded ? 'Receipt Uploaded' : 'Payment Pending', done: receiptUploaded || paymentConfirmed, icon: Clock },
     { label: 'Processing', done: processing, icon: Clock },
-    { label: 'Out for Delivery', done: outForDelivery, icon: Truck },
+    { label: 'Order Assigned', done: assigned, icon: Truck },
+    { label: 'Picked Up', done: pickedUp, icon: Truck },
+    { label: 'In Transit', done: outForDelivery, icon: Truck },
     { label: 'Delivered', done: delivered, icon: CheckCircle },
   ]
 }
@@ -165,7 +174,7 @@ export default function TrackOrderPage() {
               </div>
               <div className="tracking-status-card">
                 <span>Delivery Status</span>
-                <strong className={`tracking-badge ${badgeTone(order.order_status || order.fulfillment_status)}`}>{labelize(order.order_status || order.fulfillment_status)}</strong>
+                <strong className={`tracking-badge ${badgeTone(order.dispatch_status || order.delivery_status || order.order_status || order.fulfillment_status)}`}>{labelize(order.dispatch_status || order.delivery_status || order.order_status || order.fulfillment_status)}</strong>
               </div>
             </div>
 
@@ -188,6 +197,7 @@ export default function TrackOrderPage() {
                 <p><strong>Type:</strong> {order.delivery_worker_type === 'messenger' ? 'Messenger' : 'Rider'}</p>
                 <p><strong>Phone:</strong> {order.rider_phone || 'Not available'}</p>
                 <p><strong>Delivery Status:</strong> {order.delivery_status || order.fulfillment_status || 'Assigned'}</p>
+                {(order.delivery_pin || order.delivery_code) && <p><strong>Delivery PIN:</strong> {order.delivery_pin || order.delivery_code}</p>}
                 {order.delivery_note && <p><strong>Delivery Note:</strong> {order.delivery_note}</p>}
                 {order.rider_phone && <button type="button" onClick={contactRider}><MessageCircle size={16} /> Contact Rider</button>}
               </div>

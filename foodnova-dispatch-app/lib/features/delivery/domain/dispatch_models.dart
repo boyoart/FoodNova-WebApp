@@ -61,10 +61,15 @@ class DeliveryOffer {
   String get status => '${raw['status'] ?? 'PENDING'}';
   String get customerName =>
       '${raw['customer_name'] ?? raw['name'] ?? 'Customer'}';
+  String get customerPhone => '${raw['customer_phone'] ?? raw['phone'] ?? ''}';
   String get pickup =>
       '${raw['pickup_location'] ?? raw['pickup_address'] ?? 'FoodNova pickup'}';
   String get dropoff =>
       '${raw['dropoff_location'] ?? raw['delivery_address'] ?? raw['address'] ?? 'Customer address'}';
+  String get instructions =>
+      '${raw['delivery_notes'] ?? raw['delivery_note'] ?? raw['service_note'] ?? ''}';
+  String get deliveryPin =>
+      '${raw['delivery_pin'] ?? raw['delivery_code'] ?? ''}';
   String get distance =>
       '${raw['distance_text'] ?? raw['distance'] ?? 'Distance unavailable'}';
   String get eta =>
@@ -77,13 +82,45 @@ class DeliveryOffer {
   DateTime? get expiresAt => DateTime.tryParse('${raw['expires_at'] ?? ''}');
 }
 
+class DeliveryOrder {
+  DeliveryOrder(this.raw);
+  final Map<String, dynamic> raw;
+
+  int get id => int.tryParse('${raw['id'] ?? 0}') ?? 0;
+  String get orderCode =>
+      '${raw['order_code'] ?? raw['order_number'] ?? 'Order'}';
+  String get status =>
+      '${raw['dispatch_status'] ?? raw['delivery_status'] ?? raw['fulfillment_status'] ?? 'ASSIGNED'}';
+  String get customerName =>
+      '${raw['customer_name'] ?? raw['name'] ?? 'Customer'}';
+  String get customerPhone => '${raw['customer_phone'] ?? raw['phone'] ?? ''}';
+  String get pickup => '${raw['pickup_location'] ?? 'FoodNova pickup'}';
+  String get dropoff =>
+      '${raw['delivery_address'] ?? raw['dropoff_location'] ?? raw['address'] ?? 'Customer address'}';
+  String get instructions =>
+      '${raw['delivery_notes'] ?? raw['delivery_note'] ?? raw['service_note'] ?? ''}';
+  String get deliveryPin =>
+      '${raw['delivery_pin'] ?? raw['delivery_code'] ?? ''}';
+  DateTime? get assignedAt =>
+      DateTime.tryParse('${raw['delivery_assigned_at'] ?? ''}');
+
+  DeliveryOffer asOffer() => DeliveryOffer({
+        ...raw,
+        'order_id': id,
+        'order_code': orderCode,
+        'customer_name': customerName,
+        'delivery_address': dropoff,
+        'pickup_location': pickup,
+        'status': status,
+      });
+}
+
 enum DeliveryStage {
   assigned,
   accepted,
-  enRouteToPickup,
-  arrivedAtPickup,
   pickedUp,
-  enRouteToCustomer,
+  inTransit,
+  arrived,
   delivered,
   cancelled,
 }
@@ -92,10 +129,9 @@ extension DeliveryStageCopy on DeliveryStage {
   String get label => switch (this) {
         DeliveryStage.assigned => 'Assigned',
         DeliveryStage.accepted => 'Accepted',
-        DeliveryStage.enRouteToPickup => 'En Route To Pickup',
-        DeliveryStage.arrivedAtPickup => 'Arrived At Pickup',
         DeliveryStage.pickedUp => 'Picked Up',
-        DeliveryStage.enRouteToCustomer => 'En Route To Customer',
+        DeliveryStage.inTransit => 'In Transit',
+        DeliveryStage.arrived => 'Arrived',
         DeliveryStage.delivered => 'Delivered',
         DeliveryStage.cancelled => 'Cancelled',
       };
