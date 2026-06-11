@@ -216,13 +216,14 @@ export default function AdminOrders() {
 
   const loadRiders = async () => {
     try {
+      const assignRiderApiUrl = '/admin/riders?status=active'
+      console.info('ASSIGN_RIDER_API_URL', assignRiderApiUrl)
       const response = await adminAPI.getRiders({ status: 'active' })
-      console.info('ASSIGN_RIDER_API_RESPONSE', response)
+      console.info('ASSIGN_RIDER_RESPONSE', response)
       const assignable = (response.data || []).filter((rider) => {
         const lifecycleStatus = String(rider.status || rider.kyc_status || rider.approval_status || '').toUpperCase()
-        const workerType = String(rider.worker_type || '').toLowerCase()
-        const ninVerified = rider.nin_verified === true || String(rider.nin_status || '').toLowerCase() === 'verified'
-        return workerType === 'rider' && ninVerified && lifecycleStatus === 'ACTIVE'
+        const deleted = Boolean(rider.deleted_at || rider.isDeleted || rider.is_deleted || lifecycleStatus === 'DELETED')
+        return lifecycleStatus === 'ACTIVE' && !deleted
       })
       console.info('ADMIN_ORDER_ASSIGNMENT_RIDERS', {
         total_riders_found: response.data?.length || 0,

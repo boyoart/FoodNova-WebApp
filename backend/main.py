@@ -7882,31 +7882,36 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
     require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:view", "workforce:manage"])
     db = SessionLocal()
     try:
+        requested_status = (status or "").strip().lower()
+        print("ASSIGN_RIDER_REQUEST", json_dump({
+            "endpoint": "/admin/riders",
+            "status_filter": requested_status or "all",
+            "include_deleted": bool(include_deleted),
+            "query_params": dict(request.query_params),
+        }))
         print("ASSIGNABLE_RIDERS_QUERY", json_dump({
             "endpoint": "/admin/riders",
             "status_filter": status or "all",
             "include_deleted": bool(include_deleted),
             "models": ["DeliveryWorker", "Rider"],
             "base_filters": {
-                "worker_type": ["rider", "messenger"],
                 "soft_deleted_excluded": not bool(include_deleted),
                 "deleted_status_excluded": not bool(include_deleted),
             },
             "active_status_rule": {
                 "delivery_workers.kyc_status": ["ACTIVE"],
-                "legacy_auto_activation": "APPROVED + nin_verified => ACTIVE",
-                "nin_verified_required_for_assignment": True,
+                "isDeleted": False,
+                "nin_verified_required_for_assignment": False,
                 "online_required": False,
                 "available_required": False,
             },
         }))
-        query = db.query(DBDeliveryWorker).outerjoin(DBRider, DBRider.delivery_worker_id == DBDeliveryWorker.id).filter(DBDeliveryWorker.worker_type.in_(["rider", "messenger"]))
+        query = db.query(DBDeliveryWorker).outerjoin(DBRider, DBRider.delivery_worker_id == DBDeliveryWorker.id)
         if include_deleted or (status or "").lower() == "deleted":
             query = query.filter(or_(DBDeliveryWorker.deleted_at.isnot(None), DBDeliveryWorker.kyc_status == "DELETED"))
         else:
             query = query.filter(DBDeliveryWorker.deleted_at.is_(None), DBDeliveryWorker.kyc_status != "DELETED")
         if status and (status or "").lower() not in ["all", "deleted"]:
-            requested_status = (status or "").lower()
             status_map = {
                 "onboarding": ["ONBOARDING", "PENDING_REVIEW", "KYC_PENDING"],
                 "pending": ["ONBOARDING", "PENDING_REVIEW", "KYC_PENDING"],
@@ -7917,10 +7922,7 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
                 "deactivated": ["INACTIVE", "DEACTIVATED"],
             }
             if requested_status in ["active", "approved"]:
-                query = query.filter(or_(
-                    DBDeliveryWorker.kyc_status == "ACTIVE",
-                    and_(DBDeliveryWorker.kyc_status == "APPROVED", DBDeliveryWorker.nin_verified == True),
-                )).filter(DBDeliveryWorker.nin_verified == True)
+                query = query.filter(DBDeliveryWorker.kyc_status == "ACTIVE")
             else:
                 wanted_values = status_map.get(requested_status, [(status or "").upper()])
                 query = query.filter(DBDeliveryWorker.kyc_status.in_(wanted_values))
@@ -7935,7 +7937,7 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
             data = worker_to_dict(worker)
             rider_status = (linked_rider.status if linked_rider else "") or ""
             raw_worker_status = data.get("kyc_status") or "ONBOARDING"
-            lifecycle_status = "DELETED" if data.get("deleted_at") else rider_lifecycle_status(worker, rider_status)
+            lifecycle_status = "DELETED" if data.get("deleted_at") else "ACTIVE" if requested_status in ["active", "approved"] and (worker.kyc_status or "").upper() == "ACTIVE" else rider_lifecycle_status(worker, rider_status)
             data.update({
                 "raw_kyc_status": raw_worker_status,
                 "kyc_status": lifecycle_status,
@@ -7951,6 +7953,22 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
             riders.append(data)
         if changed_statuses:
             db.commit()
+        print("ASSIGNABLE_RIDERS_FOUND", json_dump([
+            {
+                "id": item.get("id"),
+                "rider_id": item.get("rider_id"),
+                "name": item.get("full_name") or item.get("name"),
+                "status": item.get("status"),
+                "raw_kyc_status": item.get("raw_kyc_status"),
+                "deleted_at": item.get("deleted_at"),
+            }
+            for item in riders
+        ]))
+        print("ASSIGNABLE_RIDERS_COUNT", json_dump({
+            "count": len(riders),
+            "ids": [item.get("id") for item in riders],
+            "names": [item.get("full_name") or item.get("name") for item in riders],
+        }))
         print("ADMIN_RIDERS_FETCH", json_dump({
             "total_riders_found": len(worker_rows),
             "rider_ids_returned": [item.get("id") for item in riders],
@@ -8182,12 +8200,17 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
     admin = require_any_permission(request, ["delivery:manage", "orders:delivery"])
     db = SessionLocal()
     try:
+        print("ASSIGN_RIDER_REQUEST", json_dump({
+            "endpoint": f"/admin/orders/{order_id}/assign-rider",
+            "order_id": order_id,
+            "payload_rider_id": payload.rider_id,
+            "admin_id": admin.get("id"),
+        }))
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         rider = db.query(DBDeliveryWorker).filter(
             DBDeliveryWorker.id == payload.rider_id,
-            DBDeliveryWorker.worker_type == "rider",
             DBDeliveryWorker.deleted_at.is_(None),
             DBDeliveryWorker.kyc_status != "DELETED",
         ).first()
@@ -8196,32 +8219,28 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
             if linked_payload_rider:
                 rider = db.query(DBDeliveryWorker).filter(
                     DBDeliveryWorker.id == linked_payload_rider.delivery_worker_id,
-                    DBDeliveryWorker.worker_type == "rider",
                     DBDeliveryWorker.deleted_at.is_(None),
                     DBDeliveryWorker.kyc_status != "DELETED",
                 ).first()
         if not rider:
             raise HTTPException(status_code=404, detail="Rider not found")
         linked_rider = db.query(DBRider).filter(DBRider.delivery_worker_id == rider.id).first()
-        if promote_verified_approved_rider(rider):
-            sync_rider_onboarding_state(db, rider, admin, "Auto-activated verified approved rider during assignment")
         worker_status = (rider.kyc_status or "").upper()
         rider_table_status = ((linked_rider.status if linked_rider else "") or "").upper()
-        lifecycle_status = rider_lifecycle_status(rider, rider_table_status)
+        lifecycle_status = "ACTIVE" if worker_status == "ACTIVE" else rider_lifecycle_status(rider, rider_table_status)
         print("ASSIGN_RIDER_CANDIDATE", json_dump({
             "order_id": order_id,
             "rider_id": rider.id,
+            "rider_name": rider.full_name,
             "worker_status": worker_status,
             "rider_table_status": rider_table_status,
             "lifecycle_status": lifecycle_status,
             "nin_verified": bool(getattr(rider, "nin_verified", False)),
             "deleted_at": iso(getattr(rider, "deleted_at", None)),
-            "allowed": bool(getattr(rider, "nin_verified", False)) and lifecycle_status == "ACTIVE",
+            "allowed": lifecycle_status == "ACTIVE" and not bool(getattr(rider, "deleted_at", None)),
         }))
         if lifecycle_status != "ACTIVE":
             raise HTTPException(status_code=400, detail="Rider must be ACTIVE before assignment")
-        if not bool(getattr(rider, "nin_verified", False)):
-            raise HTTPException(status_code=400, detail="Rider must be NIN verified before assignment")
 
         ensure_order_delivery_pin(db, order)
         order.delivery_worker_id = rider.id

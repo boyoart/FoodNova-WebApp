@@ -396,8 +396,12 @@ export const adminAPI = {
   // Delivery Rider Management (from delivery_workers table)
   getRiders: async (params = {}) => {
     const response = await api.get("/admin/riders", { params });
+    const query = new URLSearchParams(params).toString();
+    const url = `/admin/riders${query ? `?${query}` : ""}`;
+    console.info("ASSIGN_RIDER_API_URL", url);
+    console.info("ASSIGN_RIDER_RESPONSE", response);
     const riders = normalizeList(response.data, ["riders", "workers", "data"]);
-    return { data: riders, raw: response.data };
+    return { data: riders, raw: response.data, status: response.status, url };
   },
 
   createRider: async (payload) => {
