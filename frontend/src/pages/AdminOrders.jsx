@@ -217,21 +217,27 @@ export default function AdminOrders() {
   const loadRiders = async () => {
     try {
       const response = await adminAPI.getRiders({ status: 'active' })
+      console.info('ASSIGN_RIDER_API_RESPONSE', response)
       const assignable = (response.data || []).filter((rider) => {
         const workerStatus = String(rider.kyc_status || rider.approval_status || '').toUpperCase()
         const riderStatus = String(rider.rider_table_status || rider.status || '').toUpperCase()
         const workerType = String(rider.worker_type || '').toLowerCase()
-        return workerType === 'rider' && (['APPROVED', 'ACTIVE'].includes(workerStatus) || ['APPROVED', 'ACTIVE'].includes(riderStatus))
+        const ninVerified = rider.nin_verified === true || String(rider.nin_status || '').toLowerCase() === 'verified'
+        return workerType === 'rider' && ninVerified && (['APPROVED', 'ACTIVE'].includes(workerStatus) || ['APPROVED', 'ACTIVE'].includes(riderStatus))
       })
       console.info('ADMIN_ORDER_ASSIGNMENT_RIDERS', {
         total_riders_found: response.data?.length || 0,
         rider_ids_returned: assignable.map((rider) => rider.id),
         rider_status_values_returned: assignable.map((rider) => ({
           id: rider.id,
+          database_rider_id: rider.database_rider_id,
           status: rider.status,
           kyc_status: rider.kyc_status,
           approval_status: rider.approval_status,
           rider_table_status: rider.rider_table_status,
+          nin_verified: rider.nin_verified,
+          online: rider.operational_status === 'ONLINE',
+          available: rider.operational_status === 'ONLINE' && !rider.active_order,
         })),
       })
       setRiders(assignable)
