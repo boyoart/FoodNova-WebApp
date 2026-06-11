@@ -776,7 +776,7 @@ class _RiderTrackingCard extends StatelessWidget {
         error: (error, _) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _MutedText('Rider tracking is temporarily unavailable. $error'),
+            const _MutedText('Rider tracking temporarily unavailable.'),
             if (order.riderPhone.trim().isNotEmpty) ...[
               const SizedBox(height: 12),
               _RiderContactButtons(

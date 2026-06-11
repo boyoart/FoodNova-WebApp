@@ -51,6 +51,9 @@ class RiderLocation {
     final customer = json['customer'] is Map
         ? Map<String, dynamic>.from(json['customer'])
         : <String, dynamic>{};
+    final location = json['location'] is Map
+        ? Map<String, dynamic>.from(json['location'])
+        : <String, dynamic>{};
     final route = json['route_polyline'] is List
         ? (json['route_polyline'] as List)
             .whereType<Map>()
@@ -64,17 +67,22 @@ class RiderLocation {
             .toList()
         : <Map<String, double>>[];
     return RiderLocation(
-      deliveryStatus: '${json['delivery_status'] ?? ''}',
-      trackingVisible: json['tracking_visible'] == true,
+      deliveryStatus:
+          '${json['delivery_status'] ?? json['deliveryStatus'] ?? ''}',
+      trackingVisible: json['tracking_visible'] == true ||
+          {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}
+              .contains('${json['deliveryStatus'] ?? ''}'.toUpperCase()),
       riderName: '${rider['name'] ?? ''}',
       riderPhone: '${rider['phone'] ?? ''}',
-      riderLatitude: double.tryParse('${rider['latitude']}'),
-      riderLongitude: double.tryParse('${rider['longitude']}'),
+      riderLatitude:
+          double.tryParse('${rider['latitude'] ?? location['latitude']}'),
+      riderLongitude:
+          double.tryParse('${rider['longitude'] ?? location['longitude']}'),
       customerLatitude: double.tryParse('${customer['latitude']}'),
       customerLongitude: double.tryParse('${customer['longitude']}'),
       distanceMeters: double.tryParse('${json['distance_meters']}'),
       etaMinutes: int.tryParse('${json['eta_minutes']}'),
-      lastUpdatedAt: '${rider['last_updated_at'] ?? ''}',
+      lastUpdatedAt: '${rider['last_updated_at'] ?? json['updatedAt'] ?? ''}',
       routePolyline: route,
     );
   }
@@ -125,7 +133,20 @@ class OrdersRepository {
   }
 
   Future<RiderLocation?> riderLocation(int orderId) async {
-    final response = await _dio.get('/orders/$orderId/rider-location');
+    Response<dynamic> response;
+    try {
+      response = await _dio.get('/orders/$orderId/rider-location');
+    } on DioException catch (error) {
+      if (error.response?.statusCode == 404) {
+        try {
+          response = await _dio.get('/api/orders/$orderId/rider-location');
+        } on DioException {
+          throw Exception('Rider tracking temporarily unavailable.');
+        }
+      } else {
+        throw Exception('Rider tracking temporarily unavailable.');
+      }
+    }
     final body = response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};

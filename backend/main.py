@@ -2530,6 +2530,31 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
     }
 
 
+def order_rider_location_response(order: DBOrder, db) -> dict:
+    data = order_rider_location_payload(order, db)
+    rider = data.get("rider") or {}
+    location = {
+        "latitude": rider.get("latitude"),
+        "longitude": rider.get("longitude"),
+        "accuracy": rider.get("accuracy"),
+        "heading": rider.get("heading"),
+        "speed": rider.get("speed"),
+    }
+    return {
+        "success": True,
+        "rider": {
+            "id": rider.get("id"),
+            "name": rider.get("name") or "",
+            "phone": rider.get("phone") or "",
+        },
+        "location": location,
+        "deliveryStatus": data.get("delivery_status") or "",
+        "updatedAt": rider.get("last_updated_at") or "",
+        "tracking": data,
+        "data": data,
+    }
+
+
 def worker_inside_zone(worker: DBDeliveryWorker, latitude: float, longitude: float, db) -> bool:
     if (worker.worker_type or "") != "messenger":
         return False
@@ -5470,6 +5495,11 @@ def api_confirm_delivery(order_id: int, payload: dict):
     return confirm_delivery(order_id, payload)
 
 
+@app.get("/api/orders/{order_id}/rider-location")
+def api_get_order_rider_location(order_id: int):
+    return get_order_rider_location(order_id)
+
+
 @app.get("/api/notifications")
 def api_notifications(request: Request):
     return get_notifications(request)
@@ -7013,8 +7043,7 @@ def get_order_rider_location(order_id: int):
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        data = order_rider_location_payload(order, db)
-        return {"success": True, "tracking": data, "data": data}
+        return order_rider_location_response(order, db)
     finally:
         db.close()
 
