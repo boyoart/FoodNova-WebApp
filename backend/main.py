@@ -6710,19 +6710,32 @@ def messenger_go_online(payload: LocationPingPayload, request: Request):
 def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = None):
     db, user, worker = get_current_worker_record(request, "rider")
     try:
+        print("ONLINE_REQUEST", json_dump({
+            "worker_id": worker.id,
+            "payload_present": payload is not None,
+            "latitude": getattr(payload, "latitude", None),
+            "longitude": getattr(payload, "longitude", None),
+            "timestamp": getattr(payload, "timestamp", None),
+        }))
         if promote_verified_approved_rider(worker):
             sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved rider on go-online")
         if rider_lifecycle_status(worker) != "ACTIVE":
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
         if not worker_dashboard_access_allowed(worker):
             raise HTTPException(status_code=403, detail="Complete NIN verification, profile, selfie, and document uploads before going online.")
-        if payload:
-            if payload_has_recent_timestamp(payload):
-                update_worker_location(worker, payload, db)
-            else:
-                worker.suspicious_gps_gaps = (worker.suspicious_gps_gaps or 0) + 1
+        if payload is None:
+            worker.operational_status = "OFFLINE"
+            worker.updated_at = datetime.utcnow()
+            db.commit()
+            raise HTTPException(status_code=400, detail="Enable location services to go online.")
+        if not payload_has_recent_timestamp(payload):
+            worker.operational_status = "OFFLINE"
+            worker.suspicious_gps_gaps = (worker.suspicious_gps_gaps or 0) + 1
+            worker.updated_at = datetime.utcnow()
+            db.commit()
+            raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds to go online.")
+        update_worker_location(worker, payload, db)
         worker.operational_status = "ONLINE"
-        worker.inside_zone = False
         worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(worker)
@@ -6730,6 +6743,7 @@ def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = N
         create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"Rider {worker.full_name} went online", {"worker": data, "gps_provided": bool(payload), "gps_recent": data.get("gps_recent")})
         socket_emit("rider:availability", {"worker": data, "status": "ONLINE"}, room=f"user:{worker.user_id}")
         socket_emit("dispatch:availability", {"worker": data, "status": "ONLINE"}, room=f"role:admin")
+        print("ONLINE_RESPONSE", json_dump({"worker_id": worker.id, "status": worker.operational_status, "gps_recent": data.get("gps_recent")}))
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()

@@ -26,6 +26,8 @@ class OnboardingProgressStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     final step = currentStep.clamp(1, totalSteps).toInt();
     final percent = ((step / totalSteps) * 100).round();
+    final rejected = RegExp('reject|declin|fail', caseSensitive: false)
+        .hasMatch(status ?? '');
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 430;
@@ -98,6 +100,8 @@ class OnboardingProgressStepper extends StatelessWidget {
                             label: foodNovaOnboardingSteps[index],
                             index: index + 1,
                             complete: index + 1 <= step,
+                            current: index + 1 == step,
+                            rejected: rejected,
                             compact: true,
                           ),
                       ],
@@ -112,6 +116,8 @@ class OnboardingProgressStepper extends StatelessWidget {
                               label: foodNovaOnboardingSteps[index],
                               index: index + 1,
                               complete: index + 1 <= step,
+                              current: index + 1 == step,
+                              rejected: rejected,
                               compact: false,
                             ),
                           ),
@@ -130,17 +136,37 @@ class _StepItem extends StatelessWidget {
     required this.label,
     required this.index,
     required this.complete,
+    required this.current,
+    required this.rejected,
     required this.compact,
   });
 
   final String label;
   final int index;
   final bool complete;
+  final bool current;
+  final bool rejected;
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    final color = complete ? FoodNovaColors.primary : FoodNovaColors.offline;
+    final color = rejected
+        ? FoodNovaColors.danger
+        : complete
+            ? FoodNovaColors.success
+            : current
+                ? FoodNovaColors.warning
+                : FoodNovaColors.secondaryText;
+    final markerFill = rejected
+        ? FoodNovaColors.danger
+        : complete
+            ? FoodNovaColors.success
+            : current
+                ? FoodNovaColors.warning
+                : FoodNovaColors.surface2;
+    final markerTextColor = current && !complete && !rejected
+        ? FoodNovaColors.primaryDark
+        : Colors.white;
     final text = Text(
       label,
       maxLines: compact ? 2 : 3,
@@ -156,18 +182,18 @@ class _StepItem extends StatelessWidget {
       height: 26,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: complete ? FoodNovaColors.primary : FoodNovaColors.surface2,
+        color: markerFill,
         shape: BoxShape.circle,
         border: Border.all(
-          color: complete ? FoodNovaColors.primary : FoodNovaColors.border,
+          color: color,
         ),
       ),
-      child: complete
+      child: complete || rejected
           ? const Icon(Icons.check, size: 15, color: Colors.white)
           : Text(
               '$index',
-              style: const TextStyle(
-                color: FoodNovaColors.muted,
+              style: TextStyle(
+                color: markerTextColor,
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),

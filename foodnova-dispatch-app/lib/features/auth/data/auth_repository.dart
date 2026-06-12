@@ -387,7 +387,7 @@ class AuthRepository {
     } catch (_) {
       // Local session clearing still needs to happen when the token is stale.
     }
-    await ref.read(sessionControllerProvider.notifier).clear();
+    await ref.read(sessionControllerProvider.notifier).logoutAndReset();
   }
 
   Future<void> _registerPushToken() async {

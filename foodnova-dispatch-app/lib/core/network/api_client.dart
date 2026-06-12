@@ -75,6 +75,14 @@ void _log(String message) {
 String apiMessage(Object error) {
   if (error is DioException) {
     final data = error.response?.data;
+    if (error.response?.statusCode == 500) {
+      final detail =
+          data is Map ? '${data['detail'] ?? data['message'] ?? ''}' : '$data';
+      if (detail.trim().isEmpty ||
+          detail.toLowerCase().contains('internal server error')) {
+        return 'FoodNova could not complete this request. Please try again, and contact support if it continues.';
+      }
+    }
     if (data is Map && data['detail'] != null) {
       return data['detail'].toString();
     }
