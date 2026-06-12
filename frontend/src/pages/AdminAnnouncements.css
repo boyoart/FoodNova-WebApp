@@ -224,6 +224,11 @@
   color: #087a34;
 }
 
+.admin-empty-card.error svg,
+.admin-empty-card.error h2 {
+  color: #b42318;
+}
+
 .announcement-modal-backdrop {
   align-items: center;
   background: rgba(8, 24, 15, 0.55);

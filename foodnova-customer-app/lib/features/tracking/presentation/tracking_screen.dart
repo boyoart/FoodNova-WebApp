@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/models/order.dart';
+import '../../../services/realtime_service.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/primary_button.dart';
 import '../../../widgets/skeleton_box.dart';
@@ -42,11 +43,23 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   bool _verified = false;
   double _progress = 0;
   Timer? _refreshTimer;
+  bool _subscribedRealtime = false;
 
   @override
   void initState() {
     super.initState();
+    Future<void>.microtask(_subscribeRealtime);
     _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      ref.invalidate(riderLocationProvider(widget.orderId));
+    });
+  }
+
+  Future<void> _subscribeRealtime() async {
+    if (_subscribedRealtime) return;
+    _subscribedRealtime = true;
+    await ref.read(realtimeServiceProvider).subscribeToOrder(widget.orderId,
+        (_) {
       ref.invalidate(orderDetailProvider(widget.orderId));
       ref.invalidate(riderLocationProvider(widget.orderId));
     });

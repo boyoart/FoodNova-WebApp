@@ -26,6 +26,38 @@ final deliveryOrdersProvider = FutureProvider.autoDispose<List<DeliveryOrder>>((
   return ref.read(dispatchRepositoryProvider).orders();
 });
 
+final dashboardStatsProvider =
+    FutureProvider.autoDispose<DashboardStats>((ref) {
+  return ref.read(dispatchRepositoryProvider).dashboardStats();
+});
+
+class DashboardStats {
+  const DashboardStats({
+    required this.todayEarnings,
+    required this.todayDeliveries,
+    required this.completed,
+    required this.pending,
+  });
+
+  final num todayEarnings;
+  final int todayDeliveries;
+  final int completed;
+  final int pending;
+
+  factory DashboardStats.fromJson(Map<String, dynamic> json) {
+    return DashboardStats(
+      todayEarnings: num.tryParse(
+              '${json['today_earnings'] ?? json['todayEarnings'] ?? 0}') ??
+          0,
+      todayDeliveries: int.tryParse(
+              '${json['today_deliveries'] ?? json['todayDeliveries'] ?? 0}') ??
+          0,
+      completed: int.tryParse('${json['completed'] ?? 0}') ?? 0,
+      pending: int.tryParse('${json['pending'] ?? 0}') ?? 0,
+    );
+  }
+}
+
 class DispatchRepository {
   DispatchRepository(this.ref);
   final Ref ref;
@@ -99,6 +131,14 @@ class DispatchRepository {
 
   Future<void> panic(Map<String, dynamic> location) {
     return _dio.post('/delivery/panic-alert', data: location).then((_) {});
+  }
+
+  Future<DashboardStats> dashboardStats() async {
+    final response = await _dio.get('/delivery/stats');
+    final body = response.data as Map;
+    return DashboardStats.fromJson(
+      Map<String, dynamic>.from(body['stats'] ?? body['data'] ?? {}),
+    );
   }
 
   Future<List<DeliveryOffer>> offers() async {

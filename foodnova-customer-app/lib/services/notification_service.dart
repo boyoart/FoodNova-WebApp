@@ -69,6 +69,10 @@ class NotificationService {
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(_androidChannel);
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
       if (!_firebaseReady) {
         debugPrint(
             '[FoodNova Push] Firebase not configured; push notifications disabled for this build.');

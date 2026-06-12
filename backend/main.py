@@ -89,9 +89,20 @@ try:
 except Exception:
     cloudinary = None
 
+try:
+    import socketio
+except Exception:
+    socketio = None
+
 load_dotenv()
 
 app = FastAPI(title="FoodNova API")
+sio = socketio.AsyncServer(
+    async_mode="asgi",
+    cors_allowed_origins="*",
+    logger=False,
+    engineio_logger=False,
+) if socketio else None
 nin_provider_config = validate_ninbvnportal_config()
 if not nin_provider_config.get("configured"):
     print(f"WARNING: {nin_provider_config.get('message')}")
@@ -923,6 +934,74 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
+def _socket_user_rooms(user: dict) -> List[str]:
+    rooms = []
+    if not user:
+        return rooms
+    user_id = user.get("id") or user.get("user_id")
+    email = str(user.get("email") or user.get("sub") or "").strip().lower()
+    role = str(user.get("role") or "").strip().lower()
+    if user_id:
+        rooms.append(f"user:{user_id}")
+    if email:
+        rooms.append(f"email:{email}")
+    if role:
+        rooms.append(f"role:{role}")
+    return rooms
+
+
+def socket_emit(event: str, payload: dict, room: Optional[str] = None) -> None:
+    if not sio:
+        return
+    try:
+        import asyncio
+        target = room or None
+        asyncio.run(sio.emit(event, payload or {}, room=target))
+    except Exception as error:
+        print("SOCKET_EMIT_ERROR", json_dump({"event": event, "room": room or "", "error": repr(error)}))
+
+
+if sio:
+    @sio.event
+    async def connect(sid, environ, auth):
+        token = ""
+        if isinstance(auth, dict):
+            token = str(auth.get("token") or "").strip()
+        query = environ.get("QUERY_STRING") or ""
+        if not token and query:
+            parsed = urllib.parse.parse_qs(query)
+            token = str((parsed.get("token") or [""])[0]).strip()
+        user = decode_access_token(token)
+        if not user:
+            print("SOCKET_CONNECT_REJECTED", json_dump({"sid": sid}))
+            return False
+        for room in _socket_user_rooms(user):
+            await sio.enter_room(sid, room)
+        await sio.save_session(sid, {"user": user})
+        print("SOCKET_CONNECTED", json_dump({"sid": sid, "role": user.get("role"), "user_id": user.get("user_id")}))
+
+    @sio.event
+    async def disconnect(sid):
+        print("SOCKET_DISCONNECTED", json_dump({"sid": sid}))
+
+    @sio.on("order:subscribe")
+    async def socket_order_subscribe(sid, payload):
+        data = payload if isinstance(payload, dict) else {}
+        order_id = str(data.get("order_id") or data.get("orderId") or "").strip()
+        if not order_id:
+            return
+        await sio.enter_room(sid, f"order:{order_id}")
+        await sio.emit("order:subscribed", {"order_id": order_id}, room=sid)
+
+    @sio.on("dispatch:subscribe")
+    async def socket_dispatch_subscribe(sid, payload):
+        session = await sio.get_session(sid)
+        user = session.get("user") or {}
+        if str(user.get("role") or "").lower() in {"rider", "messenger"}:
+            await sio.enter_room(sid, f"dispatch:{user.get('user_id')}")
+            await sio.emit("dispatch:subscribed", {"success": True}, room=sid)
+
+
 def _token_hash(token: str) -> str:
     return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
 
@@ -1314,6 +1393,13 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         db.commit()
         db.refresh(notif)
         data = notification_to_dict(notif)
+        socket_emit("notification:new", data, room=f"email:{email}")
+        if data.get("order_id"):
+            socket_emit(
+                f"order:update:{data.get('order_id')}",
+                {"order_id": data.get("order_id"), "notification": data},
+                room=f"order:{data.get('order_id')}",
+            )
         user = db.query(DBUser).filter(func.lower(DBUser.email) == email).first()
         if user:
             is_dispatch_user = (getattr(user, "role", "") or "") in {"rider", "messenger"}
@@ -1331,7 +1417,7 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
                     "order_id": str(order.get("id") if order else ""),
                     "title": title,
                     "body": message,
-                    "sound": "default",
+                    "sound": "delivery_alert" if is_dispatch_user else "default",
                     "android_channel_id": "foodnova_dispatch_delivery" if is_dispatch_user else "foodnova_customer_updates",
                     "android_click_action": "OPEN_WORKER_DASHBOARD" if is_dispatch_user else "OPEN_FOODNOVA",
                     "click_action": "/notifications",
@@ -1626,7 +1712,7 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
                 "offer_id": offer.id,
                 "order_id": offer.order_id,
                 "worker_type": offer.worker_type,
-                "sound": "default",
+                "sound": "delivery_alert",
                 "android_channel_id": "foodnova_dispatch_delivery",
                 "android_click_action": "OPEN_WORKER_DASHBOARD",
                 "click_action": "/rider/dashboard" if offer.worker_type == "rider" else "/messenger/dashboard",
@@ -2568,9 +2654,6 @@ def valid_tracking_coordinate(lat, lng) -> bool:
     if lat == 0 and lng == 0:
         return False
     if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-        return False
-    # FoodNova deliveries currently operate in Nigeria; reject obvious fallback/test coordinates.
-    if not (3.0 <= lat <= 14.5 and 2.0 <= lng <= 15.0):
         return False
     return True
 
@@ -6459,6 +6542,15 @@ def update_worker_location(worker: DBDeliveryWorker, payload: LocationPingPayloa
             "longitude": payload.longitude,
         }))
         raise HTTPException(status_code=400, detail="Invalid rider GPS coordinates")
+    print("DISPATCH_GPS_PING", json_dump({
+        "worker_id": getattr(worker, "id", None),
+        "latitude": payload.latitude,
+        "longitude": payload.longitude,
+        "accuracy": payload.accuracy,
+        "heading": payload.heading,
+        "speed": payload.speed,
+        "timestamp": payload.timestamp,
+    }))
     inside_zone = worker_inside_zone(worker, payload.latitude, payload.longitude, db)
     worker.latest_latitude = payload.latitude
     worker.latest_longitude = payload.longitude
@@ -6510,6 +6602,42 @@ def delivery_me(request: Request):
         db.close()
 
 
+@app.get("/delivery/stats")
+def delivery_stats(request: Request):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        assigned_filter = or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id)
+        orders = active_order_filter(db.query(DBOrder)).filter(assigned_filter).all()
+        today_orders = [
+            order for order in orders
+            if (getattr(order, "delivery_assigned_at", None) or getattr(order, "updated_at", None) or today_start) >= today_start
+        ]
+        completed_today = [
+            order for order in today_orders
+            if str(getattr(order, "delivery_status", "") or "").upper() == "DELIVERED"
+            or str(getattr(order, "status", "") or "").lower() == "delivered"
+        ]
+        active_statuses = {"ASSIGNED", "ACCEPTED", "PICKED_UP", "IN_TRANSIT", "ARRIVED"}
+        pending_today = [
+            order for order in today_orders
+            if str(getattr(order, "delivery_status", "") or "").upper() in active_statuses
+        ]
+        earnings_today = sum(float(getattr(order, "delivery_fee", 0) or 0) for order in completed_today)
+        data = {
+            "today_earnings": earnings_today,
+            "today_deliveries": len(today_orders),
+            "completed": len(completed_today),
+            "pending": len(pending_today),
+            "assigned": len([order for order in orders if str(getattr(order, "delivery_status", "") or "").upper() == "ASSIGNED"]),
+            "active": len([order for order in orders if str(getattr(order, "delivery_status", "") or "").upper() in active_statuses]),
+            "lifetime_completed": worker.completed_deliveries or 0,
+        }
+        return {"success": True, "stats": data, "data": data}
+    finally:
+        db.close()
+
+
 @app.post("/messenger/go-online")
 def messenger_go_online(payload: LocationPingPayload, request: Request):
     db, user, worker = get_current_worker_record(request, "messenger")
@@ -6532,6 +6660,8 @@ def messenger_go_online(payload: LocationPingPayload, request: Request):
         db.refresh(worker)
         data = worker_to_dict(worker)
         create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"Messenger {worker.full_name} went online", {"worker": data})
+        socket_emit("rider:availability", {"worker": data, "status": "ONLINE"}, room=f"user:{worker.user_id}")
+        socket_emit("dispatch:availability", {"worker": data, "status": "ONLINE"}, room=f"role:admin")
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()
@@ -6559,6 +6689,8 @@ def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = N
         db.refresh(worker)
         data = worker_to_dict(worker)
         create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"Rider {worker.full_name} went online", {"worker": data, "gps_provided": bool(payload), "gps_recent": data.get("gps_recent")})
+        socket_emit("rider:availability", {"worker": data, "status": "ONLINE"}, room=f"user:{worker.user_id}")
+        socket_emit("dispatch:availability", {"worker": data, "status": "ONLINE"}, room=f"role:admin")
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()
@@ -6574,6 +6706,8 @@ def delivery_go_offline(request: Request):
         db.refresh(worker)
         data = worker_to_dict(worker)
         create_admin_audit_log(request, user, "worker_go_offline", "delivery_worker", worker.id, f"{worker.worker_type.title()} {worker.full_name} went offline", {"worker": data})
+        socket_emit("rider:availability", {"worker": data, "status": "OFFLINE"}, room=f"user:{worker.user_id}")
+        socket_emit("dispatch:availability", {"worker": data, "status": "OFFLINE"}, room=f"role:admin")
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()
@@ -6598,6 +6732,30 @@ def delivery_location_ping(payload: LocationPingPayload, request: Request):
         db.refresh(worker)
         data = worker_to_dict(worker)
         create_admin_audit_log(request, user, "delivery_location_ping", "delivery_worker", worker.id, f"Location ping from {worker.full_name}", {"latitude": payload.latitude, "longitude": payload.longitude, "inside_zone": worker.inside_zone})
+        active_orders = active_order_filter(db.query(DBOrder)).filter(
+            or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id),
+            DBOrder.delivery_status.in_(["ASSIGNED", "ACCEPTED", "PICKED_UP", "IN_TRANSIT", "ARRIVED"]),
+        ).all()
+        location_update = {
+            "rider_id": worker.id,
+            "latitude": payload.latitude,
+            "longitude": payload.longitude,
+            "accuracy": payload.accuracy,
+            "heading": payload.heading,
+            "speed": payload.speed,
+            "updatedAt": iso(worker.last_seen_at),
+        }
+        for active_order in active_orders:
+            socket_emit(
+                f"rider:location:{active_order.id}",
+                {"order_id": active_order.id, "location": location_update},
+                room=f"order:{active_order.id}",
+            )
+            socket_emit(
+                f"order:update:{active_order.id}",
+                {"order_id": active_order.id, "location": location_update},
+                room=f"order:{active_order.id}",
+            )
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()
@@ -8392,6 +8550,14 @@ def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Reques
         if processed_ids:
             rider.operational_status = "BUSY"
             rider.updated_at = now
+            _create_user_notification(
+                rider.email,
+                "New Delivery Assigned",
+                f"{len(processed_ids)} FoodNova order{'s' if len(processed_ids) != 1 else ''} assigned to you.",
+                "delivery_assigned",
+                "delivery",
+                order_to_dict(orders[0]) if orders else None,
+            )
         db.commit()
         rider_data = worker_to_dict(rider)
         create_admin_audit_log(
@@ -8812,13 +8978,21 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         db.refresh(order)
         order_data = order_to_dict(order)
         rider_data = worker_to_dict(rider)
+        _create_user_notification(
+            rider.email,
+            "New Delivery Assigned",
+            f"FoodNova order {order_data.get('order_code')} has been assigned to you.",
+            "delivery_assigned",
+            "delivery",
+            order_data,
+        )
 
         if order_data.get("customer_email"):
             _create_order_notification(
                 order_data,
-                "Delivery Rider Assigned",
-                f"A delivery rider has been assigned to your order {order_data.get('order_code')}. Rider: {rider.full_name}. Phone: {rider.phone}.",
-                "delivery_update",
+                "Rider Assigned",
+                "Your order has been assigned to a rider.",
+                "rider_assigned",
                 "delivery",
             )
             safe_email_call(
@@ -8847,6 +9021,17 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
             f"Admin assigned rider {rider.full_name} to order {order.order_code}",
             {"order_code": order.order_code, "rider": rider_data, "delivery_note": payload.delivery_note or ""},
         )
+        assignment_event = {
+            "order_id": order.id,
+            "order": order_data,
+            "rider": rider_data,
+            "event": "delivery_assigned",
+            "message": f"FoodNova order {order.order_code} has been assigned to you.",
+            "timestamp": iso(datetime.utcnow()),
+        }
+        socket_emit("delivery:assigned", assignment_event, room=f"user:{rider.user_id}")
+        socket_emit("dispatch:assignment", assignment_event, room=f"user:{rider.user_id}")
+        socket_emit(f"order:update:{order.id}", assignment_event, room=f"order:{order.id}")
         return {"success": True, "message": "Rider assigned successfully", "order": order_data, "data": order_data}
     finally:
         db.close()
@@ -9158,6 +9343,16 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
             "cancelled": ("Delivery Cancelled", f"Delivery for order {order.order_code} was cancelled.", "delivery_cancelled"),
         }.get(raw_status, ("Delivery update", f"Your order {order.order_code} is now {raw_status.replace('_', ' ')}.", "delivery_update"))
         _create_order_notification(data, customer_event[0], customer_event[1], customer_event[2], "delivery")
+        status_event = {
+            "order_id": order.id,
+            "order": data,
+            "delivery_status": order.delivery_status,
+            "status": order.status,
+            "event": customer_event[2],
+            "timestamp": iso(datetime.utcnow()),
+        }
+        socket_emit(f"order:update:{order.id}", status_event, room=f"order:{order.id}")
+        socket_emit("delivery:status", status_event, room=f"user:{worker.user_id}")
         create_admin_audit_log(request, user, "delivery_status_update", "order", order.id, f"{worker.full_name} updated delivery status for {order.order_code}", {"delivery_status": raw_status, "order": data})
         return {"success": True, "order": data, "data": data}
     finally:
@@ -9200,6 +9395,16 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
         db.refresh(order)
         data = order_to_dict(order)
         _create_order_notification(data, "Delivery completed", f"Your order {order.order_code} has been delivered.", "delivery_update", "delivery")
+        proof_event = {
+            "order_id": order.id,
+            "order": data,
+            "delivery_status": order.delivery_status,
+            "status": order.status,
+            "event": "delivered",
+            "timestamp": iso(datetime.utcnow()),
+        }
+        socket_emit(f"order:update:{order.id}", proof_event, room=f"order:{order.id}")
+        socket_emit("delivery:completed", proof_event, room=f"user:{worker.user_id}")
         create_admin_audit_log(request, user, "delivery_proof_submitted", "order", order.id, f"{worker.full_name} submitted proof for {order.order_code}", {"proof": proof, "order": data})
         safe_email_call("customer_delivery_confirmed", send_customer_order_email, data, "delivered")
         return {"success": True, "message": "Delivery proof submitted", "order": data, "data": data}
@@ -10244,7 +10449,7 @@ def get_admin_announcements(request: Request):
         return {"success": True, "announcements": announcements, "data": announcements}
     except Exception as error:
         print("ADMIN ANNOUNCEMENTS LOAD ERROR:", repr(error))
-        return {"success": True, "announcements": [], "data": []}
+        raise HTTPException(status_code=500, detail="Unable to load announcements")
     finally:
         db.close()
 
@@ -10323,13 +10528,10 @@ def delete_announcement(announcement_id: int, request: Request):
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
         old_data = announcement_to_dict(announcement)
-        announcement.is_active = False
-        announcement.updated_at = datetime.utcnow()
+        db.delete(announcement)
         db.commit()
-        db.refresh(announcement)
-        data = announcement_to_dict(announcement)
-        create_admin_audit_log(request, admin, "announcement_deactivated", "announcement", announcement.id, f"Admin deactivated announcement {announcement.title}", {"before": old_data, "after": data})
-        return {"success": True, "message": "Announcement deactivated successfully", "announcement": data, "data": data}
+        create_admin_audit_log(request, admin, "announcement_deleted", "announcement", announcement_id, f"Admin deleted announcement {old_data.get('title')}", {"before": old_data})
+        return {"success": True, "message": "Announcement deleted successfully", "announcement": old_data, "data": old_data}
     finally:
         db.close()
 
@@ -11079,3 +11281,7 @@ def delete_broadcast(broadcast_id: int, request: Request):
         db.close()
     
     raise HTTPException(status_code=404, detail="Broadcast not found")
+
+
+if sio:
+    app = socketio.ASGIApp(sio, other_asgi_app=app)

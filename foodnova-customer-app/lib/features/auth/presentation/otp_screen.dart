@@ -14,8 +14,9 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  final _code = List.generate(6, (_) => TextEditingController());
-  final _nodes = List.generate(6, (_) => FocusNode());
+  static const _pinLength = 4;
+  final _code = List.generate(_pinLength, (_) => TextEditingController());
+  final _nodes = List.generate(_pinLength, (_) => FocusNode());
 
   @override
   void dispose() {
@@ -34,7 +35,7 @@ class _OtpScreenState extends State<OtpScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Verify your phone',
+          Text('Enter your PIN',
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme
@@ -42,17 +43,19 @@ class _OtpScreenState extends State<OtpScreen> {
                   ?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 8),
           const Text(
-            'Enter the verification code sent to your FoodNova phone number.',
+            'Enter the 4-digit PIN sent to your FoodNova phone number.',
             textAlign: TextAlign.center,
             style: TextStyle(color: FoodNovaColors.muted),
           ),
           const SizedBox(height: 26),
           Row(
             children: List.generate(
-              6,
+              _pinLength,
               (index) => Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(right: index == 5 ? 0 : 8),
+                  padding: EdgeInsets.only(
+                    right: index == _pinLength - 1 ? 0 : 8,
+                  ),
                   child: TextField(
                     controller: _code[index],
                     focusNode: _nodes[index],
@@ -63,10 +66,12 @@ class _OtpScreenState extends State<OtpScreen> {
                         fontSize: 22, fontWeight: FontWeight.w900),
                     decoration: const InputDecoration(counterText: ''),
                     onChanged: (value) {
-                      if (value.isNotEmpty && index < 5)
+                      if (value.isNotEmpty && index < _pinLength - 1) {
                         _nodes[index + 1].requestFocus();
-                      if (value.isEmpty && index > 0)
+                      }
+                      if (value.isEmpty && index > 0) {
                         _nodes[index - 1].requestFocus();
+                      }
                     },
                   ),
                 ),

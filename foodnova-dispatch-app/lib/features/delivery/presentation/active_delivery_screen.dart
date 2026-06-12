@@ -42,7 +42,7 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   void initState() {
     super.initState();
     _ping();
-    timer = Timer.periodic(const Duration(seconds: 10), (_) => _ping());
+    timer = Timer.periodic(const Duration(seconds: 5), (_) => _ping());
   }
 
   @override
@@ -272,11 +272,17 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   Future<void> _ping() async {
     if (stage == DeliveryStage.delivered) return;
     try {
-      final pos = await LocationService().current();
-      await ref
-          .read(dispatchRepositoryProvider)
-          .pingLocation(locationPayload(pos));
-    } catch (_) {}
+      final pos = await LocationService().current(requestBackground: true);
+      final payload = locationPayload(pos);
+      debugPrint(
+        'DISPATCH_ACTIVE_GPS latitude=${payload['latitude']} '
+        'longitude=${payload['longitude']} accuracy=${payload['accuracy']} '
+        'timestamp=${payload['timestamp']}',
+      );
+      await ref.read(dispatchRepositoryProvider).pingLocation(payload);
+    } catch (error) {
+      debugPrint('DISPATCH_ACTIVE_GPS_ERROR $error');
+    }
   }
 
   Future<void> _panic() async {

@@ -31,11 +31,16 @@ class RealtimeService {
     return socket;
   }
 
-  Future<void> subscribeToOrder(int orderId, void Function(Map<String, dynamic>) onUpdate) async {
+  Future<void> subscribeToOrder(
+      int orderId, void Function(Map<String, dynamic>) onUpdate) async {
     final socket = await connect();
     socket.emit('order:subscribe', {'order_id': orderId});
     socket.off('order:update:$orderId');
     socket.on('order:update:$orderId', (payload) {
+      if (payload is Map) onUpdate(Map<String, dynamic>.from(payload));
+    });
+    socket.off('rider:location:$orderId');
+    socket.on('rider:location:$orderId', (payload) {
       if (payload is Map) onUpdate(Map<String, dynamic>.from(payload));
     });
   }

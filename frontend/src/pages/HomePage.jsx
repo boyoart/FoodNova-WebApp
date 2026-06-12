@@ -97,6 +97,7 @@ export default function HomePage() {
   const [featuredProducts, setFeaturedProducts] = useState([])
   const [featuredPacks, setFeaturedPacks] = useState([])
   const [announcements, setAnnouncements] = useState([])
+  const [announcementIndex, setAnnouncementIndex] = useState(0)
   const [activePopupId, setActivePopupId] = useState(null)
   const [storeError, setStoreError] = useState('')
   const { items: cartItems, addItem } = useCartStore()
@@ -140,6 +141,7 @@ export default function HomePage() {
         const response = await announcementsAPI.getActive()
         const activeAnnouncements = response.data || []
         setAnnouncements(activeAnnouncements)
+        setAnnouncementIndex(0)
         const popup = activeAnnouncements.find((announcement) => (
           announcement.display_type === 'popup'
           && !sessionStorage.getItem(`foodnova_popup_dismissed_${announcement.id}`)
@@ -153,6 +155,14 @@ export default function HomePage() {
 
     loadAnnouncements()
   }, [])
+
+  useEffect(() => {
+    if (announcements.length <= 1) return undefined
+    const interval = setInterval(() => {
+      setAnnouncementIndex((current) => (current + 1) % announcements.length)
+    }, 6500)
+    return () => clearInterval(interval)
+  }, [announcements.length])
 
   const goPrevious = () => setActiveSlide((current) => (current - 1 + heroSlides.length) % heroSlides.length)
   const goNext = () => setActiveSlide((current) => (current + 1) % heroSlides.length)
@@ -199,6 +209,12 @@ export default function HomePage() {
 
   const topBarAnnouncements = announcements.filter((announcement) => announcement.display_type === 'top_bar')
   const heroAnnouncements = announcements.filter((announcement) => announcement.display_type === 'hero_banner')
+  const activeTopBar = topBarAnnouncements.length
+    ? topBarAnnouncements[announcementIndex % topBarAnnouncements.length]
+    : null
+  const activeHeroAnnouncement = heroAnnouncements.length
+    ? heroAnnouncements[announcementIndex % heroAnnouncements.length]
+    : null
   const activePopup = announcements.find((announcement) => announcement.id === activePopupId)
   const dismissPopup = () => {
     if (activePopupId) sessionStorage.setItem(`foodnova_popup_dismissed_${activePopupId}`, 'true')
@@ -207,9 +223,7 @@ export default function HomePage() {
 
   return (
     <div className="home-page">
-      {topBarAnnouncements.map((announcement) => (
-        <AnnouncementTopBar key={`top-${announcement.id}`} announcement={announcement} />
-      ))}
+      {activeTopBar ? <AnnouncementTopBar key={`top-${activeTopBar.id}`} announcement={activeTopBar} /> : null}
 
       <section className="hero-slider" aria-label="FoodNova highlights">
         <div className="hero-slide">
@@ -257,11 +271,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      {heroAnnouncements.length > 0 && (
+      {activeHeroAnnouncement && (
         <div className="homepage-announcement-hero-list">
-          {heroAnnouncements.map((announcement) => (
-            <AnnouncementHeroBanner key={`hero-${announcement.id}`} announcement={announcement} />
-          ))}
+          <AnnouncementHeroBanner key={`hero-${activeHeroAnnouncement.id}`} announcement={activeHeroAnnouncement} />
         </div>
       )}
 

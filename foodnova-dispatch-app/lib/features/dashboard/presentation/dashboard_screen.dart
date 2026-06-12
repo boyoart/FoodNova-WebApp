@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +10,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/utils/location_service.dart';
 import '../../../core/widgets/fn_widgets.dart';
+import '../../../services/realtime_service.dart';
 import '../../auth/presentation/onboarding_progress_stepper.dart';
 import '../../delivery/data/dispatch_repository.dart';
 import '../../delivery/domain/dispatch_models.dart';
@@ -22,117 +26,165 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool toggling = false;
   String error = '';
+  DateTime? lastBackPressedAt;
+  Timer? onlineGpsTimer;
+  StreamSubscription<Map<String, dynamic>>? realtimeSubscription;
+  bool onlineGpsPingInFlight = false;
   final money = NumberFormat.currency(symbol: 'NGN ', decimalDigits: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(() async {
+      final realtime = ref.read(realtimeServiceProvider);
+      realtimeSubscription = realtime.events.listen((_) {
+        ref.invalidate(deliveryOffersProvider);
+        ref.invalidate(deliveryOrdersProvider);
+        ref.invalidate(dashboardStatsProvider);
+        ref.invalidate(riderProfileProvider);
+      });
+      await realtime.connect();
+    });
+  }
+
+  @override
+  void dispose() {
+    onlineGpsTimer?.cancel();
+    realtimeSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(notificationRefreshProvider, (_, __) {
       ref.invalidate(deliveryOffersProvider);
+      ref.invalidate(deliveryOrdersProvider);
+      ref.invalidate(dashboardStatsProvider);
       ref.invalidate(riderProfileProvider);
     });
     final profile = ref.watch(riderProfileProvider);
     final riderForNavigation = profile.valueOrNull;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dispatch'),
-        actions: [
-          IconButton(
-            onPressed: () => context.go('/notifications'),
-            icon: const Icon(Icons.notifications_outlined),
-          ),
-          IconButton(
-            onPressed: () => context.go('/profile'),
-            icon: const Icon(Icons.person_outline),
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(riderProfileProvider);
-          ref.invalidate(deliveryOffersProvider);
-        },
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            profile.when(
-              data: (rider) {
-                debugPrint('Dashboard loaded');
-                debugPrint('Rider ID ${rider.id ?? ''}');
-                debugPrint('Rider Name ${rider.name}');
-                debugPrint('Data source backend');
-                if (!rider.dashboardAccessAllowed) {
-                  return _AccessLockedCard(rider: rider);
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Header(
-                      rider: rider,
-                      onToggle: () => _toggleOnline(rider),
-                      loading: toggling,
-                    ),
-                    const SizedBox(height: 16),
-                    _ApprovedDashboardBody(money: money),
-                  ],
-                );
-              },
-              loading: () => const LinearProgressIndicator(),
-              error: (e, _) => Text(apiMessage(e)),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final now = DateTime.now();
+        final shouldExit = lastBackPressedAt != null &&
+            now.difference(lastBackPressedAt!) < const Duration(seconds: 2);
+        if (shouldExit) {
+          await SystemNavigator.pop();
+          return;
+        }
+        lastBackPressedAt = now;
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Press back again to exit')),
+        );
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Dispatch'),
+          actions: [
+            IconButton(
+              onPressed: () => context.go('/notifications'),
+              icon: const Icon(Icons.notifications_outlined),
             ),
-            if (error.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Text(
-                  error,
-                  style: const TextStyle(color: FoodNovaColors.danger),
-                ),
-              ),
+            IconButton(
+              onPressed: () => context.go('/profile'),
+              icon: const Icon(Icons.person_outline),
+            ),
           ],
         ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        onDestinationSelected: (i) {
-          if (riderForNavigation != null &&
-              !riderForNavigation.dashboardAccessAllowed) {
-            final blocked = i == 1 || i == 2;
-            if (blocked) {
-              setState(() {
-                error = riderForNavigation.applicationSubmitted
-                    ? 'Dashboard tools unlock after admin approval.'
-                    : 'Complete onboarding before using dispatch tools.';
-              });
-              return;
+        body: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(riderProfileProvider);
+            ref.invalidate(deliveryOffersProvider);
+          },
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              profile.when(
+                data: (rider) {
+                  debugPrint('Dashboard loaded');
+                  debugPrint('Rider ID ${rider.id ?? ''}');
+                  debugPrint('Rider Name ${rider.name}');
+                  debugPrint('Data source backend');
+                  if (!rider.dashboardAccessAllowed) {
+                    _syncOnlineGpsLoop(false);
+                    return _AccessLockedCard(rider: rider);
+                  }
+                  _syncOnlineGpsLoop(rider.isOnline);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Header(
+                        rider: rider,
+                        onToggle: () => _toggleOnline(rider),
+                        loading: toggling,
+                      ),
+                      const SizedBox(height: 16),
+                      _ApprovedDashboardBody(money: money),
+                    ],
+                  );
+                },
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text(apiMessage(e)),
+              ),
+              if (error.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    error,
+                    style: const TextStyle(color: FoodNovaColors.danger),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: 0,
+          onDestinationSelected: (i) {
+            if (riderForNavigation != null &&
+                !riderForNavigation.dashboardAccessAllowed) {
+              final blocked = i == 1 || i == 2;
+              if (blocked) {
+                setState(() {
+                  error = riderForNavigation.applicationSubmitted
+                      ? 'Dashboard tools unlock after admin approval.'
+                      : 'Complete onboarding before using dispatch tools.';
+                });
+                return;
+              }
             }
-          }
-          if (i == 1) {
-            context.go('/earnings');
-          }
-          if (i == 2) {
-            context.go('/orders');
-          }
-          if (i == 3) {
-            context.go('/settings');
-          }
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            label: 'Home',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.payments_outlined),
-            label: 'Earnings',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.assignment_outlined),
-            label: 'Orders',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: 'Settings',
-          ),
-        ],
+            if (i == 1) {
+              context.go('/earnings');
+            }
+            if (i == 2) {
+              context.go('/orders');
+            }
+            if (i == 3) {
+              context.go('/settings');
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              label: 'Home',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.payments_outlined),
+              label: 'Earnings',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.assignment_outlined),
+              label: 'Orders',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              label: 'Settings',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -154,16 +206,59 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       final repo = ref.read(dispatchRepositoryProvider);
       if (rider.isOnline) {
         await repo.goOffline();
+        _syncOnlineGpsLoop(false);
       } else {
-        final pos = await LocationService().current();
-        await repo.goOnline(locationPayload(pos));
+        final pos = await LocationService().current(requestBackground: true);
+        final payload = locationPayload(pos);
+        debugPrint(
+          'DISPATCH_GO_ONLINE_GPS latitude=${payload['latitude']} '
+          'longitude=${payload['longitude']} accuracy=${payload['accuracy']} '
+          'timestamp=${payload['timestamp']}',
+        );
+        await repo.goOnline(payload);
+        _syncOnlineGpsLoop(true);
       }
       ref.invalidate(riderProfileProvider);
+      ref.invalidate(dashboardStatsProvider);
     } catch (e) {
       if (!mounted) return;
-      setState(() => error = apiMessage(e));
+      final message =
+          e is DispatchLocationException ? e.message : apiMessage(e);
+      setState(() => error = message);
     } finally {
       if (mounted) setState(() => toggling = false);
+    }
+  }
+
+  void _syncOnlineGpsLoop(bool shouldRun) {
+    if (!mounted) return;
+    if (!shouldRun) {
+      onlineGpsTimer?.cancel();
+      onlineGpsTimer = null;
+      return;
+    }
+    if (onlineGpsTimer != null) return;
+    _sendOnlineGpsPing();
+    onlineGpsTimer =
+        Timer.periodic(const Duration(seconds: 5), (_) => _sendOnlineGpsPing());
+  }
+
+  Future<void> _sendOnlineGpsPing() async {
+    if (onlineGpsPingInFlight) return;
+    onlineGpsPingInFlight = true;
+    try {
+      final pos = await LocationService().current(requestBackground: true);
+      final payload = locationPayload(pos);
+      debugPrint(
+        'DISPATCH_ONLINE_GPS latitude=${payload['latitude']} '
+        'longitude=${payload['longitude']} accuracy=${payload['accuracy']} '
+        'timestamp=${payload['timestamp']}',
+      );
+      await ref.read(dispatchRepositoryProvider).pingLocation(payload);
+    } catch (error) {
+      debugPrint('DISPATCH_ONLINE_GPS_ERROR $error');
+    } finally {
+      onlineGpsPingInFlight = false;
     }
   }
 }
@@ -175,6 +270,8 @@ class _ApprovedDashboardBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final offers = ref.watch(deliveryOffersProvider);
+    final stats = ref.watch(dashboardStatsProvider);
+    final statValues = stats.valueOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -188,22 +285,26 @@ class _ApprovedDashboardBody extends ConsumerWidget {
           children: [
             StatTile(
               label: 'Today\'s Earnings',
-              value: money.format(0),
+              value: stats.isLoading
+                  ? '...'
+                  : money.format(statValues?.todayEarnings ?? 0),
               icon: Icons.payments_outlined,
             ),
-            const StatTile(
+            StatTile(
               label: 'Today\'s Deliveries',
-              value: '0',
+              value: stats.isLoading
+                  ? '...'
+                  : '${statValues?.todayDeliveries ?? 0}',
               icon: Icons.local_shipping_outlined,
             ),
-            const StatTile(
+            StatTile(
               label: 'Completed',
-              value: '0',
+              value: stats.isLoading ? '...' : '${statValues?.completed ?? 0}',
               icon: Icons.check_circle_outline,
             ),
-            const StatTile(
+            StatTile(
               label: 'Pending',
-              value: '0',
+              value: stats.isLoading ? '...' : '${statValues?.pending ?? 0}',
               icon: Icons.pending_actions_outlined,
               color: FoodNovaColors.warning,
             ),

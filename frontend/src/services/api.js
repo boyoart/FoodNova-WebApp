@@ -54,6 +54,8 @@ const normalizeList = (body, keys = []) => {
   return [];
 };
 
+const normalizeAnnouncements = (body) => normalizeList(body, ["announcements", "data"]);
+
 export const productsAPI = {
   getAll: async (params = {}) => await api.get("/products", { params }),
   getById: async (id) => await api.get(`/products/${id}`),
@@ -69,7 +71,10 @@ export const categoriesAPI = {
 };
 
 export const announcementsAPI = {
-  getActive: async () => await api.get("/announcements/active"),
+  getActive: async () => {
+    const response = await api.get("/announcements/active");
+    return { data: normalizeAnnouncements(response.data), raw: response.data };
+  },
 };
 
 export const websiteSettingsAPI = {
@@ -514,6 +519,35 @@ export const adminAPI = {
 
   updateDeliveryAssignmentMode: async (mode) => {
     const response = await api.patch("/admin/delivery-assignment-mode", { mode });
+    return response.data;
+  },
+
+  getAnnouncements: async () => {
+    const response = await api.get("/admin/announcements");
+    return { data: normalizeAnnouncements(response.data), raw: response.data };
+  },
+
+  createAnnouncement: async (payload) => {
+    const response = await api.post("/admin/announcements", payload);
+    return response.data;
+  },
+
+  updateAnnouncement: async (id, payload) => {
+    const response = await api.patch(`/admin/announcements/${id}`, payload);
+    return response.data;
+  },
+
+  deleteAnnouncement: async (id) => {
+    const response = await api.delete(`/admin/announcements/${id}`);
+    return response.data;
+  },
+
+  uploadAnnouncementImage: async (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await api.post("/admin/uploads/announcement-image", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
     return response.data;
   },
 

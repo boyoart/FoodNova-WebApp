@@ -67,6 +67,7 @@ export default function AdminAnnouncements() {
   const { isAdmin, admin } = useAuthStore()
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [saving, setSaving] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
   const [filters, setFilters] = useState({ status: 'all', display_type: 'all' })
@@ -94,10 +95,12 @@ export default function AdminAnnouncements() {
   const loadAnnouncements = async () => {
     try {
       setLoading(true)
+      setLoadError('')
       const response = await adminAPI.getAnnouncements()
       setAnnouncements(response.data || [])
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to load announcements')
+      setAnnouncements([])
+      setLoadError(error?.response?.data?.detail || 'Unable to load announcements')
     } finally {
       setLoading(false)
     }
@@ -199,14 +202,15 @@ export default function AdminAnnouncements() {
     }
   }
 
-  const deactivateAnnouncement = async (announcement) => {
+  const deleteAnnouncement = async (announcement) => {
     if (!canManage) return
+    if (!window.confirm(`Delete announcement "${announcement.title}"?`)) return
     try {
       await adminAPI.deleteAnnouncement(announcement.id)
-      toast.success('Announcement deactivated')
+      toast.success('Announcement deleted')
       await loadAnnouncements()
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to deactivate announcement')
+      toast.error(error?.response?.data?.detail || 'Failed to delete announcement')
     }
   }
 
@@ -253,6 +257,12 @@ export default function AdminAnnouncements() {
 
       {loading ? (
         <div className="admin-loading-card">Loading announcements...</div>
+      ) : loadError ? (
+        <div className="admin-empty-card error">
+          <Megaphone size={28} />
+          <h2>Unable to load announcements</h2>
+          <p>{loadError}</p>
+        </div>
       ) : filteredAnnouncements.length ? (
         <div className="announcements-table-wrap">
           <table className="announcements-table">
@@ -293,7 +303,7 @@ export default function AdminAnnouncements() {
                       {canManage ? (
                         <>
                           <button type="button" onClick={() => toggleActive(announcement)} aria-label="Toggle active"><Eye size={16} /></button>
-                          <button type="button" onClick={() => deactivateAnnouncement(announcement)} aria-label="Deactivate announcement"><Trash2 size={16} /></button>
+                          <button type="button" onClick={() => deleteAnnouncement(announcement)} aria-label="Delete announcement"><Trash2 size={16} /></button>
                         </>
                       ) : null}
                     </div>

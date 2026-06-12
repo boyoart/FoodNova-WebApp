@@ -38,6 +38,7 @@ class DispatchNotificationService {
     description: 'Delivery assignments, updates, cancellations, and messages.',
     importance: Importance.max,
     playSound: true,
+    sound: RawResourceAndroidNotificationSound('delivery_alert'),
     enableVibration: true,
   );
 
@@ -65,6 +66,10 @@ class DispatchNotificationService {
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(_deliveryChannel);
+      await _localNotifications
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
 
       if (!_firebaseReady || Firebase.apps.isEmpty) {
         debugPrint(
@@ -112,6 +117,38 @@ class DispatchNotificationService {
 
   static Stream<void> get refreshStream => _refreshController.stream;
 
+  static Future<void> showLocalDeliveryUpdate({
+    required String title,
+    required String body,
+    String payload = '/orders',
+  }) async {
+    if (!_localNotificationsReady) return;
+    await _localNotifications.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _deliveryChannel.id,
+          _deliveryChannel.name,
+          channelDescription: _deliveryChannel.description,
+          importance: Importance.max,
+          priority: Priority.max,
+          playSound: true,
+          sound: const RawResourceAndroidNotificationSound('delivery_alert'),
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentSound: true,
+          presentBadge: true,
+        ),
+      ),
+      payload: payload,
+    );
+  }
+
   static void attachRouter(GoRouter router) {
     _router = router;
     if (_routerAttached) return;
@@ -148,6 +185,7 @@ class DispatchNotificationService {
           importance: Importance.max,
           priority: Priority.max,
           playSound: true,
+          sound: const RawResourceAndroidNotificationSound('delivery_alert'),
           enableVibration: true,
           icon: '@mipmap/ic_launcher',
         ),

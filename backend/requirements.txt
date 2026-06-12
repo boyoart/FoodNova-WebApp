@@ -13,3 +13,4 @@ email-validator==2.2.0
 cloudinary==1.41.0
 resend==2.4.0
 firebase-admin==6.6.0
+python-socketio[asgi]==5.11.4
