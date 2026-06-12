@@ -103,6 +103,17 @@ sio = socketio.AsyncServer(
     logger=False,
     engineio_logger=False,
 ) if socketio else None
+DIAGNOSTIC_ENDPOINTS = (
+    "/delivery/me",
+    "/delivery/stats",
+    "/delivery/orders",
+    "/delivery/offers",
+    "/rider/go-online",
+    "/delivery/go-offline",
+    "/delivery/location-ping",
+    "/notifications/register-fcm-token",
+    "/delivery-workers/register-fcm-token",
+)
 nin_provider_config = validate_ninbvnportal_config()
 if not nin_provider_config.get("configured"):
     print(f"WARNING: {nin_provider_config.get('message')}")
@@ -175,6 +186,34 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["x-request-id"],
 )
+
+
+@app.middleware("http")
+async def delivery_diagnostics_middleware(request: Request, call_next):
+    path = request.url.path
+    should_log = any(
+        path == endpoint or path.startswith(f"{endpoint}/")
+        for endpoint in DIAGNOSTIC_ENDPOINTS
+    )
+    started_at = datetime.utcnow()
+    if should_log:
+        print("API_DIAGNOSTIC_REQUEST", json_dump({
+            "method": request.method,
+            "url": str(request.url),
+            "path": path,
+            "auth_attached": bool(request.headers.get("authorization")),
+            "timestamp": iso(started_at),
+        }))
+    response = await call_next(request)
+    if should_log:
+        print("API_DIAGNOSTIC_RESPONSE", json_dump({
+            "method": request.method,
+            "url": str(request.url),
+            "path": path,
+            "status_code": response.status_code,
+            "elapsed_ms": int((datetime.utcnow() - started_at).total_seconds() * 1000),
+        }))
+    return response
 
 WEBSITE_SETTINGS_KEY = "website_settings"
 COMING_SOON_WHITELIST_PREFIXES = (

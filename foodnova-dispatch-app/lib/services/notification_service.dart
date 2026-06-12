@@ -92,6 +92,7 @@ class DispatchNotificationService {
         sound: true,
       );
       FirebaseMessaging.onMessage.listen((message) {
+        debugPrint('NOTIFICATION RECEIVED ${message.data}');
         _showForegroundNotification(message);
         _refreshController.add(null);
       });
@@ -103,7 +104,10 @@ class DispatchNotificationService {
   static Future<String?> currentToken() async {
     if (!_firebaseReady || Firebase.apps.isEmpty) return null;
     try {
-      return await FirebaseMessaging.instance.getToken();
+      final token = await FirebaseMessaging.instance.getToken();
+      debugPrint(
+          'FCM TOKEN ${token == null || token.isEmpty ? 'missing' : token}');
+      return token;
     } catch (error) {
       debugPrint('[FoodNova Dispatch Push] token unavailable: $error');
       return null;
@@ -137,6 +141,7 @@ class DispatchNotificationService {
           playSound: true,
           sound: const RawResourceAndroidNotificationSound('delivery_alert'),
           enableVibration: true,
+          visibility: NotificationVisibility.public,
           icon: '@mipmap/ic_launcher',
         ),
         iOS: const DarwinNotificationDetails(
@@ -187,6 +192,7 @@ class DispatchNotificationService {
           playSound: true,
           sound: const RawResourceAndroidNotificationSound('delivery_alert'),
           enableVibration: true,
+          visibility: NotificationVisibility.public,
           icon: '@mipmap/ic_launcher',
         ),
         iOS: const DarwinNotificationDetails(
@@ -197,6 +203,7 @@ class DispatchNotificationService {
       ),
       payload: _targetFromData(message.data),
     );
+    debugPrint('NOTIFICATION DISPLAYED ${message.data}');
   }
 
   static void _routeFromMessage(GoRouter router, RemoteMessage message) {

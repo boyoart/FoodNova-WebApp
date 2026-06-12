@@ -108,7 +108,9 @@ class DispatchRepository {
   }
 
   Future<RiderProfile> goOnline(Map<String, dynamic> location) async {
+    debugPrint('ONLINE_REQUEST $location');
     final response = await _dio.post('/rider/go-online', data: location);
+    debugPrint('ONLINE_RESPONSE ${response.data}');
     return RiderProfile(
       Map<String, dynamic>.from(
         response.data['worker'] ?? response.data['data'] ?? {},
@@ -117,7 +119,9 @@ class DispatchRepository {
   }
 
   Future<RiderProfile> goOffline() async {
+    debugPrint('OFFLINE_REQUEST');
     final response = await _dio.post('/delivery/go-offline');
+    debugPrint('OFFLINE_RESPONSE ${response.data}');
     return RiderProfile(
       Map<String, dynamic>.from(
         response.data['worker'] ?? response.data['data'] ?? {},
@@ -126,7 +130,12 @@ class DispatchRepository {
   }
 
   Future<void> pingLocation(Map<String, dynamic> location) {
-    return _dio.post('/delivery/location-ping', data: location).then((_) {});
+    debugPrint('LOCATION_PING $location');
+    return _dio
+        .post('/delivery/location-ping', data: location)
+        .then((response) {
+      debugPrint('LOCATION_RESPONSE ${response.data}');
+    });
   }
 
   Future<void> panic(Map<String, dynamic> location) {

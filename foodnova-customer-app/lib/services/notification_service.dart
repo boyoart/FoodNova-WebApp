@@ -39,7 +39,7 @@ class NotificationService {
     'foodnova_customer_updates',
     'FoodNova updates',
     description: 'Order, payment, promotion, and delivery updates.',
-    importance: Importance.high,
+    importance: Importance.max,
     playSound: true,
     enableVibration: true,
   );
@@ -92,6 +92,7 @@ class NotificationService {
         sound: true,
       );
       FirebaseMessaging.onMessage.listen((message) {
+        debugPrint('NOTIFICATION RECEIVED ${message.data}');
         _showForegroundNotification(message);
         _refreshController.add(null);
       });
@@ -104,7 +105,10 @@ class NotificationService {
   static Future<String?> currentToken() async {
     if (!_firebaseReady || Firebase.apps.isEmpty) return null;
     try {
-      return await FirebaseMessaging.instance.getToken();
+      final token = await FirebaseMessaging.instance.getToken();
+      debugPrint(
+          'FCM TOKEN ${token == null || token.isEmpty ? 'missing' : token}');
+      return token;
     } catch (error) {
       debugPrint('[FoodNova Push] token unavailable: $error');
       return null;
@@ -152,9 +156,10 @@ class NotificationService {
           _androidChannel.name,
           channelDescription: _androidChannel.description,
           importance: Importance.high,
-          priority: Priority.high,
+          priority: Priority.max,
           playSound: true,
           enableVibration: true,
+          visibility: NotificationVisibility.public,
           icon: '@mipmap/ic_launcher',
         ),
         iOS: const DarwinNotificationDetails(
@@ -167,6 +172,7 @@ class NotificationService {
           ? '/notifications'
           : '/tracking/${message.data['order_id']}',
     );
+    debugPrint('NOTIFICATION DISPLAYED ${message.data}');
   }
 
   static void _routeFromMessage(GoRouter router, RemoteMessage message) {

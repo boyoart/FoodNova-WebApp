@@ -27,11 +27,14 @@ class DispatchRealtimeService {
     final token = await _ref.read(sessionControllerProvider.notifier).token();
     if ((token ?? '').trim().isEmpty) return;
 
+    debugPrint(
+        'SOCKET CONNECTING ${AppConfig.normalizedApiBaseUrl}/socket.io/');
     final socket = io.io(
       AppConfig.normalizedApiBaseUrl,
       io.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
+          .enableReconnection()
           .setAuth({'token': token})
           .setQuery({'client': 'foodnova-dispatch-android'})
           .build(),
@@ -39,13 +42,14 @@ class DispatchRealtimeService {
     _socket = socket;
 
     socket.onConnect((_) {
-      debugPrint('DISPATCH_SOCKET_CONNECTED');
+      debugPrint('SOCKET_CONNECTED');
       socket.emit('dispatch:subscribe', {});
     });
-    socket.onDisconnect((_) => debugPrint('DISPATCH_SOCKET_DISCONNECTED'));
-    socket
-        .onConnectError((error) => debugPrint('DISPATCH_SOCKET_ERROR $error'));
-    socket.onError((error) => debugPrint('DISPATCH_SOCKET_ERROR $error'));
+    socket.on('dispatch:subscribed', (_) => debugPrint('SOCKET_SUBSCRIBED'));
+    socket.onDisconnect((_) => debugPrint('SOCKET_DISCONNECTED'));
+    socket.onReconnectAttempt((_) => debugPrint('SOCKET_RECONNECTING'));
+    socket.onConnectError((error) => debugPrint('SOCKET_ERROR $error'));
+    socket.onError((error) => debugPrint('SOCKET_ERROR $error'));
 
     for (final eventName in [
       'delivery:assigned',
@@ -87,6 +91,7 @@ class DispatchRealtimeService {
   }
 
   void disconnect() {
+    debugPrint('SOCKET_DISCONNECTED requested_by_app');
     _socket?.dispose();
     _socket = null;
   }

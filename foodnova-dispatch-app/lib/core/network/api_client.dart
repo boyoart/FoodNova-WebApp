@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../config/app_config.dart';
 import '../state/session_controller.dart';
 
+const bool _apiLogsEnabled =
+    bool.fromEnvironment('FOODNOVA_API_LOGS', defaultValue: true);
+
 final dioProvider = Provider<Dio>((ref) {
   final dio = Dio(
     BaseOptions(
@@ -26,7 +29,17 @@ final dioProvider = Provider<Dio>((ref) {
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
+        _log('REQUEST ${options.method} ${options.uri}');
+        _log('AUTH_ATTACHED ${options.headers['Authorization'] != null}');
+        _log('REQUEST_BODY ${options.data}');
         handler.next(options);
+      },
+      onResponse: (response, handler) {
+        _log(
+          'RESPONSE ${response.statusCode} ${response.requestOptions.method} ${response.requestOptions.uri}',
+        );
+        _log('RESPONSE_BODY ${response.data}');
+        handler.next(response);
       },
       onError: (error, handler) async {
         // CRITICAL: Only clear session on 401 for authenticated endpoints
@@ -43,12 +56,21 @@ final dioProvider = Provider<Dio>((ref) {
           );
           await ref.read(sessionControllerProvider.notifier).clear();
         }
+        _log(
+          'ERROR ${error.response?.statusCode} ${error.requestOptions.method} ${error.requestOptions.uri}',
+        );
+        _log('ERROR_BODY ${error.response?.data}');
         handler.next(error);
       },
     ),
   );
   return dio;
 });
+
+void _log(String message) {
+  if (!_apiLogsEnabled) return;
+  debugPrint('[FoodNova Dispatch API] $message');
+}
 
 String apiMessage(Object error) {
   if (error is DioException) {

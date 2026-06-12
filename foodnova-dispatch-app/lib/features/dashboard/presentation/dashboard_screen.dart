@@ -43,7 +43,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ref.invalidate(dashboardStatsProvider);
         ref.invalidate(riderProfileProvider);
       });
-      await realtime.connect();
     });
   }
 
@@ -157,10 +156,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               }
             }
             if (i == 1) {
-              context.go('/earnings');
+              context.go('/orders');
             }
             if (i == 2) {
-              context.go('/orders');
+              context.go('/earnings');
             }
             if (i == 3) {
               context.go('/settings');
@@ -172,12 +171,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               label: 'Home',
             ),
             NavigationDestination(
-              icon: Icon(Icons.payments_outlined),
-              label: 'Earnings',
-            ),
-            NavigationDestination(
               icon: Icon(Icons.assignment_outlined),
               label: 'Orders',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.payments_outlined),
+              label: 'Earnings',
             ),
             NavigationDestination(
               icon: Icon(Icons.settings_outlined),
@@ -235,9 +234,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (!shouldRun) {
       onlineGpsTimer?.cancel();
       onlineGpsTimer = null;
+      ref.read(realtimeServiceProvider).disconnect();
       return;
     }
     if (onlineGpsTimer != null) return;
+    Future<void>.microtask(() => ref.read(realtimeServiceProvider).connect());
     _sendOnlineGpsPing();
     onlineGpsTimer =
         Timer.periodic(const Duration(seconds: 5), (_) => _sendOnlineGpsPing());

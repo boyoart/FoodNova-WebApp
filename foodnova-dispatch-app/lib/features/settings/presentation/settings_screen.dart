@@ -21,86 +21,117 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _Switch(
-            label: 'Dark Mode Ready',
-            value: darkModeReady,
-            onChanged: (v) => setState(() => darkModeReady = v),
-          ),
-          _Switch(
-            label: 'Notification Preferences',
-            value: push,
-            onChanged: (v) => setState(() => push = v),
-          ),
-          _Switch(
-            label: 'Biometric Login',
-            value: biometrics,
-            onChanged: (v) => setState(() => biometrics = v),
-          ),
-          _Switch(
-            label: 'Location Permissions',
-            value: location,
-            onChanged: (v) => setState(() => location = v),
-          ),
-          const SizedBox(height: 10),
-          FnCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.bug_report_outlined),
-              title: const Text('Diagnostics'),
-              subtitle: const Text('Rider auth and profile diagnostics'),
-              onTap: () => context.go('/debug'),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/dashboard');
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Settings')),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _Switch(
+              label: 'Dark Mode Ready',
+              value: darkModeReady,
+              onChanged: (v) => setState(() => darkModeReady = v),
             ),
-          ),
-          const SizedBox(height: 10),
-          FnCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.delete_sweep_outlined),
-              title: const Text('Clear Local Storage'),
-              subtitle:
-                  const Text('Reset local rider token and onboarding keys'),
-              onTap: () async {
-                await ref
-                    .read(sessionControllerProvider.notifier)
-                    .logoutAndReset();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Local rider storage cleared')),
-                  );
-                  context.go('/onboarding');
-                }
+            _Switch(
+              label: 'Notification Preferences',
+              value: push,
+              onChanged: (v) => setState(() => push = v),
+            ),
+            _Switch(
+              label: 'Biometric Login',
+              value: biometrics,
+              onChanged: (v) => setState(() => biometrics = v),
+            ),
+            _Switch(
+              label: 'Location Permissions',
+              value: location,
+              onChanged: (v) => setState(() => location = v),
+            ),
+            const SizedBox(height: 10),
+            FnCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.bug_report_outlined),
+                title: const Text('Diagnostics'),
+                subtitle: const Text('Rider auth and profile diagnostics'),
+                onTap: () => context.go('/debug'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            FnCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.delete_sweep_outlined),
+                title: const Text('Clear Local Storage'),
+                subtitle:
+                    const Text('Reset local rider token and onboarding keys'),
+                onTap: () async {
+                  await ref
+                      .read(sessionControllerProvider.notifier)
+                      .logoutAndReset();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Local rider storage cleared')),
+                    );
+                    context.go('/onboarding');
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 10),
+            FnCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.support_agent),
+                title: const Text('Support'),
+                subtitle: const Text('support@foodnova.com.ng'),
+                onTap: () {},
+              ),
+            ),
+            const SizedBox(height: 10),
+            FilledButton.icon(
+              onPressed: () async {
+                debugPrint(
+                    'ROUTE_REDIRECT reason=user_logout destination=/login');
+                await ref.read(authRepositoryProvider).logout();
+                if (context.mounted) context.go('/login');
               },
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
             ),
-          ),
-          const SizedBox(height: 10),
-          FnCard(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.support_agent),
-              title: const Text('Support'),
-              subtitle: const Text('support@foodnova.com.ng'),
-              onTap: () {},
-            ),
-          ),
-          const SizedBox(height: 10),
-          FilledButton.icon(
-            onPressed: () async {
-              debugPrint(
-                  'ROUTE_REDIRECT reason=user_logout destination=/login');
-              await ref.read(authRepositoryProvider).logout();
-              if (context.mounted) context.go('/login');
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
-          ),
-        ],
+          ],
+        ),
+        bottomNavigationBar: const _DispatchTabBar(selectedIndex: 3),
       ),
+    );
+  }
+}
+
+class _DispatchTabBar extends StatelessWidget {
+  const _DispatchTabBar({required this.selectedIndex});
+  final int selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    const routes = ['/dashboard', '/orders', '/earnings', '/settings'];
+    return NavigationBar(
+      selectedIndex: selectedIndex,
+      onDestinationSelected: (index) => context.go(routes[index]),
+      destinations: const [
+        NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined), label: 'Home'),
+        NavigationDestination(
+            icon: Icon(Icons.assignment_outlined), label: 'Orders'),
+        NavigationDestination(
+            icon: Icon(Icons.payments_outlined), label: 'Earnings'),
+        NavigationDestination(
+            icon: Icon(Icons.settings_outlined), label: 'Settings'),
+      ],
     );
   }
 }

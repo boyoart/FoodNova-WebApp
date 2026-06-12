@@ -18,30 +18,62 @@ class DeliveryOrdersScreen extends ConsumerWidget {
       ref.invalidate(deliveryOrdersProvider);
     });
     final orders = ref.watch(deliveryOrdersProvider);
-    return Scaffold(
-      appBar: AppBar(title: const Text('Assigned Orders')),
-      body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(deliveryOrdersProvider),
-        child: orders.when(
-          data: (items) => ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (items.isEmpty)
-                const FnCard(
-                  child:
-                      Text('No assigned orders yet. Stay online for dispatch.'),
-                )
-              else
-                for (final order in items) _DeliveryOrderCard(order: order),
-            ],
-          ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => ListView(
-            padding: const EdgeInsets.all(16),
-            children: [FnCard(child: Text(apiMessage(error)))],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/dashboard');
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Assigned Orders')),
+        body: RefreshIndicator(
+          onRefresh: () async => ref.invalidate(deliveryOrdersProvider),
+          child: orders.when(
+            data: (items) => ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (items.isEmpty)
+                  const FnCard(
+                    child: Text(
+                      'No assigned orders yet. Stay online for dispatch.',
+                    ),
+                  )
+                else
+                  for (final order in items) _DeliveryOrderCard(order: order),
+              ],
+            ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => ListView(
+              padding: const EdgeInsets.all(16),
+              children: [FnCard(child: Text(apiMessage(error)))],
+            ),
           ),
         ),
+        bottomNavigationBar: _DispatchTabBar(selectedIndex: 1),
       ),
+    );
+  }
+}
+
+class _DispatchTabBar extends StatelessWidget {
+  const _DispatchTabBar({required this.selectedIndex});
+  final int selectedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    const routes = ['/dashboard', '/orders', '/earnings', '/settings'];
+    return NavigationBar(
+      selectedIndex: selectedIndex,
+      onDestinationSelected: (index) => context.go(routes[index]),
+      destinations: const [
+        NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined), label: 'Home'),
+        NavigationDestination(
+            icon: Icon(Icons.assignment_outlined), label: 'Orders'),
+        NavigationDestination(
+            icon: Icon(Icons.payments_outlined), label: 'Earnings'),
+        NavigationDestination(
+            icon: Icon(Icons.settings_outlined), label: 'Settings'),
+      ],
     );
   }
 }
