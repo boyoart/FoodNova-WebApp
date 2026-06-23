@@ -1110,6 +1110,43 @@ tbody tr:hover {
   grid-column: 1 / -1;
 }
 
+.variant-admin-editor {
+  border: 1px solid #dbe8dc;
+  border-radius: 8px;
+  padding: 0.85rem;
+  background: #f8fbf6;
+}
+
+.variant-admin-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.variant-admin-row {
+  display: grid;
+  grid-template-columns: 70px minmax(130px, 1fr) 110px 110px 90px;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.variant-admin-row strong {
+  color: #173321;
+}
+
+.variant-admin-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .variant-admin-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 .stock-form-field label {
   font-weight: 800;
   color: var(--fn-heading);

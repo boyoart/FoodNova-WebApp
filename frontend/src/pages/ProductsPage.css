@@ -268,6 +268,41 @@
   margin-bottom: 1rem;
 }
 
+.variant-selector {
+  margin: 0.85rem 0 0.65rem;
+}
+
+.variant-selector > span {
+  display: block;
+  color: #4b5f51;
+  font-size: 0.78rem;
+  font-weight: 800;
+  margin-bottom: 0.4rem;
+}
+
+.variant-selector > div {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+.variant-selector button {
+  min-height: 34px;
+  border: 1px solid #d7e7d8;
+  border-radius: 8px;
+  background: #f8fbf6;
+  color: #173321;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.variant-selector button.selected {
+  background: #0b7a3b;
+  border-color: #0b7a3b;
+  color: #fff;
+}
+
 .in-stock {
   color: #22c55e;
   font-size: 0.8rem;

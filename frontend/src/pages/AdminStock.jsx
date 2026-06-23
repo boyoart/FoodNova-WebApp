@@ -209,6 +209,38 @@ export default function AdminStock() {
     return <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
   }
 
+  const updateVariant = (index, updates) => {
+    setFormData((current) => {
+      const variants = Array.isArray(current.variants) ? [...current.variants] : []
+      variants[index] = { ...variants[index], ...updates }
+      return { ...current, variants }
+    })
+  }
+
+  const renderVariantEditor = () => {
+    const variants = Array.isArray(formData.variants) ? formData.variants : []
+    if (!variants.length) return null
+    return (
+      <div className="stock-form-field stock-form-field-wide variant-admin-editor">
+        <label>Weight Variants</label>
+        <div className="variant-admin-grid">
+          {variants.map((variant, index) => (
+            <div className="variant-admin-row" key={variant.id || variant.sku || index}>
+              <strong>{variant.weight || 'Default'}</strong>
+              <input aria-label={`${variant.weight || 'Default'} SKU`} value={variant.sku || ''} onChange={(event) => updateVariant(index, { sku: event.target.value })} />
+              <input aria-label={`${variant.weight || 'Default'} price`} type="number" min="0" value={variant.price ?? ''} onChange={(event) => updateVariant(index, { price: Number(event.target.value) || 0 })} />
+              <input aria-label={`${variant.weight || 'Default'} stock`} type="number" min="0" value={variant.stock_qty ?? variant.stock ?? ''} onChange={(event) => updateVariant(index, { stock_qty: Number(event.target.value) || 0, stock: Number(event.target.value) || 0 })} />
+              <label>
+                <input type="checkbox" checked={variant.is_active !== false} onChange={(event) => updateVariant(index, { is_active: event.target.checked, active: event.target.checked })} />
+                Active
+              </label>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   const renderProductForm = () => (
     <>
     <div className="stock-form-grid">
@@ -222,7 +254,7 @@ export default function AdminStock() {
       </div>
       <div className="stock-form-field">
         <label>Stock Quantity</label>
-        <input type="number" min="0" value={formData.stock_qty ?? formData.stock ?? ''} onChange={(event) => setFormData({ ...formData, stock_qty: Number(event.target.value) || 0, stock: Number(event.target.value) || 0 })} required />
+        <input type="number" min="0" value={formData.stock_qty ?? formData.stock ?? ''} onChange={(event) => setFormData({ ...formData, stock_qty: Number(event.target.value) || 0, stock: Number(event.target.value) || 0 })} required disabled={Array.isArray(formData.variants) && formData.variants.length > 1} />
       </div>
       <div className="stock-form-field">
         <label>Category</label>
@@ -256,6 +288,7 @@ export default function AdminStock() {
         <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
         <span>Active product</span>
       </label>
+      {renderVariantEditor()}
     </div>
     {renderImageUpload('Product Image')}
     </>
@@ -348,7 +381,7 @@ export default function AdminStock() {
                     <>
                       <td>{item.category}</td>
                       <td>{Array.isArray(item.contents) ? item.contents.slice(0, 3).join(', ') : ''}{Array.isArray(item.contents) && item.contents.length > 3 ? '...' : ''}</td>
-                      <td>{item.stock ?? item.stock_qty}</td>
+                      <td>{Array.isArray(item.variants) && item.variants.length ? item.variants.map((variant) => `${variant.weight || 'Default'}: ${variant.stock_qty}`).join(', ') : (item.stock ?? item.stock_qty)}</td>
                     </>
                   ) : (
                     <>
@@ -356,7 +389,7 @@ export default function AdminStock() {
                       <td>{Array.isArray(item.items) ? item.items.join(', ') : item.items}</td>
                     </>
                   )}
-                  <td>{formatPrice(item.price)}</td>
+                  <td>{Array.isArray(item.variants) && item.variants.length ? item.variants.map((variant) => `${variant.weight || 'Default'} ${formatPrice(variant.price)}`).join(', ') : formatPrice(item.price)}</td>
                   <td>{renderStockStatus(item)}</td>
                   <td>
                     <div className="action-buttons">

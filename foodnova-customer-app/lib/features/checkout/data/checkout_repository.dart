@@ -28,6 +28,9 @@ class CheckoutRepository {
           .map((item) => {
                 'product_id': item.product.id,
                 'id': item.product.id,
+                'variant_id': item.product.selectedVariant?.id,
+                'variant_weight': item.product.variantWeight,
+                'sku': item.product.sku,
                 'item_type': item.product.type,
                 'type': item.product.type,
                 'name': item.product.name,

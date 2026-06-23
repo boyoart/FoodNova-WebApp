@@ -100,6 +100,8 @@ class Product(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+
 
 class Pack(Base):
     __tablename__ = "packs"
@@ -131,6 +133,24 @@ class DeliveryRider(Base):
     deleted_reason = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProductVariant(Base):
+    __tablename__ = "product_variants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    sku = Column(String(120), unique=True, index=True, nullable=False)
+    weight = Column(String(40), default="", index=True)
+    price = Column(Float, default=0)
+    stock_qty = Column(Integer, default=0)
+    stock = Column(Integer, default=0)
+    image_url = Column(Text, default="")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    product = relationship("Product", back_populates="variants")
 
 
 class DeliveryWorker(Base):
@@ -533,6 +553,9 @@ class OrderItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
     product_id = Column(Integer, nullable=True)
+    variant_id = Column(Integer, nullable=True, index=True)
+    variant_weight = Column(String(40), default="")
+    sku = Column(String(120), default="")
     name = Column(String(150), default="")
     product_name = Column(String(150), default="")
     price = Column(Float, default=0)

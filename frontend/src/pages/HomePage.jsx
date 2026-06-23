@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bell, CheckCircle2, ChevronLeft, ChevronRight, FileText, Headphones, Heart, Lock, MapPin, MessageCircle, PackageCheck, ShoppingCart, Sparkles, Star, Truck, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { announcementsAPI, packsAPI, productsAPI, resolveMediaUrl } from '../services/api'
+import { announcementsAPI, categoriesAPI, packsAPI, productsAPI, resolveMediaUrl } from '../services/api'
 import { useCartStore } from '../store/cartStore'
 import { buildWhatsAppLink } from '../utils/contactUtils'
 import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
@@ -96,6 +96,7 @@ export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [featuredProducts, setFeaturedProducts] = useState([])
   const [featuredPacks, setFeaturedPacks] = useState([])
+  const [categories, setCategories] = useState([])
   const [announcements, setAnnouncements] = useState([])
   const [announcementIndex, setAnnouncementIndex] = useState(0)
   const [activePopupId, setActivePopupId] = useState(null)
@@ -114,15 +115,19 @@ export default function HomePage() {
   useEffect(() => {
     const loadFeaturedStorefront = async () => {
       try {
-        const [productsRes, packsRes] = await Promise.allSettled([
+        const [productsRes, packsRes, categoriesRes] = await Promise.allSettled([
           productsAPI.getAll(),
           packsAPI.getAll(),
+          categoriesAPI.getAll(),
         ])
         if (productsRes.status === 'fulfilled') {
           setFeaturedProducts((productsRes.value.data || []).slice(0, 6).map((item) => normalizeStoreItem(item, 'product')))
         }
         if (packsRes.status === 'fulfilled') {
           setFeaturedPacks((packsRes.value.data || []).slice(0, 3).map((item) => normalizeStoreItem(item, 'pack')))
+        }
+        if (categoriesRes.status === 'fulfilled') {
+          setCategories(Array.isArray(categoriesRes.value.data) ? categoriesRes.value.data : [])
         }
         if (productsRes.status === 'rejected' && packsRes.status === 'rejected') {
           setStoreError('Products are temporarily unavailable. Please check back shortly.')
@@ -168,14 +173,23 @@ export default function HomePage() {
   const goNext = () => setActiveSlide((current) => (current + 1) % heroSlides.length)
   const normalizeStoreItem = (item, itemType = 'product') => {
     const name = item?.name || item?.product_name || 'FoodNova Item'
-    const price = Number(item?.price || item?.unit_price || 0)
-    const stock = Number(item?.stock_qty ?? item?.stock ?? 999)
+    const variants = Array.isArray(item?.variants) ? item.variants.filter((variant) => variant?.is_active !== false) : []
+    const selectedVariant = variants[0] || null
+    const price = Number(selectedVariant?.price ?? item?.price ?? item?.unit_price ?? 0)
+    const stock = Number(selectedVariant?.stock_qty ?? selectedVariant?.stock ?? item?.stock_qty ?? item?.stock ?? 999)
     return {
       ...item,
       name,
       product_name: name,
       price,
       unit_price: price,
+      variants,
+      has_variants: item?.has_variants === true || variants.length > 1,
+      selected_variant: selectedVariant,
+      variant_id: selectedVariant?.id,
+      variant_weight: selectedVariant?.weight || '',
+      sku: selectedVariant?.sku || item?.sku || '',
+      cart_key: `${itemType}-${item?.id}-${selectedVariant?.id || selectedVariant?.sku || ''}`,
       stock,
       stock_qty: stock,
       is_out_of_stock: itemType !== 'pack' && (item?.is_out_of_stock === true || stock <= 0),
@@ -312,6 +326,16 @@ export default function HomePage() {
           <Link to="/products">View All Products</Link>
         </div>
         {storeError && <p className="home-store-error">{storeError}</p>}
+        {categories.length > 0 && (
+          <div className="home-category-grid">
+            {categories.map((category) => (
+              <Link to={`/products?category=${encodeURIComponent(category.name)}`} className="home-category-card" key={category.name}>
+                <img src={resolveMediaUrl(category.image_url)} alt={category.name} loading="lazy" onError={handleImageError} />
+                <span>{category.name}</span>
+              </Link>
+            ))}
+          </div>
+        )}
         {featuredProducts.length > 0 && (
           <div className="home-product-grid">
             {featuredProducts.map((product) => (

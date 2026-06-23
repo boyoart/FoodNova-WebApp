@@ -109,14 +109,6 @@ class ProductDetailScreen extends ConsumerWidget {
           ? null
           : _StickyAddToCart(
               product: product,
-              quantity: quantity,
-              onAdd: () =>
-                  ref.read(cartControllerProvider.notifier).add(product),
-              onIncrement: () =>
-                  ref.read(cartControllerProvider.notifier).add(product),
-              onDecrement: () => ref
-                  .read(cartControllerProvider.notifier)
-                  .updateQuantity(product.id, quantity - 1),
             ),
     );
   }
@@ -639,26 +631,47 @@ class _RelatedProducts extends ConsumerWidget {
   }
 }
 
-class _StickyAddToCart extends StatelessWidget {
+class _StickyAddToCart extends ConsumerStatefulWidget {
   const _StickyAddToCart({
     required this.product,
-    required this.quantity,
-    required this.onAdd,
-    required this.onIncrement,
-    required this.onDecrement,
   });
 
   final Product product;
-  final int quantity;
-  final VoidCallback onAdd;
-  final VoidCallback onIncrement;
-  final VoidCallback onDecrement;
+
+  @override
+  ConsumerState<_StickyAddToCart> createState() => _StickyAddToCartState();
+}
+
+class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
+  ProductVariant? _selectedVariant;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedVariant = widget.product.selectedVariant;
+  }
+
+  @override
+  void didUpdateWidget(covariant _StickyAddToCart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.product.id != widget.product.id) {
+      _selectedVariant = widget.product.selectedVariant;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final currency = NumberFormat.currency(
         locale: 'en_NG', symbol: 'NGN ', decimalDigits: 0);
+    final activeVariants =
+        widget.product.variants.where((variant) => variant.isActive).toList();
+    final selectedProduct = widget.product.withVariant(_selectedVariant);
+    final cartItems = ref.watch(cartControllerProvider);
+    final quantity = cartItems
+        .where((item) => item.product.cartKey == selectedProduct.cartKey)
+        .fold<int>(0, (sum, item) => sum + item.quantity);
+    final cartController = ref.read(cartControllerProvider.notifier);
     return SafeArea(
       top: false,
       child: Container(
@@ -668,61 +681,99 @@ class _StickyAddToCart extends StatelessWidget {
           border: Border(top: BorderSide(color: scheme.outlineVariant)),
           boxShadow: FoodNovaShadows.soft,
         ),
-        child: Row(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+            if (activeVariants.length > 1) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Weight',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w900)),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Text(
-                    currency.format(product.price),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: FoodNovaColors.primary,
-                          fontWeight: FontWeight.w900,
-                        ),
-                  ),
-                  Text(
-                    product.stock > 0 ? 'Ready for checkout' : 'Out of stock',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
+                  for (final variant in activeVariants)
+                    ChoiceChip(
+                      label: Text(variant.weight),
+                      selected: _selectedVariant?.id == variant.id,
+                      onSelected: (_) =>
+                          setState(() => _selectedVariant = variant),
+                    ),
                 ],
               ),
-            ),
-            if (quantity > 0)
-              Container(
-                margin: const EdgeInsets.only(right: 10),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(999),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        currency.format(selectedProduct.price),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: FoodNovaColors.primary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                      ),
+                      Text(
+                        selectedProduct.stock > 0
+                            ? 'Ready for checkout'
+                            : 'Out of stock',
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: 'Decrease',
-                      onPressed: onDecrement,
-                      icon: const Icon(Icons.remove_rounded),
+                if (quantity > 0)
+                  Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    decoration: BoxDecoration(
+                      color: scheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                    Text('$quantity',
-                        style: const TextStyle(fontWeight: FontWeight.w900)),
-                    IconButton(
-                      tooltip: 'Increase',
-                      onPressed: onIncrement,
-                      icon: const Icon(Icons.add_rounded),
+                    child: Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Decrease',
+                          onPressed: () => cartController.updateQuantity(
+                              selectedProduct.cartKey, quantity - 1),
+                          icon: const Icon(Icons.remove_rounded),
+                        ),
+                        Text('$quantity',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
+                        IconButton(
+                          tooltip: 'Increase',
+                          onPressed: () => cartController.add(selectedProduct),
+                          icon: const Icon(Icons.add_rounded),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                SizedBox(
+                  width: quantity > 0 ? 128 : 164,
+                  child: PrimaryButton(
+                    label: quantity > 0 ? 'Add more' : 'Add to cart',
+                    icon: Icons.add_shopping_cart_rounded,
+                    onPressed: selectedProduct.stock > 0
+                        ? () => cartController.add(selectedProduct)
+                        : null,
+                  ),
                 ),
-              ),
-            SizedBox(
-              width: quantity > 0 ? 128 : 164,
-              child: PrimaryButton(
-                label: quantity > 0 ? 'Add more' : 'Add to cart',
-                icon: Icons.add_shopping_cart_rounded,
-                onPressed: product.stock > 0 ? onAdd : null,
-              ),
+              ],
             ),
           ],
         ),

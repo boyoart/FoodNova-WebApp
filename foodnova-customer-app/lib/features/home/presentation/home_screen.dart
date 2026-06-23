@@ -660,7 +660,7 @@ Future<void> _openSupport(BuildContext context) async {
 class _AsyncCategoryRail extends StatelessWidget {
   const _AsyncCategoryRail({required this.categories, required this.onTapAll});
 
-  final AsyncValue<List<String>> categories;
+  final AsyncValue<List<FoodNovaCategory>> categories;
   final VoidCallback onTapAll;
 
   @override
@@ -682,8 +682,7 @@ class _AsyncCategoryRail extends StatelessWidget {
               itemCount: items.take(10).length,
               separatorBuilder: (_, __) => const SizedBox(width: 12),
               itemBuilder: (_, index) => _CategoryCard(
-                  label: items[index],
-                  icon: _categoryIcon(items[index]),
+                  category: items[index],
                   onTap: () => context.push('/discover')),
             ),
           ),
@@ -708,11 +707,9 @@ class _AsyncCategoryRail extends StatelessWidget {
 }
 
 class _CategoryCard extends StatelessWidget {
-  const _CategoryCard(
-      {required this.label, required this.icon, required this.onTap});
+  const _CategoryCard({required this.category, required this.onTap});
 
-  final String label;
-  final IconData icon;
+  final FoodNovaCategory category;
   final VoidCallback onTap;
 
   @override
@@ -723,26 +720,46 @@ class _CategoryCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: 132,
-        padding: const EdgeInsets.all(14),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: scheme.surface,
+          color: scheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: scheme.outlineVariant),
           boxShadow: FoodNovaShadows.soft,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
+          fit: StackFit.expand,
           children: [
-            CircleAvatar(
-                radius: 20,
-                backgroundColor: scheme.surfaceContainerHighest,
-                child: Icon(icon, color: FoodNovaColors.primary)),
-            const Spacer(),
-            Text(label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontWeight: FontWeight.w900, height: 1.05)),
+            if (category.imageUrl.isNotEmpty)
+              Image.network(
+                category.imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              )
+            else
+              Center(
+                  child: Icon(_categoryIcon(category.name),
+                      color: FoodNovaColors.primary, size: 34)),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.shadow.withValues(alpha: .28),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(category.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: category.imageUrl.isNotEmpty
+                            ? Colors.white
+                            : scheme.onSurface,
+                        fontWeight: FontWeight.w900,
+                        height: 1.05)),
+              ),
+            ),
           ],
         ),
       ),

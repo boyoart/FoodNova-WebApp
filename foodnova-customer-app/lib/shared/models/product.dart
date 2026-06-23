@@ -1,5 +1,55 @@
 import '../../config/app_config.dart';
 
+class ProductVariant {
+  const ProductVariant({
+    required this.id,
+    required this.productId,
+    required this.sku,
+    required this.weight,
+    required this.price,
+    required this.stock,
+    required this.isActive,
+    this.imageUrl = '',
+  });
+
+  final int id;
+  final int productId;
+  final String sku;
+  final String weight;
+  final double price;
+  final int stock;
+  final bool isActive;
+  final String imageUrl;
+
+  factory ProductVariant.fromJson(Map<String, dynamic> json) {
+    return ProductVariant(
+      id: int.tryParse('${json['id']}') ?? 0,
+      productId:
+          int.tryParse('${json['product_id'] ?? json['productId']}') ?? 0,
+      sku: '${json['sku'] ?? ''}',
+      weight: '${json['weight'] ?? json['label'] ?? ''}',
+      price:
+          double.tryParse('${json['price'] ?? json['unit_price'] ?? 0}') ?? 0,
+      stock: int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0,
+      isActive: (json['is_active'] ?? json['active']) != false,
+      imageUrl: AppConfig.resolveMediaUrl(
+          '${json['image_url'] ?? json['imageUrl'] ?? ''}'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'product_id': productId,
+        'sku': sku,
+        'weight': weight,
+        'price': price,
+        'stock_qty': stock,
+        'stock': stock,
+        'is_active': isActive,
+        'image_url': imageUrl,
+      };
+}
+
 class Product {
   const Product({
     required this.id,
@@ -15,6 +65,8 @@ class Product {
     this.servingEstimate = '',
     this.freshnessNote = '',
     this.deliveryNote = '',
+    this.variants = const [],
+    this.selectedVariant,
   });
 
   final int id;
@@ -30,6 +82,38 @@ class Product {
   final String servingEstimate;
   final String freshnessNote;
   final String deliveryNote;
+  final List<ProductVariant> variants;
+  final ProductVariant? selectedVariant;
+
+  bool get hasVariants =>
+      variants.where((variant) => variant.isActive).length > 1;
+  String get variantWeight => selectedVariant?.weight ?? '';
+  String get sku => selectedVariant?.sku ?? '';
+  String get displayName =>
+      variantWeight.isEmpty ? name : '$name - $variantWeight';
+  String get cartKey =>
+      '$type-$id-${selectedVariant?.id ?? selectedVariant?.sku ?? ''}';
+
+  Product withVariant(ProductVariant? variant) {
+    if (variant == null) return this;
+    return Product(
+      id: id,
+      name: name,
+      price: variant.price,
+      imageUrl: variant.imageUrl.isEmpty ? imageUrl : variant.imageUrl,
+      category: category,
+      description: description,
+      stock: variant.stock,
+      type: type,
+      contents: contents,
+      packInfo: packInfo,
+      servingEstimate: servingEstimate,
+      freshnessNote: freshnessNote,
+      deliveryNote: deliveryNote,
+      variants: variants,
+      selectedVariant: variant,
+    );
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
     final type = '${json['item_type'] ?? json['type'] ?? 'product'}';
@@ -41,15 +125,28 @@ class Product {
           json['pack_contents'] ??
           json['items'],
     );
+    final variants = (json['variants'] is List)
+        ? (json['variants'] as List)
+            .whereType<Map>()
+            .map((item) =>
+                ProductVariant.fromJson(Map<String, dynamic>.from(item)))
+            .where((variant) => variant.isActive)
+            .toList()
+        : <ProductVariant>[];
+    final selectedVariant = variants.isNotEmpty ? variants.first : null;
     return Product(
       id: int.tryParse('${json['id']}') ?? 0,
       name: '${json['name'] ?? ''}',
-      price: double.tryParse('${json['price'] ?? 0}') ?? 0,
+      price:
+          double.tryParse('${selectedVariant?.price ?? json['price'] ?? 0}') ??
+              0,
       imageUrl: AppConfig.resolveMediaUrl(
-          '${json['image_url'] ?? json['imageUrl'] ?? json['image'] ?? ''}'),
+          '${selectedVariant?.imageUrl.isNotEmpty == true ? selectedVariant?.imageUrl : json['image_url'] ?? json['imageUrl'] ?? json['image'] ?? ''}'),
       category: '${json['category'] ?? json['category_name'] ?? ''}',
       description: '${json['description'] ?? ''}',
-      stock: int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0,
+      stock: int.tryParse(
+              '${selectedVariant?.stock ?? json['stock_qty'] ?? json['stock'] ?? 0}') ??
+          0,
       type: type,
       contents: contents,
       packInfo:
@@ -64,6 +161,8 @@ class Product {
       deliveryNote:
           '${json['delivery_note'] ?? json['deliveryNote'] ?? _defaultDeliveryNote(type)}'
               .trim(),
+      variants: variants,
+      selectedVariant: selectedVariant,
     );
   }
 
@@ -71,6 +170,7 @@ class Product {
     return {
       'id': id,
       'name': name,
+      'display_name': displayName,
       'price': price,
       'image_url': imageUrl,
       'category': category,
@@ -79,6 +179,11 @@ class Product {
       'stock': stock,
       'item_type': type,
       'type': type,
+      'variant_id': selectedVariant?.id,
+      'variant_weight': variantWeight,
+      'sku': sku,
+      'cart_key': cartKey,
+      'variants': variants.map((variant) => variant.toJson()).toList(),
       'contents': contents,
       'items': contents,
       'pack_info': packInfo,

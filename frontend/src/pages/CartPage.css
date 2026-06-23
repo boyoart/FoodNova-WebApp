@@ -70,6 +70,13 @@
   font-size: 1rem;
 }
 
+.item-sku {
+  margin: 0 0 0.35rem;
+  color: #66756a;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .item-price {
   color: var(--primary);
   font-weight: 600;

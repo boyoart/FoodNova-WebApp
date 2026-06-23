@@ -100,7 +100,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(item.product.name,
+                                  Text(item.product.displayName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
@@ -128,9 +128,9 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                             _QuantityStepper(
                               quantity: item.quantity,
                               onMinus: () => cart.updateQuantity(
-                                  item.product.id, item.quantity - 1),
+                                  item.product.cartKey, item.quantity - 1),
                               onPlus: () => cart.updateQuantity(
-                                  item.product.id, item.quantity + 1),
+                                  item.product.cartKey, item.quantity + 1),
                             ),
                           ],
                         ),

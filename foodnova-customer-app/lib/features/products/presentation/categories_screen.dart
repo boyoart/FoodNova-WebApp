@@ -903,7 +903,7 @@ class _SearchSheetState extends State<_SearchSheet> {
 class _CategoryChips extends StatefulWidget {
   const _CategoryChips({required this.categories});
 
-  final List<String> categories;
+  final List<FoodNovaCategory> categories;
 
   @override
   State<_CategoryChips> createState() => _CategoryChipsState();
@@ -914,31 +914,76 @@ class _CategoryChipsState extends State<_CategoryChips> {
 
   @override
   Widget build(BuildContext context) {
-    final categories = ['All', ...widget.categories.take(12)];
+    final categories = [
+      const FoodNovaCategory(name: 'All', imageUrl: ''),
+      ...widget.categories.take(12)
+    ];
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
-      height: 42,
+      height: 92,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, index) {
-          final label = categories[index];
+          final category = categories[index];
+          final label = category.name;
           final selected = label == _selected;
-          return ChoiceChip(
-            selected: selected,
-            label: Text(label),
-            onSelected: (_) => setState(() => _selected = label),
-            selectedColor: FoodNovaColors.primary,
-            backgroundColor: scheme.surface,
-            labelStyle: TextStyle(
-              color: selected ? scheme.onPrimary : scheme.onSurface,
-              fontWeight: FontWeight.w900,
+          return InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: () => setState(() => _selected = label),
+            child: Container(
+              width: 132,
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: selected
+                    ? FoodNovaColors.primary
+                    : scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color:
+                      selected ? FoodNovaColors.primary : scheme.outlineVariant,
+                  width: selected ? 1.5 : 1,
+                ),
+              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (category.imageUrl.isNotEmpty)
+                    Image.network(
+                      category.imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? FoodNovaColors.primary.withValues(alpha: .36)
+                          : scheme.shadow.withValues(alpha: .28),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: category.imageUrl.isNotEmpty || selected
+                              ? Colors.white
+                              : scheme.onSurface,
+                          fontWeight: FontWeight.w900,
+                          height: 1.05,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            side: BorderSide(
-                color:
-                    selected ? FoodNovaColors.primary : scheme.outlineVariant),
           );
         },
       ),

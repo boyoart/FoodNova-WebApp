@@ -382,7 +382,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           for (final item in items)
                             _CheckoutRow(
                                 label:
-                                    '${item.product.name} x ${item.quantity}',
+                                    '${item.product.displayName} x ${item.quantity}',
                                 value: currency.format(item.lineTotal)),
                           const Divider(height: 24),
                           _CheckoutRow(

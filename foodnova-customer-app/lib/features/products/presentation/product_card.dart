@@ -165,7 +165,12 @@ class ProductCard extends StatelessWidget {
                               onIncrement: onIncrement ?? onAdd,
                               onDecrement: onDecrement,
                             )
-                          : _QuickAddButton(onTap: outOfStock ? null : onAdd),
+                          : _QuickAddButton(
+                              onTap: outOfStock
+                                  ? null
+                                  : product.hasVariants
+                                      ? onTap
+                                      : onAdd),
                     ],
                   ),
                 ],

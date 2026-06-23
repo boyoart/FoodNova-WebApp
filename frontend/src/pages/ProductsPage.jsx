@@ -15,6 +15,7 @@ export default function ProductsPage() {
   const [sortOption, setSortOption] = useState('newest')
   const [activeTab, setActiveTab] = useState('products')
   const [loading, setLoading] = useState(true)
+  const [selectedVariants, setSelectedVariants] = useState({})
   const { items: cartItems, addItem } = useCartStore()
 
   useEffect(() => {
@@ -23,18 +24,29 @@ export default function ProductsPage() {
 
   const normalizeStoreItem = (item, itemType = activeTab === 'packs' ? 'pack' : 'product') => {
     const name = item?.name || item?.product_name || 'FoodNova Item'
-    const price = Number(item?.price || item?.unit_price || 0)
-    const stock = Number(item?.stock_qty ?? item?.stock ?? 999)
+    const variants = Array.isArray(item?.variants) ? item.variants.filter((variant) => variant?.is_active !== false) : []
+    const selectedVariant = variants.find((variant) => String(variant.id) === String(selectedVariants[item?.id])) || variants[0] || null
+    const price = Number(selectedVariant?.price ?? item?.price ?? item?.unit_price ?? 0)
+    const stock = Number(selectedVariant?.stock_qty ?? selectedVariant?.stock ?? item?.stock_qty ?? item?.stock ?? 999)
 
     return {
       ...item,
       id: item?.id,
       name,
       product_name: name,
+      display_name: selectedVariant?.weight ? `${name} - ${selectedVariant.weight}` : name,
       price,
       unit_price: price,
+      base_price: item?.price || item?.base_price || price,
       stock,
       stock_qty: stock,
+      variants,
+      has_variants: item?.has_variants === true || variants.length > 1,
+      selected_variant: selectedVariant,
+      variant_id: selectedVariant?.id,
+      variant_weight: selectedVariant?.weight || '',
+      sku: selectedVariant?.sku || item?.sku || '',
+      cart_key: `${itemType}-${item?.id}-${selectedVariant?.id || selectedVariant?.sku || ''}`,
       is_out_of_stock: item?.is_out_of_stock === true || stock <= 0,
       low_stock: item?.low_stock === true || (stock > 0 && stock <= Number(item?.low_stock_threshold || 5)),
       low_stock_threshold: item?.low_stock_threshold || 5,
@@ -79,7 +91,7 @@ export default function ProductsPage() {
       return
     }
     if (normalized.type !== 'pack') {
-      const existingQty = cartItems.find((cartItem) => cartItem.id === normalized.id && cartItem.type !== 'pack')?.quantity || 0
+      const existingQty = cartItems.find((cartItem) => (cartItem.cart_key || `${cartItem.type || cartItem.item_type || 'product'}-${cartItem.id}-${cartItem.variant_id || cartItem.sku || ''}`) === normalized.cart_key)?.quantity || 0
       if (existingQty + 1 > normalized.stock_qty) {
         toast.error(`Only ${normalized.stock_qty} left in stock`)
         return
@@ -87,6 +99,10 @@ export default function ProductsPage() {
     }
     addItem(normalized)
     toast.success('Added to cart!')
+  }
+
+  const handleVariantChange = (productId, variantId) => {
+    setSelectedVariants((current) => ({ ...current, [productId]: variantId }))
   }
 
   const handleSearch = (e) => {
@@ -217,6 +233,25 @@ export default function ProductsPage() {
                   </div>
                 )}
                 {activeTab === 'products' && (
+                  <>
+                  {item.has_variants && item.variants.length > 0 && (
+                    <div className="variant-selector" aria-label={`${item.name} weight`}>
+                      <span>Weight</span>
+                      <div>
+                        {item.variants.map((variant) => (
+                          <button
+                            type="button"
+                            key={variant.id || variant.sku}
+                            className={String(item.selected_variant?.id) === String(variant.id) ? 'selected' : ''}
+                            onClick={() => handleVariantChange(item.id, variant.id)}
+                            disabled={variant.is_active === false}
+                          >
+                            {variant.weight || variant.label || 'Default'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="stock-info">
                     {item.is_out_of_stock ? (
                       <span className="out-of-stock-text">Out of stock</span>
@@ -226,6 +261,7 @@ export default function ProductsPage() {
                       <span className="in-stock">{item.stock_qty} in stock</span>
                     )}
                   </div>
+                  </>
                 )}
                 <div className="product-footer">
                   <span className="price">{formatPrice(item.price)}</span>

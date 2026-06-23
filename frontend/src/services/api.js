@@ -298,6 +298,16 @@ export const adminAPI = {
     return response.data;
   },
 
+  bulkUpdateStock: async (updates = []) => {
+    const response = await api.post("/admin/products/bulk-stock", { updates });
+    return response.data;
+  },
+
+  bulkUpdatePricing: async (updates = []) => {
+    const response = await api.post("/admin/products/bulk-pricing", { updates });
+    return response.data;
+  },
+
   deleteProduct: async (id) => {
     const response = await api.delete(`/admin/products/${id}`);
     return response.data;

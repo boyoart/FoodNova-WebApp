@@ -55,6 +55,7 @@ from models import (
     Pack as DBPack,
     PaymentApprovalLog as DBPaymentApprovalLog,
     Product as DBProduct,
+    ProductVariant as DBProductVariant,
     Profile as DBProfile,
     DeliveryRider as DBDeliveryRider,
     DeliveryOffer as DBDeliveryOffer,
@@ -485,6 +486,50 @@ PACKS.extend([
         "image_url": "https://images.unsplash.com/photo-1542838132-92c53300491e?w=800",
     },
 ])
+
+FOODNOVA_CATEGORIES = {
+    "Food Staples": ["Foreign Rice", "Honey Beans", "Garri Ijebu", "Semovita"],
+    "Pasta & Noodles": ["Spaghetti", "Noodles"],
+    "Cooking Ingredients": ["Tomato Paste", "Salt", "Maggi", "Curry", "Thyme"],
+    "Oils": ["Vegetable Oil", "Palm Oil"],
+    "Breakfast": ["Custard", "Milo", "Milk"],
+    "Local Ingredients": ["Grounded Egusi"],
+}
+
+FOODNOVA_CATEGORY_IMAGES = {
+    "Food Staples": "/uploads/catalog/categories/food-staples.svg",
+    "Pasta & Noodles": "/uploads/catalog/categories/pasta-noodles.svg",
+    "Cooking Ingredients": "/uploads/catalog/categories/cooking-ingredients.svg",
+    "Oils": "/uploads/catalog/categories/oils.svg",
+    "Breakfast": "/uploads/catalog/categories/breakfast.svg",
+    "Local Ingredients": "/uploads/catalog/categories/local-ingredients.svg",
+}
+
+FOODNOVA_PRODUCT_CATALOG = [
+    {"name": "Foreign Rice", "category": "Food Staples", "price": 2400, "stock": 80, "image": "/uploads/catalog/products/foreign-rice.svg", "description": "Premium foreign parboiled rice selected for clean grains, consistent texture, and everyday Nigerian meals. Ideal for jollof rice, fried rice, white rice, and family foodstuff restocking."},
+    {"name": "Honey Beans", "category": "Food Staples", "price": 2200, "stock": 70, "image": "/uploads/catalog/products/honey-beans.svg", "description": "Sweet, nutritious honey beans with a smooth cook and rich flavor for akara, moi moi, beans porridge, and balanced home meals. A dependable pantry staple for FoodNova grocery shoppers."},
+    {"name": "Garri Ijebu", "category": "Food Staples", "price": 1200, "stock": 90, "image": "/uploads/catalog/products/garri-ijebu.svg", "description": "Crisp, finely processed Garri Ijebu with the familiar tangy taste loved for soaking, eba, and quick meals. Carefully packed for freshness and reliable household use."},
+    {"name": "Spaghetti", "category": "Pasta & Noodles", "price": 1500, "stock": 100, "image": "/uploads/catalog/products/spaghetti.svg", "description": "Quality spaghetti for quick weekday meals, party dishes, and lunch boxes. Cooks evenly and pairs well with tomato stew, vegetables, protein, and FoodNova pantry essentials."},
+    {"name": "Tomato Paste", "category": "Cooking Ingredients", "price": 900, "stock": 120, "image": "/uploads/catalog/products/tomato-paste.svg", "description": "Rich tomato paste for stews, jollof rice, sauces, and soups. A concentrated cooking ingredient that brings color, body, and classic tomato flavor to everyday meals."},
+    {"name": "Semovita", "category": "Food Staples", "price": 2300, "stock": 60, "image": "/uploads/catalog/products/semovita.svg", "description": "Smooth Semovita flour for soft, satisfying swallows served with vegetable, egusi, okra, and traditional soups. Packed for convenient home cooking and family restocking."},
+    {"name": "Noodles", "category": "Pasta & Noodles", "price": 800, "stock": 140, "image": "/uploads/catalog/products/noodles.svg", "description": "Quick-cooking instant noodles for breakfast, lunch, late-night meals, and busy school days. Easy to prepare and useful for fast FoodNova grocery baskets."},
+    {"name": "Salt", "category": "Cooking Ingredients", "price": 500, "stock": 150, "image": "/uploads/catalog/products/salt.svg", "description": "Everyday cooking salt for seasoning soups, stews, rice, pasta, and household recipes. A basic kitchen essential for complete grocery shopping."},
+    {"name": "Maggi", "category": "Cooking Ingredients", "price": 700, "stock": 150, "image": "/uploads/catalog/products/maggi.svg", "description": "Trusted seasoning cubes that add savory depth to soups, stews, rice dishes, sauces, and everyday Nigerian cooking. A must-have flavor booster for every pantry."},
+    {"name": "Vegetable Oil", "category": "Oils", "price": 3200, "stock": 80, "image": "/uploads/catalog/products/vegetable-oil.svg", "description": "Clean-tasting vegetable oil for frying, sauteing, baking, and daily cooking. Suitable for family kitchens, meal prep, and FoodNova foodstuff restocking."},
+    {"name": "Palm Oil", "category": "Oils", "price": 3000, "stock": 80, "image": "/uploads/catalog/products/palm-oil.svg", "description": "Quality palm oil with rich color and traditional flavor for soups, beans, yam, sauces, and local dishes. Packed for dependable taste and freshness."},
+    {"name": "Sugar", "category": "Breakfast", "price": 1100, "stock": 100, "image": "/uploads/catalog/products/sugar.svg", "description": "Fine granulated sugar for tea, pap, custard, baking, cereals, and everyday sweetening. A practical grocery essential for breakfast and home use."},
+    {"name": "Custard", "category": "Breakfast", "price": 1800, "stock": 70, "image": "/uploads/catalog/products/custard.svg", "description": "Smooth breakfast custard for quick, comforting meals served with milk, sugar, and snacks. Great for families, children, and convenient morning routines."},
+    {"name": "Curry", "category": "Cooking Ingredients", "price": 600, "stock": 100, "image": "/uploads/catalog/products/curry.svg", "description": "Aromatic curry powder for fried rice, sauces, stews, chicken, and vegetable dishes. Adds warm color and balanced spice to everyday cooking."},
+    {"name": "Thyme", "category": "Cooking Ingredients", "price": 600, "stock": 100, "image": "/uploads/catalog/products/thyme.svg", "description": "Fragrant dried thyme for seasoning meats, stews, rice, soups, and sauces. A versatile herb that brings depth to Nigerian and continental recipes."},
+    {"name": "Milo", "category": "Breakfast", "price": 2500, "stock": 80, "image": "/uploads/catalog/products/milo.svg", "description": "Chocolate malt beverage for breakfast drinks, school mornings, and energy-filled refreshment. Enjoy hot or cold with milk for a familiar family favorite."},
+    {"name": "Milk", "category": "Breakfast", "price": 1600, "stock": 90, "image": "/uploads/catalog/products/milk.svg", "description": "Creamy milk for tea, custard, cereals, pap, beverages, and baking. A breakfast essential that completes many FoodNova grocery baskets."},
+    {"name": "Grounded Egusi", "category": "Local Ingredients", "price": 2800, "stock": 60, "image": "/uploads/catalog/products/grounded-egusi.svg", "description": "Finely grounded egusi for rich, flavorful egusi soup and traditional Nigerian meals. Conveniently prepared for faster cooking and consistent texture."},
+]
+
+WEIGHT_VARIANT_PRODUCTS = {"Foreign Rice", "Honey Beans", "Garri Ijebu"}
+WEIGHT_VARIANTS = ["1kg", "2kg", "3kg", "5kg"]
+CATALOG_PRODUCT_NAMES = {item["name"] for item in FOODNOVA_PRODUCT_CATALOG}
+COMBO_KEYWORDS = ("pack", "combo", "package", "bundle")
 
 
 class RegisterPayload(BaseModel):
@@ -1771,16 +1816,24 @@ def normalize_order_items(items: list) -> list:
     normalized = []
 
     for item in items or []:
-        qty = item.get("quantity") or item.get("qty") or 1
-        price = item.get("price") or item.get("unit_price") or 0
+        qty = int(item.get("quantity") or item.get("qty") or 1)
+        price = float(item.get("price") or item.get("unit_price") or 0)
         name = item.get("name") or item.get("product_name") or f"Product #{item.get('product_id') or item.get('id') or ''}"
+        variant_id = item.get("variant_id") or item.get("product_variant_id")
+        variant_weight = item.get("variant_weight") or item.get("weight") or item.get("selected_weight") or ""
+        sku = item.get("sku") or item.get("variant_sku") or ""
+        display_name = f"{name} - {variant_weight}" if variant_weight and variant_weight not in str(name) else name
 
         normalized.append({
             "id": item.get("id") or item.get("product_id"),
             "product_id": item.get("product_id") or item.get("id"),
+            "variant_id": variant_id,
+            "variant_weight": variant_weight,
+            "sku": sku,
             "item_type": item.get("item_type") or item.get("type") or ("pack" if item.get("items") else "product"),
-            "name": name,
-            "product_name": name,
+            "name": display_name,
+            "product_name": display_name,
+            "base_product_name": name,
             "price": price,
             "unit_price": price,
             "quantity": qty,
@@ -1789,6 +1842,25 @@ def normalize_order_items(items: list) -> list:
         })
 
     return normalized
+
+
+def find_order_variant_for_stock(db, item: dict) -> Optional[DBProductVariant]:
+    if str(item.get("item_type") or "").lower() == "pack":
+        return None
+    variant_id = item.get("variant_id")
+    sku = str(item.get("sku") or "").strip()
+    if variant_id:
+        try:
+            variant = db.query(DBProductVariant).filter(DBProductVariant.id == int(variant_id)).first()
+            if variant:
+                return variant
+        except Exception:
+            pass
+    if sku:
+        variant = db.query(DBProductVariant).filter(DBProductVariant.sku == sku).first()
+        if variant:
+            return variant
+    return None
 
 
 def find_order_product_for_stock(db, item: dict) -> Optional[DBProduct]:
@@ -1813,9 +1885,18 @@ def find_order_product_for_stock(db, item: dict) -> Optional[DBProduct]:
 
 def validate_and_deduct_inventory(db, items: list) -> list:
     deductions = []
+    requested_by_variant = {}
     requested_by_product = {}
 
     for item in items:
+        variant = find_order_variant_for_stock(db, item)
+        if variant:
+            quantity = int(item.get("quantity") or item.get("qty") or 1)
+            if quantity > 0:
+                current = requested_by_variant.get(variant.id, {"variant": variant, "quantity": 0})
+                current["quantity"] += quantity
+                requested_by_variant[variant.id] = current
+            continue
         product = find_order_product_for_stock(db, item)
         if not product:
             continue
@@ -1826,6 +1907,17 @@ def validate_and_deduct_inventory(db, items: list) -> list:
         current["quantity"] += quantity
         requested_by_product[product.id] = current
 
+    for entry in requested_by_variant.values():
+        variant = entry["variant"]
+        requested = entry["quantity"]
+        available = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
+        product_name = variant.product.name if variant.product else "Product"
+        if available < requested:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient stock for {product_name} {variant.weight}. Available: {available}, requested: {requested}",
+            )
+
     for entry in requested_by_product.values():
         product = entry["product"]
         requested = entry["quantity"]
@@ -1835,6 +1927,30 @@ def validate_and_deduct_inventory(db, items: list) -> list:
                 status_code=400,
                 detail=f"Insufficient stock for {product.name}. Available: {available}, requested: {requested}",
             )
+
+    for entry in requested_by_variant.values():
+        variant = entry["variant"]
+        requested = entry["quantity"]
+        available = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
+        next_stock = max(0, available - requested)
+        variant.stock_qty = next_stock
+        variant.stock = next_stock
+        variant.updated_at = datetime.utcnow()
+        if variant.product:
+            variant.product.stock_qty = sum(v.stock_qty if v.stock_qty is not None else (v.stock or 0) for v in variant.product.variants if v.is_active)
+            variant.product.stock = variant.product.stock_qty
+            variant.product.updated_at = datetime.utcnow()
+        deductions.append({
+            "product_id": variant.product_id,
+            "variant_id": variant.id,
+            "sku": variant.sku,
+            "name": f"{variant.product.name if variant.product else 'Product'} - {variant.weight}" if variant.weight else (variant.product.name if variant.product else "Product"),
+            "quantity": requested,
+            "previous_stock": available,
+            "new_stock": next_stock,
+            "low_stock": 0 < next_stock <= 5,
+            "out_of_stock": next_stock <= 0,
+        })
 
     for entry in requested_by_product.values():
         product = entry["product"]
@@ -1862,6 +1978,30 @@ def restock_order_inventory(db, order: DBOrder) -> list:
         return []
     restocked = []
     for item in order.items or []:
+        variant_id = getattr(item, "variant_id", None)
+        if variant_id:
+            variant = db.query(DBProductVariant).filter(DBProductVariant.id == variant_id).first()
+            if variant:
+                quantity = int(item.quantity or item.qty or 0)
+                if quantity <= 0:
+                    continue
+                previous = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
+                variant.stock_qty = previous + quantity
+                variant.stock = variant.stock_qty
+                variant.updated_at = datetime.utcnow()
+                if variant.product:
+                    variant.product.stock_qty = sum(v.stock_qty if v.stock_qty is not None else (v.stock or 0) for v in variant.product.variants if v.is_active)
+                    variant.product.stock = variant.product.stock_qty
+                    variant.product.updated_at = datetime.utcnow()
+                restocked.append({
+                    "product_id": variant.product_id,
+                    "variant_id": variant.id,
+                    "name": f"{variant.product.name if variant.product else 'Product'} - {variant.weight}" if variant.weight else (variant.product.name if variant.product else "Product"),
+                    "quantity": quantity,
+                    "previous_stock": previous,
+                    "new_stock": variant.stock_qty,
+                })
+                continue
         if not item.product_id:
             continue
         product = db.query(DBProduct).filter(DBProduct.id == item.product_id).first()
@@ -1935,6 +2075,272 @@ def parse_content_list(value) -> list:
     if parsed is not None:
         return [str(parsed).strip()] if str(parsed).strip() else []
     return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def slugify(value: str) -> str:
+    clean = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(value or ""))
+    while "--" in clean:
+        clean = clean.replace("--", "-")
+    return clean.strip("-") or "item"
+
+
+def foodnova_sku(name: str, weight: str = "") -> str:
+    parts = ["FN", slugify(name).replace("-", "").upper()[:18]]
+    if weight:
+        parts.append(slugify(weight).replace("-", "").upper())
+    return "-".join(parts)
+
+
+def variant_to_dict(variant: DBProductVariant) -> dict:
+    stock_qty = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
+    return {
+        "id": variant.id,
+        "product_id": variant.product_id,
+        "sku": variant.sku,
+        "weight": variant.weight or "",
+        "label": variant.weight or variant.sku,
+        "price": variant.price or 0,
+        "unit_price": variant.price or 0,
+        "stock_qty": stock_qty,
+        "stock": variant.stock if variant.stock is not None else stock_qty,
+        "image_url": variant.image_url or "",
+        "is_active": bool(variant.is_active),
+        "active": bool(variant.is_active),
+        "is_out_of_stock": stock_qty <= 0,
+        "created_at": iso(variant.created_at),
+        "updated_at": iso(variant.updated_at),
+    }
+
+
+def product_default_sku(product: DBProduct) -> str:
+    return foodnova_sku(product.name or f"product-{product.id}")
+
+
+def default_variant_payload(product_name: str, base_price: float, base_stock: int, product_image: str) -> list[dict]:
+    if product_name in WEIGHT_VARIANT_PRODUCTS:
+        return [
+            {
+                "sku": foodnova_sku(product_name, weight),
+                "weight": weight,
+                "price": float(base_price) * int(weight.replace("kg", "")),
+                "stock_qty": int(base_stock),
+                "stock": int(base_stock),
+                "image_url": product_image,
+                "is_active": True,
+            }
+            for weight in WEIGHT_VARIANTS
+        ]
+    return [
+        {
+            "sku": foodnova_sku(product_name),
+            "weight": "",
+            "price": float(base_price),
+            "stock_qty": int(base_stock),
+            "stock": int(base_stock),
+            "image_url": product_image,
+            "is_active": True,
+        }
+    ]
+
+
+def is_combo_product(product: DBProduct) -> bool:
+    haystack = " ".join([
+        product.name or "",
+        product.category or "",
+        product.category_name or "",
+        product.pack_info or "",
+        product.description or "",
+    ]).lower()
+    return any(keyword in haystack for keyword in COMBO_KEYWORDS)
+
+
+def make_placeholder_svg(title: str, subtitle: str, accent: str = "#0B7A3B") -> str:
+    safe_title = str(title or "FoodNova").replace("&", "&amp;")
+    safe_subtitle = str(subtitle or "Premium grocery").replace("&", "&amp;")
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F7FAEF"/>
+      <stop offset="1" stop-color="#E4F4DC"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <rect x="82" y="72" width="1036" height="756" rx="42" fill="#FFFFFF" stroke="#D7E8CF" stroke-width="6"/>
+  <circle cx="960" cy="190" r="92" fill="{accent}" opacity=".16"/>
+  <circle cx="230" cy="695" r="118" fill="#F3B63F" opacity=".22"/>
+  <path d="M318 332h564l-48 294H366z" fill="{accent}" opacity=".12" stroke="{accent}" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M382 327c38-83 105-126 202-126 102 0 171 43 207 126" fill="none" stroke="{accent}" stroke-width="16" stroke-linecap="round"/>
+  <rect x="425" y="392" width="350" height="52" rx="26" fill="{accent}" opacity=".9"/>
+  <rect x="452" y="475" width="296" height="34" rx="17" fill="#F3B63F"/>
+  <text x="600" y="620" text-anchor="middle" font-family="Arial, sans-serif" font-size="56" font-weight="800" fill="#173321">{safe_title}</text>
+  <text x="600" y="680" text-anchor="middle" font-family="Arial, sans-serif" font-size="30" font-weight="600" fill="#4E6658">{safe_subtitle}</text>
+</svg>
+"""
+
+
+def ensure_catalog_placeholder_images():
+    accents = ["#0B7A3B", "#2F7D52", "#D69A19", "#B85C27", "#355E3B", "#704C9F"]
+    for folder in ["products", "categories"]:
+        os.makedirs(os.path.join(UPLOAD_DIR, "catalog", folder), exist_ok=True)
+
+    for idx, item in enumerate(FOODNOVA_PRODUCT_CATALOG):
+        path = os.path.join(UPLOAD_DIR, "catalog", "products", f"{slugify(item['name'])}.svg")
+        if not os.path.exists(path):
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(make_placeholder_svg(item["name"], item["category"], accents[idx % len(accents)]))
+
+    for idx, category in enumerate(FOODNOVA_CATEGORIES.keys()):
+        path = os.path.join(UPLOAD_DIR, "catalog", "categories", f"{slugify(category)}.svg")
+        if not os.path.exists(path):
+            with open(path, "w", encoding="utf-8") as file:
+                file.write(make_placeholder_svg(category, "FoodNova category", accents[idx % len(accents)]))
+
+
+def sync_foodnova_catalog(db) -> dict:
+    ensure_catalog_placeholder_images()
+    removed = []
+    added = []
+    variants_created = []
+
+    for product in db.query(DBProduct).all():
+        if product.name in CATALOG_PRODUCT_NAMES or is_combo_product(product):
+            continue
+        if product.is_active:
+            removed.append(product.name)
+        product.is_active = False
+        product.updated_at = datetime.utcnow()
+
+    for item in FOODNOVA_PRODUCT_CATALOG:
+        product = db.query(DBProduct).filter(func.lower(DBProduct.name) == item["name"].lower()).first()
+        if not product:
+            product = DBProduct(name=item["name"])
+            db.add(product)
+            db.flush()
+            added.append(item["name"])
+        product.category = item["category"]
+        product.category_name = item["category"]
+        product.description = item["description"]
+        product.image_url = product.image_url or item["image"]
+        product.contents = json_dump([item["name"]])
+        product.pack_info = "Weight variants available" if item["name"] in WEIGHT_VARIANT_PRODUCTS else "Single grocery item"
+        product.serving_estimate = "Select the quantity and weight that fits your household" if item["name"] in WEIGHT_VARIANT_PRODUCTS else "Serving varies by household use"
+        product.freshness_note = "Quality checked and packed from FoodNova inventory"
+        product.delivery_note = "Prepared after payment confirmation"
+        product.is_active = True
+        product.updated_at = datetime.utcnow()
+
+        desired_variants = default_variant_payload(item["name"], item["price"], item["stock"], item["image"])
+        first_variant = desired_variants[0]
+        product.price = first_variant["price"]
+        product.stock_qty = sum(v["stock_qty"] for v in desired_variants if v["is_active"])
+        product.stock = product.stock_qty
+
+        wanted_skus = {variant["sku"] for variant in desired_variants}
+        for existing in list(product.variants or []):
+            if existing.sku not in wanted_skus:
+                existing.is_active = False
+                existing.updated_at = datetime.utcnow()
+        for variant_data in desired_variants:
+            variant = db.query(DBProductVariant).filter(DBProductVariant.sku == variant_data["sku"]).first()
+            is_new_variant = variant is None
+            if not variant:
+                variant = DBProductVariant(product_id=product.id, sku=variant_data["sku"])
+                db.add(variant)
+                variants_created.append({"product": item["name"], "weight": variant_data["weight"], "sku": variant_data["sku"]})
+            variant.product_id = product.id
+            variant.weight = variant_data["weight"]
+            if is_new_variant:
+                variant.price = variant_data["price"]
+                variant.stock_qty = variant_data["stock_qty"]
+                variant.stock = variant_data["stock"]
+            elif variant.price is None:
+                variant.price = variant_data["price"]
+            if variant.stock_qty is None:
+                variant.stock_qty = variant_data["stock_qty"]
+            if variant.stock is None:
+                variant.stock = variant.stock_qty
+            variant.image_url = variant.image_url or variant_data["image_url"]
+            variant.is_active = True
+            variant.updated_at = datetime.utcnow()
+
+        db.flush()
+        active_variants = [variant for variant in (product.variants or []) if variant.is_active]
+        if active_variants:
+            product.price = active_variants[0].price or product.price or 0
+            product.stock_qty = sum(variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0) for variant in active_variants)
+            product.stock = product.stock_qty
+
+    return {
+        "removed": removed,
+        "added": added,
+        "variants_created": variants_created,
+        "categories": list(FOODNOVA_CATEGORIES.keys()),
+        "product_images": [item["image"] for item in FOODNOVA_PRODUCT_CATALOG],
+        "category_images": FOODNOVA_CATEGORY_IMAGES,
+    }
+
+
+async def read_json_payload(request: Request) -> dict:
+    content_type = request.headers.get("content-type", "")
+    if "application/json" not in content_type:
+        return {}
+    try:
+        payload = await request.json()
+        return payload if isinstance(payload, dict) else {}
+    except Exception:
+        return {}
+
+
+def apply_product_variants(db, product: DBProduct, variants_payload) -> list[dict]:
+    if variants_payload is None:
+        return [variant_to_dict(variant) for variant in (product.variants or [])]
+    if isinstance(variants_payload, str):
+        variants_payload = json_load(variants_payload, [])
+    if not isinstance(variants_payload, list):
+        return [variant_to_dict(variant) for variant in (product.variants or [])]
+
+    kept_variant_ids = set()
+    for raw_variant in variants_payload:
+        if not isinstance(raw_variant, dict):
+            continue
+        variant_id = raw_variant.get("id")
+        variant = None
+        if variant_id:
+            try:
+                variant = db.query(DBProductVariant).filter(DBProductVariant.id == int(variant_id), DBProductVariant.product_id == product.id).first()
+            except Exception:
+                variant = None
+        if not variant:
+            sku = raw_variant.get("sku") or foodnova_sku(product.name, raw_variant.get("weight", ""))
+            variant = db.query(DBProductVariant).filter(DBProductVariant.sku == sku).first()
+        if not variant:
+            variant = DBProductVariant(product_id=product.id, sku=raw_variant.get("sku") or foodnova_sku(product.name, raw_variant.get("weight", "")))
+            db.add(variant)
+        variant.product_id = product.id
+        variant.weight = str(raw_variant.get("weight") or variant.weight or "").strip()
+        variant.sku = str(raw_variant.get("sku") or variant.sku or foodnova_sku(product.name, variant.weight)).strip()
+        if raw_variant.get("price") is not None:
+            variant.price = float(raw_variant.get("price") or 0)
+        if raw_variant.get("stock_qty") is not None or raw_variant.get("stock") is not None:
+            stock = int(raw_variant.get("stock_qty") if raw_variant.get("stock_qty") is not None else raw_variant.get("stock") or 0)
+            variant.stock_qty = stock
+            variant.stock = stock
+        if raw_variant.get("image_url") is not None:
+            variant.image_url = raw_variant.get("image_url") or variant.image_url or product.image_url or ""
+        if raw_variant.get("is_active") is not None or raw_variant.get("active") is not None:
+            variant.is_active = bool(raw_variant.get("is_active") if raw_variant.get("is_active") is not None else raw_variant.get("active"))
+        variant.updated_at = datetime.utcnow()
+        if variant.id:
+            kept_variant_ids.add(variant.id)
+
+    db.flush()
+    product.stock_qty = sum(v.stock_qty if v.stock_qty is not None else (v.stock or 0) for v in product.variants if v.is_active)
+    product.stock = product.stock_qty
+    active_variants = [v for v in product.variants if v.is_active]
+    if active_variants:
+        product.price = active_variants[0].price or product.price or 0
+    product.updated_at = datetime.utcnow()
+    return [variant_to_dict(variant) for variant in (product.variants or [])]
 
 
 IMAGE_CONTENT_TYPES = {
@@ -2107,18 +2513,32 @@ def product_to_dict(product: DBProduct) -> dict:
     stock_qty = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
     low_stock_threshold = 5
     contents = parse_content_list(getattr(product, "contents", None))
+    variants = [variant_to_dict(variant) for variant in (product.variants or []) if variant.is_active]
+    variants.sort(key=lambda variant: (int(str(variant.get("weight") or "999kg").replace("kg", "") or 999), variant.get("sku", "")))
+    if variants:
+        stock_qty = sum(int(variant.get("stock_qty") or 0) for variant in variants)
+        available_variants = [variant for variant in variants if int(variant.get("stock_qty") or 0) > 0]
+        display_variant = available_variants[0] if available_variants else variants[0]
+        display_price = display_variant.get("price", product.price or 0)
+    else:
+        display_price = product.price or 0
     return {
         "id": product.id,
         "name": product.name,
-        "price": product.price or 0,
+        "sku": product_default_sku(product),
+        "price": display_price,
+        "base_price": product.price or 0,
         "stock_qty": stock_qty,
         "stock": product.stock if product.stock is not None else stock_qty,
         "category": product.category or "",
         "category_name": product.category_name or product.category or "",
+        "category_image_url": FOODNOVA_CATEGORY_IMAGES.get(product.category or product.category_name or "", ""),
         "image_url": product.image_url or "",
         "description": product.description or "",
         "contents": contents,
         "included_items": contents,
+        "has_variants": bool(variants),
+        "variants": variants,
         "pack_info": getattr(product, "pack_info", "") or "",
         "serving_estimate": getattr(product, "serving_estimate", "") or "",
         "freshness_note": getattr(product, "freshness_note", "") or "",
@@ -2468,6 +2888,9 @@ def order_item_to_dict(item: DBOrderItem) -> dict:
     return {
         "id": item.id,
         "product_id": item.product_id,
+        "variant_id": getattr(item, "variant_id", None),
+        "variant_weight": getattr(item, "variant_weight", "") or "",
+        "sku": getattr(item, "sku", "") or "",
         "name": item.name or item.product_name or "",
         "product_name": item.product_name or item.name or "",
         "price": item.price or 0,
@@ -4272,6 +4695,9 @@ def ensure_database_compatibility():
         },
         "order_items": {
             "product_id": "INTEGER",
+            "variant_id": "INTEGER",
+            "variant_weight": "VARCHAR(40) DEFAULT ''",
+            "sku": "VARCHAR(120) DEFAULT ''",
             "name": "VARCHAR(150) DEFAULT ''",
             "product_name": "VARCHAR(150) DEFAULT ''",
             "price": "FLOAT DEFAULT 0",
@@ -4580,8 +5006,10 @@ def seed_database():
                     items=json_dump(pack.get("items", [])),
                     is_active=pack.get("is_active", True),
                 ))
+        sync_report = sync_foodnova_catalog(db)
         ensure_default_operational_zone(db)
         db.commit()
+        print("FOODNOVA_CATALOG_SYNC", json_dump(sync_report))
         db.close()
     except Exception as error:
         print("DATABASE SEED ERROR:", repr(error))
@@ -4776,18 +5204,33 @@ def debug_db():
 def list_categories():
     db = SessionLocal()
     try:
-        products = db.query(DBProduct).all()
+        products = db.query(DBProduct).filter(DBProduct.is_active == True).all()
         categories = sorted({p.category or p.category_name for p in products if p.category or p.category_name})
-        return [{"id": idx + 1, "name": category} for idx, category in enumerate(categories)]
+        return [
+            {
+                "id": idx + 1,
+                "name": category,
+                "image_url": FOODNOVA_CATEGORY_IMAGES.get(category, ""),
+                "products": FOODNOVA_CATEGORIES.get(category, []),
+            }
+            for idx, category in enumerate(categories)
+        ]
     finally:
         db.close()
 
 
 @app.get("/products")
-def list_products(search: Optional[str] = None):
+def list_products(search: Optional[str] = None, include_inactive: bool = False):
     db = SessionLocal()
     try:
-        products = [product_to_dict(product) for product in db.query(DBProduct).all()]
+        query = db.query(DBProduct)
+        if not include_inactive:
+            query = query.filter(DBProduct.is_active == True)
+        products = []
+        for product in query.order_by(DBProduct.category.asc(), DBProduct.name.asc()).all():
+            if include_inactive or product.is_active:
+                if product.name in CATALOG_PRODUCT_NAMES or is_combo_product(product) or product.is_active:
+                    products.append(product_to_dict(product))
         if not search:
             return products
 
@@ -7368,6 +7811,9 @@ def create_order(payload: OrderPayload, request: Request):
             db.add(DBOrderItem(
                 order_id=order.id,
                 product_id=item.get("product_id"),
+                variant_id=item.get("variant_id"),
+                variant_weight=item.get("variant_weight", ""),
+                sku=item.get("sku", ""),
                 name=item.get("name", ""),
                 product_name=item.get("product_name", ""),
                 price=item.get("price", 0),
@@ -9468,7 +9914,7 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
 @app.get("/admin/products")
 def admin_products(request: Request):
     require_permission(request, "stock:view")
-    products = list_products()
+    products = list_products(include_inactive=True)
     return {"success": True, "products": products, "data": products}
 
 
@@ -9490,6 +9936,18 @@ async def admin_create_product(
     image: Optional[UploadFile] = File(None),
 ):
     admin = require_permission(request, "stock:manage")
+    payload = await read_json_payload(request)
+    name = payload.get("name", name)
+    price = payload.get("price", price)
+    stock_qty = payload.get("stock_qty", payload.get("stock", stock_qty))
+    category = payload.get("category", category)
+    is_active = payload.get("is_active", payload.get("active", is_active))
+    description = payload.get("description", description)
+    contents = json_dump(payload.get("contents")) if "contents" in payload else contents
+    pack_info = payload.get("pack_info", pack_info)
+    serving_estimate = payload.get("serving_estimate", serving_estimate)
+    freshness_note = payload.get("freshness_note", freshness_note)
+    delivery_note = payload.get("delivery_note", delivery_note)
     image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product") if image else ""
     db = SessionLocal()
     try:
@@ -9510,6 +9968,9 @@ async def admin_create_product(
             is_active=is_active if active is None else active,
         )
         db.add(product)
+        db.flush()
+        if "variants" in payload:
+            apply_product_variants(db, product, payload.get("variants"))
         db.commit()
         db.refresh(product)
         data = product_to_dict(product)
@@ -9543,6 +10004,19 @@ async def admin_update_product(
     image: Optional[UploadFile] = File(None),
 ):
     admin = require_permission(request, "stock:manage")
+    payload = await read_json_payload(request)
+    name = payload.get("name", name)
+    price = payload.get("price", price)
+    stock_qty = payload.get("stock_qty", payload.get("stock", stock_qty))
+    category = payload.get("category", category)
+    is_active = payload.get("is_active", is_active)
+    active = payload.get("active", active)
+    description = payload.get("description", description)
+    contents = json_dump(payload.get("contents")) if "contents" in payload else contents
+    pack_info = payload.get("pack_info", pack_info)
+    serving_estimate = payload.get("serving_estimate", serving_estimate)
+    freshness_note = payload.get("freshness_note", freshness_note)
+    delivery_note = payload.get("delivery_note", delivery_note)
     db = SessionLocal()
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
@@ -9574,6 +10048,8 @@ async def admin_update_product(
                 product.is_active = is_active if active is None else active
             if image:
                 product.image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product")
+            if "variants" in payload:
+                apply_product_variants(db, product, payload.get("variants"))
             product.updated_at = datetime.utcnow()
             db.commit()
             db.refresh(product)
@@ -9612,6 +10088,89 @@ def admin_delete_product(product_id: int, request: Request):
         db.close()
 
     raise HTTPException(status_code=404, detail="Product not found")
+
+
+@app.post("/admin/products/bulk-stock")
+async def admin_bulk_update_product_stock(request: Request):
+    admin = require_permission(request, "stock:manage")
+    payload = await read_json_payload(request)
+    updates = payload.get("updates") if isinstance(payload, dict) else []
+    if not isinstance(updates, list):
+        raise HTTPException(status_code=400, detail="updates must be a list")
+    db = SessionLocal()
+    try:
+        changed = []
+        for update in updates:
+            if not isinstance(update, dict):
+                continue
+            stock = int(update.get("stock_qty") if update.get("stock_qty") is not None else update.get("stock") or 0)
+            variant_id = update.get("variant_id")
+            product_id = update.get("product_id")
+            if variant_id:
+                variant = db.query(DBProductVariant).filter(DBProductVariant.id == int(variant_id)).first()
+                if not variant:
+                    continue
+                variant.stock_qty = stock
+                variant.stock = stock
+                variant.updated_at = datetime.utcnow()
+                if variant.product:
+                    variant.product.stock_qty = sum(v.stock_qty if v.stock_qty is not None else (v.stock or 0) for v in variant.product.variants if v.is_active)
+                    variant.product.stock = variant.product.stock_qty
+                changed.append({"variant_id": variant.id, "product_id": variant.product_id, "stock_qty": stock})
+            elif product_id:
+                product = db.query(DBProduct).filter(DBProduct.id == int(product_id)).first()
+                if not product:
+                    continue
+                product.stock_qty = stock
+                product.stock = stock
+                product.updated_at = datetime.utcnow()
+                changed.append({"product_id": product.id, "stock_qty": stock})
+        db.commit()
+        create_admin_audit_log(request, admin, "products_bulk_stock_updated", "product", "bulk", f"Admin bulk updated stock for {len(changed)} entries", {"updates": changed})
+        return {"success": True, "updated": changed, "data": changed}
+    finally:
+        db.close()
+
+
+@app.post("/admin/products/bulk-pricing")
+async def admin_bulk_update_product_pricing(request: Request):
+    admin = require_permission(request, "stock:manage")
+    payload = await read_json_payload(request)
+    updates = payload.get("updates") if isinstance(payload, dict) else []
+    if not isinstance(updates, list):
+        raise HTTPException(status_code=400, detail="updates must be a list")
+    db = SessionLocal()
+    try:
+        changed = []
+        for update in updates:
+            if not isinstance(update, dict):
+                continue
+            price = float(update.get("price") or update.get("unit_price") or 0)
+            variant_id = update.get("variant_id")
+            product_id = update.get("product_id")
+            if variant_id:
+                variant = db.query(DBProductVariant).filter(DBProductVariant.id == int(variant_id)).first()
+                if not variant:
+                    continue
+                variant.price = price
+                variant.updated_at = datetime.utcnow()
+                if variant.product:
+                    active_variants = [v for v in variant.product.variants if v.is_active]
+                    if active_variants:
+                        variant.product.price = active_variants[0].price or variant.product.price or 0
+                changed.append({"variant_id": variant.id, "product_id": variant.product_id, "price": price})
+            elif product_id:
+                product = db.query(DBProduct).filter(DBProduct.id == int(product_id)).first()
+                if not product:
+                    continue
+                product.price = price
+                product.updated_at = datetime.utcnow()
+                changed.append({"product_id": product.id, "price": price})
+        db.commit()
+        create_admin_audit_log(request, admin, "products_bulk_pricing_updated", "product", "bulk", f"Admin bulk updated pricing for {len(changed)} entries", {"updates": changed})
+        return {"success": True, "updated": changed, "data": changed}
+    finally:
+        db.close()
 
 
 @app.get("/admin/packs")

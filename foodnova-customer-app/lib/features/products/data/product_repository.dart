@@ -13,7 +13,7 @@ final productsProvider = FutureProvider<List<Product>>((ref) {
   return ref.watch(productRepositoryProvider).listProducts();
 });
 
-final categoriesProvider = FutureProvider<List<String>>((ref) {
+final categoriesProvider = FutureProvider<List<FoodNovaCategory>>((ref) {
   return ref.watch(productRepositoryProvider).listCategories();
 });
 
@@ -45,7 +45,7 @@ class ProductRepository {
 
   final Dio _dio;
   List<Product>? _productCache;
-  List<String>? _categoryCache;
+  List<FoodNovaCategory>? _categoryCache;
   List<Product>? _packCache;
   List<FoodNovaAnnouncement>? _announcementCache;
 
@@ -109,17 +109,20 @@ class ProductRepository {
     });
   }
 
-  Future<List<String>> listCategories({bool forceRefresh = false}) async {
+  Future<List<FoodNovaCategory>> listCategories(
+      {bool forceRefresh = false}) async {
     if (!forceRefresh && _categoryCache != null) return _categoryCache!;
     final response = await _dio.get('/categories');
     final body = response.data;
     final items = body is Map ? (body['categories'] ?? body['data']) : body;
     final categories = (items as List? ?? [])
         .map((item) {
-          if (item is Map) return '${item['name'] ?? ''}';
-          return '$item';
+          if (item is Map) {
+            return FoodNovaCategory.fromJson(Map<String, dynamic>.from(item));
+          }
+          return FoodNovaCategory(name: '$item', imageUrl: '');
         })
-        .where((item) => item.isNotEmpty)
+        .where((item) => item.name.isNotEmpty)
         .toList();
     _categoryCache = categories;
     return categories;
@@ -175,6 +178,21 @@ class ProductRepository {
     }).toList();
     debugPrint('[FoodNova Banners] Number of hero banners: ${banners.length}');
     return banners;
+  }
+}
+
+class FoodNovaCategory {
+  const FoodNovaCategory({required this.name, required this.imageUrl});
+
+  final String name;
+  final String imageUrl;
+
+  factory FoodNovaCategory.fromJson(Map<String, dynamic> json) {
+    return FoodNovaCategory(
+      name: '${json['name'] ?? ''}',
+      imageUrl: AppConfig.resolveMediaUrl(
+          '${json['image_url'] ?? json['imageUrl'] ?? ''}'),
+    );
   }
 }
 

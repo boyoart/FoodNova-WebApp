@@ -18,7 +18,8 @@ export const useCartStore = create((set, get) => ({
   addItem: (product) => {
     const items = get().items
     const productType = product.type || product.item_type || 'product'
-    const existingItem = items.find(item => item.id === product.id && (item.type || item.item_type || 'product') === productType)
+    const productKey = product.cart_key || `${productType}-${product.id}-${product.variant_id || product.sku || ''}`
+    const existingItem = items.find(item => (item.cart_key || `${item.type || item.item_type || 'product'}-${item.id}-${item.variant_id || item.sku || ''}`) === productKey)
     const requestedQty = Number(product.quantity || 1)
     const availableStock = Number(product.stock_qty ?? product.stock ?? 999)
 
@@ -29,12 +30,12 @@ export const useCartStore = create((set, get) => ({
     let newItems
     if (existingItem) {
       newItems = items.map(item =>
-        item.id === product.id && (item.type || item.item_type || 'product') === productType
+        (item.cart_key || `${item.type || item.item_type || 'product'}-${item.id}-${item.variant_id || item.sku || ''}`) === productKey
           ? { ...item, quantity: Math.min(Number(item.quantity || 1) + requestedQty, availableStock) }
           : item
       )
     } else {
-      newItems = [...items, { ...product, quantity: product.quantity || 1 }]
+      newItems = [...items, { ...product, cart_key: productKey, quantity: product.quantity || 1 }]
     }
 
     localStorage.setItem('cart', JSON.stringify(newItems))
@@ -42,14 +43,14 @@ export const useCartStore = create((set, get) => ({
   },
 
   removeItem: (productId) => {
-    const items = get().items.filter(item => item.id !== productId)
+    const items = get().items.filter(item => (item.cart_key || item.id) !== productId && item.id !== productId)
     localStorage.setItem('cart', JSON.stringify(items))
     set({ items })
   },
 
   updateQuantity: (productId, quantity) => {
     const items = get().items.map(item =>
-      item.id === productId ? { ...item, quantity } : item
+      (item.cart_key || item.id) === productId || item.id === productId ? { ...item, quantity } : item
     ).filter(item => item.quantity > 0)
 
     localStorage.setItem('cart', JSON.stringify(items))
