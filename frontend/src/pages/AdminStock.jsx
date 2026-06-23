@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI, resolveMediaUrl } from '../services/api'
-import { formatPrice } from '../utils/formatters'
+import { formatPrice, getImageFallbackAttrs, getImageUrl, handleImageError } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
@@ -169,7 +169,7 @@ export default function AdminStock() {
         </div>
         <div className="stock-image-upload-row">
           <div className="stock-image-preview">
-            {preview ? <img src={preview} alt="Stock item preview" /> : <span>No image selected</span>}
+            {preview ? <img src={preview} alt="Stock item preview" onError={handleImageError} {...getImageFallbackAttrs(formData)} /> : <img src={getImageUrl(formData)} alt="Stock item preview" onError={handleImageError} {...getImageFallbackAttrs(formData)} />}
           </div>
           <div className="stock-image-actions">
             <label className="stock-file-button">
@@ -186,10 +186,9 @@ export default function AdminStock() {
   }
 
   const renderStockThumb = (item) => {
-    const imageUrl = resolveMediaUrl(item.image_url || item.image)
     return (
       <div className="stock-table-thumb">
-        {imageUrl ? <img src={imageUrl} alt={item.name || 'Stock item'} /> : <span>No image</span>}
+        <img src={getImageUrl(item)} alt={item.name || 'Stock item'} onError={handleImageError} {...getImageFallbackAttrs(item)} />
       </div>
     )
   }

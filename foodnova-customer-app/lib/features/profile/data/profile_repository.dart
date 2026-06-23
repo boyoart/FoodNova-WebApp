@@ -115,6 +115,11 @@ class ProfileData {
   String get fullName => '${profile['full_name'] ?? ''}'.trim();
   String get email => '${profile['email'] ?? ''}'.trim();
   String get phone => '${profile['phone'] ?? ''}'.trim();
+  String get role =>
+      '${profile['role'] ?? profile['user_role'] ?? profile['account_role'] ?? 'customer'}'
+          .trim()
+          .toLowerCase();
+  bool get isAdmin => role == 'admin' || role == 'super_admin';
   String get avatarUrl => AppConfig.resolveMediaUrl(
       '${profile['avatar_url'] ?? profile['avatarUrl'] ?? profile['avatar'] ?? profile['profile_image_url'] ?? profile['profileImageUrl'] ?? profile['profile_image'] ?? profile['photo_url'] ?? profile['photoUrl'] ?? profile['photo'] ?? profile['picture'] ?? profile['image_url'] ?? profile['imageUrl'] ?? ''}');
   String get firstName {

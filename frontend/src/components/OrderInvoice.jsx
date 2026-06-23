@@ -25,7 +25,7 @@ const titleCase = (value) =>
 
 const getOrderCode = (order) => order?.order_code || (order?.id ? `FN-${order.id}` : 'N/A')
 const getOrderDate = (order) => order?.created_at || order?.date || order?.order_date
-const getItemName = (item) => item?.name || item?.product_name || item?.title || 'FoodNova Item'
+const getItemName = (item) => item?.name || item?.product_name || (item?.variant_weight ? `${item?.base_product_name || item?.title || 'FoodNova Item'} - ${item.variant_weight}` : item?.title) || 'FoodNova Item'
 const getItemQty = (item) => Number(item?.quantity || item?.qty || 1)
 const getItemPrice = (item) => Number(item?.price || item?.unit_price || 0)
 const getItemLineTotal = (item) => Number(item?.line_total || getItemPrice(item) * getItemQty(item))

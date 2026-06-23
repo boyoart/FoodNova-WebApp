@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle2, ChevronLeft, ChevronRight, FileText, Headphones, Heart, Lock, MapPin, MessageCircle, PackageCheck, ShoppingCart, Sparkles, Star, Truck, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { announcementsAPI, categoriesAPI, packsAPI, productsAPI, resolveMediaUrl } from '../services/api'
 import { useCartStore } from '../store/cartStore'
 import { buildWhatsAppLink } from '../utils/contactUtils'
-import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
+import { formatPrice, getImageFallbackAttrs, getImageUrl, handleImageError } from '../utils/formatters'
 import './HomePage.css'
 
 const heroSlides = [
@@ -101,6 +101,7 @@ export default function HomePage() {
   const [announcementIndex, setAnnouncementIndex] = useState(0)
   const [activePopupId, setActivePopupId] = useState(null)
   const [storeError, setStoreError] = useState('')
+  const navigate = useNavigate()
   const { items: cartItems, addItem } = useCartStore()
   const slide = heroSlides[activeSlide]
 
@@ -174,9 +175,12 @@ export default function HomePage() {
   const normalizeStoreItem = (item, itemType = 'product') => {
     const name = item?.name || item?.product_name || 'FoodNova Item'
     const variants = Array.isArray(item?.variants) ? item.variants.filter((variant) => variant?.is_active !== false) : []
-    const selectedVariant = variants[0] || null
-    const price = Number(selectedVariant?.price ?? item?.price ?? item?.unit_price ?? 0)
-    const stock = Number(selectedVariant?.stock_qty ?? selectedVariant?.stock ?? item?.stock_qty ?? item?.stock ?? 999)
+    const hasVariants = item?.has_variants === true || variants.length > 1
+    const variantPrices = variants.map((variant) => Number(variant.price || 0)).filter((price) => price > 0)
+    const price = hasVariants && variantPrices.length ? Math.min(...variantPrices) : Number(item?.price ?? item?.unit_price ?? 0)
+    const stock = hasVariants
+      ? variants.reduce((sum, variant) => sum + Number(variant.stock_qty ?? variant.stock ?? 0), 0)
+      : Number(item?.stock_qty ?? item?.stock ?? 999)
     return {
       ...item,
       name,
@@ -184,24 +188,28 @@ export default function HomePage() {
       price,
       unit_price: price,
       variants,
-      has_variants: item?.has_variants === true || variants.length > 1,
-      selected_variant: selectedVariant,
-      variant_id: selectedVariant?.id,
-      variant_weight: selectedVariant?.weight || '',
-      sku: selectedVariant?.sku || item?.sku || '',
-      cart_key: `${itemType}-${item?.id}-${selectedVariant?.id || selectedVariant?.sku || ''}`,
+      has_variants: hasVariants,
+      selected_variant: null,
+      variant_id: null,
+      variant_weight: '',
+      sku: item?.sku || '',
+      cart_key: `${itemType}-${item?.id}`,
       stock,
       stock_qty: stock,
       is_out_of_stock: itemType !== 'pack' && (item?.is_out_of_stock === true || stock <= 0),
       low_stock: itemType !== 'pack' && (item?.low_stock === true || (stock > 0 && stock <= Number(item?.low_stock_threshold || 5))),
       type: item?.type || item?.item_type || itemType,
       item_type: item?.item_type || item?.type || itemType,
-      image_url: item?.image_url || item?.image || '/placeholder.png',
+      image_url: item?.image_url || item?.image || '',
     }
   }
 
   const addFeaturedToCart = (item) => {
     const normalized = normalizeStoreItem(item, item.type || item.item_type || 'product')
+    if (normalized.has_variants && normalized.type !== 'pack') {
+      navigate(`/products/${normalized.id}`)
+      return
+    }
     if (normalized.type !== 'pack' && normalized.is_out_of_stock) {
       toast.error('This item is out of stock')
       return
@@ -330,7 +338,13 @@ export default function HomePage() {
           <div className="home-category-grid">
             {categories.map((category) => (
               <Link to={`/products?category=${encodeURIComponent(category.name)}`} className="home-category-card" key={category.name}>
-                <img src={resolveMediaUrl(category.image_url)} alt={category.name} loading="lazy" onError={handleImageError} />
+                <img
+                  src={resolveMediaUrl(category.image_url || category.default_image_url || '/placeholder.svg')}
+                  alt={category.name}
+                  loading="lazy"
+                  data-default-image={resolveMediaUrl('/placeholder.svg')}
+                  onError={handleImageError}
+                />
                 <span>{category.name}</span>
               </Link>
             ))}
@@ -341,7 +355,7 @@ export default function HomePage() {
             {featuredProducts.map((product) => (
               <article className="home-product-card" key={`featured-product-${product.id}`}>
                 <div className="home-product-image">
-                  <img src={getImageUrl(product)} alt={product.name} loading="lazy" onError={handleImageError} />
+                  <img src={getImageUrl(product)} alt={product.name} loading="lazy" onError={handleImageError} {...getImageFallbackAttrs(product)} />
                   <div className="home-product-badges"><span>Fresh</span>{product.low_stock ? <span>Hot deal</span> : <span>Bestseller</span>}</div>
                   <button type="button" className="home-favorite-button" aria-label={`Save ${product.name}`}><Heart size={17} /></button>
                   {product.is_out_of_stock && <span className="stock-ribbon out">Out of Stock</span>}
@@ -349,9 +363,9 @@ export default function HomePage() {
                 </div>
                 <div className="home-product-body">
                   <h3>{product.name}</h3>
-                  <p>{formatPrice(product.price)}</p>
+                  <p>{product.has_variants ? `From ${formatPrice(product.price)}` : formatPrice(product.price)}</p>
                   <button type="button" onClick={() => addFeaturedToCart(product)} disabled={product.is_out_of_stock}>
-                    {product.is_out_of_stock ? 'Out of Stock' : 'Add to Cart'}
+                    {product.is_out_of_stock ? 'Out of Stock' : product.has_variants ? 'Select Weight' : 'Add to Cart'}
                   </button>
                 </div>
               </article>
@@ -373,7 +387,7 @@ export default function HomePage() {
           <div className="home-pack-grid">
             {featuredPacks.map((pack) => (
               <article className="home-pack-card" key={`featured-pack-${pack.id}`}>
-                <img src={getImageUrl(pack)} alt={pack.name} loading="lazy" onError={handleImageError} />
+                <img src={getImageUrl(pack)} alt={pack.name} loading="lazy" onError={handleImageError} {...getImageFallbackAttrs(pack)} />
                 <div>
                   <h3>{pack.name}</h3>
                   <p>{pack.description || 'A curated FoodNova package for convenient restocking.'}</p>

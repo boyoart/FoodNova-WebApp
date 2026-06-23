@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Trash2, Plus, Minus, ShoppingBag } from 'lucide-react'
 import { useCartStore } from '../store/cartStore'
-import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
+import { formatPrice, getImageFallbackAttrs, getImageUrl, handleImageError } from '../utils/formatters'
 import './CartPage.css'
 
 export default function CartPage() {
@@ -36,6 +36,7 @@ export default function CartPage() {
                 alt={label}
                 className="item-image"
                 onError={handleImageError}
+                {...getImageFallbackAttrs(item)}
               />
               <div className="item-details">
                 <h3>{label}</h3>

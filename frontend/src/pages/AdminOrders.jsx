@@ -881,7 +881,7 @@ export default function AdminOrders() {
                   <tbody>
                     {(selectedOrder.items || []).map((item, idx) => (
                       <tr key={idx}>
-                        <td>{item.product_name || item.name || 'Unknown'}</td>
+                        <td>{item.product_name || item.name || (item.variant_weight ? `${item.base_product_name || 'FoodNova Item'} - ${item.variant_weight}` : 'Unknown')}</td>
                         <td>{item.quantity || item.qty || 1}</td>
                         <td>{formatPrice(item.price || item.unit_price || 0)}</td>
                         <td>{formatPrice((item.price || item.unit_price || 0) * (item.quantity || item.qty || 1))}</td>

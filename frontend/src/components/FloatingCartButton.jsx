@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ShoppingCart, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
-import { resolveMediaUrl } from '../services/api'
+import { getImageFallbackAttrs, getImageUrl, handleImageError } from '../utils/formatters'
 import './FloatingCartButton.css'
 
 const hiddenRoutes = ['/cart', '/checkout', '/login', '/register', '/admin/login', '/coming-soon']
@@ -70,12 +70,12 @@ export default function FloatingCartButton() {
               {cartItems.map((item) => {
                 const quantity = Number(item.quantity || item.qty || 1)
                 const price = Number(item.price || item.unit_price || 0)
-                const name = item.name || item.product_name || 'FoodNova item'
-                const imageUrl = resolveMediaUrl(item.image_url || item.image)
+                const name = item.display_name || (item.variant_weight ? `${item.name || item.product_name || 'FoodNova item'} - ${item.variant_weight}` : item.name || item.product_name || 'FoodNova item')
+                const imageUrl = getImageUrl(item)
 
                 return (
-                  <article className="mini-cart-item" key={item.id || name}>
-                    {imageUrl && <img src={imageUrl} alt={name} />}
+                  <article className="mini-cart-item" key={item.cart_key || `${item.type || item.item_type || 'product'}-${item.id}-${item.variant_id || item.sku || name}`}>
+                    <img src={imageUrl} alt={name} onError={handleImageError} {...getImageFallbackAttrs(item)} />
                     <div>
                       <h3>{name}</h3>
                       <p>{quantity} × {formatCurrency(price)}</p>

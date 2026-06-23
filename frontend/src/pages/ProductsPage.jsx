@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle2, Heart, Search, Sparkles } from 'lucide-react'
 import { productsAPI, packsAPI } from '../services/api'
 import { useCartStore } from '../store/cartStore'
-import { formatPrice, getImageUrl, handleImageError } from '../utils/formatters'
+import { formatPrice, getImageFallbackAttrs, getImageUrl, handleImageError } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './ProductsPage.css'
 
@@ -15,38 +16,51 @@ export default function ProductsPage() {
   const [sortOption, setSortOption] = useState('newest')
   const [activeTab, setActiveTab] = useState('products')
   const [loading, setLoading] = useState(true)
-  const [selectedVariants, setSelectedVariants] = useState({})
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const { items: cartItems, addItem } = useCartStore()
 
   useEffect(() => {
     fetchProducts()
   }, [])
 
+  useEffect(() => {
+    const category = searchParams.get('category')
+    if (category) {
+      setCategoryFilter(category)
+      setActiveTab('products')
+    }
+  }, [searchParams])
+
   const normalizeStoreItem = (item, itemType = activeTab === 'packs' ? 'pack' : 'product') => {
     const name = item?.name || item?.product_name || 'FoodNova Item'
     const variants = Array.isArray(item?.variants) ? item.variants.filter((variant) => variant?.is_active !== false) : []
-    const selectedVariant = variants.find((variant) => String(variant.id) === String(selectedVariants[item?.id])) || variants[0] || null
-    const price = Number(selectedVariant?.price ?? item?.price ?? item?.unit_price ?? 0)
-    const stock = Number(selectedVariant?.stock_qty ?? selectedVariant?.stock ?? item?.stock_qty ?? item?.stock ?? 999)
+    const hasVariants = item?.has_variants === true || variants.length > 1
+    const variantPrices = variants.map((variant) => Number(variant.price || 0)).filter((price) => price > 0)
+    const price = hasVariants && variantPrices.length ? Math.min(...variantPrices) : Number(item?.price ?? item?.unit_price ?? 0)
+    const stock = hasVariants
+      ? variants.reduce((sum, variant) => sum + Number(variant.stock_qty ?? variant.stock ?? 0), 0)
+      : Number(item?.stock_qty ?? item?.stock ?? 999)
 
     return {
       ...item,
       id: item?.id,
       name,
       product_name: name,
-      display_name: selectedVariant?.weight ? `${name} - ${selectedVariant.weight}` : name,
+      display_name: name,
       price,
       unit_price: price,
       base_price: item?.price || item?.base_price || price,
+      starting_price: price,
       stock,
       stock_qty: stock,
       variants,
-      has_variants: item?.has_variants === true || variants.length > 1,
-      selected_variant: selectedVariant,
-      variant_id: selectedVariant?.id,
-      variant_weight: selectedVariant?.weight || '',
-      sku: selectedVariant?.sku || item?.sku || '',
-      cart_key: `${itemType}-${item?.id}-${selectedVariant?.id || selectedVariant?.sku || ''}`,
+      has_variants: hasVariants,
+      selected_variant: null,
+      variant_id: null,
+      variant_weight: '',
+      sku: item?.sku || '',
+      cart_key: `${itemType}-${item?.id}`,
       is_out_of_stock: item?.is_out_of_stock === true || stock <= 0,
       low_stock: item?.low_stock === true || (stock > 0 && stock <= Number(item?.low_stock_threshold || 5)),
       low_stock_threshold: item?.low_stock_threshold || 5,
@@ -54,8 +68,8 @@ export default function ProductsPage() {
       type: item?.type || item?.item_type || itemType,
       quantity: item?.quantity || item?.qty || 1,
       qty: item?.quantity || item?.qty || 1,
-      image: item?.image || item?.image_url || '/placeholder.png',
-      image_url: item?.image_url || item?.image || '/placeholder.png',
+      image: item?.image || item?.image_url || item?.effective_image_url || item?.category_image_url || item?.default_image_url || '',
+      image_url: item?.image_url || item?.image || '',
       category: item?.category || item?.category_name || '',
       includedItems: Array.isArray(item?.included_items) ? item.included_items : Array.isArray(item?.items) ? item.items : [],
       familySize: item?.family_size || item?.serves || 'Family restock',
@@ -86,6 +100,10 @@ export default function ProductsPage() {
 
   const handleAddToCart = (item) => {
     const normalized = normalizeStoreItem(item, activeTab === 'packs' ? 'pack' : 'product')
+    if (normalized.has_variants && normalized.type !== 'pack') {
+      navigate(`/products/${normalized.id}`)
+      return
+    }
     if (normalized.is_out_of_stock) {
       toast.error('This item is out of stock')
       return
@@ -99,10 +117,6 @@ export default function ProductsPage() {
     }
     addItem(normalized)
     toast.success('Added to cart!')
-  }
-
-  const handleVariantChange = (productId, variantId) => {
-    setSelectedVariants((current) => ({ ...current, [productId]: variantId }))
   }
 
   const handleSearch = (e) => {
@@ -205,6 +219,7 @@ export default function ProductsPage() {
                   alt={item.name}
                   loading="lazy"
                   onError={handleImageError}
+                  {...getImageFallbackAttrs(item)}
                 />
                 <div className="product-badges">
                   <span><Sparkles size={13} /> Fresh</span>
@@ -215,7 +230,7 @@ export default function ProductsPage() {
                 {activeTab === 'products' && item.low_stock && !item.is_out_of_stock && <div className="low-stock-badge">Only {item.stock_qty} left</div>}
               </div>
               <div className="product-info">
-                <h3>{item.name}</h3>
+                <h3>{activeTab === 'products' ? <Link to={`/products/${item.id}`}>{item.name}</Link> : item.name}</h3>
                 <p className="description">{item.description}</p>
                 {item.category && <span className="category">{item.category}</span>}
                 {activeTab === 'packs' && (
@@ -234,24 +249,6 @@ export default function ProductsPage() {
                 )}
                 {activeTab === 'products' && (
                   <>
-                  {item.has_variants && item.variants.length > 0 && (
-                    <div className="variant-selector" aria-label={`${item.name} weight`}>
-                      <span>Weight</span>
-                      <div>
-                        {item.variants.map((variant) => (
-                          <button
-                            type="button"
-                            key={variant.id || variant.sku}
-                            className={String(item.selected_variant?.id) === String(variant.id) ? 'selected' : ''}
-                            onClick={() => handleVariantChange(item.id, variant.id)}
-                            disabled={variant.is_active === false}
-                          >
-                            {variant.weight || variant.label || 'Default'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                   <div className="stock-info">
                     {item.is_out_of_stock ? (
                       <span className="out-of-stock-text">Out of stock</span>
@@ -264,13 +261,13 @@ export default function ProductsPage() {
                   </>
                 )}
                 <div className="product-footer">
-                  <span className="price">{formatPrice(item.price)}</span>
+                  <span className="price">{item.has_variants ? `From ${formatPrice(item.price)}` : formatPrice(item.price)}</span>
                   <button
                     className="btn-add"
                     onClick={() => handleAddToCart(item)}
                     disabled={activeTab === 'products' && item.is_out_of_stock}
                   >
-                    {activeTab === 'products' && item.is_out_of_stock ? 'Out of Stock' : 'Add to Cart'}
+                    {activeTab === 'products' && item.is_out_of_stock ? 'Out of Stock' : item.has_variants ? 'Select Weight' : 'Add to Cart'}
                   </button>
                 </div>
               </div>

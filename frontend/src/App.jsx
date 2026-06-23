@@ -10,6 +10,7 @@ import FloatingCartButton from './components/FloatingCartButton'
 import PWAInstallPrompt from './components/PWAInstallPrompt'
 import HomePage from './pages/HomePage'
 import ProductsPage from './pages/ProductsPage'
+import ProductDetailPage from './pages/ProductDetailPage'
 import CartPage from './pages/CartPage'
 import CheckoutPage from './pages/CheckoutPage'
 import LoginPage from './pages/LoginPage'
@@ -205,6 +206,7 @@ function App() {
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route path="/auth" element={<AuthLandingPage />} />
               <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/:productId" element={<ProductDetailPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<RequireCustomerAuth><CheckoutPage /></RequireCustomerAuth>} />
               <Route path="/login" element={<LoginPage />} />

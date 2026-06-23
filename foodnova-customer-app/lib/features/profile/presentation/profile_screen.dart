@@ -86,6 +86,49 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 14),
                 const _SecuritySection(),
                 const SizedBox(height: 14),
+                if (profile.isAdmin) ...[
+                  _SettingsSection(
+                    title: 'ADMIN TOOLS',
+                    children: [
+                      _ProfileTile(
+                          icon: Icons.dashboard_rounded,
+                          title: 'Dashboard',
+                          subtitle: 'Orders, revenue, riders, and operations',
+                          onTap: () => context.push('/admin/dashboard')),
+                      _ProfileTile(
+                          icon: Icons.receipt_long_rounded,
+                          title: 'Orders',
+                          subtitle: 'Search, update status, assign riders',
+                          onTap: () => context.push('/admin/orders')),
+                      _ProfileTile(
+                          icon: Icons.delivery_dining_rounded,
+                          title: 'Dispatch',
+                          subtitle: 'Riders, status, calls, and locations',
+                          onTap: () => context.push('/admin/dispatch')),
+                      _ProfileTile(
+                          icon: Icons.inventory_2_rounded,
+                          title: 'Inventory',
+                          subtitle: 'Stock, pricing, and product activity',
+                          onTap: () => context.push('/admin/inventory')),
+                      _ProfileTile(
+                          icon: Icons.campaign_rounded,
+                          title: 'Announcements',
+                          subtitle: 'Hero banners, homepage notices, promos',
+                          onTap: () => context.push('/admin/announcements')),
+                      _ProfileTile(
+                          icon: Icons.groups_rounded,
+                          title: 'Customers',
+                          subtitle: 'Customer list, spend, and order counts',
+                          onTap: () => context.push('/admin/customers')),
+                      _ProfileTile(
+                          icon: Icons.analytics_rounded,
+                          title: 'Reports',
+                          subtitle: 'Revenue, products, customers, riders',
+                          onTap: () => context.push('/admin/reports')),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 _SettingsSection(
                   title: 'Account',
                   children: [

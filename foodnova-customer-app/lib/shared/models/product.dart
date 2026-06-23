@@ -93,6 +93,15 @@ class Product {
       variantWeight.isEmpty ? name : '$name - $variantWeight';
   String get cartKey =>
       '$type-$id-${selectedVariant?.id ?? selectedVariant?.sku ?? ''}';
+  double get startingPrice {
+    final prices = variants
+        .where((variant) => variant.isActive && variant.price > 0)
+        .map((variant) => variant.price)
+        .toList();
+    if (prices.isEmpty) return price;
+    prices.sort();
+    return prices.first;
+  }
 
   Product withVariant(ProductVariant? variant) {
     if (variant == null) return this;
@@ -133,20 +142,34 @@ class Product {
             .where((variant) => variant.isActive)
             .toList()
         : <ProductVariant>[];
-    final selectedVariant = variants.isNotEmpty ? variants.first : null;
+    final sortedPrices = variants
+        .where((variant) => variant.price > 0)
+        .map((variant) => variant.price)
+        .toList()
+      ..sort();
+    final startingPrice = sortedPrices.isNotEmpty ? sortedPrices.first : null;
+    final productImage =
+        '${json['image_url'] ?? json['imageUrl'] ?? json['image'] ?? ''}';
+    final categoryImage = '${json['category_image_url'] ?? ''}';
+    final effectiveImage = '${json['effective_image_url'] ?? ''}';
+    final defaultImage = '${json['default_image_url'] ?? '/placeholder.svg'}';
+    final stockTotal = variants.isNotEmpty
+        ? variants.fold<int>(0, (sum, variant) => sum + variant.stock)
+        : int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0;
     return Product(
       id: int.tryParse('${json['id']}') ?? 0,
       name: '${json['name'] ?? ''}',
-      price:
-          double.tryParse('${selectedVariant?.price ?? json['price'] ?? 0}') ??
-              0,
-      imageUrl: AppConfig.resolveMediaUrl(
-          '${selectedVariant?.imageUrl.isNotEmpty == true ? selectedVariant?.imageUrl : json['image_url'] ?? json['imageUrl'] ?? json['image'] ?? ''}'),
+      price: double.tryParse('${startingPrice ?? json['price'] ?? 0}') ?? 0,
+      imageUrl: AppConfig.resolveMediaUrl(productImage.isNotEmpty
+          ? productImage
+          : effectiveImage.isNotEmpty
+              ? effectiveImage
+              : categoryImage.isNotEmpty
+                  ? categoryImage
+                  : defaultImage),
       category: '${json['category'] ?? json['category_name'] ?? ''}',
       description: '${json['description'] ?? ''}',
-      stock: int.tryParse(
-              '${selectedVariant?.stock ?? json['stock_qty'] ?? json['stock'] ?? 0}') ??
-          0,
+      stock: stockTotal,
       type: type,
       contents: contents,
       packInfo:
@@ -162,7 +185,7 @@ class Product {
           '${json['delivery_note'] ?? json['deliveryNote'] ?? _defaultDeliveryNote(type)}'
               .trim(),
       variants: variants,
-      selectedVariant: selectedVariant,
+      selectedVariant: null,
     );
   }
 

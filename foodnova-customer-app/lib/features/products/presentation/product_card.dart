@@ -31,6 +31,7 @@ class ProductCard extends StatelessWidget {
     final outOfStock = product.stock <= 0;
     final lowStock = product.stock > 0 && product.stock <= 5;
     final sale = lowStock || product.type == 'pack';
+    final showStepper = quantity > 0 && !product.hasVariants;
     return InkWell(
       borderRadius: BorderRadius.circular(26),
       onTap: onTap,
@@ -151,7 +152,9 @@ class ProductCard extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          currency.format(product.price),
+                          product.hasVariants
+                              ? 'From ${currency.format(product.startingPrice)}'
+                              : currency.format(product.price),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -159,7 +162,7 @@ class ProductCard extends StatelessWidget {
                               fontWeight: FontWeight.w900),
                         ),
                       ),
-                      quantity > 0
+                      showStepper
                           ? _QuantityStepper(
                               quantity: quantity,
                               onIncrement: onIncrement ?? onAdd,

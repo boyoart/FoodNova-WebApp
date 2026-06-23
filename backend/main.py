@@ -124,7 +124,8 @@ NIN_PROVIDER_HEALTH = {
     "message": "Provider health has not been checked yet.",
     "checked_at": None,
 }
-UPLOAD_DIR = "uploads"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 AVATAR_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "avatars")
 PRODUCT_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "products")
 PACK_UPLOAD_DIR = os.path.join(UPLOAD_DIR, "packs")
@@ -504,6 +505,7 @@ FOODNOVA_CATEGORY_IMAGES = {
     "Breakfast": "/uploads/catalog/categories/breakfast.svg",
     "Local Ingredients": "/uploads/catalog/categories/local-ingredients.svg",
 }
+FOODNOVA_DEFAULT_PLACEHOLDER = "/uploads/catalog/foodnova-placeholder.svg"
 
 FOODNOVA_PRODUCT_CATALOG = [
     {"name": "Foreign Rice", "category": "Food Staples", "price": 2400, "stock": 80, "image": "/uploads/catalog/products/foreign-rice.svg", "description": "Premium foreign parboiled rice selected for clean grains, consistent texture, and everyday Nigerian meals. Ideal for jollof rice, fried rice, white rice, and family foodstuff restocking."},
@@ -2183,6 +2185,11 @@ def ensure_catalog_placeholder_images():
     for folder in ["products", "categories"]:
         os.makedirs(os.path.join(UPLOAD_DIR, "catalog", folder), exist_ok=True)
 
+    default_path = os.path.join(UPLOAD_DIR, "catalog", "foodnova-placeholder.svg")
+    if not os.path.exists(default_path):
+        with open(default_path, "w", encoding="utf-8") as file:
+            file.write(make_placeholder_svg("FoodNova", "Premium grocery placeholder", "#0B7A3B"))
+
     for idx, item in enumerate(FOODNOVA_PRODUCT_CATALOG):
         path = os.path.join(UPLOAD_DIR, "catalog", "products", f"{slugify(item['name'])}.svg")
         if not os.path.exists(path):
@@ -2534,6 +2541,8 @@ def product_to_dict(product: DBProduct) -> dict:
         "category_name": product.category_name or product.category or "",
         "category_image_url": FOODNOVA_CATEGORY_IMAGES.get(product.category or product.category_name or "", ""),
         "image_url": product.image_url or "",
+        "effective_image_url": product.image_url or FOODNOVA_CATEGORY_IMAGES.get(product.category or product.category_name or "", "") or FOODNOVA_DEFAULT_PLACEHOLDER,
+        "default_image_url": FOODNOVA_DEFAULT_PLACEHOLDER,
         "description": product.description or "",
         "contents": contents,
         "included_items": contents,

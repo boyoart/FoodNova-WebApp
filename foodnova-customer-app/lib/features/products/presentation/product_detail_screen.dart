@@ -666,7 +666,10 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
         locale: 'en_NG', symbol: 'NGN ', decimalDigits: 0);
     final activeVariants =
         widget.product.variants.where((variant) => variant.isActive).toList();
+    final requiresVariant = activeVariants.length > 1;
     final selectedProduct = widget.product.withVariant(_selectedVariant);
+    final canAdd = selectedProduct.stock > 0 &&
+        (!requiresVariant || _selectedVariant != null);
     final cartItems = ref.watch(cartControllerProvider);
     final quantity = cartItems
         .where((item) => item.product.cartKey == selectedProduct.cartKey)
@@ -687,7 +690,7 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
             if (activeVariants.length > 1) ...[
               Align(
                 alignment: Alignment.centerLeft,
-                child: Text('Weight',
+                child: Text('Select Weight',
                     style: Theme.of(context)
                         .textTheme
                         .labelLarge
@@ -717,7 +720,9 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        currency.format(selectedProduct.price),
+                        requiresVariant && _selectedVariant == null
+                            ? 'From ${currency.format(widget.product.startingPrice)}'
+                            : currency.format(selectedProduct.price),
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   color: FoodNovaColors.primary,
@@ -725,9 +730,11 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
                                 ),
                       ),
                       Text(
-                        selectedProduct.stock > 0
-                            ? 'Ready for checkout'
-                            : 'Out of stock',
+                        requiresVariant && _selectedVariant == null
+                            ? 'Select a weight to view stock'
+                            : selectedProduct.stock > 0
+                                ? '${selectedProduct.stock} in stock'
+                                : 'Out of stock',
                         style:
                             Theme.of(context).textTheme.labelMedium?.copyWith(
                                   color: scheme.onSurfaceVariant,
@@ -757,7 +764,9 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
                                 const TextStyle(fontWeight: FontWeight.w900)),
                         IconButton(
                           tooltip: 'Increase',
-                          onPressed: () => cartController.add(selectedProduct),
+                          onPressed: canAdd
+                              ? () => cartController.add(selectedProduct)
+                              : null,
                           icon: const Icon(Icons.add_rounded),
                         ),
                       ],
@@ -766,9 +775,13 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
                 SizedBox(
                   width: quantity > 0 ? 128 : 164,
                   child: PrimaryButton(
-                    label: quantity > 0 ? 'Add more' : 'Add to cart',
+                    label: requiresVariant && _selectedVariant == null
+                        ? 'Select weight'
+                        : quantity > 0
+                            ? 'Add more'
+                            : 'Add to cart',
                     icon: Icons.add_shopping_cart_rounded,
-                    onPressed: selectedProduct.stock > 0
+                    onPressed: canAdd
                         ? () => cartController.add(selectedProduct)
                         : null,
                   ),

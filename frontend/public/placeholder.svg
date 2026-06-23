@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="960" viewBox="0 0 960 960" role="img" aria-labelledby="title desc">
+  <title id="title">FoodNova grocery placeholder</title>
+  <desc id="desc">FoodNova branded default product placeholder image.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7fbf4"/>
+      <stop offset="1" stop-color="#e4f3df"/>
+    </linearGradient>
+    <linearGradient id="basket" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#0f7a3b"/>
+      <stop offset="1" stop-color="#0b5f2f"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="960" fill="url(#bg)"/>
+  <circle cx="760" cy="170" r="112" fill="#ffd23f" opacity=".88"/>
+  <circle cx="175" cy="785" r="150" fill="#0f7a3b" opacity=".08"/>
+  <g transform="translate(210 230)">
+    <rect x="66" y="214" width="408" height="280" rx="40" fill="url(#basket)"/>
+    <path d="M132 222c0-105 61-176 138-176s138 71 138 176" fill="none" stroke="#174524" stroke-width="34" stroke-linecap="round"/>
+    <rect x="105" y="268" width="330" height="52" rx="26" fill="#ffffff" opacity=".18"/>
+    <circle cx="164" cy="382" r="46" fill="#ffd23f"/>
+    <circle cx="270" cy="382" r="46" fill="#ffffff" opacity=".95"/>
+    <circle cx="376" cy="382" r="46" fill="#ffd23f"/>
+  </g>
+  <text x="480" y="800" fill="#143b22" font-family="Arial, Helvetica, sans-serif" font-size="62" font-weight="800" text-anchor="middle">FoodNova</text>
+  <text x="480" y="858" fill="#4c6555" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" text-anchor="middle">Premium Grocery</text>
+</svg>

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/admin/presentation/admin_portal_screens.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/otp_screen.dart';
@@ -70,6 +71,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           path: '/notifications',
           builder: (_, __) => const NotificationsScreen()),
       GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+      GoRoute(
+          path: '/admin/dashboard',
+          builder: (_, __) => const AdminGuard(child: AdminDashboardScreen())),
+      GoRoute(
+          path: '/admin/orders',
+          builder: (_, __) => const AdminGuard(child: AdminOrdersScreen())),
+      GoRoute(
+          path: '/admin/dispatch',
+          builder: (_, __) => const AdminGuard(child: AdminDispatchScreen())),
+      GoRoute(
+          path: '/admin/inventory',
+          builder: (_, __) => const AdminGuard(child: AdminInventoryScreen())),
+      GoRoute(
+          path: '/admin/announcements',
+          builder: (_, __) =>
+              const AdminGuard(child: AdminAnnouncementsScreen())),
+      GoRoute(
+          path: '/admin/customers',
+          builder: (_, __) => const AdminGuard(child: AdminCustomersScreen())),
+      GoRoute(
+          path: '/admin/reports',
+          builder: (_, __) => const AdminGuard(child: AdminReportsScreen())),
     ],
   );
 });
@@ -79,5 +102,6 @@ bool _requiresSession(String path) {
       path == '/orders' ||
       path == '/notifications' ||
       path == '/profile' ||
-      path.startsWith('/tracking/');
+      path.startsWith('/tracking/') ||
+      path.startsWith('/admin/');
 }

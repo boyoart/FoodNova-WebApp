@@ -1,5 +1,7 @@
 import { resolveMediaUrl } from '../services/api'
 
+export const DEFAULT_PLACEHOLDER_IMAGE = '/placeholder.svg'
+
 /**
  * Utility functions for FoodNova frontend
  */
@@ -24,16 +26,20 @@ export const formatPrice = (amount) => {
  * @returns {string} Image URL or placeholder
  */
 export const getImageUrl = (item) => {
-  if (!item) return '/placeholder.png'
+  if (!item) return DEFAULT_PLACEHOLDER_IMAGE
   
   // Try image_url first (backend image field)
   if (item.image_url) return resolveMediaUrl(item.image_url)
+
+  if (item.effective_image_url) return resolveMediaUrl(item.effective_image_url)
+
+  if (item.category_image_url) return resolveMediaUrl(item.category_image_url)
   
   // Fallback to image field
   if (item.image) return resolveMediaUrl(item.image)
   
   // Fallback to placeholder
-  return '/placeholder.png'
+  return resolveMediaUrl(item.default_image_url || DEFAULT_PLACEHOLDER_IMAGE)
 }
 
 /**
@@ -41,5 +47,22 @@ export const getImageUrl = (item) => {
  * @param {event} e - The error event from img element
  */
 export const handleImageError = (e) => {
-  e.target.src = '/placeholder.png'
+  const target = e.target
+  const current = target.getAttribute('src') || ''
+  const categoryFallback = target.dataset.categoryImage || ''
+  const defaultFallback = target.dataset.defaultImage || DEFAULT_PLACEHOLDER_IMAGE
+
+  if (categoryFallback && current !== categoryFallback) {
+    target.src = categoryFallback
+    return
+  }
+
+  if (current !== defaultFallback) {
+    target.src = defaultFallback
+  }
 }
+
+export const getImageFallbackAttrs = (item = {}) => ({
+  'data-category-image': item.category_image_url ? resolveMediaUrl(item.category_image_url) : '',
+  'data-default-image': resolveMediaUrl(item.default_image_url || DEFAULT_PLACEHOLDER_IMAGE),
+})

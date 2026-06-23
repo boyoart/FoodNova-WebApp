@@ -15,7 +15,9 @@ class AppConfig {
 
   static Uri get apiUri {
     final uri = Uri.parse(apiBaseUrl);
-    if (uri.scheme != 'https') {
+    final isLoopback =
+        uri.host == 'localhost' || uri.host == '127.0.0.1' || uri.host == '::1';
+    if (uri.scheme != 'https' && !(isLoopback && uri.scheme == 'http')) {
       throw StateError(
           'FoodNova API must use HTTPS in production: $apiBaseUrl');
     }
