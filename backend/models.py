@@ -18,6 +18,8 @@ class User(Base):
     role = Column(String(30), default="customer", index=True)
     admin_role = Column(String(80), default="")
     permissions_json = Column(Text, nullable=True)
+    fcm_token = Column(Text, default="")
+    fcm_tokens_json = Column(Text, default="[]")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

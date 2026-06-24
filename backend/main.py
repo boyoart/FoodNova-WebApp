@@ -1126,6 +1126,12 @@ def revoke_rider_sessions(db, worker: DBDeliveryWorker, admin: dict = None, reas
         session.revoked_at = datetime.utcnow()
         session.revoked_by_admin_id = (admin or {}).get("id")
         session.revoked_reason = reason or "Session revoked"
+    if (worker.fcm_token or worker.fcm_tokens_json or "[]") != "[]":
+        print(
+            "FCM_TOKEN_DELETED "
+            f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
+            f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+        )
     worker.fcm_token = ""
     worker.fcm_tokens_json = "[]"
     worker.force_logout_at = datetime.utcnow()
@@ -1471,7 +1477,26 @@ def user_push_tokens(user, email: str = "") -> list:
             if token and token not in tokens:
                 tokens.append(token)
     lookup_email = email or (getattr(user, "email", "") if user else "")
-    print(f"PUSH_TOKEN_LOOKUP email={str(lookup_email or '').strip().lower()} token_count={len(tokens)}")
+    print(
+        "FCM_TOKEN_LOOKUP "
+        f"table=users user_id={getattr(user, 'id', '') if user else ''} "
+        f"email={str(lookup_email or '').strip().lower()} "
+        f"token_length={len((getattr(user, 'fcm_token', '') or '').strip()) if user else 0} "
+        f"stored_token_count={len(json_load(getattr(user, 'fcm_tokens_json', None), []) or []) if user else 0}"
+    )
+    if user:
+        print(
+            "FCM_TOKEN_RECORD_FOUND "
+            f"table=users user_id={getattr(user, 'id', '')} "
+            f"email={str(getattr(user, 'email', '') or '').strip().lower()} "
+            f"token_length={len((getattr(user, 'fcm_token', '') or '').strip())} "
+            f"token_count={len(tokens)}"
+        )
+    print(
+        "PUSH_TOKEN_LOOKUP "
+        f"table=users user_id={getattr(user, 'id', '') if user else ''} "
+        f"email={str(lookup_email or '').strip().lower()} token_count={len(tokens)}"
+    )
     return tokens
 
 
@@ -4709,6 +4734,8 @@ def ensure_database_compatibility():
             "role": "VARCHAR(30) DEFAULT 'customer'",
             "admin_role": "VARCHAR(80) DEFAULT ''",
             "permissions_json": "TEXT",
+            "fcm_token": "TEXT DEFAULT ''",
+            "fcm_tokens_json": "TEXT DEFAULT '[]'",
             "is_active": "BOOLEAN DEFAULT TRUE",
             "updated_at": "TIMESTAMP",
         },
@@ -6745,6 +6772,12 @@ def delivery_auth_logout(request: Request):
                 session.is_active = False
                 session.revoked_at = datetime.utcnow()
                 session.revoked_reason = "Rider logout"
+        if (worker.fcm_token or worker.fcm_tokens_json or "[]") != "[]":
+            print(
+                "FCM_TOKEN_DELETED "
+                f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
+                f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+            )
         worker.fcm_token = ""
         worker.fcm_tokens_json = "[]"
         worker.updated_at = datetime.utcnow()
@@ -7776,11 +7809,25 @@ def register_customer_fcm_token(payload: FCMTokenPayload, request: Request):
         db_user.fcm_token = token
         db_user.fcm_tokens_json = json_dump(tokens[:5])
         db_user.updated_at = datetime.utcnow()
+        print(
+            "FCM_TOKEN_UPDATED "
+            f"table=users user_id={db_user.id} email={str(db_user.email or '').strip().lower()} "
+            f"token_length={len(token)} token_count={len(tokens[:5])}"
+        )
         db.commit()
+        db.refresh(db_user)
+        stored_tokens = json_load(getattr(db_user, "fcm_tokens_json", None), []) or []
         print(
             "FCM_TOKEN_STORED "
-            f"user_id={db_user.id} email={db_user.email} "
-            f"token_suffix={token[-12:]} token_count={len(tokens[:5])}"
+            f"table=users user_id={db_user.id} email={str(db_user.email or '').strip().lower()} "
+            f"token_length={len((getattr(db_user, 'fcm_token', '') or '').strip())} "
+            f"token_suffix={token[-12:]} token_count={len(stored_tokens)}"
+        )
+        print(
+            "FCM_TOKEN_RECORD_FOUND "
+            f"table=users user_id={db_user.id} email={str(db_user.email or '').strip().lower()} "
+            f"token_length={len((getattr(db_user, 'fcm_token', '') or '').strip())} "
+            f"token_count={len(stored_tokens)}"
         )
         return {
             "success": True,
@@ -8622,6 +8669,12 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             worker.deleted_at = datetime.utcnow()
             worker.deleted_by_admin_id = admin.get("id")
             worker.deleted_reason = review_note
+            if (worker.fcm_token or worker.fcm_tokens_json or "[]") != "[]":
+                print(
+                    "FCM_TOKEN_DELETED "
+                    f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
+                    f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+                )
             worker.fcm_token = ""
             worker.fcm_tokens_json = "[]"
             db_user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
@@ -8869,6 +8922,12 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
                 worker.deleted_at = datetime.utcnow()
                 worker.deleted_by_admin_id = admin.get("id")
                 worker.deleted_reason = (payload.review_note or "").strip()
+                if (worker.fcm_token or worker.fcm_tokens_json or "[]") != "[]":
+                    print(
+                        "FCM_TOKEN_DELETED "
+                        f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
+                        f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+                    )
                 worker.fcm_token = ""
                 worker.fcm_tokens_json = "[]"
                 db_user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
