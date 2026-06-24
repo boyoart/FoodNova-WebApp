@@ -650,6 +650,12 @@ class BroadcastPayload(BaseModel):
     is_active: Optional[bool] = True
 
 
+class TestPushPayload(BaseModel):
+    token: str
+    title: str = "Test"
+    body: str = "FoodNova push test"
+
+
 class BroadcastUpdatePayload(BaseModel):
     title: Optional[str] = None
     message: Optional[str] = None
@@ -1456,6 +1462,19 @@ def _get_next_notification_id(email: str) -> int:
         db.close()
 
 
+def user_push_tokens(user, email: str = "") -> list:
+    tokens = []
+    if user and getattr(user, "fcm_token", ""):
+        tokens.append(user.fcm_token)
+    if user:
+        for token in json_load(getattr(user, "fcm_tokens_json", None), []) or []:
+            if token and token not in tokens:
+                tokens.append(token)
+    lookup_email = email or (getattr(user, "email", "") if user else "")
+    print(f"PUSH_TOKEN_LOOKUP email={str(lookup_email or '').strip().lower()} token_count={len(tokens)}")
+    return tokens
+
+
 def _create_user_notification(email: str, title: str, message: str, notif_type: str = "service", 
                               category: str = "service", order: dict = None) -> dict:
     """Create a general user notification."""
@@ -1479,6 +1498,11 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         db.commit()
         db.refresh(notif)
         data = notification_to_dict(notif)
+        print(
+            "NOTIFICATION_CREATED "
+            f"id={notif.id} email={email} type={notif_type} category={category} "
+            f"order_id={data.get('order_id') or ''}"
+        )
         socket_emit("notification:new", data, room=f"email:{email}")
         if data.get("order_id"):
             socket_emit(
@@ -1489,13 +1513,7 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         user = db.query(DBUser).filter(func.lower(DBUser.email) == email).first()
         if user:
             is_dispatch_user = (getattr(user, "role", "") or "") in {"rider", "messenger"}
-            tokens = []
-            if getattr(user, "fcm_token", ""):
-                tokens.append(user.fcm_token)
-            for token in json_load(getattr(user, "fcm_tokens_json", None), []) or []:
-                if token and token not in tokens:
-                    tokens.append(token)
-            print(f"PUSH_TOKEN_LOOKUP email={email} token_count={len(tokens)}")
+            tokens = user_push_tokens(user)
             for token in tokens:
                 send_fcm_push_token(token, title, message, {
                     "type": notif_type,
@@ -1528,12 +1546,14 @@ def _create_admin_notifications(title: str, message: str, notif_type: str = "adm
     try:
         admins = db.query(DBUser).filter(DBUser.role == "admin", DBUser.is_active == True).all()
         count = 0
+        push_targets = []
         for admin in admins:
             if not admin.email:
                 continue
-            db.add(DBNotification(
-                user_email=admin.email.strip().lower(),
-                customer_email=admin.email.strip().lower(),
+            email = admin.email.strip().lower()
+            notification = DBNotification(
+                user_email=email,
+                customer_email=email,
                 order_id=order.get("id") if order else None,
                 order_code=order.get("order_code") if order else None,
                 title=title,
@@ -1541,9 +1561,33 @@ def _create_admin_notifications(title: str, message: str, notif_type: str = "adm
                 type=notif_type,
                 category=category,
                 is_read=False,
-            ))
+            )
+            db.add(notification)
+            db.flush()
+            print(
+                "NOTIFICATION_CREATED "
+                f"id={notification.id} email={email} type={notif_type} category={category} "
+                f"order_id={order.get('id') if order else ''}"
+            )
+            is_dispatch_user = (getattr(admin, "role", "") or "") in {"rider", "messenger"}
+            for token in user_push_tokens(admin):
+                push_targets.append((token, notification.id, email, is_dispatch_user))
             count += 1
         db.commit()
+        for token, notification_id, email, is_dispatch_user in push_targets:
+            send_fcm_push_token(token, title, message, {
+                "type": notif_type,
+                "category": category,
+                "notification_id": str(notification_id),
+                "order_id": str(order.get("id") if order else ""),
+                "title": title,
+                "body": message,
+                "sound": "delivery_alert" if is_dispatch_user else "default",
+                "android_channel_id": "foodnova_dispatch_delivery" if is_dispatch_user else "foodnova_customer_updates",
+                "android_click_action": "OPEN_WORKER_DASHBOARD" if is_dispatch_user else "OPEN_FOODNOVA",
+                "click_action": "/notifications",
+                "recipient_email": email,
+            })
         return count
     finally:
         db.close()
@@ -1584,15 +1628,11 @@ def _create_broadcast_notification(title: str, message: str, notif_type: str = "
             db.add(notification)
             db.flush()
             user = get_db_user_by_email(db, email)
-            tokens = []
-            if user and getattr(user, "fcm_token", ""):
-                tokens.append(user.fcm_token)
-            if user:
-                for token in json_load(getattr(user, "fcm_tokens_json", None), []) or []:
-                    if token and token not in tokens:
-                        tokens.append(token)
-            print(f"PUSH_TOKEN_LOOKUP email={email} token_count={len(tokens)}")
-            for token in tokens:
+            print(
+                "NOTIFICATION_CREATED "
+                f"id={notification.id} email={email} type={notif_type} category=broadcast"
+            )
+            for token in user_push_tokens(user, email=email):
                 push_targets.append((token, notification.id, email))
             recipient_count += 1
         db.commit()
@@ -1767,12 +1807,17 @@ def get_firebase_app():
     return None
 
 
-def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) -> bool:
+def send_fcm_push_token_result(token: str, title: str, body: str, data: dict = None) -> dict:
     token = (token or "").strip()
     if not token:
         print("PUSH_FAILED reason=empty_token")
-        return False
+        return {"success": False, "error": "empty_token"}
     data = {str(key): str(value) for key, value in (data or {}).items() if value is not None}
+    print(
+        "PUSH_SEND_ATTEMPT "
+        f"token_suffix={token[-12:]} title={title!r} "
+        f"channel={data.get('android_channel_id') or 'foodnova_customer_updates'}"
+    )
     app = get_firebase_app()
     if app and messaging:
         try:
@@ -1781,23 +1826,29 @@ def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) ->
                 notification=messaging.Notification(title=title, body=body),
                 data=data,
                 webpush=messaging.WebpushConfig(fcm_options=messaging.WebpushFCMOptions(link=data.get("click_action") or "/")),
-                android=messaging.AndroidConfig(notification=messaging.AndroidNotification(
-                    click_action=data.get("android_click_action") or "OPEN_FOODNOVA",
-                    channel_id=data.get("android_channel_id") or "foodnova_customer_updates",
-                    sound=data.get("sound") or "default",
-                )),
+                android=messaging.AndroidConfig(
+                    priority="high",
+                    notification=messaging.AndroidNotification(
+                        click_action=data.get("android_click_action") or "OPEN_FOODNOVA",
+                        channel_id=data.get("android_channel_id") or "foodnova_customer_updates",
+                        sound=data.get("sound") or "default",
+                        priority="max",
+                        default_vibrate_timings=True,
+                        default_sound=True,
+                    ),
+                ),
                 apns=messaging.APNSConfig(payload=messaging.APNSPayload(aps=messaging.Aps(sound=data.get("sound") or "default"))),
             ))
             print(f"FCM_RESPONSE: {response}")
             print(f"PUSH_SENT token_suffix={token[-12:]} response={response}")
-            return True
+            return {"success": True, "provider": "firebase_admin", "response": response}
         except Exception as error:
             print(f"PUSH_FAILED token_suffix={token[-12:]} error={repr(error)}")
-            return False
+            return {"success": False, "provider": "firebase_admin", "error": repr(error)}
     server_key = os.getenv("FCM_SERVER_KEY") or ""
     if not server_key:
         print("PUSH_FAILED reason=no_firebase_credentials_or_legacy_server_key")
-        return False
+        return {"success": False, "error": "no_firebase_credentials_or_legacy_server_key"}
     payload = json.dumps({
         "to": token,
         "notification": {"title": title, "body": body, "click_action": data.get("click_action") or "/", "sound": data.get("sound") or "default"},
@@ -1814,10 +1865,19 @@ def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) ->
             response_body = response.read().decode("utf-8", errors="replace")
             print(f"FCM_RESPONSE: status={response.status} body={response_body}")
             print(f"PUSH_SENT token_suffix={token[-12:]} response_status={response.status}")
-            return 200 <= response.status < 300
+            return {
+                "success": 200 <= response.status < 300,
+                "provider": "legacy_server_key",
+                "status": response.status,
+                "response": response_body,
+            }
     except (urllib.error.URLError, urllib.error.HTTPError) as error:
         print(f"PUSH_FAILED token_suffix={token[-12:]} legacy_error={repr(error)}")
-        return False
+        return {"success": False, "provider": "legacy_server_key", "error": repr(error)}
+
+
+def send_fcm_push_token(token: str, title: str, body: str, data: dict = None) -> bool:
+    return bool(send_fcm_push_token_result(token, title, body, data).get("success"))
 
 
 def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -> None:
@@ -11270,6 +11330,37 @@ def create_broadcast(payload: BroadcastPayload, request: Request):
         "broadcast": broadcast_data,
         "recipient_count": recipient_count,
         "data": broadcast_data,
+    }
+
+
+@app.post("/admin/test-push")
+def admin_test_push(payload: TestPushPayload, request: Request):
+    """Temporary production diagnostic endpoint for direct FCM delivery tests."""
+    admin = require_permission(request, "broadcasts:send")
+    token = (payload.token or "").strip()
+    title = (payload.title or "Test").strip() or "Test"
+    body = (payload.body or "FoodNova push test").strip() or "FoodNova push test"
+    if not token:
+        raise HTTPException(status_code=400, detail="FCM token is required")
+    print(
+        "ADMIN_TEST_PUSH "
+        f"admin={admin.get('email')} token_suffix={token[-12:]} title={title!r}"
+    )
+    result = send_fcm_push_token_result(token, title, body, {
+        "type": "test_push",
+        "category": "diagnostic",
+        "title": title,
+        "body": body,
+        "sound": "default",
+        "android_channel_id": "foodnova_customer_updates",
+        "android_click_action": "OPEN_FOODNOVA",
+        "click_action": "/notifications",
+    })
+    return {
+        "success": bool(result.get("success")),
+        "message": "Push test sent" if result.get("success") else "Push test failed",
+        "firebase_response": result,
+        "data": result,
     }
 
 
