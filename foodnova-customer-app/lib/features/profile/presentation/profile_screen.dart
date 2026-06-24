@@ -88,43 +88,58 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 14),
                 if (profile.isAdmin) ...[
                   _SettingsSection(
-                    title: 'ADMIN TOOLS',
+                    title: 'Mobile Admin Mode',
                     children: [
                       _ProfileTile(
                           icon: Icons.dashboard_rounded,
                           title: 'Dashboard',
-                          subtitle: 'Orders, revenue, riders, and operations',
+                          subtitle: 'Summary, alerts, and mobile overview',
                           onTap: () => context.push('/admin/dashboard')),
+                      _ProfileTile(
+                          icon: Icons.storefront_rounded,
+                          title: 'Products',
+                          subtitle: 'Catalog visibility and stock alerts',
+                          onTap: () => context.push('/admin/inventory')),
                       _ProfileTile(
                           icon: Icons.receipt_long_rounded,
                           title: 'Orders',
-                          subtitle: 'Search, update status, assign riders',
+                          subtitle: 'Monitor active customer orders',
                           onTap: () => context.push('/admin/orders')),
-                      _ProfileTile(
-                          icon: Icons.delivery_dining_rounded,
-                          title: 'Dispatch',
-                          subtitle: 'Riders, status, calls, and locations',
-                          onTap: () => context.push('/admin/dispatch')),
-                      _ProfileTile(
-                          icon: Icons.inventory_2_rounded,
-                          title: 'Inventory',
-                          subtitle: 'Stock, pricing, and product activity',
-                          onTap: () => context.push('/admin/inventory')),
-                      _ProfileTile(
-                          icon: Icons.campaign_rounded,
-                          title: 'Announcements',
-                          subtitle: 'Hero banners, homepage notices, promos',
-                          onTap: () => context.push('/admin/announcements')),
                       _ProfileTile(
                           icon: Icons.groups_rounded,
                           title: 'Customers',
-                          subtitle: 'Customer list, spend, and order counts',
+                          subtitle: 'Customer list and order activity',
                           onTap: () => context.push('/admin/customers')),
+                      _ProfileTile(
+                          icon: Icons.delivery_dining_rounded,
+                          title: 'Dispatch',
+                          subtitle: 'Delivery and rider monitoring',
+                          onTap: () => context.push('/admin/dispatch')),
+                      _ProfileTile(
+                          icon: Icons.campaign_rounded,
+                          title: 'Announcements',
+                          subtitle: 'Mobile campaign visibility',
+                          onTap: () => context.push('/admin/announcements')),
+                      _ProfileTile(
+                          icon: Icons.campaign_rounded,
+                          title: 'Homepage Banners',
+                          subtitle: 'Homepage banner monitoring',
+                          onTap: () => context.push('/admin/announcements')),
+                      _ProfileTile(
+                          icon: Icons.inventory_2_rounded,
+                          title: 'Stock Management',
+                          subtitle: 'Stock levels and low-stock alerts',
+                          onTap: () => context.push('/admin/inventory')),
                       _ProfileTile(
                           icon: Icons.analytics_rounded,
                           title: 'Reports',
-                          subtitle: 'Revenue, products, customers, riders',
+                          subtitle: 'Revenue and operations snapshots',
                           onTap: () => context.push('/admin/reports')),
+                      _ProfileTile(
+                          icon: Icons.settings_rounded,
+                          title: 'Settings',
+                          subtitle: 'Mobile settings and web portal handoff',
+                          onTap: () => context.push('/admin/settings')),
                     ],
                   ),
                   const SizedBox(height: 14),

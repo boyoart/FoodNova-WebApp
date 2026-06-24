@@ -33,6 +33,15 @@ class ProfileRepository {
           : <String, dynamic>{};
       final profile =
           Map<String, dynamic>.from(body['profile'] ?? nested['profile'] ?? {});
+      final cachedUser = await _cachedUserMap();
+      profile.addAll({
+        if (profile['role'] == null && cachedUser['role'] != null)
+          'role': cachedUser['role'],
+        if (profile['admin_role'] == null && cachedUser['admin_role'] != null)
+          'admin_role': cachedUser['admin_role'],
+        if (profile['permissions'] == null && cachedUser['permissions'] != null)
+          'permissions': cachedUser['permissions'],
+      });
       final addressItems = body['addresses'] ?? nested['addresses'] ?? [];
       final addresses = (addressItems as List? ?? [])
           .map((item) =>
@@ -45,11 +54,20 @@ class ProfileRepository {
       }
       return ProfileData(profile: profile, addresses: addresses);
     } catch (error) {
-      final cached =
-          await _ref.read(sessionControllerProvider.notifier).cachedUser();
-      if (cached == null || cached.isEmpty) rethrow;
-      final profile = Map<String, dynamic>.from(jsonDecode(cached) as Map);
+      final profile = await _cachedUserMap();
+      if (profile.isEmpty) rethrow;
       return ProfileData(profile: profile, addresses: const []);
+    }
+  }
+
+  Future<Map<String, dynamic>> _cachedUserMap() async {
+    final cached =
+        await _ref.read(sessionControllerProvider.notifier).cachedUser();
+    if (cached == null || cached.isEmpty) return <String, dynamic>{};
+    try {
+      return Map<String, dynamic>.from(jsonDecode(cached) as Map);
+    } catch (_) {
+      return <String, dynamic>{};
     }
   }
 

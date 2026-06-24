@@ -1,10 +1,12 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/state/session_controller.dart';
+import '../../../shared/auth/account_roles.dart';
 import '../../../services/app_security_service.dart';
 import '../../../services/notification_service.dart';
 import '../../notifications/data/notifications_repository.dart';
@@ -32,7 +34,7 @@ class AuthRepository {
     }
   }
 
-  Future<void> login(
+  Future<Map<String, dynamic>> login(
       {required String email,
       required String password,
       bool preflight = true}) async {
@@ -49,10 +51,15 @@ class AuthRepository {
       if (token.isEmpty) {
         throw ApiFailure('Login response did not include a token');
       }
+      final responseUser = _extractUser(response.data);
+      debugPrint(
+          '[FoodNova Auth] backend login response role=${responseUser['role']} admin_role=${responseUser['admin_role']}');
       await _ref.read(sessionControllerProvider.notifier).save(token);
       await _ref.read(appSecurityServiceProvider).rememberToken(token);
-      await _cacheCurrentUser();
+      final user = await _cacheCurrentUser(fallback: responseUser);
+      _logAuthenticatedUser(user);
       await _syncPushToken();
+      return user;
     } catch (error) {
       throw ApiFailure(apiMessage(error));
     }
@@ -69,16 +76,17 @@ class AuthRepository {
     }
   }
 
-  Future<bool> restoreSession() async {
+  Future<Map<String, dynamic>?> restoreSession() async {
     await _ref.read(sessionControllerProvider.notifier).restore();
     final hasToken = _ref.read(sessionControllerProvider).valueOrNull ?? false;
-    if (!hasToken) return false;
+    if (!hasToken) return null;
     try {
-      await currentUser();
-      return true;
+      final user = await _cacheCurrentUser();
+      _logAuthenticatedUser(user);
+      return user;
     } catch (_) {
       await _ref.read(sessionControllerProvider.notifier).clear();
-      return false;
+      return null;
     }
   }
 
@@ -100,7 +108,8 @@ class AuthRepository {
       if (token.isNotEmpty) {
         await _ref.read(sessionControllerProvider.notifier).save(token);
         await _ref.read(appSecurityServiceProvider).rememberToken(token);
-        await _cacheCurrentUser();
+        final user = await _cacheCurrentUser();
+        _logAuthenticatedUser(user);
         await _syncPushToken();
       }
     } catch (error) {
@@ -114,33 +123,61 @@ class AuthRepository {
   Future<bool> hasBiometricLogin() =>
       _ref.read(appSecurityServiceProvider).hasBiometricCredential;
 
-  Future<bool> loginWithBiometrics() async {
+  Future<Map<String, dynamic>?> loginWithBiometrics() async {
     final security = _ref.read(appSecurityServiceProvider);
     final ok = await security.authenticateBiometric(
       reason: 'Sign in to FoodNova with your fingerprint',
     );
-    if (!ok) return false;
+    if (!ok) return null;
     final token = await security.rememberedToken();
-    if (token == null || token.isEmpty) return false;
+    if (token == null || token.isEmpty) return null;
     await _ref.read(sessionControllerProvider.notifier).save(token);
     try {
-      await currentUser();
+      final user = await _cacheCurrentUser();
+      _logAuthenticatedUser(user);
       await _syncPushToken();
-      return true;
+      return user;
     } catch (_) {
       await _ref.read(sessionControllerProvider.notifier).clear();
-      return false;
+      return null;
     }
   }
 
-  Future<void> _cacheCurrentUser() async {
+  Future<Map<String, dynamic>> _cacheCurrentUser(
+      {Map<String, dynamic>? fallback}) async {
     try {
       final user = await currentUser();
       await _ref
           .read(sessionControllerProvider.notifier)
           .saveUser(jsonEncode(user));
+      return user;
     } catch (_) {
       // Token persistence should not fail just because the profile refresh did.
+      if (fallback != null && fallback.isNotEmpty) {
+        await _ref
+            .read(sessionControllerProvider.notifier)
+            .saveUser(jsonEncode(fallback));
+        return fallback;
+      }
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic> _extractUser(dynamic body) {
+    if (body is! Map) return <String, dynamic>{};
+    final user = body['user'] ?? body['data'] ?? body;
+    if (user is Map) return Map<String, dynamic>.from(user);
+    return <String, dynamic>{};
+  }
+
+  void _logAuthenticatedUser(Map<String, dynamic> user) {
+    final role = normalizeAccountRole(user['role'] ?? user['admin_role']);
+    debugPrint('USER_ID: ${user['id'] ?? user['user_id'] ?? ''}');
+    debugPrint('USER_EMAIL: ${user['email'] ?? ''}');
+    debugPrint('USER_ROLE: $role');
+    debugPrint('USER_PERMISSIONS: ${user['permissions'] ?? []}');
+    if (canUseAdminTools(role)) {
+      debugPrint('ADMIN_ROLE_DETECTED');
     }
   }
 

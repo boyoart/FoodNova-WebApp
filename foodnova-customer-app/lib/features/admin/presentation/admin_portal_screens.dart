@@ -71,9 +71,10 @@ class AdminDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    debugPrint('ADMIN_DASHBOARD_LOADING');
     final state = ref.watch(adminDashboardProvider);
     return _AdminShell(
-      title: 'Admin Dashboard',
+      title: 'Mobile Admin Mode',
       child: state.when(
         loading: _loading,
         error: _error,
@@ -122,8 +123,9 @@ class AdminDashboardScreen extends ConsumerWidget {
               padding: _pagePadding,
               children: [
                 _AdminHero(
-                  title: 'FoodNova Admin',
-                  subtitle: 'Live mobile operations overview',
+                  title: 'Mobile Admin Mode',
+                  subtitle:
+                      'Lightweight monitoring for orders, dispatch, stock, and announcements. Use the web admin portal for full management.',
                   icon: Icons.admin_panel_settings_rounded,
                 ),
                 const SizedBox(height: 14),
@@ -431,6 +433,34 @@ class AdminReportsScreen extends ConsumerWidget {
   }
 }
 
+class AdminSettingsScreen extends StatelessWidget {
+  const AdminSettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminShell(
+      title: 'Mobile Settings',
+      child: ListView(
+        padding: _pagePadding,
+        children: const [
+          _AdminHero(
+            title: 'Settings',
+            subtitle:
+                'Mobile admin mode is read-focused. Full configuration remains on the FoodNova web admin portal.',
+            icon: Icons.settings_rounded,
+          ),
+          SizedBox(height: 14),
+          _InfoNotice(
+            title: 'Web admin portal',
+            message:
+                'Use the web dashboard for user management, deep product edits, payment settings, exports, and website configuration.',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AdminShell extends StatelessWidget {
   const _AdminShell(
       {required this.title, required this.child, this.actions = const []});
@@ -455,12 +485,16 @@ class _AdminModuleGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final modules = [
+      ('Products', Icons.storefront_rounded, '/admin/inventory'),
       ('Orders', Icons.receipt_long_rounded, '/admin/orders'),
-      ('Dispatch', Icons.delivery_dining_rounded, '/admin/dispatch'),
-      ('Inventory', Icons.inventory_2_rounded, '/admin/inventory'),
-      ('Announcements', Icons.campaign_rounded, '/admin/announcements'),
       ('Customers', Icons.groups_rounded, '/admin/customers'),
+      ('Dispatch', Icons.delivery_dining_rounded, '/admin/dispatch'),
+      ('Announcements', Icons.campaign_rounded, '/admin/announcements'),
+      ('Homepage Banners', Icons.web_stories_rounded, '/admin/announcements'),
+      ('Stock Management', Icons.inventory_2_rounded, '/admin/inventory'),
+      ('Notifications', Icons.notifications_active_rounded, '/notifications'),
       ('Reports', Icons.analytics_rounded, '/admin/reports'),
+      ('Settings', Icons.settings_rounded, '/admin/settings'),
     ];
     return GridView.builder(
       itemCount: modules.length,
@@ -1291,6 +1325,47 @@ class _InlineEmpty extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 32),
         child: Center(child: Text(text)),
       );
+}
+
+class _InfoNotice extends StatelessWidget {
+  const _InfoNotice({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(context),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, color: FoodNovaColors.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Metric {

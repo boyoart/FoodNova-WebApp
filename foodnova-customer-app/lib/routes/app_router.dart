@@ -93,6 +93,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
           path: '/admin/reports',
           builder: (_, __) => const AdminGuard(child: AdminReportsScreen())),
+      GoRoute(
+          path: '/admin/settings',
+          builder: (_, __) => const AdminGuard(child: AdminSettingsScreen())),
     ],
   );
 });

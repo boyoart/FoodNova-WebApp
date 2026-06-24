@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/state/session_controller.dart';
+import '../../../shared/auth/account_roles.dart';
 import '../../../services/app_security_service.dart';
 import '../../../widgets/brand_auth_scaffold.dart';
 import '../../../widgets/input_field.dart';
@@ -58,11 +59,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await repository.checkHealth();
       if (!mounted) return;
       if (mounted) setState(() => _loadingLabel = 'Signing in...');
-      await repository.login(
+      final user = await repository.login(
           email: _email.text, password: _password.text, preflight: false);
       if (!mounted) return;
       await _maybePromptBiometricSetup();
-      if (mounted) context.go('/home');
+      if (mounted) context.go(_dashboardPathFor(user));
     } catch (error) {
       if (!mounted) return;
       _shakeController.forward(from: 0);
@@ -125,10 +126,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       _error = '';
     });
     try {
-      final ok = await ref.read(authRepositoryProvider).loginWithBiometrics();
+      final user = await ref.read(authRepositoryProvider).loginWithBiometrics();
       if (!mounted) return;
-      if (ok) {
-        context.go('/home');
+      if (user != null) {
+        context.go(_dashboardPathFor(user));
         return;
       }
       setState(() => _error = 'Fingerprint sign in was not completed.');
@@ -243,4 +244,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       ),
     );
   }
+}
+
+String _dashboardPathFor(Map<String, dynamic> user) {
+  final role = normalizeAccountRole(user['role'] ?? user['admin_role']);
+  if (canUseAdminTools(role)) {
+    debugPrint('ADMIN_DASHBOARD_LOADING');
+    return '/admin/dashboard';
+  }
+  debugPrint('CUSTOMER_DASHBOARD_LOADING');
+  return '/home';
 }

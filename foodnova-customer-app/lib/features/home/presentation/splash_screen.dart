@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../core/state/session_controller.dart';
+import '../../../shared/auth/account_roles.dart';
 import '../../../widgets/brand_logo.dart';
 import '../../auth/data/auth_repository.dart';
 
@@ -30,13 +31,13 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ..forward();
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic);
     _navigationTimer = Timer(const Duration(milliseconds: 1200), () async {
-      final authenticated =
+      final authenticatedUser =
           await ref.read(authRepositoryProvider).restoreSession();
       final guest =
           await ref.read(sessionControllerProvider.notifier).isGuest();
       if (!mounted) return;
-      if (authenticated) {
-        context.go('/home');
+      if (authenticatedUser != null) {
+        context.go(_dashboardPathFor(authenticatedUser));
         return;
       }
       if (await ref.read(authRepositoryProvider).hasBiometricLogin()) {
@@ -44,11 +45,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         final wantsBiometric = await _askForBiometricLogin(context);
         if (!mounted) return;
         if (wantsBiometric == true) {
-          final ok =
+          final user =
               await ref.read(authRepositoryProvider).loginWithBiometrics();
           if (!mounted) return;
-          if (ok) {
-            context.go('/home');
+          if (user != null) {
+            context.go(_dashboardPathFor(user));
             return;
           }
         }
@@ -117,6 +118,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       ),
     );
   }
+}
+
+String _dashboardPathFor(Map<String, dynamic> user) {
+  final role = normalizeAccountRole(user['role'] ?? user['admin_role']);
+  if (canUseAdminTools(role)) {
+    debugPrint('ADMIN_DASHBOARD_LOADING');
+    return '/admin/dashboard';
+  }
+  debugPrint('CUSTOMER_DASHBOARD_LOADING');
+  return '/home';
 }
 
 Future<bool?> _askForBiometricLogin(BuildContext context) {
