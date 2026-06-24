@@ -2,12 +2,13 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/state/session_controller.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'firebase_options.dart';
+import 'features/notifications/data/notifications_repository.dart';
 import 'features/products/data/product_repository.dart';
 import 'routes/app_router.dart';
 import 'services/notification_service.dart';
@@ -39,13 +40,32 @@ class _FoodNovaBootstrap extends ConsumerStatefulWidget {
 }
 
 class _FoodNovaBootstrapState extends ConsumerState<_FoodNovaBootstrap> {
+  StreamSubscription<void>? _notificationRefreshSubscription;
+  late final _NotificationLifecycleObserver _notificationLifecycleObserver;
+
   @override
   void initState() {
     super.initState();
+    _notificationLifecycleObserver = _NotificationLifecycleObserver(
+      onResume: _refreshNotificationsIfAuthenticated,
+    );
+    WidgetsBinding.instance.addObserver(_notificationLifecycleObserver);
+    _notificationRefreshSubscription =
+        NotificationService.refreshStream.listen((_) {
+      _refreshNotificationsIfAuthenticated();
+    });
     Future.microtask(() {
       ref.read(appSecurityServiceProvider).deleteLegacyPinStorage();
       _refreshStartupProductData();
+      _consumePendingNotificationRefresh();
     });
+  }
+
+  @override
+  void dispose() {
+    _notificationRefreshSubscription?.cancel();
+    WidgetsBinding.instance.removeObserver(_notificationLifecycleObserver);
+    super.dispose();
   }
 
   Future<void> _refreshStartupProductData() async {
@@ -62,8 +82,36 @@ class _FoodNovaBootstrapState extends ConsumerState<_FoodNovaBootstrap> {
     }
   }
 
+  Future<void> _consumePendingNotificationRefresh() async {
+    final pending = await NotificationService.consumePendingRefresh();
+    if (pending) {
+      _refreshNotificationsIfAuthenticated();
+    }
+  }
+
+  void _refreshNotificationsIfAuthenticated() {
+    final authenticated =
+        ref.read(sessionControllerProvider).valueOrNull == true;
+    if (!authenticated) return;
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(unreadNotificationsProvider);
+  }
+
   @override
   Widget build(BuildContext context) => const FoodNovaApp();
+}
+
+class _NotificationLifecycleObserver extends WidgetsBindingObserver {
+  _NotificationLifecycleObserver({required this.onResume});
+
+  final VoidCallback onResume;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      onResume();
+    }
+  }
 }
 
 Future<bool> _initializeFirebase() async {

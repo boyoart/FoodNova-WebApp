@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/state/session_controller.dart';
 import '../../../shared/auth/account_roles.dart';
+import '../../../services/notification_service.dart';
 import '../../../widgets/brand_logo.dart';
 import '../../auth/data/auth_repository.dart';
 
@@ -37,6 +38,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           await ref.read(sessionControllerProvider.notifier).isGuest();
       if (!mounted) return;
       if (authenticatedUser != null) {
+        if (NotificationService.consumePendingNotificationNavigation()) {
+          context.go('/notifications');
+          return;
+        }
         context.go(_dashboardPathFor(authenticatedUser));
         return;
       }
@@ -49,6 +54,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               await ref.read(authRepositoryProvider).loginWithBiometrics();
           if (!mounted) return;
           if (user != null) {
+            if (NotificationService.consumePendingNotificationNavigation()) {
+              context.go('/notifications');
+              return;
+            }
             context.go(_dashboardPathFor(user));
             return;
           }

@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../firebase_options.dart';
 
@@ -21,6 +22,7 @@ Future<void> foodNovaFirebaseMessagingBackgroundHandler(
     // Native Firebase config is injected per release environment.
     debugPrint('[FoodNova Push] background Firebase skipped: $error');
   }
+  await NotificationService.markRefreshPending();
 }
 
 class NotificationService {
@@ -28,6 +30,7 @@ class NotificationService {
   static bool _routerAttached = false;
   static bool _firebaseReady = false;
   static bool _localNotificationsReady = false;
+  static bool _pendingNotificationNavigation = false;
   static String? _pendingLocalPayload;
   static GoRouter? _router;
   static final StreamController<void> _refreshController =
@@ -56,9 +59,11 @@ class NotificationService {
         ),
         onDidReceiveNotificationResponse: (response) {
           final payload = response.payload;
+          _emitRefresh();
           final router = _router;
           if (router == null) {
             _pendingLocalPayload = payload;
+            _pendingNotificationNavigation = true;
             return;
           }
           _routeFromPayload(router, payload);
@@ -94,7 +99,7 @@ class NotificationService {
       FirebaseMessaging.onMessage.listen((message) {
         debugPrint('NOTIFICATION RECEIVED ${message.data}');
         _showForegroundNotification(message);
-        _refreshController.add(null);
+        _emitRefresh();
       });
     } catch (error) {
       // Firebase options are environment-specific and will be wired during Android release setup.
@@ -122,6 +127,36 @@ class NotificationService {
 
   static Stream<void> get refreshStream => _refreshController.stream;
 
+  static bool consumePendingNotificationNavigation() {
+    final pending = _pendingNotificationNavigation;
+    _pendingNotificationNavigation = false;
+    return pending;
+  }
+
+  static Future<void> markRefreshPending() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setBool('foodnova_notification_refresh_pending', true);
+    } catch (error) {
+      debugPrint('[FoodNova Push] refresh marker skipped: $error');
+    }
+  }
+
+  static Future<bool> consumePendingRefresh() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final pending =
+          preferences.getBool('foodnova_notification_refresh_pending') ?? false;
+      if (pending) {
+        await preferences.remove('foodnova_notification_refresh_pending');
+      }
+      return pending;
+    } catch (error) {
+      debugPrint('[FoodNova Push] refresh marker read skipped: $error');
+      return false;
+    }
+  }
+
   static void attachRouter(GoRouter router) {
     _router = router;
     if (_routerAttached) return;
@@ -132,10 +167,14 @@ class NotificationService {
     }
     if (!_firebaseReady || Firebase.apps.isEmpty) return;
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      _emitRefresh();
       _routeFromMessage(router, message);
     });
     FirebaseMessaging.instance.getInitialMessage().then((message) {
-      if (message != null) _routeFromMessage(router, message);
+      if (message != null) {
+        _emitRefresh();
+        _routeFromMessage(router, message);
+      }
     }).catchError((_) {});
   }
 
@@ -168,26 +207,32 @@ class NotificationService {
           presentBadge: true,
         ),
       ),
-      payload: message.data['order_id'] == null
-          ? '/notifications'
-          : '/tracking/${message.data['order_id']}',
+      payload: '/notifications',
     );
     debugPrint('NOTIFICATION DISPLAYED ${message.data}');
   }
 
   static void _routeFromMessage(GoRouter router, RemoteMessage message) {
-    final orderId = '${message.data['order_id'] ?? ''}'.trim();
-    if (orderId.isNotEmpty && orderId != 'null') {
-      Future<void>.microtask(() => router.go('/tracking/$orderId'));
-      return;
-    }
-    Future<void>.microtask(() => router.go('/notifications'));
+    _routeToNotifications(router);
   }
 
   static void _routeFromPayload(GoRouter router, String? payload) {
-    final target = (payload == null || payload.trim().isEmpty)
-        ? '/notifications'
-        : payload.trim();
-    Future<void>.microtask(() => router.go(target));
+    _routeToNotifications(router);
+  }
+
+  static void _routeToNotifications(GoRouter router) {
+    _pendingNotificationNavigation = true;
+    _emitRefresh();
+    Future<void>.microtask(() => router.go('/notifications'));
+  }
+
+  static void _emitRefresh() {
+    unawaited(markRefreshPending());
+    _refreshController.add(null);
+    Future<void>.delayed(const Duration(milliseconds: 1200), () {
+      if (!_refreshController.isClosed) {
+        _refreshController.add(null);
+      }
+    });
   }
 }
