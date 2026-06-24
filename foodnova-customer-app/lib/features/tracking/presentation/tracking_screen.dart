@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/models/order.dart';
+import '../../../services/notification_service.dart';
 import '../../../services/realtime_service.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/primary_button.dart';
@@ -43,15 +44,19 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   bool _verified = false;
   double _progress = 0;
   Timer? _refreshTimer;
+  StreamSubscription<void>? _pushRefreshSubscription;
   bool _subscribedRealtime = false;
 
   @override
   void initState() {
     super.initState();
     Future<void>.microtask(_subscribeRealtime);
-    _refreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      ref.invalidate(orderDetailProvider(widget.orderId));
-      ref.invalidate(riderLocationProvider(widget.orderId));
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) => _refreshLiveOrder(),
+    );
+    _pushRefreshSubscription = NotificationService.refreshStream.listen((_) {
+      _refreshLiveOrder();
     });
   }
 
@@ -60,14 +65,29 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
     _subscribedRealtime = true;
     await ref.read(realtimeServiceProvider).subscribeToOrder(widget.orderId,
         (_) {
-      ref.invalidate(orderDetailProvider(widget.orderId));
-      ref.invalidate(riderLocationProvider(widget.orderId));
+      _refreshLiveOrder();
     });
+  }
+
+  void _refreshLiveOrder() {
+    final order = ref.read(orderDetailProvider(widget.orderId)).valueOrNull;
+    if (order?.isDelivered == true) {
+      _refreshTimer?.cancel();
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      ref.invalidate(ordersProvider);
+      return;
+    }
+    ref.invalidate(orderDetailProvider(widget.orderId));
+    if (order == null || order.isDeliveryTrackingVisible) {
+      ref.invalidate(riderLocationProvider(widget.orderId));
+    }
+    ref.invalidate(ordersProvider);
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    _pushRefreshSubscription?.cancel();
     _deliveryCode.dispose();
     super.dispose();
   }
@@ -426,6 +446,12 @@ class _OrderHeaderCard extends StatelessWidget {
             children: [
               _Chip(label: status, icon: Icons.local_shipping_rounded),
               _Chip(label: amount, icon: Icons.payments_rounded),
+              _Chip(
+                label: order.estimatedDeliveryTime.trim().isEmpty
+                    ? 'ETA updating'
+                    : 'ETA ${order.estimatedDeliveryTime}',
+                icon: Icons.schedule_rounded,
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -449,16 +475,33 @@ class _TimelineCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = [
-      _Step('Assigned', Icons.assignment_turned_in_rounded),
-      _Step('Picked up', Icons.shopping_bag_rounded),
-      _Step('Out for delivery', Icons.local_shipping_rounded),
-      _Step('Arrived', Icons.place_rounded),
-      _Step('Delivered', Icons.check_circle_rounded),
+      _Step('Order Placed', Icons.receipt_long_rounded, order.createdAt),
+      _Step('Confirmed', Icons.verified_rounded, order.confirmedAt),
+      _Step('Preparing', Icons.restaurant_rounded, order.preparingAt),
+      _Step(
+        'Ready for Pickup',
+        Icons.shopping_bag_rounded,
+        order.readyForPickupAt,
+      ),
+      _Step(
+        'Out for Delivery',
+        Icons.delivery_dining_rounded,
+        order.outForDeliveryAt,
+      ),
+      _Step('Delivered', Icons.check_circle_rounded, order.deliveryConfirmedAt),
     ];
     final active = _activeIndex(order);
     return _Card(
       title: 'Order timeline',
       icon: Icons.timeline_rounded,
+      trailing: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 240),
+        child: _Chip(
+          key: ValueKey(active),
+          label: steps[active.clamp(0, steps.length - 1)].label,
+          compact: true,
+        ),
+      ),
       child: Column(
         children: [
           for (var i = 0; i < steps.length; i++)
@@ -496,37 +539,81 @@ class _TimelineRow extends StatelessWidget {
         Column(
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
-              width: current ? 42 : 36,
-              height: current ? 42 : 36,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOutCubic,
+              width: current ? 46 : 38,
+              height: current ? 46 : 38,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: active ? scheme.primary : scheme.surfaceContainerHighest,
+                boxShadow: current
+                    ? [
+                        BoxShadow(
+                          color: scheme.primary.withValues(alpha: .28),
+                          blurRadius: 18,
+                          spreadRadius: 2,
+                        ),
+                      ]
+                    : null,
               ),
-              child: Icon(
-                step.icon,
-                color: active ? scheme.onPrimary : scheme.onSurfaceVariant,
-                size: current ? 23 : 20,
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 180),
+                child: Icon(
+                  active ? step.icon : Icons.circle_outlined,
+                  key: ValueKey('$active-${step.label}'),
+                  color: active ? scheme.onPrimary : scheme.onSurfaceVariant,
+                  size: current ? 24 : 19,
+                ),
               ),
             ),
             if (showLine)
-              Container(
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
                 width: 3,
-                height: 36,
+                height: 42,
                 color: active ? scheme.primary : scheme.outlineVariant,
               ),
           ],
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              step.label,
-              style: TextStyle(
-                color: active ? scheme.onSurface : scheme.onSurfaceVariant,
-                fontWeight: active ? FontWeight.w900 : FontWeight.w700,
-              ),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            margin: EdgeInsets.only(top: current ? 1 : 4, bottom: 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: current ? 12 : 0,
+              vertical: current ? 10 : 5,
+            ),
+            decoration: BoxDecoration(
+              color: current
+                  ? scheme.primaryContainer.withValues(alpha: .42)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  step.label,
+                  style: TextStyle(
+                    color: active ? scheme.onSurface : scheme.onSurfaceVariant,
+                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  active
+                      ? _timelineTimeLabel(step.timestamp, current)
+                      : 'Pending',
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -707,19 +794,12 @@ class _DeliveryCard extends StatelessWidget {
                 : order.customerPhone,
           ),
           if (order.hasAssignedRider) ...[
-            const SizedBox(height: 8),
-            _InfoRow(
-              label: 'Rider Name',
-              value: order.riderName.trim().isEmpty
-                  ? 'Assigned rider'
-                  : order.riderName,
-            ),
-            const SizedBox(height: 8),
-            _InfoRow(
-              label: 'Rider Phone',
-              value: order.riderPhone.trim().isEmpty
-                  ? 'Not available'
-                  : order.riderPhone,
+            const SizedBox(height: 12),
+            _RiderProfileTile(
+              name: order.riderName,
+              phone: order.riderPhone,
+              photoUrl: order.riderPhotoUrl,
+              vehicleType: order.riderVehicleType,
             ),
             const SizedBox(height: 8),
             _InfoRow(
@@ -807,8 +887,7 @@ class _RiderTrackingCard extends StatelessWidget {
           }
           if (!data.trackingAvailable ||
               !data.hasRiderCoordinates ||
-              !data.hasCustomerCoordinates ||
-              data.routePolyline.length < 2) {
+              !data.hasCustomerCoordinates) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -832,6 +911,12 @@ class _RiderTrackingCard extends StatelessWidget {
           final routePoints = data.routePolyline
               .map((point) => LatLng(point['latitude']!, point['longitude']!))
               .toList();
+          if (routePoints.length < 2) {
+            routePoints
+              ..clear()
+              ..add(riderPoint!)
+              ..add(customerPoint!);
+          }
           debugPrint(
             'TRACK_RIDER_RENDER rider=${data.riderLatitude},${data.riderLongitude} '
             'customer=${data.customerLatitude},${data.customerLongitude} '
@@ -855,6 +940,19 @@ class _RiderTrackingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
+              _RiderProfileTile(
+                name: data.riderName.isEmpty ? order.riderName : data.riderName,
+                phone: data.riderPhone.isEmpty
+                    ? order.riderPhone
+                    : data.riderPhone,
+                photoUrl: data.riderPhotoUrl.isEmpty
+                    ? order.riderPhotoUrl
+                    : data.riderPhotoUrl,
+                vehicleType: data.vehicleType.isEmpty
+                    ? order.riderVehicleType
+                    : data.vehicleType,
+              ),
+              const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(18),
                 child: SizedBox(
@@ -875,7 +973,10 @@ class _RiderTrackingCard extends StatelessWidget {
               const SizedBox(height: 8),
               _InfoRow(
                 label: 'ETA',
-                value: _formatEta(data.etaMinutes),
+                value: data.etaMinutes == null &&
+                        order.estimatedDeliveryTime.trim().isNotEmpty
+                    ? order.estimatedDeliveryTime
+                    : _formatEta(data.etaMinutes),
               ),
               const SizedBox(height: 8),
               _InfoRow(
@@ -926,6 +1027,121 @@ class _RiderContactButtons extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RiderProfileTile extends StatelessWidget {
+  const _RiderProfileTile({
+    required this.name,
+    required this.phone,
+    required this.photoUrl,
+    required this.vehicleType,
+  });
+
+  final String name;
+  final String phone;
+  final String photoUrl;
+  final String vehicleType;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final displayName = name.trim().isEmpty ? 'FoodNova rider' : name.trim();
+    final displayPhone = phone.trim().isEmpty ? 'Phone pending' : phone.trim();
+    final displayVehicle = vehicleType.trim().isEmpty
+        ? 'Delivery partner'
+        : _labelize(vehicleType);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: .36),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.primary.withValues(alpha: .18)),
+      ),
+      child: Row(
+        children: [
+          _RiderAvatar(photoUrl: photoUrl, name: displayName),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  displayPhone,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Icon(Icons.two_wheeler_rounded,
+                        size: 16, color: scheme.primary),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        displayVehicle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RiderAvatar extends StatelessWidget {
+  const _RiderAvatar({required this.photoUrl, required this.name});
+
+  final String photoUrl;
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final initials = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part[0].toUpperCase())
+        .join();
+    return CircleAvatar(
+      radius: 30,
+      backgroundColor: scheme.primary,
+      foregroundColor: scheme.onPrimary,
+      backgroundImage:
+          photoUrl.trim().isEmpty ? null : NetworkImage(photoUrl.trim()),
+      child: photoUrl.trim().isEmpty
+          ? Text(
+              initials.isEmpty ? 'FN' : initials,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            )
+          : null,
     );
   }
 }
@@ -1333,7 +1549,12 @@ class _CopyRow extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  const _Chip({required this.label, this.icon, this.compact = false});
+  const _Chip({
+    super.key,
+    required this.label,
+    this.icon,
+    this.compact = false,
+  });
 
   final String label;
   final IconData? icon;
@@ -1390,26 +1611,52 @@ class _MutedText extends StatelessWidget {
 }
 
 class _Step {
-  const _Step(this.label, this.icon);
+  const _Step(this.label, this.icon, this.timestamp);
 
   final String label;
   final IconData icon;
+  final String timestamp;
 }
 
 int _activeIndex(OrderSummary order) {
-  final value = '${order.status} ${order.deliveryStatus}'.toLowerCase();
-  if (value.contains('delivered')) return 4;
-  if (value.contains('arrived')) return 3;
+  final value = '${order.status} ${order.deliveryStatus} '
+          '${order.paymentStatus}'
+      .toLowerCase();
+  if (order.isDelivered || value.contains('delivered')) return 5;
   if (value.contains('out_for_delivery') ||
       value.contains('out for delivery') ||
       value.contains('in_transit') ||
-      value.contains('in transit')) {
+      value.contains('in transit') ||
+      value.contains('picked_up') ||
+      value.contains('picked up') ||
+      value.contains('arrived')) {
+    return 4;
+  }
+  if (value.contains('ready_for_pickup') ||
+      value.contains('ready for pickup') ||
+      value.contains('ready')) {
+    return 3;
+  }
+  if (value.contains('preparing') ||
+      value.contains('processing') ||
+      value.contains('packing')) {
     return 2;
   }
-  if (value.contains('picked_up') || value.contains('picked up')) {
+  if (value.contains('confirmed') ||
+      value.contains('payment_confirmed') ||
+      value.contains('paid')) {
     return 1;
   }
   return 0;
+}
+
+String _timelineTimeLabel(String value, bool current) {
+  if (value.trim().isEmpty) {
+    return current ? 'In progress' : 'Completed';
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return value;
+  return DateFormat('MMM d, h:mm a').format(parsed.toLocal());
 }
 
 String _formatDistance(double? meters) {

@@ -18,6 +18,8 @@ class RiderLocation {
     required this.trackingAvailable,
     required this.riderName,
     required this.riderPhone,
+    required this.riderPhotoUrl,
+    required this.vehicleType,
     required this.riderLatitude,
     required this.riderLongitude,
     required this.customerLatitude,
@@ -33,6 +35,8 @@ class RiderLocation {
   final bool trackingAvailable;
   final String riderName;
   final String riderPhone;
+  final String riderPhotoUrl;
+  final String vehicleType;
   final double? riderLatitude;
   final double? riderLongitude;
   final double? customerLatitude;
@@ -80,6 +84,10 @@ class RiderLocation {
           json['trackingAvailable'] == true,
       riderName: '${rider['name'] ?? ''}',
       riderPhone: '${rider['phone'] ?? ''}',
+      riderPhotoUrl:
+          '${rider['photo'] ?? rider['photo_url'] ?? rider['profile_photo_url'] ?? ''}',
+      vehicleType:
+          '${rider['vehicle_type'] ?? rider['vehicleType'] ?? json['vehicle_type'] ?? ''}',
       riderLatitude:
           double.tryParse('${rider['latitude'] ?? location['latitude']}'),
       riderLongitude:

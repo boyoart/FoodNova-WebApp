@@ -31,6 +31,7 @@ class NotificationService {
   static bool _firebaseReady = false;
   static bool _localNotificationsReady = false;
   static bool _pendingNotificationNavigation = false;
+  static String? _pendingNavigationTarget;
   static String? _pendingLocalPayload;
   static GoRouter? _router;
   static final StreamController<void> _refreshController =
@@ -133,6 +134,13 @@ class NotificationService {
     return pending;
   }
 
+  static String? consumePendingNavigationTarget() {
+    final target = _pendingNavigationTarget;
+    _pendingNavigationTarget = null;
+    _pendingNotificationNavigation = false;
+    return target;
+  }
+
   static Future<void> markRefreshPending() async {
     try {
       final preferences = await SharedPreferences.getInstance();
@@ -162,7 +170,8 @@ class NotificationService {
     if (_routerAttached) return;
     _routerAttached = true;
     if (_pendingLocalPayload != null) {
-      _routeFromPayload(router, _pendingLocalPayload);
+      _rememberTarget(_pendingLocalPayload);
+      _emitRefresh();
       _pendingLocalPayload = null;
     }
     if (!_firebaseReady || Firebase.apps.isEmpty) return;
@@ -173,7 +182,7 @@ class NotificationService {
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       if (message != null) {
         _emitRefresh();
-        _routeFromMessage(router, message);
+        _rememberTarget(_targetFromData(message.data));
       }
     }).catchError((_) {});
   }
@@ -207,23 +216,45 @@ class NotificationService {
           presentBadge: true,
         ),
       ),
-      payload: '/notifications',
+      payload: _targetFromData(message.data),
     );
     debugPrint('NOTIFICATION DISPLAYED ${message.data}');
   }
 
   static void _routeFromMessage(GoRouter router, RemoteMessage message) {
-    _routeToNotifications(router);
+    _routeToTarget(router, _targetFromData(message.data));
   }
 
   static void _routeFromPayload(GoRouter router, String? payload) {
-    _routeToNotifications(router);
+    _routeToTarget(router, payload);
   }
 
-  static void _routeToNotifications(GoRouter router) {
-    _pendingNotificationNavigation = true;
+  static void _routeToTarget(GoRouter router, String? target) {
+    final route = _normalizeTarget(target);
+    _rememberTarget(route);
     _emitRefresh();
-    Future<void>.microtask(() => router.go('/notifications'));
+    Future<void>.microtask(() => router.go(route));
+  }
+
+  static void _rememberTarget(String? target) {
+    _pendingNotificationNavigation = true;
+    _pendingNavigationTarget = _normalizeTarget(target);
+  }
+
+  static String _targetFromData(Map<String, dynamic> data) {
+    final orderId = '${data['order_id'] ?? data['orderId'] ?? ''}'.trim();
+    if (orderId.isNotEmpty && orderId != 'null' && orderId != '0') {
+      return '/tracking/$orderId';
+    }
+    return _normalizeTarget('${data['click_action'] ?? ''}');
+  }
+
+  static String _normalizeTarget(String? target) {
+    final value = (target ?? '').trim();
+    if (value.startsWith('/tracking/') || value == '/notifications') {
+      return value;
+    }
+    return '/notifications';
   }
 
   static void _emitRefresh() {

@@ -38,8 +38,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           await ref.read(sessionControllerProvider.notifier).isGuest();
       if (!mounted) return;
       if (authenticatedUser != null) {
-        if (NotificationService.consumePendingNotificationNavigation()) {
-          context.go('/notifications');
+        final pendingTarget =
+            NotificationService.consumePendingNavigationTarget();
+        if (pendingTarget != null) {
+          context.go(pendingTarget);
           return;
         }
         context.go(_dashboardPathFor(authenticatedUser));
@@ -54,8 +56,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               await ref.read(authRepositoryProvider).loginWithBiometrics();
           if (!mounted) return;
           if (user != null) {
-            if (NotificationService.consumePendingNotificationNavigation()) {
-              context.go('/notifications');
+            final pendingTarget =
+                NotificationService.consumePendingNavigationTarget();
+            if (pendingTarget != null) {
+              context.go(pendingTarget);
               return;
             }
             context.go(_dashboardPathFor(user));

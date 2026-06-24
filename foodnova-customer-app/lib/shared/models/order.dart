@@ -46,6 +46,18 @@ class OrderSummary {
   String get riderVehicleType =>
       '${raw['rider_vehicle_type'] ?? raw['assigned_worker_type'] ?? ''}';
   String get riderVehicleNumber => '${raw['rider_vehicle_number'] ?? ''}';
+  String get riderPhotoUrl =>
+      '${raw['rider_photo'] ?? raw['rider_photo_url'] ?? raw['assigned_worker_photo'] ?? raw['assigned_worker_photo_url'] ?? raw['profile_photo_url'] ?? ''}';
+  String get estimatedDeliveryTime =>
+      '${raw['estimated_delivery_time'] ?? raw['estimatedDeliveryTime'] ?? raw['delivery_eta'] ?? raw['eta'] ?? ''}';
+  String get confirmedAt =>
+      '${raw['confirmed_at'] ?? raw['payment_confirmed_at'] ?? ''}';
+  String get preparingAt =>
+      '${raw['preparing_at'] ?? raw['processing_at'] ?? ''}';
+  String get readyForPickupAt =>
+      '${raw['ready_for_pickup_at'] ?? raw['ready_at'] ?? ''}';
+  String get outForDeliveryAt =>
+      '${raw['out_for_delivery_at'] ?? raw['picked_up_at'] ?? ''}';
   bool get hasAssignedRider {
     final riderId = raw['rider_id'] ?? raw['delivery_worker_id'];
     return riderId != null ||
