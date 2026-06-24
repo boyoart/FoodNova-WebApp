@@ -50,11 +50,11 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: String.fromEnvironment('FIREBASE_ANDROID_API_KEY'),
-    appId: String.fromEnvironment('FIREBASE_ANDROID_APP_ID'),
-    messagingSenderId: String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID'),
-    projectId: String.fromEnvironment('FIREBASE_PROJECT_ID'),
-    storageBucket: String.fromEnvironment('FIREBASE_STORAGE_BUCKET'),
+    apiKey: 'AIzaSyCNoco0i7L2ylLw6z4nGIn986-uGaO6-ZQ',
+    appId: '1:1051555081244:android:1d470be7b4e8c2ee4943d9',
+    messagingSenderId: '1051555081244',
+    projectId: 'foodnova-customer-app',
+    storageBucket: 'foodnova-customer-app.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -100,6 +100,6 @@ class FirebaseOptionsNotConfigured implements Exception {
 
   @override
   String toString() {
-    return 'Firebase options are not configured. Run FlutterFire CLI or pass FIREBASE_* dart-defines.';
+    return 'Firebase options are unavailable for this platform.';
   }
 }

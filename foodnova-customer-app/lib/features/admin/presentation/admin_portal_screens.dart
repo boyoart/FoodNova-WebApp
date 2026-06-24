@@ -12,6 +12,7 @@ import '../../../core/theme/shadows.dart';
 import '../../../shared/auth/account_roles.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/mobile_app_scaffold.dart';
+import '../../products/presentation/product_image.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/admin_repository.dart';
 
@@ -747,9 +748,15 @@ class _AnnouncementCard extends ConsumerWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             child: imageUrl.isEmpty
-                ? const Icon(Icons.campaign_rounded,
-                    color: FoodNovaColors.primary)
-                : CachedNetworkImage(imageUrl: imageUrl, fit: BoxFit.cover),
+                ? const ProductPlaceholderImage(icon: Icons.campaign_rounded)
+                : CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => const ProductPlaceholderImage(
+                        icon: Icons.campaign_rounded),
+                    errorWidget: (_, __, ___) => const ProductPlaceholderImage(
+                        icon: Icons.campaign_rounded),
+                  ),
           ),
           const SizedBox(width: 12),
           Expanded(

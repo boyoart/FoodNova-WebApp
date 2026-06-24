@@ -14,6 +14,7 @@ import '../../../widgets/skeleton_box.dart';
 import '../../cart/data/cart_controller.dart';
 import '../data/product_repository.dart';
 import 'product_card.dart';
+import 'product_image.dart';
 
 class DiscoverScreen extends ConsumerWidget {
   const DiscoverScreen({super.key});
@@ -445,10 +446,11 @@ class _MiniBanner extends StatelessWidget {
               Image.network(
                 banner.imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const _BannerFallbackArt(),
+                errorBuilder: (_, __, ___) =>
+                    const ProductPlaceholderImage(icon: Icons.campaign_rounded),
               )
             else
-              const _BannerFallbackArt(),
+              const ProductPlaceholderImage(icon: Icons.campaign_rounded),
             DecoratedBox(
               decoration: BoxDecoration(
                 color: scheme.shadow.withValues(alpha: .35),
@@ -900,6 +902,23 @@ class _SearchSheetState extends State<_SearchSheet> {
   }
 }
 
+IconData _categoryIcon(String label) {
+  final value = label.toLowerCase();
+  if (value.contains('rice') || value.contains('grain')) {
+    return Icons.rice_bowl_rounded;
+  }
+  if (value.contains('fruit') || value.contains('fresh')) {
+    return Icons.eco_rounded;
+  }
+  if (value.contains('drink') || value.contains('water')) {
+    return Icons.local_drink_rounded;
+  }
+  if (value.contains('pack') || value.contains('bundle')) {
+    return Icons.inventory_2_rounded;
+  }
+  return Icons.local_grocery_store_rounded;
+}
+
 class _CategoryChips extends StatefulWidget {
   const _CategoryChips({required this.categories});
 
@@ -954,8 +973,11 @@ class _CategoryChipsState extends State<_CategoryChips> {
                     Image.network(
                       category.imageUrl,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                    ),
+                      errorBuilder: (_, __, ___) => ProductPlaceholderImage(
+                          icon: _categoryIcon(category.name)),
+                    )
+                  else
+                    ProductPlaceholderImage(icon: _categoryIcon(category.name)),
                   DecoratedBox(
                     decoration: BoxDecoration(
                       color: selected

@@ -142,3 +142,19 @@ class _ProductPlaceholder extends StatelessWidget {
     );
   }
 }
+
+class ProductPlaceholderImage extends StatelessWidget {
+  const ProductPlaceholderImage({
+    this.icon = Icons.shopping_basket_rounded,
+    this.showBanner = false,
+    super.key,
+  });
+
+  final IconData icon;
+  final bool showBanner;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ProductPlaceholder(icon: icon, showBanner: showBanner);
+  }
+}

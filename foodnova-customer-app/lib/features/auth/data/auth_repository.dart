@@ -83,6 +83,7 @@ class AuthRepository {
     try {
       final user = await _cacheCurrentUser();
       _logAuthenticatedUser(user);
+      await _syncPushToken();
       return user;
     } catch (_) {
       await _ref.read(sessionControllerProvider.notifier).clear();
@@ -195,7 +196,8 @@ class AuthRepository {
               .catchError((_) {});
         });
       }
-    } catch (_) {
+    } catch (error) {
+      debugPrint('FCM_REGISTER_FAILED: $error');
       // Push registration must never block login or signup.
     }
   }

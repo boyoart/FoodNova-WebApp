@@ -75,7 +75,7 @@ class NotificationService {
           ?.requestNotificationsPermission();
       if (!_firebaseReady) {
         debugPrint(
-            '[FoodNova Push] Firebase not configured; push notifications disabled for this build.');
+            '[FoodNova Push] push notifications disabled for this build.');
         return;
       }
       FirebaseMessaging.onBackgroundMessage(
@@ -107,7 +107,7 @@ class NotificationService {
     try {
       final token = await FirebaseMessaging.instance.getToken();
       debugPrint(
-          'FCM TOKEN ${token == null || token.isEmpty ? 'missing' : token}');
+          'FCM_TOKEN: ${token == null || token.isEmpty ? 'missing' : token}');
       return token;
     } catch (error) {
       debugPrint('[FoodNova Push] token unavailable: $error');

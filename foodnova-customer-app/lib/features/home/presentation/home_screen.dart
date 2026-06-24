@@ -20,6 +20,7 @@ import '../../cart/data/cart_controller.dart';
 import '../../notifications/data/notifications_repository.dart';
 import '../../products/data/product_repository.dart';
 import '../../products/presentation/product_card.dart';
+import '../../products/presentation/product_image.dart';
 import '../../profile/data/profile_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -506,9 +507,9 @@ class _AnnouncementSlide extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
@@ -517,63 +518,75 @@ class _AnnouncementSlide extends StatelessWidget {
             FoodNovaColors.success,
           ],
         ),
-        image: banner.imageUrl.isEmpty
-            ? null
-            : DecorationImage(
-                image: NetworkImage(banner.imageUrl),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  scheme.shadow.withValues(alpha: .28),
-                  BlendMode.darken,
-                ),
-              ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          const StatusBadge(
-              label: 'FoodNova update', tone: FoodNovaColors.accent),
-          const Spacer(),
-          Text(
-            banner.title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: scheme.onPrimary,
-                  fontWeight: FontWeight.w900,
-                  height: 1.02,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            banner.message,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style:
-                TextStyle(color: scheme.onPrimary, fontWeight: FontWeight.w700),
-          ),
-          if (banner.buttonText.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () => _openBannerLink(context, banner.buttonLink),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-                decoration: BoxDecoration(
-                  color: FoodNovaColors.accent,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  banner.buttonText,
-                  style: TextStyle(
-                    color: const Color(0xFF231B00),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
+          if (banner.imageUrl.isNotEmpty)
+            Image.network(
+              banner.imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const ProductPlaceholderImage(icon: Icons.campaign_rounded),
+            )
+          else
+            const ProductPlaceholderImage(icon: Icons.campaign_rounded),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: scheme.shadow.withValues(alpha: .32),
             ),
-          ],
+          ),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const StatusBadge(
+                    label: 'FoodNova update', tone: FoodNovaColors.accent),
+                const Spacer(),
+                Text(
+                  banner.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        color: scheme.onPrimary,
+                        fontWeight: FontWeight.w900,
+                        height: 1.02,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  banner.message,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: scheme.onPrimary, fontWeight: FontWeight.w700),
+                ),
+                if (banner.buttonText.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => _openBannerLink(context, banner.buttonLink),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: FoodNovaColors.accent,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        banner.buttonText,
+                        style: TextStyle(
+                          color: const Color(0xFF231B00),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -734,12 +747,11 @@ class _CategoryCard extends StatelessWidget {
               Image.network(
                 category.imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                errorBuilder: (_, __, ___) =>
+                    ProductPlaceholderImage(icon: _categoryIcon(category.name)),
               )
             else
-              Center(
-                  child: Icon(_categoryIcon(category.name),
-                      color: FoodNovaColors.primary, size: 34)),
+              ProductPlaceholderImage(icon: _categoryIcon(category.name)),
             DecoratedBox(
               decoration: BoxDecoration(
                 color: scheme.shadow.withValues(alpha: .28),

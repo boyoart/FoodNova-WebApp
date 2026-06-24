@@ -72,6 +72,7 @@ Future<bool> _initializeFirebase() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    debugPrint('FIREBASE_INITIALIZED');
     return true;
   } catch (error) {
     debugPrint('[FoodNova Firebase] initialization skipped: $error');

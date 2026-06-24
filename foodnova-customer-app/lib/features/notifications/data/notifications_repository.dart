@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/network/api_client.dart';
@@ -36,9 +37,15 @@ class NotificationsRepository {
 
   Future<void> registerFcmToken(String token) async {
     if (token.trim().isEmpty) return;
-    await _dio.post('/notifications/register-fcm-token', data: {
+    debugPrint('FCM_REGISTER_REQUEST: /notifications/register-fcm-token');
+    debugPrint('FCM_REGISTER_TOKEN: ${token.trim()}');
+    final response =
+        await _dio.post('/notifications/register-fcm-token', data: {
       'token': token.trim(),
+      'platform': 'android',
     });
+    debugPrint(
+        'FCM_REGISTER_RESPONSE: ${response.statusCode} ${response.data}');
   }
 
   Future<void> markRead(int id) async {

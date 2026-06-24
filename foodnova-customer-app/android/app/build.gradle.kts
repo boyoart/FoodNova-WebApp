@@ -1,13 +1,27 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+val releaseKeystoreFile = keystoreProperties["storeFile"]?.toString()?.let { rootProject.file(it) }
+val hasReleaseSigning =
+    releaseKeystoreFile?.exists() == true &&
+        keystoreProperties["storePassword"] != null &&
+        keystoreProperties["keyAlias"] != null &&
+        keystoreProperties["keyPassword"] != null
+
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 } else {
-    logger.warn("FoodNova Firebase: android/app/google-services.json is missing; Google Services plugin is not applied for this local build.")
+    logger.warn("FoodNova Firebase: android/app/google-services.json is missing; Google Services plugin skipped for this local build.")
 }
 
 android {
@@ -31,9 +45,25 @@ android {
             project.findProperty("GOOGLE_MAPS_API_KEY")?.toString() ?: ""
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = releaseKeystoreFile
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                logger.warn("FoodNova release signing is not configured; falling back to debug signing for local build only.")
+                signingConfigs.getByName("debug")
+            }
         }
     }
 }
