@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/theme/colors.dart';
 import '../../../shared/models/product.dart';
 import '../../../core/theme/shadows.dart';
+import 'product_image.dart';
 
 class ProductCard extends StatelessWidget {
   const ProductCard(
@@ -53,25 +53,7 @@ class ProductCard extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: product.imageUrl.isEmpty
-                        ? Container(
-                            color: scheme.surfaceContainerHighest,
-                            child: Center(
-                                child: Icon(Icons.shopping_basket_rounded,
-                                    color: scheme.primary, size: 34)),
-                          )
-                        : CachedNetworkImage(
-                            imageUrl: product.imageUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (_, __) => Container(
-                                color: scheme.surfaceContainerHighest),
-                            errorWidget: (_, __, ___) => Container(
-                              color: scheme.surfaceContainerHighest,
-                              child: Center(
-                                  child: Icon(Icons.image_not_supported_rounded,
-                                      color: scheme.onSurfaceVariant)),
-                            ),
-                          ),
+                    child: ProductImage(product: product),
                   ),
                   Positioned.fill(
                     child: DecoratedBox(

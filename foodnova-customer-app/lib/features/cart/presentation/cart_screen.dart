@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +9,7 @@ import '../../../core/theme/shadows.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/mobile_app_scaffold.dart';
 import '../../../widgets/primary_button.dart';
+import '../../products/presentation/product_image.dart';
 import '../data/cart_controller.dart';
 
 class CartScreen extends ConsumerStatefulWidget {
@@ -84,16 +84,10 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                               decoration: BoxDecoration(
                                   color: scheme.surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(20)),
-                              child: item.product.imageUrl.isEmpty
-                                  ? const Icon(Icons.shopping_basket_rounded,
-                                      color: FoodNovaColors.primary)
-                                  : CachedNetworkImage(
-                                      imageUrl: item.product.imageUrl,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (_, __, ___) => const Icon(
-                                          Icons.shopping_basket_rounded,
-                                          color: FoodNovaColors.primary),
-                                    ),
+                              child: ProductImage(
+                                product: item.product,
+                                showPlaceholderBanner: false,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(

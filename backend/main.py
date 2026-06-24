@@ -6832,8 +6832,6 @@ def login(payload: LoginPayload, request: Request):
             raise HTTPException(status_code=401, detail="Invalid login credentials")
         if not getattr(user, "is_active", True):
             raise HTTPException(status_code=403, detail="This account has been removed or deactivated.")
-        if (user.role or "customer") == "admin":
-            raise HTTPException(status_code=403, detail="Please use the admin login page")
         if (user.role or "") in ["messenger", "rider"]:
             worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
             if worker and getattr(worker, "deleted_at", None):

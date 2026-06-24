@@ -208,6 +208,53 @@
   color: var(--fn-text);
 }
 
+.admin-tools-panel {
+  border-color: color-mix(in srgb, var(--fn-primary) 24%, var(--fn-border));
+}
+
+.admin-tools-grid {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.admin-tool-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.85rem;
+  color: var(--fn-text);
+  background: var(--fn-surface-2);
+  text-decoration: none;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+
+.admin-tool-link:hover {
+  transform: translateY(-1px);
+  border-color: var(--primary);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--fn-primary) 15%, transparent);
+}
+
+.admin-tool-link svg {
+  color: var(--primary);
+}
+
+.admin-tool-link span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.admin-tool-link strong {
+  color: var(--fn-heading);
+}
+
+.admin-tool-link small {
+  color: var(--fn-muted);
+  line-height: 1.35;
+}
+
 .avatar-upload-box {
   display: grid;
   gap: 0.85rem;

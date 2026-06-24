@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { clearActiveSessionOnly, updateLastActivity } from '../utils/sessionManager'
+import { canUseAdminTools } from '../utils/accountRoles'
 
 const safeJsonParse = (key, fallback) => {
   try {
@@ -24,8 +25,22 @@ export const useAuthStore = create((set) => ({
     localStorage.setItem('foodnova_token', token)
     localStorage.setItem('user', JSON.stringify(user))
     localStorage.setItem('foodnova_user', JSON.stringify(user))
+    if (canUseAdminTools(user)) {
+      localStorage.setItem('admin_token', token)
+      localStorage.setItem('admin', JSON.stringify(user))
+      localStorage.setItem('foodnova_admin', JSON.stringify(user))
+    } else {
+      localStorage.removeItem('admin_token')
+      localStorage.removeItem('admin')
+      localStorage.removeItem('foodnova_admin')
+    }
     updateLastActivity()
-    set({ user, isAuthenticated: true })
+    set({
+      user,
+      admin: canUseAdminTools(user) ? user : null,
+      isAuthenticated: true,
+      isAdmin: canUseAdminTools(user),
+    })
   },
 
   adminLogin: (admin, token) => {

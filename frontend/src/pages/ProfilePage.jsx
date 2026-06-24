@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { Home, KeyRound, MapPin, Phone, Plus, Save, Star, Trash2, UserRound } from 'lucide-react'
+import { BellRing, ClipboardList, Home, KeyRound, LayoutDashboard, MapPin, Megaphone, Package, Phone, Plus, Save, ShieldCheck, Star, Trash2, Truck, UserRound, Users } from 'lucide-react'
 import { authAPI, profileAPI, resolveMediaUrl } from '../services/api'
+import { useAuthStore } from '../store/authStore'
+import { canUseAdminTools } from '../utils/accountRoles'
 import './ProfilePage.css'
 
 const emptyAddress = {
@@ -29,9 +31,20 @@ const getInitials = (name = 'User') =>
     .slice(0, 2)
     .toUpperCase() || 'U'
 
+const adminToolLinks = [
+  { to: '/admin/dashboard', label: 'Dashboard', description: 'Operations overview', icon: LayoutDashboard },
+  { to: '/admin/orders', label: 'Orders', description: 'Search and update orders', icon: ClipboardList },
+  { to: '/admin/dispatch', label: 'Dispatch', description: 'Riders and delivery status', icon: Truck },
+  { to: '/admin/stock', label: 'Inventory', description: 'Products, packs, and stock', icon: Package },
+  { to: '/admin/announcements', label: 'Announcements', description: 'Banners and promos', icon: Megaphone },
+  { to: '/admin/customers', label: 'Customers', description: 'Customer list and activity', icon: Users },
+  { to: '/admin/broadcasts', label: 'Broadcasts', description: 'Customer notifications', icon: BellRing },
+]
+
 export default function ProfilePage() {
   const location = useLocation()
-  const [profile, setProfile] = useState({ full_name: '', email: '', phone: '', avatar_url: '' })
+  const user = useAuthStore((state) => state.user)
+  const [profile, setProfile] = useState({ full_name: '', email: '', phone: '', avatar_url: '', role: '', admin_role: '' })
   const [passwordForm, setPasswordForm] = useState({
     current_password: '',
     new_password: '',
@@ -76,6 +89,8 @@ export default function ProfilePage() {
         email: nextProfile.email || '',
         phone: nextProfile.phone || '',
         avatar_url: nextProfile.avatar_url || '',
+        role: nextProfile.role || user?.role || '',
+        admin_role: nextProfile.admin_role || user?.admin_role || '',
       })
       setAddresses(Array.isArray(nextAddresses) ? nextAddresses : [])
     } catch (error) {
@@ -270,6 +285,8 @@ export default function ProfilePage() {
     return <div className="profile-page"><div className="profile-loading">Loading profile...</div></div>
   }
 
+  const showAdminTools = canUseAdminTools({ ...user, ...profile })
+
   return (
     <div className="profile-page">
       <div className="profile-hero">
@@ -355,6 +372,30 @@ export default function ProfilePage() {
               </button>
             </form>
           </section>
+
+          {showAdminTools && (
+            <section className="profile-panel admin-tools-panel">
+              <div className="section-heading">
+                <ShieldCheck size={20} />
+                <div>
+                  <h2>Admin Tools</h2>
+                  <p>Quick access for FoodNova operations.</p>
+                </div>
+              </div>
+
+              <div className="admin-tools-grid">
+                {adminToolLinks.map(({ to, label, description, icon: Icon }) => (
+                  <Link className="admin-tool-link" to={to} key={to}>
+                    <Icon size={18} />
+                    <span>
+                      <strong>{label}</strong>
+                      <small>{description}</small>
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="profile-panel security-panel">
             <div className="section-heading">

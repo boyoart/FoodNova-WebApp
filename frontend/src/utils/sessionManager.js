@@ -45,6 +45,22 @@ export function isSessionExpired() {
 }
 
 export function clearActiveSessionOnly(role = getCurrentSessionRole()) {
+  const hasCustomerSession = Boolean(
+    localStorage.getItem('token') ||
+    localStorage.getItem('foodnova_token') ||
+    localStorage.getItem('user') ||
+    localStorage.getItem('foodnova_user')
+  );
+  const hasAdminSession = Boolean(
+    localStorage.getItem('admin_token') ||
+    localStorage.getItem('admin') ||
+    localStorage.getItem('foodnova_admin')
+  );
+
+  if (role === 'admin' && hasCustomerSession && hasAdminSession) {
+    role = null;
+  }
+
   if (role === 'customer') {
     localStorage.removeItem('token');
     localStorage.removeItem('foodnova_token');

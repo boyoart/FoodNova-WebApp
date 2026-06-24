@@ -9,14 +9,14 @@ import '../../../config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
+import '../../../shared/auth/account_roles.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/mobile_app_scaffold.dart';
 import '../../profile/data/profile_repository.dart';
 import '../data/admin_repository.dart';
 
 bool isAdminProfile(ProfileData profile) {
-  final role = profile.role.toLowerCase().trim();
-  return role == 'admin' || role == 'super_admin';
+  return canUseAdminTools(profile.role);
 }
 
 class AdminGuard extends ConsumerWidget {
@@ -844,7 +844,7 @@ Future<void> _showOrderDetails(
           _SectionTitle('Items'),
           for (final item in items)
             _InfoLine(
-              '${item['product_name'] ?? item['name'] ?? 'Item'}',
+              _orderItemName(item),
               '${item['quantity'] ?? item['qty'] ?? 1} × ${_money(_num(item['price'] ?? item['unit_price']))}',
             ),
           const SizedBox(height: 12),
@@ -1346,6 +1346,12 @@ num _num(dynamic value) => num.tryParse('$value') ?? 0;
 String _money(num value) =>
     NumberFormat.currency(locale: 'en_NG', symbol: 'NGN ', decimalDigits: 0)
         .format(value);
+String _orderItemName(Map<String, dynamic> item) {
+  final name = '${item['product_name'] ?? item['name'] ?? 'Item'}';
+  final weight = '${item['variant_weight'] ?? item['weight'] ?? ''}'.trim();
+  return weight.isEmpty ? name : '$name - $weight';
+}
+
 String _label(String value) => value
     .replaceAll('_', ' ')
     .split(' ')

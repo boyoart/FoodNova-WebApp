@@ -89,6 +89,7 @@ class Product {
       variants.where((variant) => variant.isActive).length > 1;
   String get variantWeight => selectedVariant?.weight ?? '';
   String get sku => selectedVariant?.sku ?? '';
+  String get image => imageUrl;
   String get displayName =>
       variantWeight.isEmpty ? name : '$name - $variantWeight';
   String get cartKey =>
@@ -150,9 +151,7 @@ class Product {
     final startingPrice = sortedPrices.isNotEmpty ? sortedPrices.first : null;
     final productImage =
         '${json['image_url'] ?? json['imageUrl'] ?? json['image'] ?? ''}';
-    final categoryImage = '${json['category_image_url'] ?? ''}';
     final effectiveImage = '${json['effective_image_url'] ?? ''}';
-    final defaultImage = '${json['default_image_url'] ?? '/placeholder.svg'}';
     final stockTotal = variants.isNotEmpty
         ? variants.fold<int>(0, (sum, variant) => sum + variant.stock)
         : int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0;
@@ -160,13 +159,8 @@ class Product {
       id: int.tryParse('${json['id']}') ?? 0,
       name: '${json['name'] ?? ''}',
       price: double.tryParse('${startingPrice ?? json['price'] ?? 0}') ?? 0,
-      imageUrl: AppConfig.resolveMediaUrl(productImage.isNotEmpty
-          ? productImage
-          : effectiveImage.isNotEmpty
-              ? effectiveImage
-              : categoryImage.isNotEmpty
-                  ? categoryImage
-                  : defaultImage),
+      imageUrl: AppConfig.resolveMediaUrl(
+          productImage.isNotEmpty ? productImage : effectiveImage),
       category: '${json['category'] ?? json['category_name'] ?? ''}',
       description: '${json['description'] ?? ''}',
       stock: stockTotal,

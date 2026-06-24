@@ -49,6 +49,14 @@ class ProductRepository {
   List<Product>? _packCache;
   List<FoodNovaAnnouncement>? _announcementCache;
 
+  void clearCaches() {
+    _productCache = null;
+    _categoryCache = null;
+    _packCache = null;
+    _announcementCache = null;
+    debugPrint('[FoodNova Products] cleared product repository caches');
+  }
+
   Future<List<Product>> listProducts(
       {String? search, bool forceRefresh = false}) async {
     final normalizedSearch = (search ?? '').trim().toLowerCase();
@@ -60,9 +68,11 @@ class ProductRepository {
             normalizedSearch.isEmpty ? null : {'search': normalizedSearch});
     final body = response.data;
     final items = body is Map ? (body['products'] ?? body['data']) : body;
-    final products = (items as List? ?? [])
-        .map((item) => Product.fromJson(Map<String, dynamic>.from(item)))
-        .toList();
+    final products = (items as List? ?? []).map((item) {
+      final json = Map<String, dynamic>.from(item);
+      _logProductPayload(json);
+      return Product.fromJson(json);
+    }).toList();
     if (normalizedSearch.isEmpty) _productCache = products;
     return products;
   }
@@ -71,7 +81,9 @@ class ProductRepository {
     final response = await _dio.get('/products/$id');
     final body = response.data;
     final item = body is Map ? (body['product'] ?? body['data'] ?? body) : body;
-    return Product.fromJson(Map<String, dynamic>.from(item));
+    final json = Map<String, dynamic>.from(item);
+    _logProductPayload(json);
+    return Product.fromJson(json);
   }
 
   Future<List<Product>> listPacks({bool forceRefresh = false}) async {
@@ -81,6 +93,7 @@ class ProductRepository {
     final items = body is Map ? (body['packs'] ?? body['data']) : body;
     final packs = (items as List? ?? []).map((item) {
       final data = Map<String, dynamic>.from(item);
+      _logProductPayload(data);
       return Product.fromJson({
         ...data,
         'category': 'Food Packs',
@@ -99,6 +112,7 @@ class ProductRepository {
     final body = response.data;
     final data = Map<String, dynamic>.from(
         body is Map ? (body['pack'] ?? body['data'] ?? body) : body);
+    _logProductPayload(data);
     return Product.fromJson({
       ...data,
       'category': 'Food Packs',
@@ -178,6 +192,15 @@ class ProductRepository {
     }).toList();
     debugPrint('[FoodNova Banners] Number of hero banners: ${banners.length}');
     return banners;
+  }
+
+  void _logProductPayload(Map<String, dynamic> json) {
+    debugPrint(
+      '[FoodNova Products] API payload name=${json['name']} '
+      'image_url=${json['image_url']} imageUrl=${json['imageUrl']} '
+      'image=${json['image']} effective_image_url=${json['effective_image_url']} '
+      'default_image_url=${json['default_image_url']}',
+    );
   }
 }
 

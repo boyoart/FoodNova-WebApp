@@ -2,11 +2,13 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/painting.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_controller.dart';
 import 'firebase_options.dart';
+import 'features/products/data/product_repository.dart';
 import 'routes/app_router.dart';
 import 'services/notification_service.dart';
 import 'services/app_security_service.dart';
@@ -42,7 +44,22 @@ class _FoodNovaBootstrapState extends ConsumerState<_FoodNovaBootstrap> {
     super.initState();
     Future.microtask(() {
       ref.read(appSecurityServiceProvider).deleteLegacyPinStorage();
+      _refreshStartupProductData();
     });
+  }
+
+  Future<void> _refreshStartupProductData() async {
+    try {
+      final repository = ref.read(productRepositoryProvider);
+      repository.clearCaches();
+      await repository.listProducts(forceRefresh: true);
+    } catch (error) {
+      debugPrint('[FoodNova Products] startup product sync skipped: $error');
+    } finally {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+      debugPrint('[FoodNova Products] cleared Flutter image cache');
+    }
   }
 
   @override

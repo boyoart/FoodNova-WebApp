@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +12,7 @@ import '../../../widgets/skeleton_box.dart';
 import '../../cart/data/cart_controller.dart';
 import '../data/product_repository.dart';
 import 'product_card.dart';
+import 'product_image.dart';
 
 class ProductDetailScreen extends ConsumerWidget {
   const ProductDetailScreen({
@@ -141,8 +141,7 @@ class _ImageGalleryStrip extends StatelessWidget {
               width: index == 0 ? 1.4 : 1,
             ),
           ),
-          child:
-              CachedNetworkImage(imageUrl: product.imageUrl, fit: BoxFit.cover),
+          child: ProductImage(product: product, showPlaceholderBanner: false),
         ),
       ),
     );
@@ -169,26 +168,12 @@ class _ProductHero extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (product.imageUrl.isEmpty)
-            Icon(
-              isPack
-                  ? Icons.inventory_2_rounded
-                  : Icons.shopping_basket_rounded,
-              color: FoodNovaColors.primary,
-              size: 74,
-            )
-          else
-            CachedNetworkImage(
-              imageUrl: product.imageUrl,
-              fit: BoxFit.cover,
-              placeholder: (_, __) =>
-                  const SkeletonBox(height: 330, radius: 30),
-              errorWidget: (_, __, ___) => Icon(
-                Icons.shopping_basket_rounded,
-                color: FoodNovaColors.primary,
-                size: 68,
-              ),
-            ),
+          ProductImage(
+            product: product,
+            placeholderIcon: isPack
+                ? Icons.inventory_2_rounded
+                : Icons.shopping_basket_rounded,
+          ),
           Positioned(
             left: 14,
             bottom: 14,
