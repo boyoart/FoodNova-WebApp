@@ -1821,11 +1821,17 @@ def send_fcm_push_token_result(token: str, title: str, body: str, data: dict = N
     app = get_firebase_app()
     if app and messaging:
         try:
+            webpush_config = None
+            click_action = data.get("click_action") or ""
+            if click_action.startswith("https://"):
+                webpush_config = messaging.WebpushConfig(
+                    fcm_options=messaging.WebpushFCMOptions(link=click_action)
+                )
             response = messaging.send(messaging.Message(
                 token=token,
                 notification=messaging.Notification(title=title, body=body),
                 data=data,
-                webpush=messaging.WebpushConfig(fcm_options=messaging.WebpushFCMOptions(link=data.get("click_action") or "/")),
+                webpush=webpush_config,
                 android=messaging.AndroidConfig(
                     priority="high",
                     notification=messaging.AndroidNotification(
