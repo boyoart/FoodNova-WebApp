@@ -9,6 +9,9 @@ const bool _apiLogsEnabled =
     bool.fromEnvironment('FOODNOVA_API_LOGS', defaultValue: true);
 
 final dioProvider = Provider<Dio>((ref) {
+  debugPrint(
+    '[FoodNova Dispatch API] BASE_URL ${AppConfig.normalizedApiBaseUrl}',
+  );
   final dio = Dio(
     BaseOptions(
       baseUrl: AppConfig.normalizedApiBaseUrl,

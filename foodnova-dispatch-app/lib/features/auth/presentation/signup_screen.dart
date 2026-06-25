@@ -909,6 +909,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       maxLength: maxLength,
       inputFormatters: inputFormatters,
       textInputAction: TextInputAction.next,
+      cursorColor: FoodNovaColors.primaryDark,
+      style: const TextStyle(
+        color: FoodNovaColors.primaryDark,
+        fontWeight: FontWeight.w800,
+      ),
       decoration: _decoration(label),
       validator: (value) => _validate(key, value ?? ''),
       onChanged: (_) => _saveDraft(),
@@ -918,6 +923,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   InputDecoration _decoration(String label) {
     return InputDecoration(
       labelText: label,
+      labelStyle: const TextStyle(
+        color: FoodNovaColors.secondaryText,
+        fontWeight: FontWeight.w700,
+      ),
+      floatingLabelStyle: const TextStyle(
+        color: FoodNovaColors.primaryDark,
+        fontWeight: FontWeight.w900,
+      ),
+      hintStyle: const TextStyle(
+        color: FoodNovaColors.secondaryText,
+        fontWeight: FontWeight.w700,
+      ),
       filled: true,
       fillColor: Colors.white,
       counterText: '',

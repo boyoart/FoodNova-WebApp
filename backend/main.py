@@ -5333,6 +5333,17 @@ def seed_database():
 @app.on_event("startup")
 def on_startup():
     seed_database()
+    route_rows = []
+    for route in app.routes:
+        path = getattr(route, "path", "")
+        methods = sorted(getattr(route, "methods", []) or [])
+        for method in methods:
+            if method in {"GET", "POST", "PATCH", "PUT", "DELETE", "HEAD"}:
+                route_rows.append(f"{method} {path}")
+    print("FOODNOVA_REGISTERED_ROUTES_START")
+    for row in sorted(route_rows):
+        print("FOODNOVA_ROUTE", row)
+    print("FOODNOVA_REGISTERED_ROUTES_END", json_dump({"count": len(route_rows)}))
     global NIN_PROVIDER_HEALTH
     nin_config = ninbvnportal_config()
     nin_endpoint = f"{nin_config.get('base_url')}/nin-verification"
