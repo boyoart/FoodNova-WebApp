@@ -4221,6 +4221,19 @@ def log_delivery_auth_event(event: str, phone: str, reason: str = "", worker_id:
     )
 
 
+def log_backend_exception(event: str, error: Exception, **context) -> str:
+    trace = traceback.format_exc()
+    payload = {
+        **context,
+        "error_type": type(error).__name__,
+        "error_message": str(error),
+        "traceback": trace,
+        "timestamp": iso(datetime.utcnow()),
+    }
+    print(event, json_dump(payload))
+    return trace
+
+
 def get_delivery_worker_record_for_request(request: Request):
     user = require_user(request)
     if user.get("role") not in ["messenger", "rider"]:
@@ -6247,10 +6260,28 @@ def verify_delivery_worker_nin(payload: NINVerificationPayload, request: Request
 @app.post("/delivery/kyc/verify-nin")
 def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
     db, user, worker = get_delivery_worker_record_for_request(request)
+    clean_nin = "".join(ch for ch in str(payload.nin or "") if ch.isdigit())
+    print("DELIVERY_NIN_VERIFY_REQUEST", json_dump({
+        "route": str(request.url.path),
+        "user_id": user.get("id"),
+        "worker_id": getattr(worker, "id", None),
+        "worker_type": getattr(worker, "worker_type", ""),
+        "approval_status": getattr(worker, "kyc_status", ""),
+        "nin_last4": clean_nin[-4:] if clean_nin else "",
+        "nin_length": len(clean_nin),
+        "consent": bool(payload.consent),
+        "provider_enabled": bool(NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True)),
+        "provider_health": {
+            "healthy": NIN_PROVIDER_HEALTH.get("healthy"),
+            "provider_status": NIN_PROVIDER_HEALTH.get("provider_status"),
+            "provider_auth_status": NIN_PROVIDER_HEALTH.get("provider_auth_status"),
+            "message": NIN_PROVIDER_HEALTH.get("message"),
+        },
+        "timestamp": iso(datetime.utcnow()),
+    }))
     try:
         if not NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True):
             raise HTTPException(status_code=503, detail=NIN_PROVIDER_HEALTH.get("message") or "Identity verification currently unavailable.")
-        clean_nin = "".join(ch for ch in str(payload.nin or "") if ch.isdigit())
         if len(clean_nin) != 11:
             raise HTTPException(status_code=422, detail="NIN must be exactly 11 digits.")
         if not payload.consent:
@@ -6458,6 +6489,7 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
         response_identity = nin_identity_response_data(
             normalize_nin_provider_data(rider_identity_data(db, worker, rider_kyc))
         )
+        worker_data = worker_to_dict(worker)
         db.commit()
         db.refresh(worker)
 
@@ -6486,6 +6518,46 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
             "worker": worker_data,
             "onboarding_progress": progress,
         }
+    except HTTPException as error:
+        print("DELIVERY_NIN_VERIFY_HTTP_ERROR", json_dump({
+            "worker_id": getattr(worker, "id", None),
+            "user_id": user.get("id"),
+            "status_code": error.status_code,
+            "detail": error.detail,
+            "nin_last4": clean_nin[-4:] if clean_nin else "",
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        if error.status_code >= 500:
+            db.rollback()
+            return JSONResponse(
+                status_code=error.status_code,
+                content={
+                    "success": False,
+                    "error": "NIN verification service is temporarily unavailable.",
+                    "retryable": True,
+                },
+            )
+        raise
+    except Exception as error:
+        db.rollback()
+        log_backend_exception(
+            "DELIVERY_NIN_VERIFY_EXCEPTION",
+            error,
+            route=str(request.url.path),
+            user_id=user.get("id"),
+            worker_id=getattr(worker, "id", None),
+            approval_status=getattr(worker, "kyc_status", ""),
+            nin_last4=clean_nin[-4:] if clean_nin else "",
+            consent=bool(payload.consent),
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "NIN verification service is temporarily unavailable.",
+                "retryable": True,
+            },
+        )
     finally:
         db.close()
 
@@ -7648,11 +7720,18 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
     db, user, worker = get_current_worker_record(request)
     try:
         print("DELIVERY_ONLINE_REQUEST", json_dump({
+            "route": str(request.url.path),
+            "user_id": user.get("id"),
             "worker_id": worker.id,
             "worker_type": worker.worker_type,
+            "delivery_worker_id": worker.id,
+            "approval_status": worker.kyc_status,
+            "current_online_status": worker.operational_status,
+            "jwt_validated": True,
             "payload_present": payload is not None,
             "latitude": getattr(payload, "latitude", None),
             "longitude": getattr(payload, "longitude", None),
+            "accuracy": getattr(payload, "accuracy", None),
             "timestamp": getattr(payload, "timestamp", None),
         }))
         if promote_verified_approved_rider(worker):
@@ -7673,6 +7752,14 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
             db.commit()
             raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds to go online.")
         inside_zone = update_worker_location(worker, payload, db)
+        print("DELIVERY_ONLINE_DATABASE_UPDATE_PENDING", json_dump({
+            "worker_id": worker.id,
+            "inside_zone": inside_zone,
+            "new_status": "ONLINE",
+            "latitude": worker.latest_latitude,
+            "longitude": worker.latest_longitude,
+            "last_seen_at": iso(worker.last_seen_at),
+        }))
         if (worker.worker_type or "") == "messenger" and not inside_zone:
             worker.operational_status = "OFFLINE"
             db.commit()
@@ -7691,8 +7778,28 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
         print("DELIVERY_ONLINE_ERROR", json_dump({"worker_id": getattr(worker, "id", None), "status_code": error.status_code, "detail": error.detail}))
         raise
     except Exception as error:
-        print("DELIVERY_ONLINE_ERROR", json_dump({"worker_id": getattr(worker, "id", None), "error": repr(error)}))
-        raise
+        db.rollback()
+        log_backend_exception(
+            "DELIVERY_ONLINE_EXCEPTION",
+            error,
+            route=str(request.url.path),
+            user_id=user.get("id"),
+            worker_id=getattr(worker, "id", None),
+            delivery_worker_id=getattr(worker, "id", None),
+            approval_status=getattr(worker, "kyc_status", ""),
+            current_online_status=getattr(worker, "operational_status", ""),
+            payload_present=payload is not None,
+            latitude=getattr(payload, "latitude", None),
+            longitude=getattr(payload, "longitude", None),
+            timestamp=str(getattr(payload, "timestamp", "")),
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "Unable to go online. Please try again shortly.",
+            },
+        )
     finally:
         db.close()
 
