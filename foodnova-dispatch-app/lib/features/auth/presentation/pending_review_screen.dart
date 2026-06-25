@@ -120,7 +120,7 @@ class PendingReviewScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Once approved, FoodNova will unlock dashboard, orders, deliveries, and earnings.',
+                      'Once approved, FoodNova will unlock dashboard, orders, deliveries, and delivery history.',
                     ),
                     const SizedBox(height: 14),
                     FilledButton.icon(

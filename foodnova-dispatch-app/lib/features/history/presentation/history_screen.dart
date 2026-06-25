@@ -22,13 +22,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
           const TextField(
             decoration: InputDecoration(
               prefixIcon: Icon(Icons.search),
-              labelText: 'Search by customer, date, amount',
+              labelText: 'Search by customer, date, or status',
             ),
           ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
-            children: ['All', 'Date', 'Status', 'Customer', 'Amount']
+            children: ['All', 'Date', 'Status', 'Customer']
                 .map(
                   (item) => ChoiceChip(
                     label: Text(item),

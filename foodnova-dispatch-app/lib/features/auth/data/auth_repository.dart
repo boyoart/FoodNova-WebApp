@@ -97,7 +97,7 @@ class AuthRepository {
         ) ??
         1;
     final finalStep =
-        int.tryParse('${profile['onboarding_step_total'] ?? 7}') ?? 7;
+        int.tryParse('${profile['onboarding_step_total'] ?? 11}') ?? 11;
     final applicationSubmitted = liveApprovalStatus == 'PENDING_REVIEW' ||
         liveApprovalStatus == 'APPROVED' ||
         liveApprovalStatus == 'REJECTED';
@@ -362,8 +362,8 @@ class AuthRepository {
             profileExists: true,
             profileSource: 'backend',
             currentStep: int.tryParse(
-                    '${worker['current_step'] ?? worker['onboarding_current_step'] ?? 7}') ??
-                7,
+                    '${worker['current_step'] ?? worker['onboarding_current_step'] ?? 11}') ??
+                11,
           );
       debugPrint(
           'RIDER_STATUS_UPDATE_SUCCESS status=${worker['kyc_status'] ?? 'PENDING_REVIEW'}');

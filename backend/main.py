@@ -873,6 +873,10 @@ class OnboardingProfilePayload(BaseModel):
     address: Optional[str] = ""
     rider_type: Optional[str] = "motorcycle"
     vehicle_type: Optional[str] = ""
+    vehicle_make: Optional[str] = ""
+    vehicle_model: Optional[str] = ""
+    vehicle_color: Optional[str] = ""
+    vehicle_photo_url: Optional[str] = ""
     plate_number: Optional[str] = ""
     emergency_contact_name: Optional[str] = ""
     emergency_contact_phone: Optional[str] = ""
@@ -2852,22 +2856,22 @@ def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
     }
 
 
-RIDER_ONBOARDING_TOTAL_STEPS = 7
+RIDER_ONBOARDING_TOTAL_STEPS = 11
 RIDER_ONBOARDING_STAGE_STEPS = {
     "account_created": 2,
-    "identity_submitted": 2,
-    "address_uploaded": 3,
-    "emergency_contact_added": 3,
-    "rider_profile_completed": 4,
-    "selfie_verified": 5,
-    "documents_uploaded": 5,
-    "training_completed": 6,
-    "admin_review": 7,
-    "approved": 7,
-    "rejected": 7,
-    "suspended": 7,
-    "deactivated": 7,
-    "deleted": 7,
+    "identity_submitted": 4,
+    "address_uploaded": 6,
+    "emergency_contact_added": 7,
+    "rider_profile_completed": 10,
+    "selfie_verified": 8,
+    "documents_uploaded": 9,
+    "training_completed": 10,
+    "admin_review": 11,
+    "approved": 11,
+    "rejected": 11,
+    "suspended": 11,
+    "deactivated": 11,
+    "deleted": 11,
 }
 
 
@@ -2887,6 +2891,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     identity_meta = review_meta.get("identity_verification") or {}
     address_meta = review_meta.get("address_verification") or {}
     emergency_meta = review_meta.get("emergency_contact") or {}
+    profile_meta = review_meta.get("profile_data") or {}
     admin_override = review_meta.get("admin_override") or {}
     rejection_reason = admin_override.get("note") or identity_meta.get("rejection_reason") or review_meta.get("rejection_reason") or ""
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
@@ -2946,11 +2951,14 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
             and profile_completed
         ),
         "vehicle_type": worker.vehicle_type or "",
+        "vehicle_make": profile_meta.get("vehicle_make") or "",
+        "vehicle_model": profile_meta.get("vehicle_model") or "",
+        "vehicle_color": profile_meta.get("vehicle_color") or "",
         "rider_type": identity_meta.get("rider_type") or ("walking" if (worker.worker_type or "") == "messenger" else "motorcycle"),
         "partner_company": getattr(worker, "partner_company", "") or "",
         "plate_number": worker.plate_number or "",
         "driver_license_number": worker.driver_license_number or "",
-        "vehicle_photo_url": worker.vehicle_photo_url or "",
+        "vehicle_photo_url": worker.vehicle_photo_url or profile_meta.get("vehicle_photo_url") or "",
         "kyc_status": worker.kyc_status or "KYC_PENDING",
         "onboarding_stage": rider_stage,
         "current_step": current_step,
@@ -3008,6 +3016,7 @@ def worker_dashboard_access_allowed(worker: DBDeliveryWorker) -> bool:
     identity_meta = review_meta.get("identity_verification") or {}
     address_meta = review_meta.get("address_verification") or {}
     emergency_meta = review_meta.get("emergency_contact") or {}
+    profile_meta = review_meta.get("profile_data") or {}
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
     documents_complete = bool(
         getattr(worker, "selfie_url", None)
@@ -3757,6 +3766,104 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
     }
 
 
+INVOICE_STORAGE_DIR = Path(__file__).resolve().parent / "uploads" / "invoices"
+
+
+def _pdf_escape(value: object) -> str:
+    return str(value or "").replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _money(value: object) -> str:
+    try:
+        amount = float(value or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    return f"NGN {amount:,.0f}"
+
+
+def invoice_file_path(order: dict) -> Path:
+    order_id = str(order.get("id") or "").strip() or "unknown"
+    order_code = str(order.get("order_code") or order_id).strip()
+    safe_code = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in order_code)
+    return INVOICE_STORAGE_DIR / f"foodnova_invoice_{order_id}_{safe_code}.pdf"
+
+
+def build_invoice_pdf_bytes(order: dict) -> bytes:
+    items = order.get("items") if isinstance(order.get("items"), list) else []
+    lines = [
+        "FoodNova Invoice / Receipt",
+        f"Order: {order.get('order_code') or order.get('id') or ''}",
+        f"Date: {order.get('created_at') or ''}",
+        f"Customer: {order.get('customer_name') or 'FoodNova Customer'}",
+        f"Email: {order.get('customer_email') or ''}",
+        f"Phone: {order.get('customer_phone') or order.get('phone') or ''}",
+        f"Delivery: {order.get('delivery_address') or ''}",
+        "",
+        "Items",
+    ]
+    if items:
+        for item in items[:24]:
+            name = item.get("name") or item.get("product_name") or "FoodNova Item"
+            quantity = item.get("quantity") or item.get("qty") or 1
+            unit_price = item.get("unit_price") or item.get("price") or 0
+            line_total = item.get("line_total") or 0
+            lines.append(f"{quantity} x {name} @ {_money(unit_price)} = {_money(line_total)}")
+    else:
+        lines.append("Order items are unavailable.")
+    lines.extend([
+        "",
+        f"Payment Status: {str(order.get('payment_status') or '').replace('_', ' ').title()}",
+        f"Order Status: {str(order.get('order_status') or order.get('status') or '').replace('_', ' ').title()}",
+        f"Total: {_money(order.get('total_amount'))}",
+        "",
+        "Thank you for shopping with FoodNova.",
+    ])
+
+    content_lines = ["BT", "/F1 16 Tf", "50 790 Td"]
+    first = True
+    for line in lines:
+        if first:
+            first = False
+        else:
+            content_lines.append("0 -22 Td")
+        content_lines.append(f"({_pdf_escape(line[:105])}) Tj")
+    content_lines.append("ET")
+    content = "\n".join(content_lines).encode("latin-1", errors="replace")
+
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(content)).encode("ascii") + b" >>\nstream\n" + content + b"\nendstream",
+    ]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode("ascii"))
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+    xref_offset = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    pdf.extend(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode("ascii")
+    )
+    return bytes(pdf)
+
+
+def ensure_order_invoice_pdf(order: dict) -> Path:
+    path = invoice_file_path(order)
+    if path.exists() and path.stat().st_size > 0:
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(build_invoice_pdf_bytes(order))
+    return path
+
+
 def notification_to_dict(notification: DBNotification) -> dict:
     return {
         "id": notification.id,
@@ -4190,6 +4297,10 @@ def onboarding_progress_payload(db, worker: DBDeliveryWorker) -> dict:
         "address": worker.home_address or "",
         "rider_type": (meta.get("identity_verification") or {}).get("rider_type") or ("walker" if (worker.worker_type or "") == "messenger" else "motorcycle"),
         "vehicle_type": worker.vehicle_type or "",
+        "vehicle_make": (meta.get("profile_data") or {}).get("vehicle_make") or "",
+        "vehicle_model": (meta.get("profile_data") or {}).get("vehicle_model") or "",
+        "vehicle_color": (meta.get("profile_data") or {}).get("vehicle_color") or "",
+        "vehicle_photo_url": worker.vehicle_photo_url or (meta.get("profile_data") or {}).get("vehicle_photo_url") or "",
         "plate_number": worker.plate_number or "",
         "emergency_contact_name": worker.emergency_contact_name or "",
         "emergency_contact_phone": worker.emergency_contact_phone or "",
@@ -6403,6 +6514,11 @@ def api_order_detail(order_id: int):
     return api_success(order, order=order)
 
 
+@app.get("/api/orders/{order_id}/invoice")
+def api_order_invoice(order_id: int, request: Request):
+    return get_order_invoice(order_id, request)
+
+
 @app.post("/api/orders/{order_id}/receipt")
 async def api_upload_order_receipt(order_id: int, request: Request, file: UploadFile = File(...)):
     require_user(request)
@@ -6665,6 +6781,10 @@ def delivery_onboarding_profile(payload: OnboardingProfilePayload, request: Requ
             "address": worker.home_address or "",
             "rider_type": rider_type or "motorcycle",
             "vehicle_type": worker.vehicle_type or "",
+            "vehicle_make": (payload.vehicle_make or "").strip(),
+            "vehicle_model": (payload.vehicle_model or "").strip(),
+            "vehicle_color": (payload.vehicle_color or "").strip(),
+            "vehicle_photo_url": (payload.vehicle_photo_url or worker.vehicle_photo_url or "").strip(),
             "plate_number": worker.plate_number or "",
             "updated_at": iso(datetime.utcnow()),
         }
@@ -6746,10 +6866,14 @@ def delivery_onboarding_submit(payload: OnboardingSubmitPayload, request: Reques
             missing.append("driver license")
         if not (documents.get("proof_of_address") or documents.get("address_proof")):
             missing.append("proof of address")
-        if not progress.get("training_completed"):
-            missing.append("training")
         if missing:
             raise HTTPException(status_code=400, detail=f"Missing required onboarding item: {', '.join(missing)}")
+        meta = delivery_worker_review_meta(worker)
+        training_meta = meta.get("training") or {}
+        training_meta["completed"] = True
+        training_meta["completed_at"] = training_meta.get("completed_at") or iso(datetime.utcnow())
+        meta["training"] = training_meta
+        worker.review_note = json_dump(meta)
         worker.kyc_status = "PENDING_REVIEW"
         worker.updated_at = datetime.utcnow()
         _, rider_kyc = ensure_rider_records(db, worker)
@@ -7262,15 +7386,20 @@ def delivery_stats(request: Request):
             order for order in today_orders
             if str(getattr(order, "delivery_status", "") or "").upper() in active_statuses
         ]
-        earnings_today = sum(float(getattr(order, "delivery_fee", 0) or 0) for order in completed_today)
+        accepted_orders = [
+            order for order in orders
+            if str(getattr(order, "delivery_status", "") or "").upper() not in {"ASSIGNED", "DECLINED", "CANCELLED"}
+        ]
+        acceptance_rate = (len(accepted_orders) / len(orders) * 100) if orders else 0
         data = {
-            "today_earnings": earnings_today,
             "today_deliveries": len(today_orders),
             "completed": len(completed_today),
             "pending": len(pending_today),
             "assigned": len([order for order in orders if str(getattr(order, "delivery_status", "") or "").upper() == "ASSIGNED"]),
             "active": len([order for order in orders if str(getattr(order, "delivery_status", "") or "").upper() in active_statuses]),
             "lifetime_completed": worker.completed_deliveries or 0,
+            "acceptance_rate": round(acceptance_rate, 1),
+            "average_rating": float(getattr(worker, "rating", 0) or 0),
         }
         return {"success": True, "stats": data, "data": data}
     finally:
@@ -8006,6 +8135,7 @@ def create_order(payload: OrderPayload, request: Request):
         db.commit()
         db.refresh(order)
         order_data = order_to_dict(order)
+        ensure_order_invoice_pdf(order_data)
         if inventory_deductions:
             print(f"INVENTORY DEDUCTED for {order.order_code}: {inventory_deductions}")
             create_admin_audit_log(
@@ -8089,6 +8219,36 @@ def get_order(order_id: int):
         db.close()
 
     raise HTTPException(status_code=404, detail="Order not found")
+
+
+@app.get("/orders/{order_id}/invoice")
+def get_order_invoice(order_id: int, request: Request):
+    user = require_user(request)
+    user_email = (user.get("email") or "").strip().lower()
+    user_role = (user.get("role") or "").strip().lower()
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        owner_email = (order.customer_email or "").strip().lower()
+        if user_role != "admin" and (not user_email or owner_email != user_email):
+            raise HTTPException(status_code=403, detail="You can only download invoices for your own orders")
+
+        order_data = order_to_dict(order)
+        invoice_path = ensure_order_invoice_pdf(order_data)
+        headers = {
+            "Content-Disposition": f'inline; filename="{invoice_path.name}"',
+            "Cache-Control": "private, max-age=86400",
+        }
+        return StreamingResponse(
+            io.BytesIO(invoice_path.read_bytes()),
+            media_type="application/pdf",
+            headers=headers,
+        )
+    finally:
+        db.close()
 
 
 @app.get("/orders/{order_id}/rider-location")

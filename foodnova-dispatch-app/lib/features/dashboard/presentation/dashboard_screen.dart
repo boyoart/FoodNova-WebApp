@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/colors.dart';
@@ -30,7 +29,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Timer? onlineGpsTimer;
   StreamSubscription<Map<String, dynamic>>? realtimeSubscription;
   bool onlineGpsPingInFlight = false;
-  final money = NumberFormat.currency(symbol: 'NGN ', decimalDigits: 0);
 
   @override
   void initState() {
@@ -122,7 +120,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         loading: toggling,
                       ),
                       const SizedBox(height: 16),
-                      _ApprovedDashboardBody(money: money),
+                      const _ApprovedDashboardBody(),
                     ],
                   );
                 },
@@ -159,7 +157,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               context.go('/orders');
             }
             if (i == 2) {
-              context.go('/earnings');
+              context.go('/history');
             }
             if (i == 3) {
               context.go('/settings');
@@ -175,8 +173,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               label: 'Orders',
             ),
             NavigationDestination(
-              icon: Icon(Icons.payments_outlined),
-              label: 'Earnings',
+              icon: Icon(Icons.history_outlined),
+              label: 'History',
             ),
             NavigationDestination(
               icon: Icon(Icons.settings_outlined),
@@ -265,8 +263,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 class _ApprovedDashboardBody extends ConsumerWidget {
-  const _ApprovedDashboardBody({required this.money});
-  final NumberFormat money;
+  const _ApprovedDashboardBody();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -285,11 +282,11 @@ class _ApprovedDashboardBody extends ConsumerWidget {
           childAspectRatio: 1.15,
           children: [
             StatTile(
-              label: 'Today\'s Earnings',
+              label: 'Acceptance Rate',
               value: stats.isLoading
                   ? '...'
-                  : money.format(statValues?.todayEarnings ?? 0),
-              icon: Icons.payments_outlined,
+                  : '${statValues?.acceptanceRate.round() ?? 0}%',
+              icon: Icons.trending_up_outlined,
             ),
             StatTile(
               label: 'Today\'s Deliveries',
@@ -304,9 +301,11 @@ class _ApprovedDashboardBody extends ConsumerWidget {
               icon: Icons.check_circle_outline,
             ),
             StatTile(
-              label: 'Pending',
-              value: stats.isLoading ? '...' : '${statValues?.pending ?? 0}',
-              icon: Icons.pending_actions_outlined,
+              label: 'Average Rating',
+              value: stats.isLoading
+                  ? '...'
+                  : (statValues?.averageRating ?? 0).toStringAsFixed(1),
+              icon: Icons.star_outline,
               color: FoodNovaColors.warning,
             ),
           ],
@@ -479,7 +478,7 @@ class _LockedCapabilities extends StatelessWidget {
       'Go Online disabled',
       'Accept Orders disabled',
       'Receive Deliveries disabled',
-      'Earnings disabled',
+      'Order completion disabled',
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -635,7 +634,7 @@ class _OfferCard extends ConsumerWidget {
             Text(offer.customerName),
             Text('Pickup: ${offer.pickup}'),
             Text('Dropoff: ${offer.dropoff}'),
-            Text('${offer.distance} / ${offer.eta} / NGN ${offer.earnings}'),
+            Text('${offer.distance} / ${offer.eta}'),
             const SizedBox(height: 14),
             Row(
               children: [

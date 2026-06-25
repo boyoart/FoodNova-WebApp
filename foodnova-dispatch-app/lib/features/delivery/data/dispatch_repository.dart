@@ -33,27 +33,29 @@ final dashboardStatsProvider =
 
 class DashboardStats {
   const DashboardStats({
-    required this.todayEarnings,
     required this.todayDeliveries,
     required this.completed,
-    required this.pending,
+    required this.acceptanceRate,
+    required this.averageRating,
   });
 
-  final num todayEarnings;
   final int todayDeliveries;
   final int completed;
-  final int pending;
+  final num acceptanceRate;
+  final num averageRating;
 
   factory DashboardStats.fromJson(Map<String, dynamic> json) {
     return DashboardStats(
-      todayEarnings: num.tryParse(
-              '${json['today_earnings'] ?? json['todayEarnings'] ?? 0}') ??
-          0,
       todayDeliveries: int.tryParse(
               '${json['today_deliveries'] ?? json['todayDeliveries'] ?? 0}') ??
           0,
       completed: int.tryParse('${json['completed'] ?? 0}') ?? 0,
-      pending: int.tryParse('${json['pending'] ?? 0}') ?? 0,
+      acceptanceRate: num.tryParse(
+              '${json['acceptance_rate'] ?? json['acceptanceRate'] ?? 0}') ??
+          0,
+      averageRating: num.tryParse(
+              '${json['average_rating'] ?? json['averageRating'] ?? 0}') ??
+          0,
     );
   }
 }

@@ -14,7 +14,7 @@ import '../../../core/widgets/fn_widgets.dart';
 import '../data/auth_repository.dart';
 import '../data/onboarding_file_recovery_service.dart';
 
-const _totalSteps = 7;
+const _totalSteps = 11;
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -43,6 +43,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     'emergency_contact_phone': TextEditingController(),
     'emergency_contact_relationship': TextEditingController(),
     'vehicle_type': TextEditingController(text: 'Motorcycle'),
+    'vehicle_make': TextEditingController(),
+    'vehicle_model': TextEditingController(),
+    'vehicle_color': TextEditingController(),
     'plate_number': TextEditingController(),
   };
 
@@ -62,14 +65,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   String selfieUrl = '';
   String driverLicenseUrl = '';
   String proofOfAddressUrl = '';
-  final trainingDone = <String, bool>{
-    'Accepting Orders': false,
-    'Food Handling': false,
-    'Customer Conduct': false,
-    'Safety Rules': false,
-    'Delivery Standards': false,
-  };
-
   bool get requiresVehicleDetails => riderType == 'motorcycle';
   bool get _accountComplete =>
       authenticatedRider ||
@@ -80,6 +75,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       fields['residential_address']!.text.trim().isNotEmpty &&
       fields['state']!.text.trim().isNotEmpty &&
       fields['lga']!.text.trim().isNotEmpty &&
+      _emergencyContactComplete;
+  bool get _residentialAddressComplete =>
+      fields['residential_address']!.text.trim().isNotEmpty &&
+      fields['state']!.text.trim().isNotEmpty &&
+      fields['lga']!.text.trim().isNotEmpty;
+  bool get _emergencyContactComplete =>
       fields['emergency_contact_name']!.text.trim().isNotEmpty &&
       fields['emergency_contact_phone']!
               .text
@@ -91,13 +92,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       riderType == 'bicycle' ||
       riderType == 'walker' ||
       (fields['vehicle_type']!.text.trim().isNotEmpty &&
+          fields['vehicle_make']!.text.trim().isNotEmpty &&
+          fields['vehicle_model']!.text.trim().isNotEmpty &&
+          fields['vehicle_color']!.text.trim().isNotEmpty &&
           fields['plate_number']!.text.trim().isNotEmpty);
+  bool get _selfieComplete => selfie != null || selfieUrl.isNotEmpty;
+  bool get _governmentIdComplete =>
+      (driverLicense != null || driverLicenseUrl.isNotEmpty) &&
+      (proofOfAddress != null || proofOfAddressUrl.isNotEmpty);
   bool get _documentsComplete =>
       (selfie != null || selfieUrl.isNotEmpty) &&
       (driverLicense != null || driverLicenseUrl.isNotEmpty) &&
       (proofOfAddress != null || proofOfAddressUrl.isNotEmpty);
-  bool get _trainingComplete => trainingDone.values.every((done) => done);
-
   @override
   void initState() {
     super.initState();
@@ -184,12 +190,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             '${data['driver_license_url'] ?? driverLicenseUrl}'.trim();
         proofOfAddressUrl =
             '${data['proof_of_address_url'] ?? proofOfAddressUrl}'.trim();
-        final savedTraining = data['training_done'];
-        if (savedTraining is Map) {
-          for (final key in trainingDone.keys) {
-            trainingDone[key] = savedTraining[key] == true;
-          }
-        }
         debugPrint(
             'ONBOARDING_STATE_REBUILD ${jsonEncode(_onboardingDebugState())}');
       } catch (_) {
@@ -239,6 +239,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     _setFieldIfPresent('emergency_contact_relationship',
         profile['emergency_contact_relationship']);
     _setFieldIfPresent('vehicle_type', profile['vehicle_type']);
+    _setFieldIfPresent('vehicle_make', profile['vehicle_make']);
+    _setFieldIfPresent('vehicle_model', profile['vehicle_model']);
+    _setFieldIfPresent('vehicle_color', profile['vehicle_color']);
     _setFieldIfPresent('plate_number', profile['plate_number']);
     riderType = '${profile['rider_type'] ?? riderType}'.trim().isEmpty
         ? riderType
@@ -256,11 +259,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     proofOfAddressUrl = _documentUrl(documents, 'proof_of_address').isNotEmpty
         ? _documentUrl(documents, 'proof_of_address')
         : _documentUrl(documents, 'address_proof');
-    if (progress['training_completed'] == true) {
-      for (final key in trainingDone.keys) {
-        trainingDone[key] = true;
-      }
-    }
     final backendStep = int.tryParse('${progress['current_step'] ?? ''}');
     if (backendStep != null) {
       final hasServerAccount = progress['rider_id'] != null;
@@ -317,7 +315,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       'fields': {
         for (final entry in fields.entries) entry.key: entry.value.text
       },
-      'training_done': trainingDone,
       if (verifiedNin != null) 'verified_nin': verifiedNin!.raw,
       if (verifiedNin == null && previousNin is Map)
         'verified_nin': previousNin,
@@ -381,22 +378,32 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   }
 
   bool get _canContinueCurrentStep => switch (currentStep) {
-        1 => _accountComplete,
-        2 => verifiedNin?.verified == true,
-        3 => _addressComplete,
-        4 => _riderProfileComplete,
-        5 => _documentsComplete,
-        6 => _trainingComplete,
+        1 => true,
+        2 => _accountComplete,
+        3 => fields['nin_number']!.text.replaceAll(RegExp(r'\D'), '').length ==
+                11 &&
+            ninConsent,
+        4 => verifiedNin?.verified == true,
+        5 => verifiedNin?.verified == true,
+        6 => _residentialAddressComplete,
+        7 => _emergencyContactComplete,
+        8 => _selfieComplete,
+        9 => _governmentIdComplete,
+        10 => _riderProfileComplete,
         _ => !loading,
       };
 
   String get _stepTitle => const [
-        'Account Creation',
-        'NIN Verification',
-        'Address & Emergency Contact',
-        'Rider Profile',
-        'Documents',
-        'FoodNova Training',
+        'Welcome',
+        'Email & Password',
+        'NIN + Consent',
+        'Live NIN Verification',
+        'Verified Information',
+        'Address',
+        'Emergency Contact',
+        'Selfie Capture',
+        'Government ID',
+        'Vehicle Information',
         'Review & Submit',
       ][currentStep - 1];
 
@@ -492,14 +499,34 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   }
 
   Widget _currentStepPage() => switch (currentStep) {
-        1 => _accountStep(),
-        2 => _ninStep(),
-        3 => _addressStep(),
-        4 => _riderProfileStep(),
-        5 => _documentsStep(),
-        6 => _trainingStep(),
+        1 => _welcomeStep(),
+        2 => _accountStep(),
+        3 => _ninConsentStep(),
+        4 => _ninStep(),
+        5 => _verifiedInfoStep(),
+        6 => _residentialAddressStep(),
+        7 => _emergencyContactStep(),
+        8 => _selfieStep(),
+        9 => _governmentIdStep(),
+        10 => _riderProfileStep(),
         _ => _reviewStep(),
       };
+
+  Widget _welcomeStep() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepIntro(
+          icon: Icons.delivery_dining,
+          title: 'Welcome to FoodNova Dispatch',
+          body:
+              'Set up your verified rider profile, documents, emergency contact, and vehicle details for FoodNova review.',
+          hero: true,
+        ),
+        _CompletionBadge(text: 'Your progress saves automatically'),
+      ],
+    );
+  }
 
   Widget _accountStep() {
     return Column(
@@ -517,6 +544,45 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             keyboardType: TextInputType.phone, icon: Icons.phone_outlined),
         _field('password', obscure: true, icon: Icons.lock_outline),
         _PasswordStrength(password: fields['password']!.text),
+      ],
+    );
+  }
+
+  Widget _ninConsentStep() {
+    final verified = verifiedNin?.verified == true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepIntro(
+          icon: Icons.assignment_ind_outlined,
+          title: 'NIN and consent',
+          body:
+              'Enter your 11-digit NIN and grant consent before FoodNova runs live identity verification.',
+        ),
+        _field(
+          'nin_number',
+          keyboardType: TextInputType.number,
+          maxLength: 11,
+          readOnly: verified,
+          icon: Icons.shield_outlined,
+          onChanged: (_) {
+            if (verifiedNin != null) {
+              setState(() {
+                verifiedNin = null;
+                verificationMessage = '';
+              });
+              _saveDraft();
+            }
+          },
+        ),
+        _ConsentTile(
+          value: ninConsent,
+          locked: verified,
+          onChanged: (value) {
+            setState(() => ninConsent = value);
+            _saveDraft();
+          },
+        ),
       ],
     );
   }
@@ -587,19 +653,53 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     );
   }
 
-  Widget _addressStep() {
+  Widget _verifiedInfoStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepIntro(
+          icon: Icons.manage_accounts_outlined,
+          title: 'Verified information',
+          body:
+              'FoodNova auto-fills your verified identity details from the successful NIN check.',
+        ),
+        if (verifiedNin != null) _VerifiedIdentityCard(result: verifiedNin!),
+        const SizedBox(height: 14),
+        _field('first_name', icon: Icons.person_outline),
+        _field('last_name', icon: Icons.person_outline),
+        if (verifiedNin?.phone.isNotEmpty == true)
+          _ReviewLine(label: 'Verified phone', value: verifiedNin!.phone),
+      ],
+    );
+  }
+
+  Widget _residentialAddressStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _StepIntro(
           icon: Icons.home_work_outlined,
-          title: 'Where can operations reach you?',
-          body:
-              'Complete your address and emergency contact for rider safety review.',
+          title: 'Residential address',
+          body: 'Add the address FoodNova operations can use for review.',
         ),
         _field('residential_address', icon: Icons.location_on_outlined),
         _field('state', icon: Icons.map_outlined),
         _field('lga', icon: Icons.place_outlined),
+        if (_residentialAddressComplete)
+          const _CompletionBadge(text: 'Address completed'),
+      ],
+    );
+  }
+
+  Widget _emergencyContactStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepIntro(
+          icon: Icons.contact_emergency_outlined,
+          title: 'Emergency contact',
+          body: 'Add a trusted contact for rider safety review.',
+        ),
         _field('emergency_contact_name',
             icon: Icons.contact_emergency_outlined),
         _field('emergency_contact_phone',
@@ -607,9 +707,63 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             icon: Icons.phone_in_talk_outlined),
         _field('emergency_contact_relationship',
             icon: Icons.people_alt_outlined),
-        if (_addressComplete)
-          const _CompletionBadge(
-              text: 'Address and emergency contact completed'),
+        if (_emergencyContactComplete)
+          const _CompletionBadge(text: 'Emergency contact completed'),
+      ],
+    );
+  }
+
+  Widget _selfieStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepIntro(
+          icon: Icons.camera_front_outlined,
+          title: 'Selfie capture',
+          body: 'Capture a clear front-facing selfie for account review.',
+        ),
+        _UploadCard(
+          title: 'Live Selfie',
+          uploadedText: 'Selfie Uploaded',
+          body: 'Use good lighting and keep your face centered.',
+          icon: Icons.camera_front_outlined,
+          file: selfie == null ? null : File(selfie!.path),
+          uploaded: selfieUrl.isNotEmpty,
+          onTap: _pickSelfie,
+        ),
+      ],
+    );
+  }
+
+  Widget _governmentIdStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StepIntro(
+          icon: Icons.badge_outlined,
+          title: 'Government ID upload',
+          body:
+              'Upload a clear government ID and proof of address for admin review.',
+        ),
+        _UploadCard(
+          title: 'Government ID',
+          uploadedText: 'Government ID Uploaded',
+          body: 'Driver license, national ID, or another accepted ID.',
+          icon: Icons.badge_outlined,
+          file: driverLicense?.path == null ? null : File(driverLicense!.path!),
+          uploaded: driverLicenseUrl.isNotEmpty,
+          onTap: _pickDriverLicense,
+        ),
+        _UploadCard(
+          title: 'Proof Of Address',
+          uploadedText: 'Proof Of Address Uploaded',
+          body: 'Utility bill, tenancy proof, or address document.',
+          icon: Icons.receipt_long_outlined,
+          file:
+              proofOfAddress?.path == null ? null : File(proofOfAddress!.path!),
+          uploaded: proofOfAddressUrl.isNotEmpty,
+          onTap: _pickProofOfAddress,
+        ),
       ],
     );
   }
@@ -654,6 +808,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             children: [
               const SizedBox(height: 10),
               _field('vehicle_type', icon: Icons.motorcycle_outlined),
+              _field('vehicle_make',
+                  icon: Icons.precision_manufacturing_outlined),
+              _field('vehicle_model', icon: Icons.two_wheeler_outlined),
+              _field('vehicle_color', icon: Icons.palette_outlined),
               _field('plate_number', icon: Icons.pin_outlined),
             ],
           ),
@@ -663,96 +821,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
                 text: 'No vehicle papers required for this profile'),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _documentsStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _StepIntro(
-          icon: Icons.cloud_upload_outlined,
-          title: 'Upload your review documents',
-          body:
-              'Each card updates immediately and restores from saved onboarding state.',
-        ),
-        _UploadCard(
-          title: 'Live Selfie',
-          uploadedText: 'Selfie Uploaded',
-          body: 'Capture a clear front-facing photo.',
-          icon: Icons.camera_front_outlined,
-          file: selfie == null ? null : File(selfie!.path),
-          uploaded: selfieUrl.isNotEmpty,
-          onTap: _pickSelfie,
-        ),
-        _UploadCard(
-          title: 'Driver License',
-          uploadedText: 'Driver License Uploaded',
-          body: 'Upload a clear license image or PDF.',
-          icon: Icons.badge_outlined,
-          file: driverLicense?.path == null ? null : File(driverLicense!.path!),
-          uploaded: driverLicenseUrl.isNotEmpty,
-          onTap: _pickDriverLicense,
-        ),
-        _UploadCard(
-          title: 'Proof Of Address',
-          uploadedText: 'Proof Of Address Uploaded',
-          body: 'Upload a utility bill, tenancy proof, or address document.',
-          icon: Icons.receipt_long_outlined,
-          file:
-              proofOfAddress?.path == null ? null : File(proofOfAddress!.path!),
-          uploaded: proofOfAddressUrl.isNotEmpty,
-          onTap: _pickProofOfAddress,
-        ),
-      ],
-    );
-  }
-
-  Widget _trainingStep() {
-    final done = trainingDone.values.where((value) => value).length;
-    final percent = ((done / trainingDone.length) * 100).round();
-    final icons = [
-      Icons.shopping_bag_outlined,
-      Icons.restaurant_outlined,
-      Icons.support_agent_outlined,
-      Icons.health_and_safety_outlined,
-      Icons.fact_check_outlined,
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _StepIntro(
-          icon: Icons.school_outlined,
-          title: 'FoodNova Training',
-          body: 'Tap each slide after reading it to complete your training.',
-        ),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(999),
-          child: LinearProgressIndicator(
-            minHeight: 9,
-            value: percent / 100,
-            backgroundColor: FoodNovaColors.surface2,
-            color: FoodNovaColors.primary,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text('$percent% complete',
-            style: const TextStyle(fontWeight: FontWeight.w800)),
-        const SizedBox(height: 14),
-        ...trainingDone.keys.toList().asMap().entries.map((entry) {
-          final title = entry.value;
-          return _TrainingSlide(
-            icon: icons[entry.key],
-            title: title,
-            done: trainingDone[title] == true,
-            onTap: () {
-              setState(
-                  () => trainingDone[title] = !(trainingDone[title] ?? false));
-              _saveDraft();
-            },
-          );
-        }),
       ],
     );
   }
@@ -791,7 +859,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             title: 'Emergency Contact Completed', complete: _addressComplete),
         _SummaryBadge(
             title: 'Documents Uploaded', complete: _documentsComplete),
-        _SummaryBadge(title: 'Training Completed', complete: _trainingComplete),
+        _SummaryBadge(
+            title: 'Vehicle Information Completed',
+            complete: _riderProfileComplete),
         const SizedBox(height: 16),
         Text('Uploaded documents',
             style: Theme.of(context)
@@ -834,6 +904,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
               _ReviewLine(label: 'Phone', value: fields['phone']!.text.trim()),
               _ReviewLine(label: 'Email', value: fields['email']!.text.trim()),
               _ReviewLine(label: 'Address', value: _fullAddress),
+              _ReviewLine(
+                  label: 'Vehicle',
+                  value: requiresVehicleDetails
+                      ? [
+                          fields['vehicle_make']!.text.trim(),
+                          fields['vehicle_model']!.text.trim(),
+                          fields['vehicle_color']!.text.trim(),
+                          fields['plate_number']!.text.trim(),
+                        ].where((part) => part.isNotEmpty).join(' / ')
+                      : _riderTypeLabel),
             ],
           ),
         ),
@@ -843,16 +923,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
 
   Future<void> _nextStep() async {
     if (!_validateCurrentStep()) return;
-    if (currentStep == 1) {
+    if (currentStep == 2) {
       await _createAccountStep();
       return;
     }
-    if (currentStep == 3 || currentStep == 4) {
+    if (currentStep == 6 || currentStep == 7 || currentStep == 10) {
       await _saveProfileStep(nextStep: currentStep + 1);
-      return;
-    }
-    if (currentStep == 6) {
-      await _completeTrainingStep();
       return;
     }
     await _goToStep(currentStep + 1);
@@ -882,7 +958,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       authenticatedRider = true;
       _applyBackendProgress(Map<String, dynamic>.from(
           progress['onboarding_progress'] ?? progress['data'] ?? {}));
-      await _goToStep(2);
+      await _goToStep(3);
     } catch (error) {
       if (mounted) setState(() => message = _friendlyError(error));
     } finally {
@@ -908,6 +984,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
         'address': _fullAddress,
         'rider_type': riderType,
         'vehicle_type': fields['vehicle_type']!.text.trim(),
+        'vehicle_make': fields['vehicle_make']!.text.trim(),
+        'vehicle_model': fields['vehicle_model']!.text.trim(),
+        'vehicle_color': fields['vehicle_color']!.text.trim(),
         'plate_number': fields['plate_number']!.text.trim(),
         'emergency_contact_name': fields['emergency_contact_name']!.text.trim(),
         'emergency_contact_phone':
@@ -924,37 +1003,30 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     }
   }
 
-  Future<void> _completeTrainingStep() async {
-    setState(() {
-      loading = true;
-      message = '';
-    });
-    try {
-      final progress =
-          await ref.read(authRepositoryProvider).completeOnboardingTraining();
-      _applyBackendProgress(progress);
-      await _goToStep(7);
-    } catch (error) {
-      if (mounted) setState(() => message = _friendlyError(error));
-    } finally {
-      if (mounted) setState(() => loading = false);
-    }
-  }
-
   bool _validateCurrentStep() {
     final blocker = switch (currentStep) {
-      1 => _accountComplete ? null : 'Complete valid account details first.',
-      2 => verifiedNin?.verified == true
+      1 => null,
+      2 => _accountComplete ? null : 'Complete valid account details first.',
+      3 =>
+        fields['nin_number']!.text.replaceAll(RegExp(r'\D'), '').length == 11 &&
+                ninConsent
+            ? null
+            : 'Enter your 11-digit NIN and accept consent before continuing.',
+      4 => verifiedNin?.verified == true
           ? null
           : 'Verify your NIN successfully before continuing.',
-      3 => _addressComplete
+      5 => verifiedNin?.verified == true
           ? null
-          : 'Complete address and emergency contact details.',
-      4 => _riderProfileComplete ? null : 'Complete your rider profile.',
-      5 => _documentsComplete
+          : 'Verified identity details are required before continuing.',
+      6 => _residentialAddressComplete ? null : 'Complete your address.',
+      7 => _emergencyContactComplete
           ? null
-          : 'Upload your selfie, driver license, and proof of address.',
-      6 => _trainingComplete ? null : 'Complete all FoodNova training slides.',
+          : 'Complete your emergency contact details.',
+      8 => _selfieComplete ? null : 'Capture and upload your selfie.',
+      9 => _governmentIdComplete
+          ? null
+          : 'Upload your government ID and proof of address.',
+      10 => _riderProfileComplete ? null : 'Complete your vehicle information.',
       _ => null,
     };
     if (blocker == null) return true;
@@ -1205,6 +1277,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
         'id_number': nin,
         'vehicle_type':
             requiresVehicleDetails ? fields['vehicle_type']!.text.trim() : '',
+        'vehicle_make':
+            requiresVehicleDetails ? fields['vehicle_make']!.text.trim() : '',
+        'vehicle_model':
+            requiresVehicleDetails ? fields['vehicle_model']!.text.trim() : '',
+        'vehicle_color':
+            requiresVehicleDetails ? fields['vehicle_color']!.text.trim() : '',
         'plate_number':
             requiresVehicleDetails ? fields['plate_number']!.text.trim() : '',
         'driver_license_number': '',
@@ -1239,7 +1317,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     }
     if (!_riderProfileComplete) return 'Complete your rider profile.';
     if (!_documentsComplete) return 'Upload your required documents.';
-    if (!_trainingComplete) return 'Complete FoodNova training.';
     return null;
   }
 
@@ -1320,7 +1397,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
         'has_driver_license': driverLicense != null,
         'has_proof_of_address': proofOfAddress != null,
         'documents_complete': _documentsComplete,
-        'training_complete': _trainingComplete,
       };
 
   String _friendlyError(Object error) {
@@ -1856,29 +1932,6 @@ class _DocumentReviewTile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _TrainingSlide extends StatelessWidget {
-  const _TrainingSlide(
-      {required this.icon,
-      required this.title,
-      required this.done,
-      required this.onTap});
-  final IconData icon;
-  final String title;
-  final bool done;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return _ChoiceCard(
-      selected: done,
-      icon: icon,
-      title: title,
-      body: done ? 'Completed' : 'Tap to mark this training slide complete.',
-      onTap: onTap,
     );
   }
 }

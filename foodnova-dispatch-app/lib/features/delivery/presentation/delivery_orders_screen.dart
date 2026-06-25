@@ -60,7 +60,7 @@ class _DispatchTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const routes = ['/dashboard', '/orders', '/earnings', '/settings'];
+    const routes = ['/dashboard', '/orders', '/history', '/settings'];
     return NavigationBar(
       selectedIndex: selectedIndex,
       onDestinationSelected: (index) => context.go(routes[index]),
@@ -70,7 +70,7 @@ class _DispatchTabBar extends StatelessWidget {
         NavigationDestination(
             icon: Icon(Icons.assignment_outlined), label: 'Orders'),
         NavigationDestination(
-            icon: Icon(Icons.payments_outlined), label: 'Earnings'),
+            icon: Icon(Icons.history_outlined), label: 'History'),
         NavigationDestination(
             icon: Icon(Icons.settings_outlined), label: 'Settings'),
       ],

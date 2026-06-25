@@ -7,6 +7,10 @@ class RiderProfile {
   String get phone => '${raw['phone'] ?? ''}';
   String get email => '${raw['email'] ?? ''}';
   String get vehicleType => '${raw['vehicle_type'] ?? ''}';
+  String get vehicleMake => '${raw['vehicle_make'] ?? ''}';
+  String get vehicleModel => '${raw['vehicle_model'] ?? ''}';
+  String get vehicleColor => '${raw['vehicle_color'] ?? ''}';
+  String get plateNumber => '${raw['plate_number'] ?? ''}';
   String get kycStatus => '${raw['kyc_status'] ?? 'KYC_PENDING'}';
   String get normalizedKycStatus => kycStatus.toUpperCase();
   String get accountStatus => '${raw['operational_status'] ?? 'OFFLINE'}';
@@ -31,13 +35,13 @@ class RiderProfile {
   int get currentStep =>
       int.tryParse(
         '${raw['current_step'] ?? raw['onboarding_current_step'] ?? 1}',
-      )?.clamp(1, 7).toInt() ??
+      )?.clamp(1, 11).toInt() ??
       1;
   int get onboardingStepTotal =>
-      int.tryParse('${raw['onboarding_step_total'] ?? 7}')
-          ?.clamp(1, 7)
+      int.tryParse('${raw['onboarding_step_total'] ?? 11}')
+          ?.clamp(1, 11)
           .toInt() ??
-      7;
+      11;
   int get onboardingProgressPercent =>
       int.tryParse('${raw['onboarding_progress_percent'] ?? ''}') ??
       ((currentStep / onboardingStepTotal) * 100).round();
@@ -80,11 +84,6 @@ class DeliveryOffer {
       '${raw['distance_text'] ?? raw['distance'] ?? 'Distance unavailable'}';
   String get eta =>
       '${raw['eta'] ?? raw['estimated_eta'] ?? 'ETA unavailable'}';
-  num get earnings =>
-      num.tryParse(
-        '${raw['estimated_earnings'] ?? raw['earnings'] ?? raw['delivery_fee'] ?? 0}',
-      ) ??
-      0;
   DateTime? get expiresAt => DateTime.tryParse('${raw['expires_at'] ?? ''}');
 }
 

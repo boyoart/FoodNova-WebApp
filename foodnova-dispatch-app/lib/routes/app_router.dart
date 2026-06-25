@@ -10,7 +10,6 @@ import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/delivery/presentation/active_delivery_screen.dart';
 import '../features/delivery/presentation/delivery_orders_screen.dart';
-import '../features/earnings/presentation/earnings_screen.dart';
 import '../features/history/presentation/history_screen.dart';
 import '../features/home/presentation/onboarding_screen.dart';
 import '../features/home/presentation/splash_screen.dart';
@@ -101,7 +100,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/orders',
         builder: (_, __) => const DeliveryOrdersScreen(),
       ),
-      GoRoute(path: '/earnings', builder: (_, __) => const EarningsScreen()),
       GoRoute(path: '/history', builder: (_, __) => const HistoryScreen()),
       GoRoute(
         path: '/notifications',
