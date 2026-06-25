@@ -111,8 +111,6 @@ class _DeliveryOrderCard extends StatelessWidget {
             Text('Dropoff: ${order.dropoff}'),
             if (order.instructions.isNotEmpty)
               Text('Instructions: ${order.instructions}'),
-            if (order.deliveryPin.isNotEmpty)
-              Text('Delivery PIN: ${order.deliveryPin}'),
             const SizedBox(height: 14),
             FilledButton.icon(
               onPressed: () =>

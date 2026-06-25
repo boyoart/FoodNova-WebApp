@@ -114,6 +114,7 @@ class OrderSummary {
   String get refundNote => '${raw['refund_note'] ?? ''}';
   String get receipt => '${raw['receipt'] ?? ''}';
   String get deliveryConfirmedAt => '${raw['delivery_confirmed_at'] ?? ''}';
+  String get deliveryCompletedAt => '${raw['delivery_completed_at'] ?? ''}';
   bool get isOutForDelivery {
     return {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}
         .contains(canonicalDeliveryStatus);

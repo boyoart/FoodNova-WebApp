@@ -3070,7 +3070,9 @@ def order_to_dict(order: DBOrder) -> dict:
         "payment_status": order.payment_status or "pending_payment",
         "order_status": order.order_status or "order_placed",
         "fulfillment_status": order.fulfillment_status or "order_placed",
+        "dispatch_status": canonical_dispatch_status(order),
         "delivery_code": order.delivery_code,
+        "delivery_pin": order.delivery_code or "",
         "delivery_code_created_at": iso(order.delivery_code_created_at),
         "delivery_confirmed_at": iso(order.delivery_confirmed_at),
         "rider_id": getattr(order, "rider_id", None),
@@ -9917,38 +9919,10 @@ def update_order(order_id: int, payload: dict, request: Request):
 
 @app.post("/orders/{order_id}/confirm-delivery")
 def confirm_delivery(order_id: int, payload: dict):
-    db = SessionLocal()
-    try:
-        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        stored_code = str(order.delivery_code or "").strip()
-
-        if not stored_code:
-            raise HTTPException(status_code=400, detail="No delivery code generated for this order")
-
-        delivery_code = validate_delivery_pin_input(payload.get("delivery_code", ""), stored_code)
-        if delivery_code != stored_code:
-            raise HTTPException(status_code=400, detail="Invalid delivery confirmation code")
-
-        order.status = "delivered"
-        order.order_status = "delivered"
-        order.fulfillment_status = "delivered"
-        order.delivery_confirmed_at = datetime.utcnow()
-        order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
-        order.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(order)
-        data = order_to_dict(order)
-        safe_email_call("customer_delivery_confirmed", send_customer_order_email, data, "delivered")
-        return {
-            "success": True,
-            "message": "Delivery confirmed successfully",
-            "order": data,
-            "data": data,
-        }
-    finally:
-        db.close()
+    raise HTTPException(
+        status_code=403,
+        detail="Only the assigned rider can complete delivery with the customer's PIN.",
+    )
 
 
 def _delivery_worker_order_or_404(db, worker: DBDeliveryWorker, order_id: int) -> DBOrder:
@@ -9958,6 +9932,129 @@ def _delivery_worker_order_or_404(db, worker: DBDeliveryWorker, order_id: int) -
     if getattr(order, "delivery_worker_id", None) != worker.id and getattr(order, "rider_id", None) != worker.id:
         raise HTTPException(status_code=403, detail="This order is not assigned to your dispatch account")
     return order
+
+
+def _complete_delivery_with_pin(
+    db,
+    request: Request,
+    user: dict,
+    worker: DBDeliveryWorker,
+    order: DBOrder,
+    entered_pin: str,
+    proof: dict = None,
+) -> dict:
+    stored_code = str(order.delivery_code or "").strip()
+    if not stored_code:
+        raise HTTPException(status_code=400, detail="No delivery code generated for this order")
+    try:
+        delivery_code = validate_delivery_pin_input(entered_pin, stored_code)
+    except HTTPException:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid delivery PIN. Please ask the customer for the correct PIN.",
+        )
+    if delivery_code != stored_code:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid delivery PIN. Please ask the customer for the correct PIN.",
+        )
+
+    completed_at = datetime.utcnow()
+    already_delivered = canonical_dispatch_status(order) == "DELIVERED"
+    order.status = "delivered"
+    order.order_status = "delivered"
+    order.fulfillment_status = "delivered"
+    order.delivery_status = "DELIVERED"
+    order.delivery_confirmed_at = order.delivery_confirmed_at or completed_at
+    order.delivery_completed_at = order.delivery_completed_at or completed_at
+    order.updated_at = completed_at
+    if proof is not None:
+        order.service_note = f"{order.service_note or ''}\nDelivery proof: {json_dump(proof)}".strip()
+
+    worker.operational_status = "ONLINE"
+    if not already_delivered:
+        worker.completed_deliveries = (worker.completed_deliveries or 0) + 1
+    worker.updated_at = completed_at
+
+    db.query(DBDeliveryOffer).filter(
+        DBDeliveryOffer.order_id == order.id,
+        DBDeliveryOffer.worker_id == worker.id,
+        DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"]),
+    ).update({"status": "COMPLETED", "updated_at": completed_at}, synchronize_session=False)
+
+    assignment_log = db.query(DBDeliveryAssignmentLog).filter(
+        DBDeliveryAssignmentLog.order_id == order.id,
+        DBDeliveryAssignmentLog.worker_id == worker.id,
+    ).order_by(DBDeliveryAssignmentLog.id.desc()).first()
+    if assignment_log:
+        assignment_log.status = "completed"
+        assignment_log.completion_time = assignment_log.completion_time or completed_at
+        assignment_log.delivery_code_entered = delivery_code
+        assignment_log.updated_at = completed_at
+    else:
+        db.add(DBDeliveryAssignmentLog(
+            order_id=order.id,
+            order_code=order.order_code,
+            worker_id=worker.id,
+            worker_type=worker.worker_type or "",
+            worker_name=worker.full_name or "",
+            worker_phone=worker.phone or "",
+            status="completed",
+            completion_time=completed_at,
+            delivery_code_entered=delivery_code,
+        ))
+
+    db.commit()
+    db.refresh(order)
+    data = dispatch_order_to_dict(order)
+
+    _create_order_notification(
+        data,
+        "Order delivered",
+        "Your order has been delivered successfully.",
+        "delivered",
+        "delivery",
+    )
+    _create_user_notification(
+        worker.email,
+        "Delivery completed successfully.",
+        f"Delivery for order {order.order_code} has been completed successfully.",
+        "delivery_completed",
+        "delivery",
+        data,
+    )
+    _create_admin_notifications(
+        f"Order #{order.order_code} has been delivered.",
+        f"Order #{order.order_code} has been delivered.",
+        "admin_delivery_completed",
+        "delivery",
+        data,
+    )
+    event = {
+        "order_id": order.id,
+        "order": data,
+        "dispatch_status": "DELIVERED",
+        "delivery_status": "DELIVERED",
+        "status": "delivered",
+        "event": "delivered",
+        "timestamp": iso(completed_at),
+    }
+    socket_emit(f"order:update:{order.id}", event, room=f"order:{order.id}")
+    socket_emit("delivery:completed", event, room=f"user:{worker.user_id}")
+    socket_emit("delivery:active_jobs", event, room=f"user:{worker.user_id}")
+    socket_emit("admin:dashboard", event, room="role:admin")
+    socket_emit("admin:orders", event, room="role:admin")
+    create_admin_audit_log(
+        request,
+        user,
+        "delivery_completed",
+        "order",
+        order.id,
+        f"{worker.full_name} completed delivery for {order.order_code}",
+        {"proof": proof or {"delivery_code_entered": True}, "order": data},
+    )
+    safe_email_call("customer_delivery_confirmed", send_customer_order_email, data, "delivered")
+    return data
 
 
 @app.get("/delivery/orders")
@@ -9995,6 +10092,11 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
         }
         if raw_status not in allowed:
             raise HTTPException(status_code=400, detail="Invalid delivery status")
+        if raw_status == "delivered":
+            raise HTTPException(
+                status_code=400,
+                detail="Delivery completion requires the customer's PIN.",
+            )
 
         status_map = {
             "en_route_to_customer": "IN_TRANSIT",
@@ -10007,11 +10109,6 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
             order.order_status = "out_for_delivery"
             order.fulfillment_status = "out_for_delivery"
             order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
-        if raw_status == "delivered":
-            order.status = "delivered"
-            order.order_status = "delivered"
-            order.fulfillment_status = "delivered"
-            order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
         if raw_status == "cancelled":
             order.delivery_status = "CANCELLED"
         if payload.note:
@@ -10061,43 +10158,21 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
             "submitted_at": datetime.utcnow().isoformat(),
             "worker_id": worker.id,
         }
-        if payload.delivery_code:
-            stored_code = str(order.delivery_code or "").strip()
-            if not stored_code:
-                raise HTTPException(status_code=400, detail="No delivery code generated for this order")
-            delivery_code = validate_delivery_pin_input(payload.delivery_code, stored_code)
-            if delivery_code != stored_code:
-                raise HTTPException(status_code=400, detail="Invalid delivery confirmation code")
-            order.delivery_confirmed_at = datetime.utcnow()
-        elif not proof["signature_present"] and not proof["photo_url"]:
-            raise HTTPException(status_code=400, detail="Delivery proof requires a 4-digit Delivery PIN, signature, or photo")
-
-        order.status = "delivered"
-        order.order_status = "delivered"
-        order.fulfillment_status = "delivered"
-        order.delivery_status = "DELIVERED"
-        order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
-        order.service_note = f"{order.service_note or ''}\nDelivery proof: {json_dump(proof)}".strip()
-        order.updated_at = datetime.utcnow()
-        worker.operational_status = "ONLINE"
-        worker.updated_at = datetime.utcnow()
-        db.commit()
-        db.refresh(order)
-        data = order_to_dict(order)
-        _create_order_notification(data, "Delivery completed", f"Your order {order.order_code} has been delivered.", "delivery_update", "delivery")
-        proof_event = {
-            "order_id": order.id,
+        data = _complete_delivery_with_pin(
+            db,
+            request,
+            user,
+            worker,
+            order,
+            payload.delivery_code or "",
+            proof,
+        )
+        return {
+            "success": True,
+            "message": "Delivery completed successfully.",
             "order": data,
-            "delivery_status": order.delivery_status,
-            "status": order.status,
-            "event": "delivered",
-            "timestamp": iso(datetime.utcnow()),
+            "data": data,
         }
-        socket_emit(f"order:update:{order.id}", proof_event, room=f"order:{order.id}")
-        socket_emit("delivery:completed", proof_event, room=f"user:{worker.user_id}")
-        create_admin_audit_log(request, user, "delivery_proof_submitted", "order", order.id, f"{worker.full_name} submitted proof for {order.order_code}", {"proof": proof, "order": data})
-        safe_email_call("customer_delivery_confirmed", send_customer_order_email, data, "delivered")
-        return {"success": True, "message": "Delivery proof submitted", "order": data, "data": data}
     finally:
         db.close()
 

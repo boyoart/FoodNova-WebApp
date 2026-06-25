@@ -37,11 +37,8 @@ class TrackingScreen extends ConsumerStatefulWidget {
 }
 
 class _TrackingScreenState extends ConsumerState<TrackingScreen> {
-  final _deliveryCode = TextEditingController();
   _ReceiptFile? _selectedReceipt;
   bool _uploading = false;
-  bool _verifying = false;
-  bool _verified = false;
   double _progress = 0;
   Timer? _refreshTimer;
   StreamSubscription<void>? _pushRefreshSubscription;
@@ -90,7 +87,6 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   void dispose() {
     _refreshTimer?.cancel();
     _pushRefreshSubscription?.cancel();
-    _deliveryCode.dispose();
     super.dispose();
   }
 
@@ -149,30 +145,6 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
       _toast('Receipt upload failed: $error');
     } finally {
       if (mounted) setState(() => _uploading = false);
-    }
-  }
-
-  Future<void> _verifyDelivery() async {
-    final code = _deliveryCode.text.trim();
-    if (!RegExp(r'^\d{4}$').hasMatch(code)) {
-      _toast('Enter the 4-digit PIN from your rider to confirm delivery.');
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _verifying = true);
-    try {
-      final repository = ref.read(ordersRepositoryProvider);
-      await repository.confirmDelivery(orderId: widget.orderId, code: code);
-      if (!mounted) return;
-      _deliveryCode.clear();
-      setState(() => _verified = true);
-      ref.invalidate(orderDetailProvider(widget.orderId));
-      ref.invalidate(ordersProvider);
-      _toast('Delivery verified. Your order is now delivered.');
-    } catch (error) {
-      _toast('Delivery confirmation failed: $error');
-    } finally {
-      if (mounted) setState(() => _verifying = false);
     }
   }
 
@@ -243,15 +215,11 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
               selectedReceipt: _selectedReceipt,
               uploading: _uploading,
               uploadProgress: _progress,
-              deliveryCode: _deliveryCode,
-              verifying: _verifying,
-              verified: _verified,
               lastSyncedAt: _lastSyncedAt,
               onPickCamera: () => _pickImage(ImageSource.camera),
               onPickGallery: () => _pickImage(ImageSource.gallery),
               onPickFile: _pickFile,
               onUpload: _uploadReceipt,
-              onVerifyDelivery: _verifyDelivery,
               onCancel: () => _showCancelRequestSheet(context, ref, order),
             ),
           );
@@ -295,15 +263,11 @@ class _OrderDetailsView extends StatelessWidget {
     required this.selectedReceipt,
     required this.uploading,
     required this.uploadProgress,
-    required this.deliveryCode,
-    required this.verifying,
-    required this.verified,
     required this.lastSyncedAt,
     required this.onPickCamera,
     required this.onPickGallery,
     required this.onPickFile,
     required this.onUpload,
-    required this.onVerifyDelivery,
     required this.onCancel,
   });
 
@@ -312,15 +276,11 @@ class _OrderDetailsView extends StatelessWidget {
   final _ReceiptFile? selectedReceipt;
   final bool uploading;
   final double uploadProgress;
-  final TextEditingController deliveryCode;
-  final bool verifying;
-  final bool verified;
   final DateTime lastSyncedAt;
   final VoidCallback onPickCamera;
   final VoidCallback onPickGallery;
   final VoidCallback onPickFile;
   final VoidCallback onUpload;
-  final VoidCallback onVerifyDelivery;
   final VoidCallback onCancel;
 
   @override
@@ -368,11 +328,7 @@ class _OrderDetailsView extends StatelessWidget {
         const SizedBox(height: 14),
         _VerificationCard(
           order: order,
-          controller: deliveryCode,
-          loading: verifying,
-          verified: verified || order.isDelivered,
           highlight: order.riderArrived,
-          onVerify: onVerifyDelivery,
         ),
         const SizedBox(height: 14),
         _InvoiceCard(order: order),
@@ -1418,36 +1374,29 @@ class _TrackingMapState extends State<_TrackingMap> {
 class _VerificationCard extends StatelessWidget {
   const _VerificationCard({
     required this.order,
-    required this.controller,
-    required this.loading,
-    required this.verified,
     required this.highlight,
-    required this.onVerify,
   });
 
   final OrderSummary order;
-  final TextEditingController controller;
-  final bool loading;
-  final bool verified;
   final bool highlight;
-  final VoidCallback onVerify;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final canEnterPin = order.riderArrived && !verified;
+    final delivered = order.isDelivered;
+    final arrived = order.riderArrived;
     return _Card(
-      title: verified ? 'Delivery complete' : 'Delivery PIN',
-      icon: verified ? Icons.verified_rounded : Icons.password_rounded,
-      highlighted: highlight && !verified,
+      title: delivered ? 'Delivered' : 'Delivery Verification',
+      icon: delivered ? Icons.verified_rounded : Icons.password_rounded,
+      highlighted: highlight && !delivered,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (verified) ...[
+          if (delivered) ...[
             const _SuccessBurst(),
             const SizedBox(height: 12),
             Text(
-              'Thank you for ordering with FoodNova.',
+              'Delivered',
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
@@ -1459,7 +1408,8 @@ class _VerificationCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             const _RatingPrompt(),
-            if (order.deliveryConfirmedAt.isNotEmpty) ...[
+            if ((order.deliveryConfirmedAt.isNotEmpty ||
+                order.deliveryCompletedAt.isNotEmpty)) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1468,7 +1418,7 @@ class _VerificationCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  'Confirmed ${_timelineTimeLabel(order.deliveryConfirmedAt, false)}',
+                  'Delivered on: ${_timelineTimeLabel(order.deliveryConfirmedAt.isNotEmpty ? order.deliveryConfirmedAt : order.deliveryCompletedAt, false)}',
                   style: TextStyle(
                     color: scheme.onPrimaryContainer,
                     fontWeight: FontWeight.w900,
@@ -1476,38 +1426,44 @@ class _VerificationCard extends StatelessWidget {
                 ),
               ),
             ],
-          ] else if (canEnterPin) ...[
+          ] else if (arrived) ...[
+            Text(
+              'Your rider has arrived.',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
             const _MutedText(
-              'Your rider has arrived. Enter the 4-digit PIN only after receiving your order.',
+              'After you have received your items, tell your rider the PIN below.',
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Never share this PIN before receiving your order.',
+              style: TextStyle(
+                color: scheme.error,
+                fontWeight: FontWeight.w900,
+              ),
             ),
             if (order.deliveryPin.trim().isNotEmpty) ...[
               const SizedBox(height: 14),
               _PinDisplay(pin: order.deliveryPin.trim()),
-            ],
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              enabled: !loading,
-              maxLength: 4,
-              keyboardType: TextInputType.number,
-              textInputAction: TextInputAction.done,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(4),
-              ],
-              decoration: const InputDecoration(
-                hintText: '4-digit PIN',
-                counterText: '',
-                prefixIcon: Icon(Icons.pin_rounded),
+              const SizedBox(height: 14),
+              OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: order.deliveryPin));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Delivery PIN copied')),
+                  );
+                },
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('Copy PIN'),
               ),
-            ),
-            const SizedBox(height: 12),
-            PrimaryButton(
-              label: loading ? 'Verifying...' : 'Verify delivery',
-              icon: Icons.verified_user_rounded,
-              loading: loading,
-              onPressed: loading ? null : onVerify,
-            ),
+            ] else ...[
+              const SizedBox(height: 12),
+              const _MutedText('PIN is being generated. Please wait a moment.'),
+            ],
           ] else ...[
             Container(
               padding: const EdgeInsets.all(12),
@@ -1521,7 +1477,7 @@ class _VerificationCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   const Expanded(
                     child: _MutedText(
-                      'The delivery PIN will appear when your rider marks the order as arrived.',
+                      'Your delivery PIN will become available once your rider arrives.',
                     ),
                   ),
                 ],

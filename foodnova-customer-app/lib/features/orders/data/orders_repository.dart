@@ -130,22 +130,6 @@ class OrdersRepository {
     return Map<String, dynamic>.from(response.data is Map ? response.data : {});
   }
 
-  Future<OrderSummary> confirmDelivery({
-    required int orderId,
-    required String code,
-  }) async {
-    final response = await _dio.post('/orders/$orderId/confirm-delivery',
-        data: {'delivery_code': code});
-    final body = response.data is Map
-        ? Map<String, dynamic>.from(response.data)
-        : <String, dynamic>{};
-    final data = body['data'] is Map
-        ? Map<String, dynamic>.from(body['data'])
-        : <String, dynamic>{};
-    return OrderSummary.fromJson(
-        Map<String, dynamic>.from(body['order'] ?? data['order'] ?? body));
-  }
-
   Future<RiderLocation?> riderLocation(int orderId) async {
     Response<dynamic> response;
     try {

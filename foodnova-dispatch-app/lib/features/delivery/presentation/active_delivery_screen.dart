@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:signature/signature.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/network/api_client.dart';
@@ -31,12 +29,6 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   DeliveryStage stage = DeliveryStage.accepted;
   Timer? timer;
   String message = '';
-  final otp = TextEditingController();
-  final signature = SignatureController(
-    penStrokeWidth: 3,
-    penColor: FoodNovaColors.primary,
-  );
-  XFile? photo;
 
   @override
   void initState() {
@@ -48,8 +40,6 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   @override
   void dispose() {
     timer?.cancel();
-    signature.dispose();
-    otp.dispose();
     super.dispose();
   }
 
@@ -93,8 +83,6 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
                 Text('Dropoff: ${offer.dropoff}'),
                 if (offer.instructions.isNotEmpty)
                   Text('Instructions: ${offer.instructions}'),
-                if (offer.deliveryPin.isNotEmpty)
-                  Text('Delivery PIN: ${offer.deliveryPin}'),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
@@ -135,9 +123,13 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
                     ? FoodNovaColors.success
                     : FoodNovaColors.border,
               ),
-              title: Text(item.label),
+              title: Text(
+                item == DeliveryStage.delivered
+                    ? 'Complete Delivery'
+                    : item.label,
+              ),
               onTap: item == DeliveryStage.delivered
-                  ? _showProofSheet
+                  ? _openVerificationScreen
                   : () => _setStage(item),
             ),
           if (message.isNotEmpty) FnCard(child: Text(message)),
@@ -168,104 +160,21 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
     }
   }
 
-  Future<void> _showProofSheet() async {
-    if (!context.mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          18,
-          18,
-          18,
-          18 + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Delivery proof',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: otp,
-              decoration: const InputDecoration(
-                labelText: 'Customer PIN',
-                hintText: '4-digit PIN',
-              ),
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              inputFormatters: [
-                FilteringTextInputFormatter.digitsOnly,
-                LengthLimitingTextInputFormatter(4),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              height: 140,
-              decoration: BoxDecoration(
-                border: Border.all(color: FoodNovaColors.border),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Signature(
-                controller: signature,
-                backgroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () async {
-                photo = await ImagePicker().pickImage(
-                  source: ImageSource.camera,
-                  imageQuality: 80,
-                );
-                if (mounted) setState(() {});
-              },
-              icon: const Icon(Icons.camera_alt_outlined),
-              label: Text(
-                photo == null ? 'Add delivery photo' : 'Photo attached',
-              ),
-            ),
-            FilledButton(
-              onPressed: _completeDelivery,
-              child: const Text('Mark delivered'),
-            ),
-          ],
-        ),
+  Future<void> _openVerificationScreen() async {
+    final completed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => _DeliveryPinVerificationScreen(order: offer),
       ),
     );
-  }
-
-  Future<void> _completeDelivery() async {
-    try {
-      if (otp.text.trim().isNotEmpty) {
-        if (!RegExp(r'^\d{4}$').hasMatch(otp.text.trim())) {
-          setState(() => message = 'Enter the 4-digit PIN from the customer.');
-          return;
-        }
-        await ref
-            .read(dispatchRepositoryProvider)
-            .confirmDeliveryOtp(offer.orderId, otp.text.trim());
-      } else if (signature.isNotEmpty || photo != null) {
-        await ref.read(dispatchRepositoryProvider).submitProof(offer.orderId, {
-          'signature_present': signature.isNotEmpty,
-          'photo_path': photo?.path,
-        });
-      } else {
-        if (!mounted) return;
-        setState(
-          () => message =
-              'Add PIN, signature, or delivery photo before marking delivered.',
-        );
-        return;
-      }
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      await _setStage(DeliveryStage.delivered);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => message = apiMessage(e));
+    if (completed == true && mounted) {
+      timer?.cancel();
+      timer = null;
+      setState(() {
+        stage = DeliveryStage.delivered;
+        message = 'Delivery completed successfully.';
+      });
+      ref.invalidate(deliveryOrdersProvider);
+      ref.invalidate(dashboardStatsProvider);
     }
   }
 
@@ -309,4 +218,218 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
         ),
         mode: LaunchMode.externalApplication,
       );
+}
+
+class _DeliveryPinVerificationScreen extends ConsumerStatefulWidget {
+  const _DeliveryPinVerificationScreen({required this.order});
+
+  final DeliveryOffer order;
+
+  @override
+  ConsumerState<_DeliveryPinVerificationScreen> createState() =>
+      _DeliveryPinVerificationScreenState();
+}
+
+class _DeliveryPinVerificationScreenState
+    extends ConsumerState<_DeliveryPinVerificationScreen> {
+  final _pin = TextEditingController();
+  final _focusNode = FocusNode();
+  bool _loading = false;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    final code = _pin.text.trim();
+    if (!RegExp(r'^\d{4}$').hasMatch(code)) {
+      setState(() => _error = 'Ask the customer for their 4-digit PIN.');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = '';
+    });
+    try {
+      await ref
+          .read(dispatchRepositoryProvider)
+          .confirmDeliveryOtp(widget.order.orderId, code);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Delivery completed successfully.')),
+      );
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = apiMessage(error);
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Complete Delivery')),
+      body: ListView(
+        padding: const EdgeInsets.all(18),
+        children: [
+          FnCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Icon(
+                  Icons.verified_user_outlined,
+                  size: 44,
+                  color: FoodNovaColors.primary,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Customer Verification PIN',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Ask the customer for their 4-digit PIN.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                TextField(
+                  controller: _pin,
+                  focusNode: _focusNode,
+                  enabled: !_loading,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  maxLength: 4,
+                  obscureText: true,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 1,
+                    color: Colors.transparent,
+                  ),
+                  cursorColor: Colors.transparent,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(4),
+                  ],
+                  decoration: const InputDecoration(
+                    counterText: '',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onChanged: (_) => setState(() => _error = ''),
+                  onSubmitted: (_) => _loading ? null : _verify(),
+                ),
+                GestureDetector(
+                  onTap: () => _focusNode.requestFocus(),
+                  child: AnimatedBuilder(
+                    animation: _pin,
+                    builder: (context, _) => _PinBoxes(
+                        value: _pin.text, hasError: _error.isNotEmpty),
+                  ),
+                ),
+                if (_error.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _error,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: scheme.error,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 22),
+                FilledButton.icon(
+                  onPressed: _loading ? null : _verify,
+                  icon: _loading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.check_circle_outline),
+                  label: Text(
+                    _loading ? 'Verifying...' : 'Verify & Complete Delivery',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PinBoxes extends StatelessWidget {
+  const _PinBoxes({required this.value, required this.hasError});
+
+  final String value;
+  final bool hasError;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'PIN Entry',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < 4; i++) ...[
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 54,
+              height: 58,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: hasError
+                      ? scheme.error
+                      : i < value.length
+                          ? FoodNovaColors.primary
+                          : FoodNovaColors.border,
+                  width: i < value.length ? 1.8 : 1,
+                ),
+              ),
+              child: Text(
+                i < value.length ? value[i] : '_',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: i < value.length
+                          ? scheme.onSurface
+                          : scheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
+            if (i != 3) const SizedBox(width: 10),
+          ],
+        ],
+      ),
+    );
+  }
 }
