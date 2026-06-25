@@ -9,12 +9,13 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/state/session_controller.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/widgets/fn_widgets.dart';
 import '../data/auth_repository.dart';
 import '../data/onboarding_file_recovery_service.dart';
 
-const _totalSteps = 11;
+const _totalSteps = dispatchOnboardingTotalSteps;
 
 class SignUpScreen extends ConsumerStatefulWidget {
   const SignUpScreen({super.key});
@@ -58,6 +59,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   int currentStep = 1;
   String message = '';
   String verificationMessage = '';
+  String? highlightedField;
   NinVerificationResult? verifiedNin;
   XFile? selfie;
   PlatformFile? driverLicense;
@@ -143,6 +145,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   Future<void> _restoreStep() async {
     final session = ref.read(sessionControllerProvider.notifier);
     final savedStep = await session.currentOnboardingStep();
+    int? draftStep;
     final token = await session.token();
     if (token != null && token.isNotEmpty) {
       authenticatedRider = true;
@@ -159,6 +162,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     if (draft.trim().isNotEmpty) {
       try {
         final data = Map<String, dynamic>.from(jsonDecode(draft) as Map);
+        draftStep = int.tryParse('${data['current_step'] ?? ''}');
         final values = data['fields'];
         if (values is Map) {
           for (final entry in values.entries) {
@@ -214,7 +218,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       }
     }
     restoringDraft = false;
-    final restoredStep = currentStep > 1 ? currentStep : savedStep;
+    var restoredStep = savedStep;
+    for (final candidate in [currentStep, if (draftStep != null) draftStep]) {
+      if (candidate > restoredStep) restoredStep = candidate;
+    }
     setState(() => currentStep = restoredStep.clamp(1, _totalSteps).toInt());
     await _saveDraft();
   }
@@ -373,6 +380,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     setState(() {
       currentStep = next;
       message = '';
+      highlightedField = null;
     });
     await _saveDraft();
   }
@@ -409,7 +417,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
 
   String get _completionStatus {
     if (_canContinueCurrentStep) return 'Complete';
-    if (currentStep == 2 && verifyingNin) return 'Verifying';
+    if (currentStep == 4 && verifyingNin) return 'Verifying';
     return 'In progress';
   }
 
@@ -418,68 +426,73 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _handleSystemBack();
-      },
-      child: Scaffold(
-        backgroundColor: FoodNovaColors.bg,
-        body: SafeArea(
-          child: Form(
-            key: formKey,
-            child: Column(
-              children: [
-                _Header(
-                  currentStep: currentStep,
-                  title: _stepTitle,
-                  status: _completionStatus,
-                  percent: _progressPercent,
-                ),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 280),
-                    transitionBuilder: (child, animation) {
-                      final offset = Tween<Offset>(
-                        begin: const Offset(0.08, 0),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                          parent: animation, curve: Curves.easeOutCubic));
-                      return FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(position: offset, child: child),
-                      );
-                    },
-                    child: SingleChildScrollView(
-                      key: ValueKey(currentStep),
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
-                      child: _PremiumCard(child: _currentStepPage()),
-                    ),
+    return Theme(
+      data: FoodNovaAppTheme.light,
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _handleSystemBack();
+        },
+        child: Scaffold(
+          backgroundColor: FoodNovaColors.bg,
+          body: SafeArea(
+            child: Form(
+              key: formKey,
+              child: Column(
+                children: [
+                  _Header(
+                    currentStep: currentStep,
+                    title: _stepTitle,
+                    status: _completionStatus,
+                    percent: _progressPercent,
                   ),
-                ),
-                if (message.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-                    child: Text(
-                      message,
-                      style: TextStyle(
-                        color: message.toLowerCase().contains('submitted')
-                            ? FoodNovaColors.success
-                            : FoodNovaColors.danger,
-                        fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 280),
+                      transitionBuilder: (child, animation) {
+                        final offset = Tween<Offset>(
+                          begin: const Offset(0.08, 0),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                            parent: animation, curve: Curves.easeOutCubic));
+                        return FadeTransition(
+                          opacity: animation,
+                          child:
+                              SlideTransition(position: offset, child: child),
+                        );
+                      },
+                      child: SingleChildScrollView(
+                        key: ValueKey(currentStep),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 18),
+                        child: _PremiumCard(child: _currentStepPage()),
                       ),
                     ),
                   ),
-                _Controls(
-                  step: currentStep,
-                  loading: loading,
-                  canContinue: _canContinueCurrentStep,
-                  onBack: currentStep == 1
-                      ? null
-                      : () => _goToStep(currentStep - 1),
-                  onNext: currentStep == _totalSteps ? _submit : _nextStep,
-                ),
-              ],
+                  if (message.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                      child: Text(
+                        message,
+                        style: TextStyle(
+                          color: message.toLowerCase().contains('submitted')
+                              ? FoodNovaColors.success
+                              : FoodNovaColors.danger,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  _Controls(
+                    step: currentStep,
+                    loading: loading,
+                    onBack: currentStep == 1
+                        ? () {
+                            _leaveRegistration();
+                          }
+                        : () => _goToStep(currentStep - 1),
+                    onNext: currentStep == _totalSteps ? _submit : _nextStep,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -493,9 +506,18 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       await _goToStep(currentStep - 1);
       return;
     }
-    final token = await ref.read(sessionControllerProvider.notifier).token();
+    await _leaveRegistration();
+  }
+
+  Future<void> _leaveRegistration() async {
+    await _saveDraft();
+    final session = ref.read(sessionControllerProvider.notifier);
+    final token = await session.token();
+    if (token != null && token.isNotEmpty) {
+      await session.clear();
+    }
     if (!mounted) return;
-    context.go(token == null || token.isEmpty ? '/login' : '/dashboard');
+    context.go('/login');
   }
 
   Widget _currentStepPage() => switch (currentStep) {
@@ -938,6 +960,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     setState(() {
       loading = true;
       message = '';
+      highlightedField = null;
     });
     try {
       final token = await ref.read(sessionControllerProvider.notifier).token();
@@ -970,6 +993,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     setState(() {
       loading = true;
       message = '';
+      highlightedField = null;
     });
     try {
       final progress =
@@ -1004,34 +1028,141 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   }
 
   bool _validateCurrentStep() {
-    final blocker = switch (currentStep) {
-      1 => null,
-      2 => _accountComplete ? null : 'Complete valid account details first.',
-      3 =>
-        fields['nin_number']!.text.replaceAll(RegExp(r'\D'), '').length == 11 &&
-                ninConsent
-            ? null
-            : 'Enter your 11-digit NIN and accept consent before continuing.',
-      4 => verifiedNin?.verified == true
-          ? null
-          : 'Verify your NIN successfully before continuing.',
-      5 => verifiedNin?.verified == true
-          ? null
-          : 'Verified identity details are required before continuing.',
-      6 => _residentialAddressComplete ? null : 'Complete your address.',
-      7 => _emergencyContactComplete
-          ? null
-          : 'Complete your emergency contact details.',
-      8 => _selfieComplete ? null : 'Capture and upload your selfie.',
-      9 => _governmentIdComplete
-          ? null
-          : 'Upload your government ID and proof of address.',
-      10 => _riderProfileComplete ? null : 'Complete your vehicle information.',
-      _ => null,
-    };
-    if (blocker == null) return true;
-    setState(() => message = blocker);
+    final failure = _validationFailure();
+    if (failure == null) return true;
+    setState(() {
+      message = failure.message;
+      highlightedField = failure.fieldKey;
+    });
     return false;
+  }
+
+  _OnboardingValidationFailure? _validationFailure() {
+    if (currentStep == 1) return null;
+    if (currentStep == 2) {
+      if (!fields['email']!.text.contains('@')) {
+        return const _OnboardingValidationFailure(
+          'email',
+          'Enter a valid email address.',
+        );
+      }
+      if (fields['phone']!.text.replaceAll(RegExp(r'\D'), '').length < 10) {
+        return const _OnboardingValidationFailure(
+          'phone',
+          'Enter a valid phone number.',
+        );
+      }
+      if (fields['password']!.text.length < 8) {
+        return const _OnboardingValidationFailure(
+          'password',
+          'Password must be at least 8 characters.',
+        );
+      }
+      return null;
+    }
+    if (currentStep == 3) {
+      if (fields['nin_number']!.text.replaceAll(RegExp(r'\D'), '').length !=
+          11) {
+        return const _OnboardingValidationFailure(
+          'nin_number',
+          'Enter your 11-digit NIN.',
+        );
+      }
+      if (!ninConsent) {
+        return const _OnboardingValidationFailure(
+          null,
+          'Accept the NIN verification consent before continuing.',
+        );
+      }
+      return null;
+    }
+    if (currentStep == 4 && verifiedNin?.verified != true) {
+      return const _OnboardingValidationFailure(
+        'nin_number',
+        'Verify your NIN successfully before continuing.',
+      );
+    }
+    if (currentStep == 5 && verifiedNin?.verified != true) {
+      return const _OnboardingValidationFailure(
+        null,
+        'Verified identity details are required before continuing.',
+      );
+    }
+    if (currentStep == 6) {
+      for (final key in ['residential_address', 'state', 'lga']) {
+        if (fields[key]!.text.trim().isEmpty) {
+          return _OnboardingValidationFailure(
+            key,
+            'Complete your residential address.',
+          );
+        }
+      }
+      return null;
+    }
+    if (currentStep == 7) {
+      if (fields['emergency_contact_name']!.text.trim().isEmpty) {
+        return const _OnboardingValidationFailure(
+          'emergency_contact_name',
+          'Enter your emergency contact name.',
+        );
+      }
+      if (fields['emergency_contact_phone']!
+              .text
+              .replaceAll(RegExp(r'\D'), '')
+              .length <
+          10) {
+        return const _OnboardingValidationFailure(
+          'emergency_contact_phone',
+          'Enter a valid emergency contact phone number.',
+        );
+      }
+      if (fields['emergency_contact_relationship']!.text.trim().isEmpty) {
+        return const _OnboardingValidationFailure(
+          'emergency_contact_relationship',
+          'Enter your relationship to this contact.',
+        );
+      }
+      return null;
+    }
+    if (currentStep == 8 && !_selfieComplete) {
+      return const _OnboardingValidationFailure(
+        null,
+        'Capture and upload your selfie.',
+      );
+    }
+    if (currentStep == 9) {
+      if (driverLicense == null && driverLicenseUrl.isEmpty) {
+        return const _OnboardingValidationFailure(
+          null,
+          'Upload your government ID.',
+        );
+      }
+      if (proofOfAddress == null && proofOfAddressUrl.isEmpty) {
+        return const _OnboardingValidationFailure(
+          null,
+          'Upload your proof of address.',
+        );
+      }
+      return null;
+    }
+    if (currentStep == 10) {
+      if (!requiresVehicleDetails) return null;
+      for (final key in [
+        'vehicle_type',
+        'vehicle_make',
+        'vehicle_model',
+        'vehicle_color',
+        'plate_number',
+      ]) {
+        if (fields[key]!.text.trim().isEmpty) {
+          return _OnboardingValidationFailure(
+            key,
+            'Complete your vehicle information.',
+          );
+        }
+      }
+    }
+    return null;
   }
 
   Future<void> _verifyNin() async {
@@ -1429,13 +1560,33 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
         decoration: InputDecoration(
           labelText: _label(key),
           prefixIcon: icon == null ? null : Icon(icon),
+          errorText: highlightedField == key ? _fieldErrorText(key) : null,
           suffixIcon: readOnly
               ? const Icon(Icons.lock_outline, size: 18)
               : _fieldCompleteIcon(key),
         ),
-        onChanged: onChanged,
+        onChanged: (value) {
+          if (highlightedField == key) {
+            setState(() {
+              highlightedField = null;
+              message = '';
+            });
+          }
+          onChanged?.call(value);
+        },
       ),
     );
+  }
+
+  String _fieldErrorText(String key) {
+    return switch (key) {
+      'email' => 'Use a valid email.',
+      'phone' => 'Use a valid phone number.',
+      'password' => 'Minimum 8 characters.',
+      'nin_number' => 'Enter 11 digits.',
+      'emergency_contact_phone' => 'Use a valid phone number.',
+      _ => 'Required',
+    };
   }
 
   Widget? _fieldCompleteIcon(String key) {
@@ -1445,7 +1596,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       'phone' ||
       'emergency_contact_phone' =>
         value.replaceAll(RegExp(r'\D'), '').length >= 10,
-      'password' => value.length >= 6,
+      'password' => value.length >= 8,
       'confirm_password' =>
         value.isNotEmpty && value == fields['password']!.text,
       'nin_number' => value.replaceAll(RegExp(r'\D'), '').length == 11,
@@ -1456,6 +1607,12 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             color: FoodNovaColors.success, size: 19)
         : null;
   }
+}
+
+class _OnboardingValidationFailure {
+  const _OnboardingValidationFailure(this.fieldKey, this.message);
+  final String? fieldKey;
+  final String message;
 }
 
 String _label(String key) => key
@@ -1482,8 +1639,8 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Center(child: BrandLogo(width: 152, height: 58)),
-          const SizedBox(height: 14),
+          const Center(child: BrandLogo(width: 220, height: 88)),
+          const SizedBox(height: 18),
           Text('Welcome to FoodNova Dispatch',
               style: Theme.of(context)
                   .textTheme
@@ -2052,12 +2209,10 @@ class _Controls extends StatelessWidget {
   const _Controls(
       {required this.step,
       required this.loading,
-      required this.canContinue,
       required this.onBack,
       required this.onNext});
   final int step;
   final bool loading;
-  final bool canContinue;
   final VoidCallback? onBack;
   final VoidCallback onNext;
 
@@ -2083,7 +2238,7 @@ class _Controls extends StatelessWidget {
           Expanded(
             flex: 2,
             child: FilledButton.icon(
-              onPressed: loading || !canContinue ? null : onNext,
+              onPressed: loading ? null : onNext,
               icon: loading
                   ? const SizedBox(
                       width: 18,

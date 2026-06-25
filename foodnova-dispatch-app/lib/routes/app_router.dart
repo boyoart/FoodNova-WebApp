@@ -32,8 +32,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           '${diagnostics['approval_status'] ?? ''}'.toUpperCase();
       final currentStep =
           int.tryParse('${diagnostics['current_step'] ?? 1}') ?? 1;
-      final onboardingComplete =
-          diagnostics['onboarding_complete'] == true || currentStep >= 7;
+      final onboardingComplete = diagnostics['onboarding_complete'] == true ||
+          currentStep >= dispatchOnboardingTotalSteps;
       final completedAuthRoute = [
         '/login',
         '/forgot-password',

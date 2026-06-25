@@ -14,6 +14,8 @@ const _currentOnboardingStepKey = 'foodnova_dispatch_current_step';
 const _onboardingDraftKey = 'foodnova_dispatch_onboarding_draft';
 const _verifiedIdentityKey = 'foodnova_dispatch_verified_identity';
 
+const dispatchOnboardingTotalSteps = 11;
+
 final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 
 final sessionControllerProvider =
@@ -65,12 +67,17 @@ class SessionController extends AsyncNotifier<bool> {
 
   Future<int> currentOnboardingStep() async {
     final prefs = await SharedPreferences.getInstance();
-    return (prefs.getInt(_currentOnboardingStepKey) ?? 1).clamp(1, 7).toInt();
+    return (prefs.getInt(_currentOnboardingStepKey) ?? 1)
+        .clamp(1, dispatchOnboardingTotalSteps)
+        .toInt();
   }
 
   Future<void> saveOnboardingStep(int step) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_currentOnboardingStepKey, step.clamp(1, 7).toInt());
+    await prefs.setInt(
+      _currentOnboardingStepKey,
+      step.clamp(1, dispatchOnboardingTotalSteps).toInt(),
+    );
   }
 
   Future<String> onboardingDraft() async {
@@ -126,7 +133,7 @@ class SessionController extends AsyncNotifier<bool> {
     required bool onboardingCompleted,
     bool profileExists = true,
     String profileSource = 'backend',
-    int currentStep = 7,
+    int currentStep = dispatchOnboardingTotalSteps,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_riderIdKey, riderId);
@@ -136,7 +143,7 @@ class SessionController extends AsyncNotifier<bool> {
     await prefs.setString(_profileSourceKey, profileSource);
     await prefs.setInt(
       _currentOnboardingStepKey,
-      currentStep.clamp(1, 7).toInt(),
+      currentStep.clamp(1, dispatchOnboardingTotalSteps).toInt(),
     );
     _cachedDiagnostics = {
       ..._cachedDiagnostics,
@@ -145,7 +152,8 @@ class SessionController extends AsyncNotifier<bool> {
       'onboarding_complete': onboardingCompleted,
       'profile_exists': profileExists,
       'profile_source': profileSource,
-      'current_step': currentStep.clamp(1, 7).toInt(),
+      'current_step':
+          currentStep.clamp(1, dispatchOnboardingTotalSteps).toInt(),
     };
   }
 

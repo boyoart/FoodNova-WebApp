@@ -163,7 +163,10 @@ final _pendingReviewDiagnosticsProvider =
   return _PendingReviewData(
     worker: worker,
     approvalStatus: '${diagnostics['approval_status'] ?? 'PENDING_REVIEW'}',
-    currentStep: int.tryParse('${diagnostics['current_step'] ?? 5}') ?? 5,
+    currentStep: int.tryParse(
+          '${diagnostics['current_step'] ?? dispatchOnboardingTotalSteps}',
+        ) ??
+        dispatchOnboardingTotalSteps,
   );
 });
 

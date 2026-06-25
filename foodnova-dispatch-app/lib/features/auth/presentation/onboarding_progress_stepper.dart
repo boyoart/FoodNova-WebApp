@@ -3,10 +3,16 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/colors.dart';
 
 const foodNovaOnboardingSteps = [
-  'Account Creation',
-  'NIN Verification',
-  'Personal Information',
-  'Selfie & Documents',
+  'Welcome',
+  'Email & Password',
+  'NIN + Consent',
+  'Live Verification',
+  'Verified Info',
+  'Address',
+  'Emergency Contact',
+  'Selfie',
+  'Government ID',
+  'Vehicle',
   'Review & Submit',
 ];
 
@@ -20,7 +26,7 @@ class OnboardingProgressStepper extends StatelessWidget {
   final int currentStep;
   final String? status;
 
-  static const totalSteps = 5;
+  static const totalSteps = 11;
 
   @override
   Widget build(BuildContext context) {
