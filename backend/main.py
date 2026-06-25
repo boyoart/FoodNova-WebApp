@@ -99,6 +99,7 @@ except Exception:
 load_dotenv()
 
 app = FastAPI(title="FoodNova API")
+fastapi_app = app
 sio = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins="*",
@@ -5334,7 +5335,7 @@ def seed_database():
 def on_startup():
     seed_database()
     route_rows = []
-    for route in app.routes:
+    for route in fastapi_app.routes:
         path = getattr(route, "path", "")
         methods = sorted(getattr(route, "methods", []) or [])
         for method in methods:
@@ -12571,4 +12572,4 @@ def delete_broadcast(broadcast_id: int, request: Request):
 
 
 if sio:
-    app = socketio.ASGIApp(sio, other_asgi_app=app)
+    app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
