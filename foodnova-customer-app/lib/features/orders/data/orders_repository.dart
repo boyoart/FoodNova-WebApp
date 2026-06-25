@@ -1,7 +1,11 @@
 import 'dart:developer' as developer;
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../shared/models/order.dart';
@@ -10,6 +14,18 @@ final ordersRepositoryProvider =
     Provider((ref) => OrdersRepository(ref.watch(dioProvider)));
 final ordersProvider =
     FutureProvider((ref) => ref.watch(ordersRepositoryProvider).myOrders());
+
+class InvoiceFile {
+  const InvoiceFile({
+    required this.path,
+    required this.fileName,
+    required this.fromCache,
+  });
+
+  final String path;
+  final String fileName;
+  final bool fromCache;
+}
 
 class RiderLocation {
   const RiderLocation({
@@ -130,6 +146,60 @@ class OrdersRepository {
     return Map<String, dynamic>.from(response.data is Map ? response.data : {});
   }
 
+  Future<InvoiceFile> invoicePdf(OrderSummary order,
+      {bool forceRefresh = false}) async {
+    final file = await _invoiceFile(order);
+    if (!forceRefresh && await file.exists() && await file.length() > 0) {
+      return InvoiceFile(
+        path: file.path,
+        fileName: p.basename(file.path),
+        fromCache: true,
+      );
+    }
+
+    Response<dynamic> response;
+    try {
+      response = await _dio.get<List<int>>(
+        '/orders/${order.id}/invoice',
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {'Accept': 'application/pdf'},
+        ),
+      );
+    } on DioException catch (error) {
+      if (await file.exists() && await file.length() > 0) {
+        return InvoiceFile(
+          path: file.path,
+          fileName: p.basename(file.path),
+          fromCache: true,
+        );
+      }
+      if (error.response?.statusCode == 404) {
+        response = await _dio.get<List<int>>(
+          '/api/orders/${order.id}/invoice',
+          options: Options(
+            responseType: ResponseType.bytes,
+            headers: {'Accept': 'application/pdf'},
+          ),
+        );
+      } else {
+        rethrow;
+      }
+    }
+
+    final bytes = _invoiceBytes(response.data);
+    if (!_looksLikePdf(bytes, response.headers.value('content-type'))) {
+      throw Exception('Invoice PDF is not available from the backend yet.');
+    }
+    await file.parent.create(recursive: true);
+    await file.writeAsBytes(bytes, flush: true);
+    return InvoiceFile(
+      path: file.path,
+      fileName: p.basename(file.path),
+      fromCache: false,
+    );
+  }
+
   Future<RiderLocation?> riderLocation(int orderId) async {
     Response<dynamic> response;
     try {
@@ -184,5 +254,27 @@ class OrdersRepository {
         : <String, dynamic>{};
     final request = body['request'] ?? body['data'];
     return request is Map ? Map<String, dynamic>.from(request) : null;
+  }
+
+  Future<File> _invoiceFile(OrderSummary order) async {
+    final root = await getApplicationDocumentsDirectory();
+    final directory = Directory(p.join(root.path, 'invoices'));
+    final code =
+        order.orderCode.trim().isEmpty ? '${order.id}' : order.orderCode;
+    final safeCode = code.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return File(p.join(directory.path, 'foodnova_invoice_$safeCode.pdf'));
+  }
+
+  Uint8List _invoiceBytes(dynamic data) {
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+    return Uint8List(0);
+  }
+
+  bool _looksLikePdf(Uint8List bytes, String? contentType) {
+    if (bytes.length < 5) return false;
+    final header = String.fromCharCodes(bytes.take(5));
+    return header == '%PDF-' ||
+        (contentType ?? '').toLowerCase().contains('application/pdf');
   }
 }

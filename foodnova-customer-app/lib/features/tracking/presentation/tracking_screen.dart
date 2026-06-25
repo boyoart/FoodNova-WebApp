@@ -8,8 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../../shared/models/order.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/realtime_service.dart';
@@ -1613,32 +1616,137 @@ class _RatingPromptState extends State<_RatingPrompt> {
   }
 }
 
-class _InvoiceCard extends StatelessWidget {
+class _InvoiceCard extends ConsumerStatefulWidget {
   const _InvoiceCard({required this.order});
 
   final OrderSummary order;
 
   @override
+  ConsumerState<_InvoiceCard> createState() => _InvoiceCardState();
+}
+
+class _InvoiceCardState extends ConsumerState<_InvoiceCard> {
+  bool _viewing = false;
+  bool _downloading = false;
+  bool _sharing = false;
+
+  Future<InvoiceFile> _download({required bool forceRefresh}) {
+    return ref
+        .read(ordersRepositoryProvider)
+        .invoicePdf(widget.order, forceRefresh: forceRefresh);
+  }
+
+  Future<void> _viewInvoice() async {
+    setState(() => _viewing = true);
+    try {
+      final invoice = await _download(forceRefresh: false);
+      final result = await OpenFilex.open(
+        invoice.path,
+        type: 'application/pdf',
+      );
+      if (!mounted) return;
+      if (result.type != ResultType.done) {
+        _showInvoiceMessage(result.message);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      _showInvoiceMessage(apiMessage(error));
+    } finally {
+      if (mounted) setState(() => _viewing = false);
+    }
+  }
+
+  Future<void> _downloadInvoice() async {
+    setState(() => _downloading = true);
+    try {
+      final invoice = await _download(forceRefresh: true);
+      if (!mounted) return;
+      _showInvoiceMessage(
+        invoice.fromCache
+            ? 'Offline invoice is ready.'
+            : 'Invoice downloaded for offline viewing.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showInvoiceMessage(apiMessage(error));
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  Future<void> _shareInvoice() async {
+    setState(() => _sharing = true);
+    try {
+      final invoice = await _download(forceRefresh: false);
+      await Share.shareXFiles(
+        [XFile(invoice.path, mimeType: 'application/pdf')],
+        subject: 'FoodNova invoice ${widget.order.orderCode}',
+        text: 'FoodNova invoice ${widget.order.orderCode}',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      _showInvoiceMessage(apiMessage(error));
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  void _showInvoiceMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final busy = _viewing || _downloading || _sharing;
     return _Card(
       title: 'Invoice',
       icon: Icons.description_outlined,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: PrimaryButton(
-              label: 'Preview',
-              icon: Icons.open_in_new_rounded,
-              onPressed: () => _openInvoice(order),
-            ),
+          PrimaryButton(
+            label: _viewing ? 'Opening...' : 'View Invoice',
+            icon: Icons.picture_as_pdf_rounded,
+            loading: _viewing,
+            onPressed: busy ? null : _viewInvoice,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _openInvoice(order),
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('Download'),
-            ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : _downloadInvoice,
+                  icon: _downloading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.download_rounded),
+                  label: const Text('Download'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : _shareInvoice,
+                  icon: _sharing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.ios_share_rounded),
+                  label: const Text('Share'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const _MutedText(
+            'Invoices open from the app using your current secure session and are saved for offline viewing.',
           ),
         ],
       ),
@@ -2281,11 +2389,4 @@ class _CancelRequestSheetState extends ConsumerState<_CancelRequestSheet> {
       ),
     );
   }
-}
-
-Future<void> _openInvoice(OrderSummary order) async {
-  await launchUrl(
-    Uri.parse('https://www.foodnova.com.ng/orders/${order.id}/invoice'),
-    mode: LaunchMode.externalApplication,
-  );
 }
