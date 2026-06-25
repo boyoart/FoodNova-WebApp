@@ -491,35 +491,6 @@ class _MiniBanner extends StatelessWidget {
   }
 }
 
-class _BannerFallbackArt extends StatelessWidget {
-  const _BannerFallbackArt();
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            FoodNovaColors.primaryDark,
-            FoodNovaColors.primary,
-            FoodNovaColors.success,
-          ],
-        ),
-      ),
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Icon(
-          Icons.local_grocery_store_rounded,
-          size: 86,
-          color: Colors.white.withValues(alpha: .18),
-        ),
-      ),
-    );
-  }
-}
-
 Future<void> _openExploreBannerLink(BuildContext context, String link) async {
   final value = link.trim();
   if (value.isEmpty) return;

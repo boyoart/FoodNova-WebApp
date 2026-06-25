@@ -46,6 +46,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   Timer? _refreshTimer;
   StreamSubscription<void>? _pushRefreshSubscription;
   bool _subscribedRealtime = false;
+  DateTime _lastSyncedAt = DateTime.now();
 
   @override
   void initState() {
@@ -82,6 +83,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
       ref.invalidate(riderLocationProvider(widget.orderId));
     }
     ref.invalidate(ordersProvider);
+    if (mounted) setState(() => _lastSyncedAt = DateTime.now());
   }
 
   @override
@@ -208,16 +210,15 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Order details'),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh',
-            onPressed: () {
-              ref.invalidate(orderDetailProvider(widget.orderId));
-              ref.invalidate(riderLocationProvider(widget.orderId));
-            },
-            icon: const Icon(Icons.refresh_rounded),
-          ),
-        ],
+      ),
+      bottomNavigationBar: state.maybeWhen(
+        data: (order) => _BottomActionBar(
+          order: order,
+          onCallRider: () => _callRider(order),
+          onMessageRider: () => _messageRider(order),
+          onTrackOrder: _refreshLiveOrder,
+        ),
+        orElse: () => null,
       ),
       body: state.when(
         loading: () => const _OrderSkeleton(),
@@ -245,17 +246,12 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
               deliveryCode: _deliveryCode,
               verifying: _verifying,
               verified: _verified,
+              lastSyncedAt: _lastSyncedAt,
               onPickCamera: () => _pickImage(ImageSource.camera),
               onPickGallery: () => _pickImage(ImageSource.gallery),
               onPickFile: _pickFile,
               onUpload: _uploadReceipt,
               onVerifyDelivery: _verifyDelivery,
-              onCallRider: () => _callRider(order),
-              onMessageRider: () => _messageRider(order),
-              onRefresh: () {
-                ref.invalidate(orderDetailProvider(order.id));
-                ref.invalidate(riderLocationProvider(order.id));
-              },
               onCancel: () => _showCancelRequestSheet(context, ref, order),
             ),
           );
@@ -302,14 +298,12 @@ class _OrderDetailsView extends StatelessWidget {
     required this.deliveryCode,
     required this.verifying,
     required this.verified,
+    required this.lastSyncedAt,
     required this.onPickCamera,
     required this.onPickGallery,
     required this.onPickFile,
     required this.onUpload,
     required this.onVerifyDelivery,
-    required this.onCallRider,
-    required this.onMessageRider,
-    required this.onRefresh,
     required this.onCancel,
   });
 
@@ -321,14 +315,12 @@ class _OrderDetailsView extends StatelessWidget {
   final TextEditingController deliveryCode;
   final bool verifying;
   final bool verified;
+  final DateTime lastSyncedAt;
   final VoidCallback onPickCamera;
   final VoidCallback onPickGallery;
   final VoidCallback onPickFile;
   final VoidCallback onUpload;
   final VoidCallback onVerifyDelivery;
-  final VoidCallback onCallRider;
-  final VoidCallback onMessageRider;
-  final VoidCallback onRefresh;
   final VoidCallback onCancel;
 
   @override
@@ -338,24 +330,22 @@ class _OrderDetailsView extends StatelessWidget {
       symbol: 'NGN ',
       decimalDigits: 0,
     );
-    final showVerification = order.isOutForDelivery ||
-        order.riderArrived ||
-        order.isDelivered ||
-        verified;
     final showTracking = order.isDeliveryTrackingVisible;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 118),
       children: [
-        _OrderHeaderCard(
+        _HeroSummaryCard(
           order: order,
           amount: currency.format(order.totalAmount),
-          onRefresh: onRefresh,
+          lastSyncedAt: lastSyncedAt,
         ),
         const SizedBox(height: 14),
-        _TimelineCard(order: order),
+        _ProgressTrackerCard(order: order),
         const SizedBox(height: 14),
         _PaymentCard(order: order),
+        const SizedBox(height: 14),
+        _ProductListCard(order: order, currency: currency),
         const SizedBox(height: 14),
         _ReceiptCard(
           selectedReceipt: selectedReceipt,
@@ -367,31 +357,23 @@ class _OrderDetailsView extends StatelessWidget {
           onUpload: onUpload,
         ),
         const SizedBox(height: 14),
-        _DeliveryCard(
-          order: order,
-          onCallRider: onCallRider,
-          onMessageRider: onMessageRider,
-        ),
+        _RiderInformationCard(order: order),
         if (showTracking) ...[
           const SizedBox(height: 14),
           _RiderTrackingCard(
             order: order,
             location: riderLocation,
-            onCallRider: onCallRider,
-            onMessageRider: onMessageRider,
           ),
         ],
-        if (showVerification) ...[
-          const SizedBox(height: 14),
-          _VerificationCard(
-            order: order,
-            controller: deliveryCode,
-            loading: verifying,
-            verified: verified || order.isDelivered,
-            highlight: order.riderArrived,
-            onVerify: onVerifyDelivery,
-          ),
-        ],
+        const SizedBox(height: 14),
+        _VerificationCard(
+          order: order,
+          controller: deliveryCode,
+          loading: verifying,
+          verified: verified || order.isDelivered,
+          highlight: order.riderArrived,
+          onVerify: onVerifyDelivery,
+        ),
         const SizedBox(height: 14),
         _InvoiceCard(order: order),
         const SizedBox(height: 14),
@@ -401,65 +383,146 @@ class _OrderDetailsView extends StatelessWidget {
   }
 }
 
-class _OrderHeaderCard extends StatelessWidget {
-  const _OrderHeaderCard({
+class _HeroSummaryCard extends StatefulWidget {
+  const _HeroSummaryCard({
     required this.order,
     required this.amount,
-    required this.onRefresh,
+    required this.lastSyncedAt,
   });
 
   final OrderSummary order;
   final String amount;
-  final VoidCallback onRefresh;
+  final DateTime lastSyncedAt;
+
+  @override
+  State<_HeroSummaryCard> createState() => _HeroSummaryCardState();
+}
+
+class _HeroSummaryCardState extends State<_HeroSummaryCard> {
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final status =
-        _labelize(order.status.isEmpty ? order.paymentStatus : order.status);
-    return _Card(
+    final order = widget.order;
+    final address = order.deliveryAddress.trim();
+    final status = _dispatchStatusLabel(order);
+    return Semantics(
+      container: true,
+      label: 'Order summary for ${order.orderCode}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  order.orderCode.isEmpty ? 'FoodNova order' : order.orderCode,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w900),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  scheme.primary,
+                  Color.lerp(scheme.primary, scheme.tertiary, .35)!,
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: scheme.primary.withValues(alpha: .22),
+                  blurRadius: 28,
+                  offset: const Offset(0, 14),
                 ),
-              ),
-              IconButton.filledTonal(
-                tooltip: 'Refresh',
-                onPressed: onRefresh,
-                icon: const Icon(Icons.refresh_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _Chip(label: status, icon: Icons.local_shipping_rounded),
-              _Chip(label: amount, icon: Icons.payments_rounded),
-              _Chip(
-                label: order.estimatedDeliveryTime.trim().isEmpty
-                    ? 'ETA updating'
-                    : 'ETA ${order.estimatedDeliveryTime}',
-                icon: Icons.schedule_rounded,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            order.deliveryAddress.isEmpty
-                ? 'Delivery details will appear after checkout syncs.'
-                : order.deliveryAddress,
-            style: TextStyle(color: scheme.onSurfaceVariant, height: 1.4),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        order.orderCode.isEmpty
+                            ? 'FoodNova order'
+                            : order.orderCode,
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: scheme.onPrimary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                      ),
+                    ),
+                    _SyncPill(lastSyncedAt: widget.lastSyncedAt),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _HeroPill(label: status, icon: Icons.local_shipping),
+                    _HeroPill(
+                      label: order.estimatedDeliveryTime.trim().isEmpty
+                          ? 'ETA updating'
+                          : 'ETA ${order.estimatedDeliveryTime}',
+                      icon: Icons.schedule_rounded,
+                    ),
+                    _HeroPill(label: widget.amount, icon: Icons.payments),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                InkWell(
+                  borderRadius: BorderRadius.circular(18),
+                  onTap: address.isEmpty
+                      ? null
+                      : () => setState(() => _expanded = !_expanded),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: scheme.onPrimary.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: scheme.onPrimary.withValues(alpha: .18),
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.location_on_rounded,
+                            color: scheme.onPrimary, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: AnimatedSize(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            child: Text(
+                              address.isEmpty
+                                  ? 'Delivery address syncing'
+                                  : address,
+                              maxLines: _expanded ? null : 2,
+                              overflow: _expanded
+                                  ? TextOverflow.visible
+                                  : TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: scheme.onPrimary,
+                                fontWeight: FontWeight.w800,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (address.isNotEmpty)
+                          Icon(
+                            _expanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
+                            color: scheme.onPrimary,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -467,21 +530,21 @@ class _OrderHeaderCard extends StatelessWidget {
   }
 }
 
-class _TimelineCard extends StatelessWidget {
-  const _TimelineCard({required this.order});
+class _ProgressTrackerCard extends StatelessWidget {
+  const _ProgressTrackerCard({required this.order});
 
   final OrderSummary order;
 
   @override
   Widget build(BuildContext context) {
     final steps = [
-      _Step('Order Placed', Icons.receipt_long_rounded, order.createdAt),
+      _Step('Placed', Icons.receipt_long_rounded, order.createdAt),
       _Step('Confirmed', Icons.verified_rounded, order.confirmedAt),
       _Step('Preparing', Icons.restaurant_rounded, order.preparingAt),
       _Step(
-        'Ready for Pickup',
+        'Picked Up',
         Icons.shopping_bag_rounded,
-        order.readyForPickupAt,
+        order.pickedUpAt.isEmpty ? order.readyForPickupAt : order.pickedUpAt,
       ),
       _Step(
         'Out for Delivery',
@@ -492,7 +555,7 @@ class _TimelineCard extends StatelessWidget {
     ];
     final active = _activeIndex(order);
     return _Card(
-      title: 'Order timeline',
+      title: 'Delivery progress',
       icon: Icons.timeline_rounded,
       trailing: AnimatedSwitcher(
         duration: const Duration(milliseconds: 240),
@@ -503,121 +566,139 @@ class _TimelineCard extends StatelessWidget {
         ),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < steps.length; i++)
-            _TimelineRow(
-              step: steps[i],
-              active: i <= active,
-              current: i == active,
-              showLine: i != steps.length - 1,
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < steps.length; i++)
+                  _ProgressStep(
+                    step: steps[i],
+                    completed: i <= active,
+                    current: i == active,
+                    showLine: i != steps.length - 1,
+                  ),
+              ],
             ),
+          ),
+          const SizedBox(height: 12),
+          const _MutedText(
+            'Timestamps appear as each delivery milestone is confirmed.',
+          ),
         ],
       ),
     );
   }
 }
 
-class _TimelineRow extends StatelessWidget {
-  const _TimelineRow({
+class _ProgressStep extends StatelessWidget {
+  const _ProgressStep({
     required this.step,
-    required this.active,
+    required this.completed,
     required this.current,
     required this.showLine,
   });
 
   final _Step step;
-  final bool active;
+  final bool completed;
   final bool current;
   final bool showLine;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              width: current ? 46 : 38,
-              height: current ? 46 : 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: active ? scheme.primary : scheme.surfaceContainerHighest,
-                boxShadow: current
-                    ? [
-                        BoxShadow(
-                          color: scheme.primary.withValues(alpha: .28),
-                          blurRadius: 18,
-                          spreadRadius: 2,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: Icon(
-                  active ? step.icon : Icons.circle_outlined,
-                  key: ValueKey('$active-${step.label}'),
-                  color: active ? scheme.onPrimary : scheme.onSurfaceVariant,
-                  size: current ? 24 : 19,
-                ),
-              ),
-            ),
-            if (showLine)
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeOutCubic,
-                width: 3,
-                height: 42,
-                color: active ? scheme.primary : scheme.outlineVariant,
-              ),
-          ],
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            margin: EdgeInsets.only(top: current ? 1 : 4, bottom: 10),
-            padding: EdgeInsets.symmetric(
-              horizontal: current ? 12 : 0,
-              vertical: current ? 10 : 5,
-            ),
-            decoration: BoxDecoration(
-              color: current
-                  ? scheme.primaryContainer.withValues(alpha: .42)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  step.label,
-                  style: TextStyle(
-                    color: active ? scheme.onSurface : scheme.onSurfaceVariant,
-                    fontWeight: active ? FontWeight.w900 : FontWeight.w700,
+    return SizedBox(
+      width: showLine ? 136 : 92,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Column(
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: .96, end: current ? 1.08 : 1),
+                duration: const Duration(milliseconds: 620),
+                curve: Curves.easeInOut,
+                builder: (context, scale, child) =>
+                    Transform.scale(scale: scale, child: child),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 320),
+                  curve: Curves.easeOutCubic,
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: completed
+                        ? scheme.primary
+                        : scheme.surfaceContainerHighest,
+                    boxShadow: current
+                        ? [
+                            BoxShadow(
+                              color: scheme.primary.withValues(alpha: .28),
+                              blurRadius: 18,
+                              spreadRadius: 2,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Icon(
+                    completed ? step.icon : Icons.circle_outlined,
+                    color:
+                        completed ? scheme.onPrimary : scheme.onSurfaceVariant,
+                    size: 20,
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  active
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 84,
+                child: Text(
+                  step.label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color:
+                        completed ? scheme.onSurface : scheme.onSurfaceVariant,
+                    fontWeight: completed ? FontWeight.w900 : FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                width: 84,
+                child: Text(
+                  completed
                       ? _timelineTimeLabel(step.timestamp, current)
                       : 'Pending',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: scheme.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: 10,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ),
-      ],
+          if (showLine)
+            Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                margin: const EdgeInsets.only(top: 20),
+                height: 4,
+                decoration: BoxDecoration(
+                  color: completed ? scheme.primary : scheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -629,22 +710,152 @@ class _PaymentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currency = NumberFormat.currency(
+      locale: 'en_NG',
+      symbol: 'NGN ',
+      decimalDigits: 0,
+    );
     return _Card(
-      title: 'Bank transfer',
+      title: order.paymentConfirmed ? 'Payment summary' : 'Bank transfer',
       icon: Icons.account_balance_rounded,
       trailing: _Chip(label: _labelize(order.paymentStatus), compact: true),
       child: Column(
         children: [
-          _CopyRow(label: 'Account number', value: '6427173992'),
-          const SizedBox(height: 8),
-          const _InfoRow(label: 'Bank', value: 'OPay'),
-          const SizedBox(height: 8),
-          const _InfoRow(label: 'Account name', value: 'FOODNOVA LIMITED'),
-          const SizedBox(height: 8),
-          _CopyRow(label: 'Reference', value: order.orderCode),
-          const SizedBox(height: 12),
-          _MutedText(
-            'Transfer the order amount, use your order code as reference, then upload your receipt for admin verification.',
+          if (order.paymentConfirmed) ...[
+            _InfoRow(
+                label: 'Amount paid',
+                value: currency.format(order.totalAmount)),
+            const SizedBox(height: 8),
+            _InfoRow(label: 'Reference', value: order.orderCode),
+            const SizedBox(height: 8),
+            const _InfoRow(label: 'Method', value: 'Bank transfer'),
+            const SizedBox(height: 12),
+            const _MutedText(
+              'Payment is confirmed. Bank account details are hidden for this completed payment step.',
+            ),
+          ] else ...[
+            _CopyRow(label: 'Account number', value: '6427173992'),
+            const SizedBox(height: 8),
+            const _InfoRow(label: 'Bank', value: 'OPay'),
+            const SizedBox(height: 8),
+            const _InfoRow(label: 'Account name', value: 'FOODNOVA LIMITED'),
+            const SizedBox(height: 8),
+            _CopyRow(label: 'Reference', value: order.orderCode),
+            const SizedBox(height: 12),
+            const _MutedText(
+              'Transfer the order amount, use your order code as reference, then upload your receipt for admin verification.',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductListCard extends StatelessWidget {
+  const _ProductListCard({required this.order, required this.currency});
+
+  final OrderSummary order;
+  final NumberFormat currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = order.items;
+    return _Card(
+      title: 'Products',
+      icon: Icons.shopping_bag_rounded,
+      child: Column(
+        children: [
+          if (items.isEmpty)
+            const _MutedText('Product details are syncing for this order.')
+          else
+            for (var i = 0; i < items.length; i++) ...[
+              _ProductTile(item: items[i], currency: currency),
+              if (i != items.length - 1) const SizedBox(height: 10),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductTile extends StatelessWidget {
+  const _ProductTile({required this.item, required this.currency});
+
+  final Map<String, dynamic> item;
+  final NumberFormat currency;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final name = '${item['name'] ?? item['product_name'] ?? 'FoodNova Item'}';
+    final quantity =
+        int.tryParse('${item['quantity'] ?? item['qty'] ?? 1}') ?? 1;
+    final price =
+        double.tryParse('${item['unit_price'] ?? item['price'] ?? 0}') ?? 0;
+    final subtotal = double.tryParse(
+            '${item['line_total'] ?? item['subtotal'] ?? price * quantity}') ??
+        price * quantity;
+    final imageUrl =
+        '${item['image_url'] ?? item['image'] ?? item['thumbnail'] ?? item['photo_url'] ?? ''}'
+            .trim();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: SizedBox(
+              width: 58,
+              height: 58,
+              child: imageUrl.isEmpty
+                  ? Image.asset('assets/images/product_placeholder.png',
+                      fit: BoxFit.cover)
+                  : Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Image.asset(
+                        'assets/images/product_placeholder.png',
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '$quantity x ${currency.format(price)}',
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            currency.format(subtotal),
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: scheme.primary,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ],
       ),
@@ -755,82 +966,52 @@ class _ReceiptCard extends StatelessWidget {
   }
 }
 
-class _DeliveryCard extends StatelessWidget {
-  const _DeliveryCard({
-    required this.order,
-    required this.onCallRider,
-    required this.onMessageRider,
-  });
+class _RiderInformationCard extends StatelessWidget {
+  const _RiderInformationCard({required this.order});
 
   final OrderSummary order;
-  final VoidCallback onCallRider;
-  final VoidCallback onMessageRider;
 
   @override
   Widget build(BuildContext context) {
     return _Card(
-      title: 'Delivery information',
+      title: 'Rider information',
       icon: Icons.delivery_dining_rounded,
       child: Column(
         children: [
-          _InfoRow(
-            label: 'Address',
-            value: order.deliveryAddress.isEmpty
-                ? 'Not available'
-                : order.deliveryAddress,
-          ),
-          const SizedBox(height: 8),
-          _InfoRow(
-            label: 'Receiver',
-            value: order.customerName.isEmpty
-                ? 'FoodNova customer'
-                : order.customerName,
-          ),
-          const SizedBox(height: 8),
-          _InfoRow(
-            label: 'Phone',
-            value: order.customerPhone.isEmpty
-                ? 'Not available'
-                : order.customerPhone,
-          ),
-          if (order.hasAssignedRider) ...[
-            const SizedBox(height: 12),
+          if (order.hasAssignedRider)
             _RiderProfileTile(
               name: order.riderName,
               phone: order.riderPhone,
               photoUrl: order.riderPhotoUrl,
               vehicleType: order.riderVehicleType,
+            )
+          else
+            const _MutedText(
+              'Rider details will appear here once FoodNova assigns your delivery partner.',
             ),
-            const SizedBox(height: 8),
-            _InfoRow(
-              label: 'Delivery Status',
-              value: _labelize(order.deliveryStatus.isEmpty
-                  ? order.status
-                  : order.deliveryStatus),
-            ),
-            if (order.riderPhone.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onCallRider,
-                      icon: const Icon(Icons.call_rounded),
-                      label: const Text('Contact Rider'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onMessageRider,
-                      icon: const Icon(Icons.chat_rounded),
-                      label: const Text('WhatsApp'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
+          const SizedBox(height: 10),
+          _InfoRow(
+            label: 'Phone',
+            value: order.riderPhone.trim().isEmpty
+                ? 'Not available yet'
+                : order.riderPhone.trim(),
+          ),
+          const SizedBox(height: 8),
+          _InfoRow(
+            label: 'WhatsApp',
+            value: order.riderPhone.trim().isEmpty
+                ? 'Not available yet'
+                : order.riderPhone.trim(),
+          ),
+          const SizedBox(height: 8),
+          _InfoRow(
+            label: 'Vehicle',
+            value: order.riderVehicleType.trim().isEmpty
+                ? 'Pending assignment'
+                : _labelize(order.riderVehicleType),
+          ),
+          const SizedBox(height: 10),
+          const _RatingReserve(),
           if (order.deliveryNotes.isNotEmpty) ...[
             const SizedBox(height: 8),
             _InfoRow(label: 'Notes', value: order.deliveryNotes),
@@ -845,14 +1026,10 @@ class _RiderTrackingCard extends StatelessWidget {
   const _RiderTrackingCard({
     required this.order,
     required this.location,
-    required this.onCallRider,
-    required this.onMessageRider,
   });
 
   final OrderSummary order;
   final AsyncValue<RiderLocation?> location;
-  final VoidCallback onCallRider;
-  final VoidCallback onMessageRider;
 
   @override
   Widget build(BuildContext context) {
@@ -868,15 +1045,8 @@ class _RiderTrackingCard extends StatelessWidget {
         ),
         error: (error, _) => Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const _MutedText('Rider tracking temporarily unavailable.'),
-            if (order.riderPhone.trim().isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _RiderContactButtons(
-                onCallRider: onCallRider,
-                onMessageRider: onMessageRider,
-              ),
-            ],
+          children: const [
+            _MutedText('Rider tracking temporarily unavailable.'),
           ],
         ),
         data: (data) {
@@ -890,15 +1060,10 @@ class _RiderTrackingCard extends StatelessWidget {
               !data.hasCustomerCoordinates) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const _MutedText('Waiting for rider location...'),
-                if (order.riderPhone.trim().isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _RiderContactButtons(
-                    onCallRider: onCallRider,
-                    onMessageRider: onMessageRider,
-                  ),
-                ],
+              children: const [
+                _MutedText(
+                  'Live map will appear when rider and destination coordinates are available.',
+                ),
               ],
             );
           }
@@ -983,50 +1148,10 @@ class _RiderTrackingCard extends StatelessWidget {
                 label: 'Last updated',
                 value: _formatRelativeTime(data.lastUpdatedAt),
               ),
-              if (order.riderPhone.trim().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                _RiderContactButtons(
-                  onCallRider: onCallRider,
-                  onMessageRider: onMessageRider,
-                ),
-              ],
             ],
           );
         },
       ),
-    );
-  }
-}
-
-class _RiderContactButtons extends StatelessWidget {
-  const _RiderContactButtons({
-    required this.onCallRider,
-    required this.onMessageRider,
-  });
-
-  final VoidCallback onCallRider;
-  final VoidCallback onMessageRider;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onCallRider,
-            icon: const Icon(Icons.call_rounded),
-            label: const Text('Contact Rider'),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: onMessageRider,
-            icon: const Icon(Icons.chat_rounded),
-            label: const Text('WhatsApp'),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1142,6 +1267,38 @@ class _RiderAvatar extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w900),
             )
           : null,
+    );
+  }
+}
+
+class _RatingReserve extends StatelessWidget {
+  const _RatingReserve();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.star_border_rounded, color: scheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Rider rating space reserved',
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1278,19 +1435,55 @@ class _VerificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final canEnterPin = order.riderArrived && !verified;
     return _Card(
-      title: verified ? 'Delivery verified' : 'Confirm Delivery',
+      title: verified ? 'Delivery complete' : 'Delivery PIN',
       icon: verified ? Icons.verified_rounded : Icons.password_rounded,
       highlighted: highlight && !verified,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _MutedText(
-            verified
-                ? 'This order has been securely confirmed as delivered.'
-                : 'Your order is out for delivery. Enter the 4-digit PIN from your rider to confirm delivery.',
-          ),
-          if (!verified) ...[
+          if (verified) ...[
+            const _SuccessBurst(),
+            const SizedBox(height: 12),
+            Text(
+              'Thank you for ordering with FoodNova.',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            const _MutedText(
+              'Rate your delivery and leave optional feedback to help us improve the experience.',
+            ),
+            const SizedBox(height: 14),
+            const _RatingPrompt(),
+            if (order.deliveryConfirmedAt.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Text(
+                  'Confirmed ${_timelineTimeLabel(order.deliveryConfirmedAt, false)}',
+                  style: TextStyle(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ] else if (canEnterPin) ...[
+            const _MutedText(
+              'Your rider has arrived. Enter the 4-digit PIN only after receiving your order.',
+            ),
+            if (order.deliveryPin.trim().isNotEmpty) ...[
+              const SizedBox(height: 14),
+              _PinDisplay(pin: order.deliveryPin.trim()),
+            ],
             const SizedBox(height: 14),
             TextField(
               controller: controller,
@@ -1315,25 +1508,151 @@ class _VerificationCard extends StatelessWidget {
               loading: loading,
               onPressed: loading ? null : onVerify,
             ),
-          ] else if (order.deliveryConfirmedAt.isNotEmpty) ...[
-            const SizedBox(height: 12),
+          ] else ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: scheme.primaryContainer,
+                color: scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Text(
-                'Confirmed ${order.deliveryConfirmedAt}',
-                style: TextStyle(
-                  color: scheme.onPrimaryContainer,
-                  fontWeight: FontWeight.w900,
-                ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_rounded, color: scheme.primary),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: _MutedText(
+                      'The delivery PIN will appear when your rider marks the order as arrived.',
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _PinDisplay extends StatelessWidget {
+  const _PinDisplay({required this.pin});
+
+  final String pin;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: 'Delivery PIN is $pin',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (final digit in pin.split('').take(4)) ...[
+            Container(
+              width: 46,
+              height: 52,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: scheme.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: scheme.primary.withValues(alpha: .2)),
+              ),
+              child: Text(
+                digit,
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: scheme.onPrimaryContainer,
+                      fontWeight: FontWeight.w900,
+                    ),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SuccessBurst extends StatelessWidget {
+  const _SuccessBurst();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: .75, end: 1),
+      duration: const Duration(milliseconds: 620),
+      curve: Curves.elasticOut,
+      builder: (context, value, child) =>
+          Transform.scale(scale: value, child: child),
+      child: Container(
+        width: 82,
+        height: 82,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: scheme.primaryContainer,
+          boxShadow: [
+            BoxShadow(
+              color: scheme.primary.withValues(alpha: .25),
+              blurRadius: 24,
+              spreadRadius: 4,
+            ),
+          ],
+        ),
+        child: Icon(Icons.check_rounded, color: scheme.primary, size: 46),
+      ),
+    );
+  }
+}
+
+class _RatingPrompt extends StatefulWidget {
+  const _RatingPrompt();
+
+  @override
+  State<_RatingPrompt> createState() => _RatingPromptState();
+}
+
+class _RatingPromptState extends State<_RatingPrompt> {
+  int _rating = 0;
+  final _feedback = TextEditingController();
+
+  @override
+  void dispose() {
+    _feedback.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 1; i <= 5; i++)
+              IconButton(
+                tooltip: '$i star${i == 1 ? '' : 's'}',
+                onPressed: () => setState(() => _rating = i),
+                icon: Icon(
+                  i <= _rating ? Icons.star_rounded : Icons.star_border_rounded,
+                  color: scheme.primary,
+                ),
+              ),
+          ],
+        ),
+        TextField(
+          controller: _feedback,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Optional feedback',
+            hintText: 'Tell us how the delivery went',
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1407,6 +1726,146 @@ class _CancellationCard extends StatelessWidget {
               'Cancellation is unavailable for this order status. Contact FoodNova support for help.',
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({required this.label, required this.icon});
+
+  final String label;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+      decoration: BoxDecoration(
+        color: scheme.onPrimary.withValues(alpha: .14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: scheme.onPrimary.withValues(alpha: .18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: scheme.onPrimary),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: scheme.onPrimary,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SyncPill extends StatelessWidget {
+  const _SyncPill({required this.lastSyncedAt});
+
+  final DateTime lastSyncedAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: scheme.onPrimary.withValues(alpha: .13),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(scheme.onPrimary),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            _formatSyncLabel(lastSyncedAt),
+            style: TextStyle(
+              color: scheme.onPrimary,
+              fontWeight: FontWeight.w900,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BottomActionBar extends StatelessWidget {
+  const _BottomActionBar({
+    required this.order,
+    required this.onCallRider,
+    required this.onMessageRider,
+    required this.onTrackOrder,
+  });
+
+  final OrderSummary order;
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
+  final VoidCallback onTrackOrder;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final canContact = order.riderPhone.trim().isNotEmpty;
+    return SafeArea(
+      minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: scheme.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: scheme.shadow.withValues(alpha: .12),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: canContact ? onCallRider : null,
+                icon: const Icon(Icons.call_rounded),
+                label: const FittedBox(child: Text('Call Rider')),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: canContact ? onMessageRider : null,
+                icon: const Icon(Icons.chat_rounded),
+                label: const FittedBox(child: Text('WhatsApp')),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: onTrackOrder,
+                icon: const Icon(Icons.near_me_rounded),
+                label: const FittedBox(child: Text('Track Order')),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1552,12 +2011,10 @@ class _Chip extends StatelessWidget {
   const _Chip({
     super.key,
     required this.label,
-    this.icon,
     this.compact = false,
   });
 
   final String label;
-  final IconData? icon;
   final bool compact;
 
   @override
@@ -1575,10 +2032,6 @@ class _Chip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 15, color: scheme.onPrimaryContainer),
-            const SizedBox(width: 5),
-          ],
           Text(
             label.isEmpty ? 'Pending' : label,
             style: TextStyle(
@@ -1619,17 +2072,22 @@ class _Step {
 }
 
 int _activeIndex(OrderSummary order) {
-  final value = '${order.status} ${order.deliveryStatus} '
-          '${order.paymentStatus}'
-      .toLowerCase();
-  if (order.isDelivered || value.contains('delivered')) return 5;
+  switch (order.canonicalDeliveryStatus) {
+    case 'DELIVERED':
+      return 5;
+    case 'ARRIVED':
+    case 'IN_TRANSIT':
+      return 4;
+    case 'PICKED_UP':
+      return 3;
+    case 'ASSIGNED':
+    case 'ACCEPTED':
+      return 1;
+  }
+  final value = '${order.status} ${order.paymentStatus}'.toLowerCase();
+  if (value.contains('delivered')) return 5;
   if (value.contains('out_for_delivery') ||
-      value.contains('out for delivery') ||
-      value.contains('in_transit') ||
-      value.contains('in transit') ||
-      value.contains('picked_up') ||
-      value.contains('picked up') ||
-      value.contains('arrived')) {
+      value.contains('out for delivery')) {
     return 4;
   }
   if (value.contains('ready_for_pickup') ||
@@ -1648,6 +2106,28 @@ int _activeIndex(OrderSummary order) {
     return 1;
   }
   return 0;
+}
+
+String _dispatchStatusLabel(OrderSummary order) {
+  switch (order.canonicalDeliveryStatus) {
+    case 'DELIVERED':
+      return 'Delivered';
+    case 'ARRIVED':
+      return 'Arrived';
+    case 'IN_TRANSIT':
+      return 'Out for Delivery';
+    case 'PICKED_UP':
+      return 'Picked Up';
+    case 'ASSIGNED':
+      return 'Confirmed';
+    case 'ACCEPTED':
+      return 'Confirmed';
+    case 'CANCELLED':
+      return 'Cancelled';
+    default:
+      return _labelize(
+          order.status.isEmpty ? order.paymentStatus : order.status);
+  }
 }
 
 String _timelineTimeLabel(String value, bool current) {
@@ -1685,6 +2165,13 @@ String _formatRelativeTime(String value) {
   }
   final days = diff.inDays;
   return '$days day${days == 1 ? '' : 's'} ago';
+}
+
+String _formatSyncLabel(DateTime value) {
+  final diff = DateTime.now().difference(value);
+  if (diff.inSeconds < 45) return 'Updated just now';
+  if (diff.inMinutes < 60) return 'Updated ${diff.inMinutes}m ago';
+  return 'Updated ${diff.inHours}h ago';
 }
 
 String _labelize(String value) {

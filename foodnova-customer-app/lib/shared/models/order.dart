@@ -50,14 +50,47 @@ class OrderSummary {
       '${raw['rider_photo'] ?? raw['rider_photo_url'] ?? raw['assigned_worker_photo'] ?? raw['assigned_worker_photo_url'] ?? raw['profile_photo_url'] ?? ''}';
   String get estimatedDeliveryTime =>
       '${raw['estimated_delivery_time'] ?? raw['estimatedDeliveryTime'] ?? raw['delivery_eta'] ?? raw['eta'] ?? ''}';
+  String get updatedAt => '${raw['updated_at'] ?? ''}';
+  String get dispatchStatus =>
+      '${raw['dispatch_status'] ?? raw['deliveryStatus'] ?? ''}';
+  String get canonicalDeliveryStatus {
+    final value = dispatchStatus.trim();
+    if (value.isNotEmpty) return value.toUpperCase();
+    final delivery = deliveryStatus.trim().toLowerCase();
+    final orderValue = status.trim().toLowerCase();
+    if (orderValue == 'delivered' || delivery == 'delivered') {
+      return 'DELIVERED';
+    }
+    if (delivery.contains('arrived')) return 'ARRIVED';
+    if (delivery.contains('in_transit') ||
+        delivery.contains('out_for_delivery') ||
+        delivery.contains('en_route')) {
+      return 'IN_TRANSIT';
+    }
+    if (delivery.contains('picked')) return 'PICKED_UP';
+    if (delivery.contains('assigned')) return 'ASSIGNED';
+    return 'NEW';
+  }
+
+  String get deliveryPin =>
+      '${raw['delivery_pin'] ?? raw['delivery_code'] ?? raw['deliveryCode'] ?? ''}';
   String get confirmedAt =>
       '${raw['confirmed_at'] ?? raw['payment_confirmed_at'] ?? ''}';
   String get preparingAt =>
       '${raw['preparing_at'] ?? raw['processing_at'] ?? ''}';
   String get readyForPickupAt =>
       '${raw['ready_for_pickup_at'] ?? raw['ready_at'] ?? ''}';
+  String get pickedUpAt =>
+      '${raw['picked_up_at'] ?? raw['delivery_started_at'] ?? ''}';
   String get outForDeliveryAt =>
       '${raw['out_for_delivery_at'] ?? raw['picked_up_at'] ?? ''}';
+  bool get paymentConfirmed {
+    final value = paymentStatus.toLowerCase();
+    return value == 'payment_confirmed' ||
+        value == 'confirmed' ||
+        value == 'paid';
+  }
+
   bool get hasAssignedRider {
     final riderId = raw['rider_id'] ?? raw['delivery_worker_id'];
     return riderId != null ||
@@ -66,20 +99,13 @@ class OrderSummary {
   }
 
   bool get isDeliveryTrackingVisible {
-    final value = '$status $deliveryStatus'.toLowerCase();
+    final value = canonicalDeliveryStatus;
     if (isDelivered) return false;
-    return value.contains('picked_up') ||
-        value.contains('picked up') ||
-        value.contains('out_for_delivery') ||
-        value.contains('out for delivery') ||
-        value.contains('in_transit') ||
-        value.contains('in transit') ||
-        value.contains('arrived');
+    return {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}.contains(value);
   }
 
   bool get riderArrived {
-    final value = '$status $deliveryStatus'.toLowerCase();
-    return !isDelivered && value.contains('arrived');
+    return !isDelivered && canonicalDeliveryStatus == 'ARRIVED';
   }
 
   String get cancellationStatus => '${raw['cancellation_status'] ?? 'none'}';
@@ -89,14 +115,14 @@ class OrderSummary {
   String get receipt => '${raw['receipt'] ?? ''}';
   String get deliveryConfirmedAt => '${raw['delivery_confirmed_at'] ?? ''}';
   bool get isOutForDelivery {
-    final value = '$status $deliveryStatus'.toLowerCase();
-    return value.contains('out_for_delivery') ||
-        value.contains('out for delivery');
+    return {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}
+        .contains(canonicalDeliveryStatus);
   }
 
   bool get isDelivered {
-    final value = '$status $deliveryStatus'.toLowerCase();
-    return value.contains('delivered') || deliveryConfirmedAt.isNotEmpty;
+    return canonicalDeliveryStatus == 'DELIVERED' ||
+        status.toLowerCase().contains('delivered') ||
+        deliveryConfirmedAt.isNotEmpty;
   }
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
