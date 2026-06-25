@@ -38,7 +38,7 @@ class RiderProfile {
       )?.clamp(1, 11).toInt() ??
       1;
   int get onboardingStepTotal =>
-      int.tryParse('${raw['onboarding_step_total'] ?? 11}')
+      int.tryParse('${raw['onboarding_step_total'] ?? 9}')
           ?.clamp(1, 11)
           .toInt() ??
       11;

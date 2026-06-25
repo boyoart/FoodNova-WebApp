@@ -11,6 +11,10 @@ class NotificationsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(notificationRefreshProvider, (_, __) {
+      ref.invalidate(notificationsProvider);
+      ref.invalidate(unreadCountProvider);
+    });
     final notifications = ref.watch(notificationsProvider);
     return PopScope(
       canPop: false,

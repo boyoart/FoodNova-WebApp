@@ -211,10 +211,6 @@ class DispatchNotificationService {
   }
 
   static String _targetFromData(Map<String, dynamic> data) {
-    final orderId = '${data['order_id'] ?? ''}'.trim();
-    final offerId = '${data['offer_id'] ?? ''}'.trim();
-    if (orderId.isNotEmpty && orderId != 'null') return '/orders';
-    if (offerId.isNotEmpty && offerId != 'null') return '/orders';
     return '/notifications';
   }
 

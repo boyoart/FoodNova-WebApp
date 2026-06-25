@@ -28,6 +28,7 @@ from sqlalchemy import and_, func, inspect, or_, text
 
 from database import Base, SessionLocal, engine
 from email_service import (
+    send_email,
     send_admin_order_email,
     send_customer_order_email,
     send_low_stock_alert,
@@ -841,12 +842,26 @@ class DeliveryAuthCheckPhonePayload(BaseModel):
     phone_number: str
 
 
+class DeliveryAuthCheckEmailPayload(BaseModel):
+    email: EmailStr
+
+
+class DeliveryAuthSendOtpPayload(BaseModel):
+    email: EmailStr
+
+
+class DeliveryAuthVerifyOtpPayload(BaseModel):
+    email: EmailStr
+    otp: str
+
+
 class DeliveryAuthRegisterPayload(BaseModel):
     full_name: Optional[str] = ""
     email: Optional[EmailStr] = None
-    phone_number: str
+    phone_number: Optional[str] = ""
     country_code: Optional[str] = "+234"
     password: str
+    otp: Optional[str] = ""
     worker_type: Optional[str] = "rider"
 
 
@@ -2856,22 +2871,19 @@ def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
     }
 
 
-RIDER_ONBOARDING_TOTAL_STEPS = 11
+RIDER_ONBOARDING_TOTAL_STEPS = 9
 RIDER_ONBOARDING_STAGE_STEPS = {
-    "account_created": 2,
+    "account_created": 3,
     "identity_submitted": 4,
-    "address_uploaded": 6,
-    "emergency_contact_added": 7,
-    "rider_profile_completed": 10,
-    "selfie_verified": 8,
-    "documents_uploaded": 9,
-    "training_completed": 10,
-    "admin_review": 11,
-    "approved": 11,
-    "rejected": 11,
-    "suspended": 11,
-    "deactivated": 11,
-    "deleted": 11,
+    "rider_profile_completed": 5,
+    "selfie_verified": 6,
+    "documents_uploaded": 8,
+    "admin_review": 9,
+    "approved": 9,
+    "rejected": 9,
+    "suspended": 9,
+    "deactivated": 9,
+    "deleted": 9,
 }
 
 
@@ -2897,13 +2909,12 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
     promote_verified_approved_rider(worker)
     lifecycle_status = rider_lifecycle_status(worker)
-    rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if lifecycle_status == "ACTIVE" else "suspended" if lifecycle_status == "SUSPENDED" else "deactivated" if lifecycle_status == "INACTIVE" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url)]) else "selfie_verified" if worker.selfie_url else "emergency_contact_added" if (emergency_meta.get("status") or "") in submitted_statuses else "address_uploaded" if (address_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
+    rider_stage = "deleted" if getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED" else "approved" if lifecycle_status == "ACTIVE" else "suspended" if lifecycle_status == "SUSPENDED" else "deactivated" if lifecycle_status == "INACTIVE" else "admin_review" if all([(identity_meta.get("status") or "") in submitted_statuses, (address_meta.get("status") or "") in submitted_statuses, (emergency_meta.get("status") or "") in submitted_statuses, bool(worker.selfie_url), bool(worker.id_document_url)]) else "documents_uploaded" if worker.selfie_url and worker.id_document_url else "selfie_verified" if worker.selfie_url else "rider_profile_completed" if (address_meta.get("status") or "") in submitted_statuses or (emergency_meta.get("status") or "") in submitted_statuses else "identity_submitted" if (identity_meta.get("status") or "") in submitted_statuses else "account_created"
     current_step = rider_onboarding_step_for_stage(rider_stage)
     progress_percent = rider_onboarding_progress_percent(current_step)
     documents_complete = bool(
         getattr(worker, "selfie_url", None)
         and getattr(worker, "id_document_url", None)
-        and (address_meta.get("status") or "") in submitted_statuses
     )
     profile_completed = bool(
         (identity_meta.get("status") or "") in submitted_statuses
@@ -4080,6 +4091,55 @@ def get_db_user_by_phone(db, phone: str):
     return db.query(DBUser).filter(DBUser.phone == normalized).first()
 
 
+DELIVERY_EMAIL_OTPS: Dict[str, dict] = {}
+DELIVERY_OTP_TTL_MINUTES = 10
+
+
+def normalize_email(value: str) -> str:
+    return str(value or "").strip().lower()
+
+
+def delivery_email_exists(db, email: str) -> bool:
+    clean_email = normalize_email(email)
+    if not clean_email:
+        return False
+    return bool(
+        db.query(DBUser).filter(func.lower(DBUser.email) == clean_email).first()
+        or db.query(DBDeliveryWorker).filter(func.lower(DBDeliveryWorker.email) == clean_email).first()
+    )
+
+
+def generate_delivery_otp(email: str) -> str:
+    clean_email = normalize_email(email)
+    code = f"{random.randint(0, 999999):06d}"
+    DELIVERY_EMAIL_OTPS[clean_email] = {
+        "code_hash": hashlib.sha256(code.encode("utf-8")).hexdigest(),
+        "expires_at": datetime.utcnow() + timedelta(minutes=DELIVERY_OTP_TTL_MINUTES),
+        "verified": False,
+        "attempts": 0,
+    }
+    return code
+
+
+def validate_delivery_email_otp(email: str, otp: str, mark_verified: bool = True) -> None:
+    clean_email = normalize_email(email)
+    record = DELIVERY_EMAIL_OTPS.get(clean_email)
+    if not record:
+        raise HTTPException(status_code=400, detail="Request a new verification code.")
+    if datetime.utcnow() > record.get("expires_at", datetime.utcnow()):
+        DELIVERY_EMAIL_OTPS.pop(clean_email, None)
+        raise HTTPException(status_code=410, detail="Verification code expired. Request a new code.")
+    record["attempts"] = int(record.get("attempts") or 0) + 1
+    if record["attempts"] > 6:
+        DELIVERY_EMAIL_OTPS.pop(clean_email, None)
+        raise HTTPException(status_code=429, detail="Too many incorrect verification attempts. Request a new code.")
+    code_hash = hashlib.sha256(str(otp or "").strip().encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(record.get("code_hash") or "", code_hash):
+        raise HTTPException(status_code=400, detail="Invalid verification code.")
+    if mark_verified:
+        record["verified"] = True
+
+
 def normalize_delivery_phone(phone: str) -> str:
     digits = "".join(ch for ch in str(phone or "") if ch.isdigit())
     if not digits:
@@ -4421,7 +4481,7 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
     kyc.identity_status = identity.get("status") or kyc.identity_status or "not_started"
     kyc.address_status = address.get("status") or kyc.address_status or "not_started"
     kyc.emergency_status = emergency.get("status") or kyc.emergency_status or "not_started"
-    documents_complete = bool(worker.selfie_url and worker.id_document_url and documents.get("proof_of_address_url"))
+    documents_complete = bool(worker.selfie_url and worker.id_document_url)
     kyc.selfie_status = "verified" if worker.selfie_url and kyc.identity_status in submitted_statuses else "not_started"
     kyc.nin_last4 = worker.nin_last4 or kyc.nin_last4 or ""
     kyc.nin_verified = bool(worker.nin_verified)
@@ -4453,16 +4513,12 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
         stage = "deleted"
     elif (worker.kyc_status or "") == "PENDING_REVIEW":
         stage = "admin_review"
-    elif training.get("completed") is True:
-        stage = "training_completed"
     elif documents_complete:
         stage = "documents_uploaded"
-    elif profile.get("completed") is True:
+    elif worker.selfie_url:
+        stage = "selfie_verified"
+    elif profile.get("completed") is True or kyc.emergency_status in submitted_statuses or kyc.address_status in submitted_statuses:
         stage = "rider_profile_completed"
-    elif kyc.emergency_status in submitted_statuses:
-        stage = "emergency_contact_added"
-    elif kyc.address_status in submitted_statuses:
-        stage = "address_uploaded"
     elif kyc.identity_status in submitted_statuses:
         stage = "identity_submitted"
     else:
@@ -6577,28 +6633,84 @@ def delivery_auth_check_phone(payload: DeliveryAuthCheckPhonePayload):
         db.close()
 
 
+@app.post("/delivery/auth/check-email")
+def delivery_auth_check_email(payload: DeliveryAuthCheckEmailPayload):
+    email = normalize_email(payload.email)
+    db = SessionLocal()
+    try:
+        exists = delivery_email_exists(db, email)
+        return {
+            "success": True,
+            "exists": exists,
+            "email": email,
+            "message": "This email is already registered." if exists else "Email is available.",
+        }
+    finally:
+        db.close()
+
+
+@app.post("/delivery/auth/send-otp")
+def delivery_auth_send_otp(payload: DeliveryAuthSendOtpPayload):
+    email = normalize_email(payload.email)
+    db = SessionLocal()
+    try:
+        if delivery_email_exists(db, email):
+            raise HTTPException(status_code=409, detail="This email is already registered.")
+        code = generate_delivery_otp(email)
+        subject = "Your FoodNova Dispatch verification code"
+        text = f"Your FoodNova Dispatch verification code is {code}. It expires in {DELIVERY_OTP_TTL_MINUTES} minutes."
+        html = f"<p>Your FoodNova Dispatch verification code is <strong>{code}</strong>.</p><p>It expires in {DELIVERY_OTP_TTL_MINUTES} minutes.</p>"
+        try:
+            send_email(email, subject, html, text=text, event_type="delivery_otp")
+        except Exception as error:
+            print("DELIVERY_OTP_EMAIL_ERROR", json_dump({"email": email, "error": repr(error)}))
+        print("DELIVERY_EMAIL_OTP_SENT", json_dump({"email": email, "expires_in_seconds": DELIVERY_OTP_TTL_MINUTES * 60}))
+        return {
+            "success": True,
+            "message": "Verification code sent.",
+            "email": email,
+            "expires_in_seconds": DELIVERY_OTP_TTL_MINUTES * 60,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/delivery/auth/verify-otp")
+def delivery_auth_verify_otp(payload: DeliveryAuthVerifyOtpPayload):
+    validate_delivery_email_otp(payload.email, payload.otp)
+    return {
+        "success": True,
+        "verified": True,
+        "email": normalize_email(payload.email),
+        "message": "Email verified.",
+    }
+
+
 @app.post("/delivery/auth/register", status_code=201)
 def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Request):
-    phone = normalize_delivery_phone(payload.phone_number)
+    phone = normalize_delivery_phone(payload.phone_number or "")
     full_name = (payload.full_name or "").strip()
     worker_type = (payload.worker_type or "").strip().lower()
     password = payload.password or ""
-    account_email = str(payload.email or "").strip().lower()
+    account_email = normalize_email(payload.email)
+    otp = str(payload.otp or "").strip()
 
-    if not phone:
-        raise HTTPException(status_code=422, detail="Enter a valid Nigerian phone number.")
     if not account_email:
         raise HTTPException(status_code=422, detail="Email is required.")
     if worker_type not in ["messenger", "rider"]:
         raise HTTPException(status_code=422, detail="Worker type must be rider or messenger.")
     if len(password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+    if otp:
+        validate_delivery_email_otp(account_email, otp)
+    elif not phone:
+        raise HTTPException(status_code=422, detail="Verify your email before creating a rider account.")
 
     db = SessionLocal()
     try:
-        if get_delivery_worker_by_phone(db, phone):
+        if phone and get_delivery_worker_by_phone(db, phone):
             raise HTTPException(status_code=409, detail="Delivery account already exists. Please log in.")
-        if get_db_user_by_phone(db, phone):
+        if phone and get_db_user_by_phone(db, phone):
             raise HTTPException(status_code=409, detail="This phone number is already registered.")
         if get_db_user_by_email(db, account_email):
             raise HTTPException(status_code=409, detail="This email is already registered. Please log in.")
@@ -6631,7 +6743,8 @@ def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Reques
         db.commit()
         db.refresh(user)
         db.refresh(worker)
-        log_delivery_auth_event("register_success", phone, worker_id=worker.id, user_id=user.id, scheme=_password_hash_scheme(user.password))
+        DELIVERY_EMAIL_OTPS.pop(account_email, None)
+        log_delivery_auth_event("register_success", phone or account_email, worker_id=worker.id, user_id=user.id, scheme=_password_hash_scheme(user.password))
         create_admin_audit_log(
             request,
             db_user_to_dict(user),
@@ -6751,6 +6864,11 @@ def delivery_onboarding_verify_nin(payload: NINVerificationPayload, request: Req
     return verify_delivery_kyc_nin(payload, request)
 
 
+@app.post("/delivery/verify-nin")
+def delivery_verify_nin(payload: NINVerificationPayload, request: Request):
+    return delivery_onboarding_verify_nin(payload, request)
+
+
 @app.patch("/delivery/onboarding/profile")
 def delivery_onboarding_profile(payload: OnboardingProfilePayload, request: Request):
     db, user, worker = get_delivery_worker_record_for_request(request)
@@ -6800,6 +6918,11 @@ def delivery_onboarding_profile(payload: OnboardingProfilePayload, request: Requ
         db.close()
 
 
+@app.patch("/delivery/profile")
+def delivery_profile(payload: OnboardingProfilePayload, request: Request):
+    return delivery_onboarding_profile(payload, request)
+
+
 @app.post("/delivery/onboarding/documents")
 async def delivery_onboarding_document(
     request: Request,
@@ -6835,6 +6958,33 @@ async def delivery_onboarding_document(
         db.close()
 
 
+@app.post("/delivery/upload-selfie")
+async def delivery_upload_selfie(request: Request, document: UploadFile = File(...)):
+    return await delivery_onboarding_document(request, document_type="selfie", document=document)
+
+
+@app.post("/delivery/upload-document")
+async def delivery_upload_document(
+    request: Request,
+    document_type: str = Form(...),
+    document: UploadFile = File(...),
+):
+    clean_type = (document_type or "").strip().lower().replace(" ", "_")
+    allowed = {
+        "driver_license": "driver_license",
+        "drivers_license": "driver_license",
+        "driver's_license": "driver_license",
+        "voters_card": "driver_license",
+        "voter_card": "driver_license",
+        "international_passport": "driver_license",
+        "passport": "driver_license",
+    }
+    mapped_type = allowed.get(clean_type)
+    if not mapped_type:
+        raise HTTPException(status_code=400, detail="Upload one valid government ID document.")
+    return await delivery_onboarding_document(request, document_type=mapped_type, document=document)
+
+
 @app.post("/delivery/onboarding/training")
 def delivery_onboarding_training(payload: OnboardingTrainingPayload, request: Request):
     db, user, worker = get_delivery_worker_record_for_request(request)
@@ -6864,8 +7014,6 @@ def delivery_onboarding_submit(payload: OnboardingSubmitPayload, request: Reques
             missing.append("selfie")
         if not documents.get("driver_license"):
             missing.append("driver license")
-        if not (documents.get("proof_of_address") or documents.get("address_proof")):
-            missing.append("proof of address")
         if missing:
             raise HTTPException(status_code=400, detail=f"Missing required onboarding item: {', '.join(missing)}")
         meta = delivery_worker_review_meta(worker)
@@ -6885,6 +7033,11 @@ def delivery_onboarding_submit(payload: OnboardingSubmitPayload, request: Reques
         return {"success": True, "message": "Submitted for admin review.", "worker": worker_to_dict(worker), "data": progress, "onboarding_progress": progress}
     finally:
         db.close()
+
+
+@app.post("/delivery/submit-onboarding")
+def delivery_submit_onboarding(payload: OnboardingSubmitPayload, request: Request):
+    return delivery_onboarding_submit(payload, request)
 
 
 @app.post("/delivery/auth/logout")

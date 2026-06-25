@@ -96,8 +96,10 @@ class AuthRepository {
           '${profile['current_step'] ?? profile['onboarding_current_step'] ?? 1}',
         ) ??
         1;
-    final finalStep =
-        int.tryParse('${profile['onboarding_step_total'] ?? 11}') ?? 11;
+    final finalStep = int.tryParse(
+          '${profile['onboarding_step_total'] ?? dispatchOnboardingTotalSteps}',
+        ) ??
+        dispatchOnboardingTotalSteps;
     final applicationSubmitted = liveApprovalStatus == 'PENDING_REVIEW' ||
         liveApprovalStatus == 'APPROVED' ||
         liveApprovalStatus == 'REJECTED';
@@ -118,16 +120,51 @@ class AuthRepository {
     await _dio.post('/forgot-password', data: {'email': email.trim()});
   }
 
-  Future<Map<String, dynamic>> createRiderAccount({
+  Future<bool> emailExists(String email) async {
+    final response = await _dio.post(
+      '/delivery/auth/check-email',
+      data: {'email': email.trim()},
+    );
+    final data = Map<String, dynamic>.from(response.data as Map);
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(data));
+    return data['exists'] == true;
+  }
+
+  Future<void> sendEmailOtp(String email) async {
+    final response = await _dio.post(
+      '/delivery/auth/send-otp',
+      data: {'email': email.trim()},
+    );
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(response.data));
+  }
+
+  Future<void> verifyEmailOtp({
     required String email,
-    required String phone,
+    required String otp,
+  }) async {
+    final response = await _dio.post(
+      '/delivery/auth/verify-otp',
+      data: {'email': email.trim(), 'otp': otp.trim()},
+    );
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(response.data));
+  }
+
+  Future<Map<String, dynamic>> registerWithVerifiedEmail({
+    required String email,
     required String password,
+    required String otp,
   }) async {
     debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/auth/register');
     final response = await _dio.post('/delivery/auth/register', data: {
       'email': email.trim(),
-      'phone_number': phone.trim(),
       'password': password,
+      'otp': otp.trim(),
       'worker_type': 'rider',
     });
     final data = Map<String, dynamic>.from(response.data as Map);
@@ -143,7 +180,6 @@ class AuthRepository {
     final progress = Map<String, dynamic>.from(
       data['onboarding_progress'] ?? data['data'] ?? {},
     );
-    _logOnboardingProgress('ONBOARDING_API_AFTER account_create', progress);
     await ref.read(sessionControllerProvider.notifier).saveRiderState(
           riderId: '${worker['id'] ?? progress['rider_id'] ?? ''}',
           approvalStatus:
@@ -151,8 +187,9 @@ class AuthRepository {
           onboardingCompleted: false,
           profileExists: true,
           profileSource: 'backend',
-          currentStep: int.tryParse('${progress['current_step'] ?? 2}') ?? 2,
+          currentStep: int.tryParse('${progress['current_step'] ?? 3}') ?? 3,
         );
+    await _registerPushToken();
     return data;
   }
 
@@ -175,10 +212,9 @@ class AuthRepository {
     required bool consent,
   }) async {
     debugPrint('NIN_VERIFY_REQUEST nin_length=${nin.trim().length}');
-    debugPrint(
-        'ONBOARDING_API_BEFORE endpoint=/delivery/onboarding/verify-nin');
+    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/verify-nin');
     final response = await _dio.post(
-      '/delivery/onboarding/verify-nin',
+      '/delivery/verify-nin',
       data: {'nin': nin.trim(), 'consent': consent},
     );
     debugPrint('RAW HTTP RESPONSE ${response.data}');
@@ -224,9 +260,8 @@ class AuthRepository {
   Future<Map<String, dynamic>> saveOnboardingProfile(
     Map<String, dynamic> payload,
   ) async {
-    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/onboarding/profile');
-    final response =
-        await _dio.patch('/delivery/onboarding/profile', data: payload);
+    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/profile');
+    final response = await _dio.patch('/delivery/profile', data: payload);
     final data = Map<String, dynamic>.from(response.data as Map);
     await ref
         .read(sessionControllerProvider.notifier)
@@ -238,18 +273,33 @@ class AuthRepository {
     return progress;
   }
 
-  Future<Map<String, dynamic>> uploadOnboardingDocument({
+  Future<Map<String, dynamic>> uploadSelfie({required String path}) async {
+    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/upload-selfie');
+    final form = FormData.fromMap({
+      'document': await MultipartFile.fromFile(path),
+    });
+    final response = await _dio.post('/delivery/upload-selfie', data: form);
+    final data = Map<String, dynamic>.from(response.data as Map);
+    await ref
+        .read(sessionControllerProvider.notifier)
+        .recordLastApiResponse(jsonEncode(data));
+    final progress = Map<String, dynamic>.from(
+      data['onboarding_progress'] ?? data['data'] ?? {},
+    );
+    _logOnboardingProgress('ONBOARDING_API_AFTER selfie', progress);
+    return progress;
+  }
+
+  Future<Map<String, dynamic>> uploadGovernmentDocument({
     required String documentType,
     required String path,
   }) async {
-    debugPrint(
-        'ONBOARDING_API_BEFORE endpoint=/delivery/onboarding/documents type=$documentType');
+    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/upload-document');
     final form = FormData.fromMap({
       'document_type': documentType,
       'document': await MultipartFile.fromFile(path),
     });
-    final response =
-        await _dio.post('/delivery/onboarding/documents', data: form);
+    final response = await _dio.post('/delivery/upload-document', data: form);
     final data = Map<String, dynamic>.from(response.data as Map);
     await ref
         .read(sessionControllerProvider.notifier)
@@ -257,31 +307,15 @@ class AuthRepository {
     final progress = Map<String, dynamic>.from(
       data['onboarding_progress'] ?? data['data'] ?? {},
     );
-    _logOnboardingProgress('ONBOARDING_API_AFTER document', progress);
-    return progress;
-  }
-
-  Future<Map<String, dynamic>> completeOnboardingTraining() async {
-    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/onboarding/training');
-    final response = await _dio.post(
-      '/delivery/onboarding/training',
-      data: {'completed': true},
-    );
-    final data = Map<String, dynamic>.from(response.data as Map);
-    await ref
-        .read(sessionControllerProvider.notifier)
-        .recordLastApiResponse(jsonEncode(data));
-    final progress = Map<String, dynamic>.from(
-      data['onboarding_progress'] ?? data['data'] ?? {},
-    );
-    _logOnboardingProgress('ONBOARDING_API_AFTER training', progress);
+    _logOnboardingProgress(
+        'ONBOARDING_API_AFTER government_document', progress);
     return progress;
   }
 
   Future<Map<String, dynamic>> submitOnboardingApplication() async {
-    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/onboarding/submit');
+    debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/submit-onboarding');
     final response = await _dio.post(
-      '/delivery/onboarding/submit',
+      '/delivery/submit-onboarding',
       data: {'submit': true},
     );
     final data = Map<String, dynamic>.from(response.data as Map);
@@ -294,91 +328,6 @@ class AuthRepository {
           data['onboarding_progress'] ?? data['data'] ?? {}),
     );
     return data;
-  }
-
-  Future<Map<String, dynamic>> signup({
-    required Map<String, dynamic> fields,
-    required String selfiePath,
-    required String driverLicensePath,
-    required String proofOfAddressPath,
-  }) async {
-    debugPrint('SUBMIT_STARTED endpoint=/delivery-workers/signup');
-    debugPrint('ONBOARDING_SUBMIT_START');
-    debugPrint('SUBMIT_DOCUMENT_UPLOAD preparing_multipart=true');
-    final formMap = <String, dynamic>{
-      ...fields,
-      'nin_consent': fields['nin_consent'] == true ? 'true' : 'false',
-      'selfie': await MultipartFile.fromFile(selfiePath),
-      'id_document': await MultipartFile.fromFile(driverLicensePath),
-      'address_document': await MultipartFile.fromFile(proofOfAddressPath),
-    };
-    debugPrint('SUBMIT_DOCUMENT_UPLOAD multipart_ready=true');
-    debugPrint('LICENSE_UPLOAD_SUCCESS multipart_prepared=true');
-    debugPrint('SELFIE_UPLOAD_SUCCESS multipart_prepared=true');
-    debugPrint('RIDER_CREATE_START endpoint=/delivery-workers/signup');
-    final form = FormData.fromMap(formMap);
-    Response<dynamic> response;
-    try {
-      debugPrint(
-          'ONBOARDING_API_REQUEST fields=${jsonEncode(_safeSignupLog(fields))}');
-      response = await _dio.post(
-        '/delivery-workers/signup',
-        data: form,
-        options: Options(
-          sendTimeout: const Duration(seconds: 120),
-          receiveTimeout: const Duration(seconds: 120),
-        ),
-      );
-    } catch (error) {
-      debugPrint('SUBMIT_FAILED error=$error');
-      debugPrint('ONBOARDING_API_RESPONSE error=$error');
-      debugPrint('RIDER_CREATE_FAILURE $error');
-      rethrow;
-    }
-    final body = Map<String, dynamic>.from(response.data as Map);
-    debugPrint('SUBMIT_APPLICATION_CREATED ${jsonEncode(body)}');
-    debugPrint('ONBOARDING_API_RESPONSE ${jsonEncode(body)}');
-    await ref
-        .read(sessionControllerProvider.notifier)
-        .recordLastApiResponse(jsonEncode(body));
-    debugPrint('Registration response ${jsonEncode(body)}');
-    final worker =
-        Map<String, dynamic>.from(body['worker'] ?? body['data'] ?? {});
-    debugPrint('Created rider ID ${worker['id'] ?? ''}');
-    debugPrint(
-        'Backend record created ${worker.isNotEmpty && worker['id'] != null}');
-    debugPrint('RIDER_CREATE_SUCCESS worker_id=${worker['id'] ?? ''}');
-    if (worker.isNotEmpty) {
-      final token = '${body['access_token'] ?? body['token'] ?? ''}';
-      if (token.isNotEmpty) {
-        await ref.read(sessionControllerProvider.notifier).save(token);
-      }
-      debugPrint('RIDER_STATUS_UPDATE_START');
-      debugPrint('PENDING_REVIEW_SAVE_START');
-      await ref.read(sessionControllerProvider.notifier).saveRiderState(
-            riderId: '${worker['id'] ?? ''}',
-            approvalStatus: '${worker['kyc_status'] ?? 'PENDING_REVIEW'}',
-            onboardingCompleted: true,
-            profileExists: true,
-            profileSource: 'backend',
-            currentStep: int.tryParse(
-                    '${worker['current_step'] ?? worker['onboarding_current_step'] ?? 11}') ??
-                11,
-          );
-      debugPrint(
-          'RIDER_STATUS_UPDATE_SUCCESS status=${worker['kyc_status'] ?? 'PENDING_REVIEW'}');
-      debugPrint(
-          'PENDING_REVIEW_SAVE_SUCCESS status=${worker['kyc_status'] ?? 'PENDING_REVIEW'} rider_id=${worker['id'] ?? ''}');
-      debugPrint('RIDER_ONBOARDING_COMPLETE ${worker['id']}');
-      debugPrint('SUBMIT_COMPLETED worker_id=${worker['id']}');
-      debugPrint(
-          'RIDER_APPROVAL_STATUS ${worker['kyc_status'] ?? 'PENDING_REVIEW'}');
-      await _registerPushToken();
-    } else {
-      debugPrint('RIDER_STATUS_UPDATE_FAILURE worker_missing=true');
-      debugPrint('PENDING_REVIEW_SAVE_FAILURE worker_missing=true');
-    }
-    return body;
   }
 
   Future<void> logout() async {
@@ -407,27 +356,6 @@ class AuthRepository {
       });
     }
   }
-}
-
-Map<String, dynamic> _safeSignupLog(Map<String, dynamic> fields) {
-  return {
-    'field_keys': fields.keys.toList(),
-    'email_present': '${fields['email'] ?? ''}'.trim().isNotEmpty,
-    'phone_present': '${fields['phone'] ?? ''}'.trim().isNotEmpty,
-    'worker_type': fields['worker_type'],
-    'rider_type': fields['rider_type'],
-    'nin_last4': '${fields['nin_number'] ?? ''}'
-                .replaceAll(RegExp(r'\D'), '')
-                .length >=
-            4
-        ? '${fields['nin_number']}'.replaceAll(RegExp(r'\D'), '').substring(
-            '${fields['nin_number']}'.replaceAll(RegExp(r'\D'), '').length - 4)
-        : '',
-    'has_confirm_password': fields.containsKey('confirm_password'),
-    'has_emergency_contact_name': fields.containsKey('emergency_contact_name'),
-    'has_emergency_contact_phone':
-        fields.containsKey('emergency_contact_phone'),
-  };
 }
 
 void _logOnboardingProgress(String label, Map<String, dynamic> progress) {
