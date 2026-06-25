@@ -7478,6 +7478,60 @@ def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = N
         db.close()
 
 
+@app.post("/delivery/go-online")
+def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] = None):
+    db, user, worker = get_current_worker_record(request)
+    try:
+        print("DELIVERY_ONLINE_REQUEST", json_dump({
+            "worker_id": worker.id,
+            "worker_type": worker.worker_type,
+            "payload_present": payload is not None,
+            "latitude": getattr(payload, "latitude", None),
+            "longitude": getattr(payload, "longitude", None),
+            "timestamp": getattr(payload, "timestamp", None),
+        }))
+        if promote_verified_approved_rider(worker):
+            sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved worker on go-online")
+        if rider_lifecycle_status(worker) != "ACTIVE":
+            raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
+        if not worker_dashboard_access_allowed(worker):
+            raise HTTPException(status_code=403, detail="Complete NIN verification, profile, selfie, and document uploads before going online.")
+        if payload is None:
+            worker.operational_status = "OFFLINE"
+            worker.updated_at = datetime.utcnow()
+            db.commit()
+            raise HTTPException(status_code=400, detail="Enable location services to go online.")
+        if not payload_has_recent_timestamp(payload):
+            worker.operational_status = "OFFLINE"
+            worker.suspicious_gps_gaps = (worker.suspicious_gps_gaps or 0) + 1
+            worker.updated_at = datetime.utcnow()
+            db.commit()
+            raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds to go online.")
+        inside_zone = update_worker_location(worker, payload, db)
+        if (worker.worker_type or "") == "messenger" and not inside_zone:
+            worker.operational_status = "OFFLINE"
+            db.commit()
+            raise HTTPException(status_code=403, detail=MESSENGER_OUTSIDE_ZONE_MESSAGE)
+        worker.operational_status = "ONLINE"
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"{worker.worker_type.title()} {worker.full_name} went online", {"worker": data, "gps_provided": bool(payload), "gps_recent": data.get("gps_recent")})
+        socket_emit("rider:availability", {"worker": data, "status": "ONLINE"}, room=f"user:{worker.user_id}")
+        socket_emit("dispatch:availability", {"worker": data, "status": "ONLINE"}, room=f"role:admin")
+        print("DELIVERY_ONLINE_RESPONSE", json_dump({"worker_id": worker.id, "status": worker.operational_status, "gps_recent": data.get("gps_recent")}))
+        return {"success": True, "worker": data, "data": data}
+    except HTTPException as error:
+        print("DELIVERY_ONLINE_ERROR", json_dump({"worker_id": getattr(worker, "id", None), "status_code": error.status_code, "detail": error.detail}))
+        raise
+    except Exception as error:
+        print("DELIVERY_ONLINE_ERROR", json_dump({"worker_id": getattr(worker, "id", None), "error": repr(error)}))
+        raise
+    finally:
+        db.close()
+
+
 @app.post("/delivery/go-offline")
 def delivery_go_offline(request: Request):
     db, user, worker = get_current_worker_record(request)

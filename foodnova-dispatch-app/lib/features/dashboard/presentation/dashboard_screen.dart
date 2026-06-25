@@ -25,7 +25,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   bool toggling = false;
   String error = '';
-  DateTime? lastBackPressedAt;
   Timer? onlineGpsTimer;
   StreamSubscription<Map<String, dynamic>>? realtimeSubscription;
   bool onlineGpsPingInFlight = false;
@@ -65,18 +64,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        final now = DateTime.now();
-        final shouldExit = lastBackPressedAt != null &&
-            now.difference(lastBackPressedAt!) < const Duration(seconds: 2);
-        if (shouldExit) {
-          await SystemNavigator.pop();
-          return;
-        }
-        lastBackPressedAt = now;
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Press back again to exit')),
+        final exit = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Exit FoodNova Dispatch?'),
+            content: const Text('You are on the dashboard. Exit the app?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Stay'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Exit'),
+              ),
+            ],
+          ),
         );
+        if (exit == true) await SystemNavigator.pop();
       },
       child: Scaffold(
         appBar: AppBar(
@@ -125,7 +131,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   );
                 },
                 loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text(apiMessage(e)),
+                error: (e, _) => Text(apiOperationMessage(e, 'Load dashboard')),
               ),
               if (error.isNotEmpty)
                 Padding(
@@ -219,8 +225,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ref.invalidate(dashboardStatsProvider);
     } catch (e) {
       if (!mounted) return;
-      final message =
-          e is DispatchLocationException ? e.message : apiMessage(e);
+      final operation = rider.isOnline ? 'Go offline' : 'Go online';
+      final message = e is DispatchLocationException
+          ? '$operation failed: ${e.message}'
+          : apiOperationMessage(e, operation);
       setState(() => error = message);
     } finally {
       if (mounted) setState(() => toggling = false);
@@ -343,7 +351,8 @@ class _ApprovedDashboardBody extends ConsumerWidget {
               child: CircularProgressIndicator(),
             ),
           ),
-          error: (e, _) => FnCard(child: Text(apiMessage(e))),
+          error: (e, _) => FnCard(
+              child: Text(apiOperationMessage(e, 'Load incoming orders'))),
         ),
       ],
     );

@@ -96,3 +96,18 @@ String apiMessage(Object error) {
   }
   return error.toString();
 }
+
+String apiOperationMessage(Object error, String operation) {
+  final message = apiMessage(error);
+  if (error is DioException) {
+    debugPrint(
+      'API_OPERATION_FAILED operation=$operation '
+      'status=${error.response?.statusCode} '
+      'body=${error.response?.data}',
+    );
+    if (message.startsWith('FoodNova could not complete this request')) {
+      return '$operation failed because FoodNova returned an internal server error. Please try again.';
+    }
+  }
+  return '$operation failed: $message';
+}

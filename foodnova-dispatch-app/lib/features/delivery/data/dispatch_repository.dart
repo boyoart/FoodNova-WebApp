@@ -111,8 +111,18 @@ class DispatchRepository {
 
   Future<RiderProfile> goOnline(Map<String, dynamic> location) async {
     debugPrint('ONLINE_REQUEST $location');
-    final response = await _dio.post('/rider/go-online', data: location);
-    debugPrint('ONLINE_RESPONSE ${response.data}');
+    late final Response<dynamic> response;
+    try {
+      response = await _dio.post('/delivery/go-online', data: location);
+    } on DioException catch (error) {
+      debugPrint(
+        'ONLINE_FAILURE status=${error.response?.statusCode} '
+        'body=${error.response?.data}',
+      );
+      rethrow;
+    }
+    debugPrint(
+        'ONLINE_RESPONSE status=${response.statusCode} ${response.data}');
     return RiderProfile(
       Map<String, dynamic>.from(
         response.data['worker'] ?? response.data['data'] ?? {},
@@ -122,8 +132,18 @@ class DispatchRepository {
 
   Future<RiderProfile> goOffline() async {
     debugPrint('OFFLINE_REQUEST');
-    final response = await _dio.post('/delivery/go-offline');
-    debugPrint('OFFLINE_RESPONSE ${response.data}');
+    late final Response<dynamic> response;
+    try {
+      response = await _dio.post('/delivery/go-offline');
+    } on DioException catch (error) {
+      debugPrint(
+        'OFFLINE_FAILURE status=${error.response?.statusCode} '
+        'body=${error.response?.data}',
+      );
+      rethrow;
+    }
+    debugPrint(
+        'OFFLINE_RESPONSE status=${response.statusCode} ${response.data}');
     return RiderProfile(
       Map<String, dynamic>.from(
         response.data['worker'] ?? response.data['data'] ?? {},

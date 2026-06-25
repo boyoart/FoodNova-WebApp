@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -45,95 +46,104 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(offer.orderCode)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          SizedBox(
-            height: 220,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: GoogleMap(
-                initialCameraPosition: const CameraPosition(
-                  target: LatLng(6.5244, 3.3792),
-                  zoom: 12,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) context.go('/dashboard');
+      },
+      child: Scaffold(
+        appBar: AppBar(title: Text(offer.orderCode)),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            SizedBox(
+              height: 220,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: GoogleMap(
+                  initialCameraPosition: const CameraPosition(
+                    target: LatLng(6.5244, 3.3792),
+                    zoom: 12,
+                  ),
+                  myLocationEnabled: true,
+                  myLocationButtonEnabled: true,
                 ),
-                myLocationEnabled: true,
-                myLocationButtonEnabled: true,
               ),
             ),
-          ),
-          const SizedBox(height: 14),
-          FnCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  stage.label,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 8),
-                Text('Pickup: ${offer.pickup}'),
-                Text('Customer: ${offer.customerName}'),
-                if (offer.customerPhone.isNotEmpty)
-                  Text('Phone: ${offer.customerPhone}'),
-                Text('Dropoff: ${offer.dropoff}'),
-                if (offer.instructions.isNotEmpty)
-                  Text('Instructions: ${offer.instructions}'),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _openGoogleMaps,
-                      icon: const Icon(Icons.navigation_outlined),
-                      label: const Text('Google Maps'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _openWaze,
-                      icon: const Icon(Icons.alt_route),
-                      label: const Text('Waze'),
-                    ),
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: FoodNovaColors.danger,
+            const SizedBox(height: 14),
+            FnCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stage.label,
+                    style: Theme.of(
+                      context,
+                    )
+                        .textTheme
+                        .titleLarge
+                        ?.copyWith(fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Pickup: ${offer.pickup}'),
+                  Text('Customer: ${offer.customerName}'),
+                  if (offer.customerPhone.isNotEmpty)
+                    Text('Phone: ${offer.customerPhone}'),
+                  Text('Dropoff: ${offer.dropoff}'),
+                  if (offer.instructions.isNotEmpty)
+                    Text('Instructions: ${offer.instructions}'),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _openGoogleMaps,
+                        icon: const Icon(Icons.navigation_outlined),
+                        label: const Text('Google Maps'),
                       ),
-                      onPressed: _panic,
-                      icon: const Icon(Icons.sos),
-                      label: const Text('Panic'),
-                    ),
-                  ],
+                      OutlinedButton.icon(
+                        onPressed: _openWaze,
+                        icon: const Icon(Icons.alt_route),
+                        label: const Text('Waze'),
+                      ),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: FoodNovaColors.danger,
+                        ),
+                        onPressed: _panic,
+                        icon: const Icon(Icons.sos),
+                        label: const Text('Panic'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            for (final item in DeliveryStage.values)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  item.index <= stage.index
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  color: item.index <= stage.index
+                      ? FoodNovaColors.success
+                      : FoodNovaColors.border,
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          for (final item in DeliveryStage.values)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(
-                item.index <= stage.index
-                    ? Icons.check_circle
-                    : Icons.radio_button_unchecked,
-                color: item.index <= stage.index
-                    ? FoodNovaColors.success
-                    : FoodNovaColors.border,
+                title: Text(
+                  item == DeliveryStage.delivered
+                      ? 'Complete Delivery'
+                      : item.label,
+                ),
+                onTap: item == DeliveryStage.delivered
+                    ? _openVerificationScreen
+                    : () => _setStage(item),
               ),
-              title: Text(
-                item == DeliveryStage.delivered
-                    ? 'Complete Delivery'
-                    : item.label,
-              ),
-              onTap: item == DeliveryStage.delivered
-                  ? _openVerificationScreen
-                  : () => _setStage(item),
-            ),
-          if (message.isNotEmpty) FnCard(child: Text(message)),
-        ],
+            if (message.isNotEmpty) FnCard(child: Text(message)),
+          ],
+        ),
       ),
     );
   }

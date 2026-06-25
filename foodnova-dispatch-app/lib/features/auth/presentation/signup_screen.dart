@@ -60,6 +60,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
   String message = '';
   String verificationMessage = '';
   String? highlightedField;
+  String? existingAccountMessage;
   NinVerificationResult? verifiedNin;
   XFile? selfie;
   PlatformFile? driverLicense;
@@ -381,6 +382,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       currentStep = next;
       message = '';
       highlightedField = null;
+      existingAccountMessage = null;
     });
     await _saveDraft();
   }
@@ -566,6 +568,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
             keyboardType: TextInputType.phone, icon: Icons.phone_outlined),
         _field('password', obscure: true, icon: Icons.lock_outline),
         _PasswordStrength(password: fields['password']!.text),
+        if (existingAccountMessage != null) ...[
+          const SizedBox(height: 8),
+          _ExistingAccountCard(message: existingAccountMessage!),
+        ],
       ],
     );
   }
@@ -961,6 +967,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
       loading = true;
       message = '';
       highlightedField = null;
+      existingAccountMessage = null;
     });
     try {
       final token = await ref.read(sessionControllerProvider.notifier).token();
@@ -983,7 +990,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
           progress['onboarding_progress'] ?? progress['data'] ?? {}));
       await _goToStep(3);
     } catch (error) {
-      if (mounted) setState(() => message = _friendlyError(error));
+      if (!mounted) return;
+      if (_isExistingAccountError(error)) {
+        setState(() {
+          existingAccountMessage =
+              'This email or phone number is already registered.';
+          message = '';
+        });
+      } else {
+        setState(() => message = _friendlyError(error));
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -1540,6 +1556,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen>
     return '$error'.replaceFirst('Exception: ', '');
   }
 
+  bool _isExistingAccountError(Object error) {
+    if (error is! DioException) return false;
+    if (error.response?.statusCode == 409) return true;
+    final text = _friendlyError(error).toLowerCase();
+    return text.contains('already registered') ||
+        text.contains('already exists');
+  }
+
   Widget _field(
     String key, {
     bool obscure = false,
@@ -1613,6 +1637,52 @@ class _OnboardingValidationFailure {
   const _OnboardingValidationFailure(this.fieldKey, this.message);
   final String? fieldKey;
   final String message;
+}
+
+class _ExistingAccountCard extends StatelessWidget {
+  const _ExistingAccountCard({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return FnCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.info_outline, color: FoodNovaColors.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: () => context.go('/login'),
+                  child: const Text('Go to Login'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => context.go('/forgot-password'),
+                  child: const Text('Forgot Password'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 String _label(String key) => key
