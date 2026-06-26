@@ -50,6 +50,10 @@ final dioProvider = Provider<Dio>((ref) {
         final path = error.requestOptions.path;
         final isPublicEndpoint = [
           '/delivery-workers/verify-nin',
+          '/delivery/auth/check-email',
+          '/delivery/auth/send-otp',
+          '/delivery/auth/verify-otp',
+          '/delivery/auth/register',
           '/delivery/auth/login',
           '/auth/login',
         ].any((endpoint) => path.contains(endpoint));
@@ -86,9 +90,8 @@ String apiMessage(Object error) {
         return 'FoodNova could not complete this request. Please try again, and contact support if it continues.';
       }
     }
-    if (data is Map && data['detail'] != null) {
-      return data['detail'].toString();
-    }
+    if (data is Map && data['error'] != null) return data['error'].toString();
+    if (data is Map && data['detail'] != null) return data['detail'].toString();
     if (data is Map && data['message'] != null) {
       return data['message'].toString();
     }

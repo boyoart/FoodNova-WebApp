@@ -80,7 +80,7 @@ class DispatchRepository {
           .read(sessionControllerProvider.notifier)
           .recordLastApiResponse(exact);
       debugPrint('RIDER_PROFILE_NOT_FOUND $exact');
-      throw Exception(exact);
+      throw Exception(apiMessage(error));
     }
     await ref
         .read(sessionControllerProvider.notifier)
@@ -93,7 +93,9 @@ class DispatchRepository {
           .read(sessionControllerProvider.notifier)
           .markProfileMissing(profileSource: 'backend');
       debugPrint('RIDER_PROFILE_NOT_FOUND $exact');
-      throw Exception(exact);
+      throw Exception(
+        'FoodNova could not load your rider profile. Please contact support if this continues.',
+      );
     }
     final profile = RiderProfile(raw);
     await ref.read(sessionControllerProvider.notifier).saveRiderState(

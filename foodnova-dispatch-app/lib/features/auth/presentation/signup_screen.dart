@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../../core/state/session_controller.dart';
 import '../../../core/theme/colors.dart';
 import '../data/auth_repository.dart';
@@ -1089,6 +1091,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   String _text(String key) => _controllers[key]?.text.trim() ?? '';
 
   String _friendlyError(Object error) {
+    if (error is DioException) return apiMessage(error);
     final text = error.toString();
     final match = RegExp(r'detail: ([^,}]+)').firstMatch(text);
     if (match != null) return match.group(1)!.trim();

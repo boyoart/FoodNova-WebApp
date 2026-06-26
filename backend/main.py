@@ -28,6 +28,7 @@ from sqlalchemy import and_, func, inspect, or_, text
 
 from database import Base, SessionLocal, engine
 from email_service import (
+    is_email_enabled,
     send_email,
     send_admin_order_email,
     send_customer_order_email,
@@ -6740,14 +6741,37 @@ def delivery_auth_send_otp(payload: DeliveryAuthSendOtpPayload):
     try:
         if delivery_email_exists(db, email):
             raise HTTPException(status_code=409, detail="This email is already registered.")
+        if not is_email_enabled():
+            print("DELIVERY_OTP_EMAIL_NOT_CONFIGURED", json_dump({
+                "email": email,
+                "email_enabled": False,
+                "resend_api_key_present": bool(os.environ.get("RESEND_API_KEY")),
+            }))
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Email verification is temporarily unavailable. Please try again shortly.",
+                },
+            )
         code = generate_delivery_otp(email)
         subject = "Your FoodNova Dispatch verification code"
         text = f"Your FoodNova Dispatch verification code is {code}. It expires in {DELIVERY_OTP_TTL_MINUTES} minutes."
         html = f"<p>Your FoodNova Dispatch verification code is <strong>{code}</strong>.</p><p>It expires in {DELIVERY_OTP_TTL_MINUTES} minutes.</p>"
-        try:
-            send_email(email, subject, html, text=text, event_type="delivery_otp")
-        except Exception as error:
-            print("DELIVERY_OTP_EMAIL_ERROR", json_dump({"email": email, "error": repr(error)}))
+        email_result = send_email(email, subject, html, text=text, event_type="delivery_otp")
+        if not isinstance(email_result, dict) or email_result.get("status") != "sent":
+            DELIVERY_EMAIL_OTPS.pop(email, None)
+            print("DELIVERY_OTP_EMAIL_ERROR", json_dump({
+                "email": email,
+                "result": email_result,
+            }))
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "success": False,
+                    "error": "Email verification is temporarily unavailable. Please try again shortly.",
+                },
+            )
         print("DELIVERY_EMAIL_OTP_SENT", json_dump({"email": email, "expires_in_seconds": DELIVERY_OTP_TTL_MINUTES * 60}))
         return {
             "success": True,
@@ -6785,10 +6809,9 @@ def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Reques
         raise HTTPException(status_code=422, detail="Worker type must be rider or messenger.")
     if len(password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
-    if otp:
-        validate_delivery_email_otp(account_email, otp)
-    elif not phone:
+    if not otp:
         raise HTTPException(status_code=422, detail="Verify your email before creating a rider account.")
+    validate_delivery_email_otp(account_email, otp)
 
     db = SessionLocal()
     try:
@@ -7585,8 +7608,8 @@ def get_current_worker_record(request: Request, expected_type: Optional[str] = N
         raise
 
 
-@app.get("/delivery/me")
-def delivery_me(request: Request):
+@app.get("/delivery/profile/me")
+def delivery_profile_me(request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
         print("RIDER_PROFILE_FETCH", json_dump({
