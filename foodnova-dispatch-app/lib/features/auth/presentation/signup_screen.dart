@@ -127,6 +127,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     setState(() {
       _index = (savedStep - 1).clamp(0, _steps.length - 1).toInt();
     });
+    debugPrint(
+      'ONBOARDING_RESTORED saved_step=$savedStep index=$_index title=${_titles[_step]} draft_present=${draft.trim().isNotEmpty}',
+    );
   }
 
   Future<void> _saveDraft() async {
@@ -345,6 +348,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     );
     if (image != null) {
       setState(() => _selfie = image);
+      debugPrint(
+        'SELFIE_CAPTURED path_present=${image.path.trim().isNotEmpty} name=${image.name}',
+      );
       await _saveDraft();
     }
   }

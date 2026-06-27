@@ -7064,7 +7064,25 @@ async def delivery_onboarding_document(
         if clean_type not in {"selfie", "driver_license", "proof_of_address", "address_proof"}:
             raise HTTPException(status_code=400, detail="Invalid document type.")
         folder = "foodnova/workforce/selfies" if clean_type == "selfie" else "foodnova/workforce/id-documents" if clean_type == "driver_license" else "foodnova/workforce/address-documents"
+        if clean_type == "selfie":
+            print("SELFIE_UPLOAD_START", json_dump({
+                "route": str(request.url.path),
+                "user_id": user.get("id"),
+                "worker_id": getattr(worker, "id", None),
+                "filename": getattr(document, "filename", ""),
+                "content_type": getattr(document, "content_type", ""),
+                "folder": folder,
+                "timestamp": iso(datetime.utcnow()),
+            }))
         url = await save_workforce_upload(document, clean_type != "selfie", folder)
+        if clean_type == "selfie":
+            print("SELFIE_SAVED", json_dump({
+                "route": str(request.url.path),
+                "worker_id": getattr(worker, "id", None),
+                "url_present": bool(url),
+                "storage": "cloudinary" if str(url or "").startswith("http") else "local_uploads",
+                "timestamp": iso(datetime.utcnow()),
+            }))
         if clean_type == "selfie":
             worker.selfie_url = url
             worker.profile_photo_url = worker.profile_photo_url or url
@@ -7081,7 +7099,25 @@ async def delivery_onboarding_document(
         worker.updated_at = datetime.utcnow()
         sync_rider_onboarding_state(db, worker, note=f"Onboarding document uploaded: {clean_type}")
         progress = onboarding_progress_payload(db, worker)
+        if clean_type == "selfie":
+            print("ONBOARDING_STEP_UPDATED", json_dump({
+                "route": str(request.url.path),
+                "worker_id": getattr(worker, "id", None),
+                "current_step": progress.get("current_step"),
+                "progress_percent": progress.get("progress_percent"),
+                "selfie_url_present": bool(worker.selfie_url),
+                "timestamp": iso(datetime.utcnow()),
+            }))
         db.commit()
+        if clean_type == "selfie":
+            print("SELFIE_UPLOAD_RESPONSE", json_dump({
+                "route": str(request.url.path),
+                "worker_id": getattr(worker, "id", None),
+                "success": True,
+                "current_step": progress.get("current_step"),
+                "url_present": bool(url),
+                "timestamp": iso(datetime.utcnow()),
+            }))
         return {"success": True, "document_type": clean_type, "url": url, "data": progress, "onboarding_progress": progress}
     finally:
         db.close()

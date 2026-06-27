@@ -275,13 +275,48 @@ class AuthRepository {
     return progress;
   }
 
+  Future<void> _persistOnboardingProgress(
+    Map<String, dynamic> progress, {
+    required String source,
+  }) async {
+    if (progress.isEmpty) return;
+    final currentStep = int.tryParse('${progress['current_step'] ?? ''}') ?? 1;
+    final riderId = '${progress['rider_id'] ?? ''}';
+    if (riderId.trim().isEmpty) {
+      await ref
+          .read(sessionControllerProvider.notifier)
+          .saveOnboardingStep(currentStep);
+      debugPrint(
+        'ONBOARDING_STEP_UPDATED source=$source current_step=$currentStep rider_id_missing=true',
+      );
+      return;
+    }
+    await ref.read(sessionControllerProvider.notifier).saveRiderState(
+          riderId: riderId,
+          approvalStatus: '${progress['approval_status'] ?? 'ONBOARDING'}',
+          onboardingCompleted: progress['application_submitted'] == true,
+          profileExists: true,
+          profileSource: 'backend',
+          currentStep: currentStep,
+        );
+    debugPrint(
+      'ONBOARDING_STEP_UPDATED source=$source rider_id=$riderId current_step=$currentStep',
+    );
+  }
+
   Future<Map<String, dynamic>> uploadSelfie({required String path}) async {
+    debugPrint('SELFIE_UPLOAD_START endpoint=/delivery/upload-selfie');
     debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/upload-selfie');
     final form = FormData.fromMap({
       'document': await MultipartFile.fromFile(path),
     });
     final response = await _dio.post('/delivery/upload-selfie', data: form);
     final data = Map<String, dynamic>.from(response.data as Map);
+    debugPrint('SELFIE_UPLOAD_RESPONSE ${jsonEncode(data)}');
+    if (data['success'] == false) {
+      throw Exception(
+          '${data['error'] ?? data['detail'] ?? 'Selfie upload failed.'}');
+    }
     await ref
         .read(sessionControllerProvider.notifier)
         .recordLastApiResponse(jsonEncode(data));
@@ -289,6 +324,7 @@ class AuthRepository {
       data['onboarding_progress'] ?? data['data'] ?? {},
     );
     _logOnboardingProgress('ONBOARDING_API_AFTER selfie', progress);
+    await _persistOnboardingProgress(progress, source: 'selfie');
     return progress;
   }
 
