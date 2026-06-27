@@ -91,6 +91,11 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   _StepId get _step => _steps[_index];
   int get _stepNumber => _index + 1;
   int get _percent => ((_stepNumber / _steps.length) * 100).round();
+  static const _documentTypes = <String>{
+    'driver_license',
+    'voters_card',
+    'international_passport',
+  };
 
   @override
   void initState() {
@@ -119,7 +124,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           entry.value.text = '${data[entry.key] ?? ''}';
         }
         _termsAccepted = data['terms_accepted'] == true;
-        _documentType = '${data['document_type'] ?? _documentType}';
+        final savedDocumentType = '${data['document_type'] ?? _documentType}';
+        _documentType = _documentTypes.contains(savedDocumentType)
+            ? savedDocumentType
+            : 'driver_license';
       } catch (_) {
         await session.clearOnboardingDraft();
       }
@@ -285,10 +293,23 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   }
 
   Future<void> _uploadDocument() async {
+    debugPrint(
+      'DOCUMENT_VALIDATION_START document_type=$_documentType has_document=${_governmentId != null}',
+    );
+    if (!_documentTypes.contains(_documentType)) {
+      debugPrint('DOCUMENT_VALIDATION_FAILED reason=invalid_document_type');
+      throw Exception('Select a valid government ID document type.');
+    }
     final document = _governmentId;
     final path = document?.path;
     if (document == null || path == null || path.isEmpty) {
+      debugPrint('DOCUMENT_VALIDATION_FAILED reason=document_missing');
       throw Exception('Upload one government ID document to continue.');
+    }
+    final size = await File(path).length();
+    if (size <= 0) {
+      debugPrint('DOCUMENT_VALIDATION_FAILED reason=document_empty');
+      throw Exception('The selected government ID file is empty.');
     }
     await ref.read(authRepositoryProvider).uploadGovernmentDocument(
           documentType: _documentType,
@@ -779,6 +800,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         DropdownButtonFormField<String>(
+          key: ValueKey('document_type_$_documentType'),
           initialValue: _documentType,
           decoration: _decoration('Document Type'),
           items: const [
@@ -797,8 +819,15 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               : (value) {
                   if (value == null) return;
                   setState(() => _documentType = value);
+                  debugPrint('DOCUMENT_TYPE_SELECTED value=$value');
                   _saveDraft();
                 },
+          validator: (value) {
+            if (value == null || !_documentTypes.contains(value)) {
+              return 'Select a valid document type.';
+            }
+            return null;
+          },
         ),
         const SizedBox(height: 14),
         _notice(_governmentId == null

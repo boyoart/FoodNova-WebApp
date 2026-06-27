@@ -332,6 +332,9 @@ class AuthRepository {
     required String documentType,
     required String path,
   }) async {
+    debugPrint(
+      'DOCUMENT_UPLOAD_START endpoint=/delivery/upload-document document_type=$documentType',
+    );
     debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/upload-document');
     final form = FormData.fromMap({
       'document_type': documentType,
@@ -339,6 +342,11 @@ class AuthRepository {
     });
     final response = await _dio.post('/delivery/upload-document', data: form);
     final data = Map<String, dynamic>.from(response.data as Map);
+    debugPrint('DOCUMENT_UPLOAD_RESPONSE ${jsonEncode(data)}');
+    if (data['success'] == false) {
+      throw Exception(
+          '${data['error'] ?? data['detail'] ?? 'Government ID upload failed.'}');
+    }
     await ref
         .read(sessionControllerProvider.notifier)
         .recordLastApiResponse(jsonEncode(data));
@@ -347,6 +355,7 @@ class AuthRepository {
     );
     _logOnboardingProgress(
         'ONBOARDING_API_AFTER government_document', progress);
+    await _persistOnboardingProgress(progress, source: 'government_document');
     return progress;
   }
 

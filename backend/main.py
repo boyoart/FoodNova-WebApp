@@ -7074,11 +7074,31 @@ async def delivery_onboarding_document(
                 "folder": folder,
                 "timestamp": iso(datetime.utcnow()),
             }))
+        elif clean_type == "driver_license":
+            print("DOCUMENT_UPLOAD_START", json_dump({
+                "route": str(request.url.path),
+                "user_id": user.get("id"),
+                "worker_id": getattr(worker, "id", None),
+                "document_type": clean_type,
+                "filename": getattr(document, "filename", ""),
+                "content_type": getattr(document, "content_type", ""),
+                "folder": folder,
+                "timestamp": iso(datetime.utcnow()),
+            }))
         url = await save_workforce_upload(document, clean_type != "selfie", folder)
         if clean_type == "selfie":
             print("SELFIE_SAVED", json_dump({
                 "route": str(request.url.path),
                 "worker_id": getattr(worker, "id", None),
+                "url_present": bool(url),
+                "storage": "cloudinary" if str(url or "").startswith("http") else "local_uploads",
+                "timestamp": iso(datetime.utcnow()),
+            }))
+        elif clean_type == "driver_license":
+            print("DOCUMENT_SAVED", json_dump({
+                "route": str(request.url.path),
+                "worker_id": getattr(worker, "id", None),
+                "document_type": clean_type,
                 "url_present": bool(url),
                 "storage": "cloudinary" if str(url or "").startswith("http") else "local_uploads",
                 "timestamp": iso(datetime.utcnow()),
@@ -7108,12 +7128,32 @@ async def delivery_onboarding_document(
                 "selfie_url_present": bool(worker.selfie_url),
                 "timestamp": iso(datetime.utcnow()),
             }))
+        elif clean_type == "driver_license":
+            print("DOCUMENT_STEP_UPDATED", json_dump({
+                "route": str(request.url.path),
+                "worker_id": getattr(worker, "id", None),
+                "document_type": clean_type,
+                "current_step": progress.get("current_step"),
+                "progress_percent": progress.get("progress_percent"),
+                "id_document_url_present": bool(worker.id_document_url),
+                "timestamp": iso(datetime.utcnow()),
+            }))
         db.commit()
         if clean_type == "selfie":
             print("SELFIE_UPLOAD_RESPONSE", json_dump({
                 "route": str(request.url.path),
                 "worker_id": getattr(worker, "id", None),
                 "success": True,
+                "current_step": progress.get("current_step"),
+                "url_present": bool(url),
+                "timestamp": iso(datetime.utcnow()),
+            }))
+        elif clean_type == "driver_license":
+            print("DOCUMENT_UPLOAD_RESPONSE", json_dump({
+                "route": str(request.url.path),
+                "worker_id": getattr(worker, "id", None),
+                "success": True,
+                "document_type": clean_type,
                 "current_step": progress.get("current_step"),
                 "url_present": bool(url),
                 "timestamp": iso(datetime.utcnow()),
