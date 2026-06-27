@@ -2220,7 +2220,7 @@ def json_load(value, fallback=None):
 def json_dump(value):
     if value is None:
         return None
-    return json.dumps(value)
+    return json.dumps(value, default=str)
 
 
 def parse_content_list(value) -> list:
@@ -5345,20 +5345,7 @@ def seed_database():
         print("DATABASE SEED ERROR:", repr(error))
 
 
-@app.on_event("startup")
-def on_startup():
-    seed_database()
-    route_rows = []
-    for route in fastapi_app.routes:
-        path = getattr(route, "path", "")
-        methods = sorted(getattr(route, "methods", []) or [])
-        for method in methods:
-            if method in {"GET", "POST", "PATCH", "PUT", "DELETE", "HEAD"}:
-                route_rows.append(f"{method} {path}")
-    print("FOODNOVA_REGISTERED_ROUTES_START")
-    for row in sorted(route_rows):
-        print("FOODNOVA_ROUTE", row)
-    print("FOODNOVA_REGISTERED_ROUTES_END", json_dump({"count": len(route_rows)}))
+def refresh_nin_provider_health(reason: str = "startup") -> dict:
     global NIN_PROVIDER_HEALTH
     nin_config = ninbvnportal_config()
     nin_endpoint = f"{nin_config.get('base_url')}/nin-verification"
@@ -5391,6 +5378,7 @@ def on_startup():
             "header_name_used": "x-api-key",
             "message": validation.get("message"),
             "timestamp": iso(datetime.utcnow()),
+            "reason": reason,
         }))
         print("NIN_PROVIDER_STATUS", "configuration_error")
         print("NIN_PROVIDER_BALANCE_CHECK", "skipped_missing_configuration")
@@ -5400,7 +5388,7 @@ def on_startup():
             "verification_health",
             "operations",
         )
-        return
+        return NIN_PROVIDER_HEALTH
     health = check_provider_connectivity()
     healthy = bool(health.get("apiKeyLoaded") and health.get("endpointReachable"))
     provider_auth_failed = health.get("providerAuthStatus") == "failed" or health.get("lastProviderStatus") in (401, 403)
@@ -5423,6 +5411,7 @@ def on_startup():
         "provider_url": health.get("providerUrl"),
         "latency_ms": health.get("latencyMs"),
         "timestamp": iso(datetime.utcnow()),
+        "reason": reason,
     }))
     print("NIN_PROVIDER_STATUS", "authenticated" if healthy else health.get("providerAuthStatus") or "unavailable")
     print("NIN_PROVIDER_BALANCE_CHECK", json_dump({
@@ -5438,6 +5427,24 @@ def on_startup():
             "verification_health",
             "operations",
         )
+    return NIN_PROVIDER_HEALTH
+
+
+@app.on_event("startup")
+def on_startup():
+    seed_database()
+    route_rows = []
+    for route in fastapi_app.routes:
+        path = getattr(route, "path", "")
+        methods = sorted(getattr(route, "methods", []) or [])
+        for method in methods:
+            if method in {"GET", "POST", "PATCH", "PUT", "DELETE", "HEAD"}:
+                route_rows.append(f"{method} {path}")
+    print("FOODNOVA_REGISTERED_ROUTES_START")
+    for row in sorted(route_rows):
+        print("FOODNOVA_ROUTE", row)
+    print("FOODNOVA_REGISTERED_ROUTES_END", json_dump({"count": len(route_rows)}))
+    refresh_nin_provider_health("startup")
 
 
 @app.get("/")
@@ -6281,6 +6288,21 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
         "timestamp": iso(datetime.utcnow()),
     }))
     try:
+        if not NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True):
+            print("DELIVERY_NIN_PROVIDER_HEALTH_REFRESH_START", json_dump({
+                "worker_id": getattr(worker, "id", None),
+                "previous_status": NIN_PROVIDER_HEALTH,
+                "timestamp": iso(datetime.utcnow()),
+            }))
+            refreshed_health = refresh_nin_provider_health("delivery_verify_nin")
+            print("DELIVERY_NIN_PROVIDER_HEALTH_REFRESH_RESULT", json_dump({
+                "worker_id": getattr(worker, "id", None),
+                "provider_enabled": bool(refreshed_health.get("onboarding_verification_enabled", True)),
+                "healthy": refreshed_health.get("healthy"),
+                "provider_status": refreshed_health.get("provider_status"),
+                "provider_message": refreshed_health.get("provider_message"),
+                "timestamp": iso(datetime.utcnow()),
+            }))
         if not NIN_PROVIDER_HEALTH.get("onboarding_verification_enabled", True):
             raise HTTPException(status_code=503, detail=NIN_PROVIDER_HEALTH.get("message") or "Identity verification currently unavailable.")
         if len(clean_nin) != 11:
@@ -7572,7 +7594,7 @@ def update_worker_location(worker: DBDeliveryWorker, payload: LocationPingPayloa
         "accuracy": payload.accuracy,
         "heading": payload.heading,
         "speed": payload.speed,
-        "timestamp": payload.timestamp,
+        "timestamp": iso(payload.timestamp),
     }))
     inside_zone = worker_inside_zone(worker, payload.latitude, payload.longitude, db)
     worker.latest_latitude = payload.latitude
@@ -7704,7 +7726,7 @@ def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = N
             "payload_present": payload is not None,
             "latitude": getattr(payload, "latitude", None),
             "longitude": getattr(payload, "longitude", None),
-            "timestamp": getattr(payload, "timestamp", None),
+            "timestamp": iso(getattr(payload, "timestamp", None)),
         }))
         if promote_verified_approved_rider(worker):
             sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved rider on go-online")
@@ -7742,6 +7764,25 @@ def rider_go_online(request: Request, payload: Optional[LocationPingPayload] = N
 def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] = None):
     db, user, worker = get_current_worker_record(request)
     try:
+        print("GO_ONLINE_START", json_dump({
+            "route": str(request.url.path),
+            "payload_present": payload is not None,
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        print("JWT_VALIDATED", json_dump({
+            "route": str(request.url.path),
+            "user_id": user.get("id"),
+            "role": user.get("role"),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        print("WORKER_FOUND", json_dump({
+            "worker_id": worker.id,
+            "delivery_worker_id": worker.id,
+            "worker_type": worker.worker_type,
+            "approval_status": worker.kyc_status,
+            "current_online_status": worker.operational_status,
+            "timestamp": iso(datetime.utcnow()),
+        }))
         print("DELIVERY_ONLINE_REQUEST", json_dump({
             "route": str(request.url.path),
             "user_id": user.get("id"),
@@ -7755,7 +7796,7 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
             "latitude": getattr(payload, "latitude", None),
             "longitude": getattr(payload, "longitude", None),
             "accuracy": getattr(payload, "accuracy", None),
-            "timestamp": getattr(payload, "timestamp", None),
+            "timestamp": iso(getattr(payload, "timestamp", None)),
         }))
         if promote_verified_approved_rider(worker):
             sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved worker on go-online")
@@ -7763,6 +7804,12 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
             raise HTTPException(status_code=403, detail="Your FoodNova delivery account is under review. You will be notified once approved.")
         if not worker_dashboard_access_allowed(worker):
             raise HTTPException(status_code=403, detail="Complete NIN verification, profile, selfie, and document uploads before going online.")
+        print("WORKER_APPROVED", json_dump({
+            "worker_id": worker.id,
+            "approval_status": worker.kyc_status,
+            "current_online_status": worker.operational_status,
+            "timestamp": iso(datetime.utcnow()),
+        }))
         if payload is None:
             worker.operational_status = "OFFLINE"
             worker.updated_at = datetime.utcnow()
@@ -7774,6 +7821,18 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
             worker.updated_at = datetime.utcnow()
             db.commit()
             raise HTTPException(status_code=400, detail=f"GPS ping must be within {GPS_RECENCY_SECONDS} seconds to go online.")
+        print("GPS_RECEIVED", json_dump({
+            "worker_id": worker.id,
+            "latitude": payload.latitude,
+            "longitude": payload.longitude,
+            "accuracy": payload.accuracy,
+            "timestamp": iso(payload.timestamp),
+        }))
+        print("DB_UPDATE_STARTED", json_dump({
+            "worker_id": worker.id,
+            "new_status": "ONLINE",
+            "timestamp": iso(datetime.utcnow()),
+        }))
         inside_zone = update_worker_location(worker, payload, db)
         print("DELIVERY_ONLINE_DATABASE_UPDATE_PENDING", json_dump({
             "worker_id": worker.id,
@@ -7790,11 +7849,22 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
         worker.operational_status = "ONLINE"
         worker.updated_at = datetime.utcnow()
         db.commit()
+        print("DB_COMMIT_SUCCESS", json_dump({
+            "worker_id": worker.id,
+            "status": worker.operational_status,
+            "timestamp": iso(datetime.utcnow()),
+        }))
         db.refresh(worker)
         data = worker_to_dict(worker)
         create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"{worker.worker_type.title()} {worker.full_name} went online", {"worker": data, "gps_provided": bool(payload), "gps_recent": data.get("gps_recent")})
         socket_emit("rider:availability", {"worker": data, "status": "ONLINE"}, room=f"user:{worker.user_id}")
         socket_emit("dispatch:availability", {"worker": data, "status": "ONLINE"}, room=f"role:admin")
+        print("GO_ONLINE_SUCCESS", json_dump({
+            "worker_id": worker.id,
+            "status": worker.operational_status,
+            "gps_recent": data.get("gps_recent"),
+            "timestamp": iso(datetime.utcnow()),
+        }))
         print("DELIVERY_ONLINE_RESPONSE", json_dump({"worker_id": worker.id, "status": worker.operational_status, "gps_recent": data.get("gps_recent")}))
         return {"success": True, "worker": data, "data": data}
     except HTTPException as error:
