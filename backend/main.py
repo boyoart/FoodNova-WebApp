@@ -587,6 +587,24 @@ class OperationalZonePayload(BaseModel):
 
 GPS_RECENCY_SECONDS = 60
 MESSENGER_OUTSIDE_ZONE_MESSAGE = "You must be within the operational area to receive delivery requests."
+VALID_DELIVERY_WORKER_TYPES = {"rider", "messenger"}
+
+
+def normalize_worker_type(value: Optional[str], default: str = "rider") -> str:
+    clean = str(value or "").strip().lower()
+    if clean in {"delivery_rider", "delivery rider", "riders"}:
+        clean = "rider"
+    if clean in {"walking_messenger", "walking messenger", "walker", "messengers"}:
+        clean = "messenger"
+    fallback = default if default in VALID_DELIVERY_WORKER_TYPES else "rider"
+    return clean if clean in VALID_DELIVERY_WORKER_TYPES else fallback
+
+
+def validate_worker_type(value: Optional[str]) -> str:
+    clean = normalize_worker_type(value, default="")
+    if clean not in VALID_DELIVERY_WORKER_TYPES:
+        raise HTTPException(status_code=422, detail="Worker type must be RIDER or MESSENGER.")
+    return clean
 
 
 class ChangePasswordPayload(BaseModel):
@@ -727,6 +745,7 @@ class RiderPayload(BaseModel):
     full_name: str
     phone: str
     email: Optional[str] = ""
+    worker_type: Optional[str] = "rider"
     vehicle_type: Optional[str] = ""
     vehicle_number: Optional[str] = ""
     status: Optional[str] = "active"
@@ -737,6 +756,7 @@ class RiderUpdatePayload(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    worker_type: Optional[str] = None
     vehicle_type: Optional[str] = None
     vehicle_number: Optional[str] = None
     status: Optional[str] = None
@@ -2836,7 +2856,7 @@ def as_naive_utc(value: datetime) -> datetime:
 
 
 def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
-    worker_type = (worker.worker_type or "messenger").lower()
+    worker_type = normalize_worker_type(worker.worker_type)
     promote_verified_approved_rider(worker)
     deleted = bool(getattr(worker, "deleted_at", None) or (worker.kyc_status or "") == "DELETED")
     approved = rider_lifecycle_status(worker) == "ACTIVE" and not deleted
@@ -2873,19 +2893,19 @@ def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
     }
 
 
-RIDER_ONBOARDING_TOTAL_STEPS = 9
+RIDER_ONBOARDING_TOTAL_STEPS = 10
 RIDER_ONBOARDING_STAGE_STEPS = {
-    "account_created": 3,
-    "identity_submitted": 4,
-    "rider_profile_completed": 5,
-    "selfie_verified": 6,
+    "account_created": 4,
+    "identity_submitted": 5,
+    "rider_profile_completed": 6,
+    "selfie_verified": 7,
     "documents_uploaded": 8,
-    "admin_review": 9,
-    "approved": 9,
-    "rejected": 9,
-    "suspended": 9,
-    "deactivated": 9,
-    "deleted": 9,
+    "admin_review": 10,
+    "approved": 10,
+    "rejected": 10,
+    "suspended": 10,
+    "deactivated": 10,
+    "deleted": 10,
 }
 
 
@@ -2927,8 +2947,8 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     return {
         "id": worker.id,
         "user_id": worker.user_id,
-        "worker_type": worker.worker_type or "messenger",
-        "delivery_worker_type": worker.worker_type or "messenger",
+        "worker_type": normalize_worker_type(worker.worker_type),
+        "delivery_worker_type": normalize_worker_type(worker.worker_type),
         "delivery_type_label": assignment_policy["delivery_type_label"],
         "full_name": worker.full_name or "",
         "name": worker.full_name or "",
@@ -2967,7 +2987,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "vehicle_make": profile_meta.get("vehicle_make") or "",
         "vehicle_model": profile_meta.get("vehicle_model") or "",
         "vehicle_color": profile_meta.get("vehicle_color") or "",
-        "rider_type": identity_meta.get("rider_type") or ("walking" if (worker.worker_type or "") == "messenger" else "motorcycle"),
+        "rider_type": identity_meta.get("rider_type") or ("walking" if normalize_worker_type(worker.worker_type) == "messenger" else "motorcycle"),
         "partner_company": getattr(worker, "partner_company", "") or "",
         "plate_number": worker.plate_number or "",
         "driver_license_number": worker.driver_license_number or "",
@@ -5053,7 +5073,7 @@ def ensure_database_compatibility():
         },
         "delivery_workers": {
             "user_id": "INTEGER",
-            "worker_type": "VARCHAR(30) DEFAULT 'messenger'",
+            "worker_type": "VARCHAR(30) DEFAULT 'rider'",
             "full_name": "VARCHAR(150) DEFAULT ''",
             "phone": "VARCHAR(50) DEFAULT ''",
             "email": "VARCHAR(150) DEFAULT ''",
@@ -5243,6 +5263,8 @@ def ensure_database_compatibility():
             connection.execute(text("UPDATE users SET role = COALESCE(NULLIF(role, ''), 'customer') WHERE role IS NULL OR role = ''"))
             connection.execute(text("UPDATE users SET admin_role = 'super_admin' WHERE role = 'admin' AND (admin_role IS NULL OR admin_role = '')"))
             connection.execute(text("UPDATE users SET is_active = TRUE WHERE is_active IS NULL"))
+        if "delivery_workers" in existing_tables and "worker_type" in table_columns.get("delivery_workers", {}):
+            connection.execute(text("UPDATE delivery_workers SET worker_type = 'rider' WHERE worker_type IS NULL OR worker_type = '' OR LOWER(worker_type) NOT IN ('rider', 'messenger')"))
         if "products" in existing_tables:
             connection.execute(text("UPDATE products SET stock_qty = COALESCE(stock_qty, stock, 0), stock = COALESCE(stock, stock_qty, 0)"))
             connection.execute(text("UPDATE products SET category_name = COALESCE(NULLIF(category_name, ''), category, '') WHERE category_name IS NULL OR category_name = ''"))
@@ -6820,15 +6842,13 @@ def delivery_auth_verify_otp(payload: DeliveryAuthVerifyOtpPayload):
 def delivery_auth_register(payload: DeliveryAuthRegisterPayload, request: Request):
     phone = normalize_delivery_phone(payload.phone_number or "")
     full_name = (payload.full_name or "").strip()
-    worker_type = (payload.worker_type or "").strip().lower()
+    worker_type = validate_worker_type(payload.worker_type)
     password = payload.password or ""
     account_email = normalize_email(payload.email)
     otp = str(payload.otp or "").strip()
 
     if not account_email:
         raise HTTPException(status_code=422, detail="Email is required.")
-    if worker_type not in ["messenger", "rider"]:
-        raise HTTPException(status_code=422, detail="Worker type must be rider or messenger.")
     if len(password) < 8:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
     if not otp:
@@ -7020,6 +7040,10 @@ def delivery_onboarding_profile(payload: OnboardingProfilePayload, request: Requ
             worker.worker_type = "rider"
             worker.vehicle_type = (payload.vehicle_type or worker.vehicle_type or rider_type.title()).strip()
             worker.plate_number = (payload.plate_number or worker.plate_number or "").strip()
+        linked_user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+        if linked_user and linked_user.role != normalize_worker_type(worker.worker_type):
+            linked_user.role = normalize_worker_type(worker.worker_type)
+            linked_user.updated_at = datetime.utcnow()
         meta = delivery_worker_review_meta(worker)
         meta["profile_data"] = {
             "completed": True,
@@ -10068,6 +10092,7 @@ def create_rider(payload: RiderPayload, request: Request):
         raise HTTPException(status_code=400, detail="Rider full name is required")
     if not phone:
         raise HTTPException(status_code=400, detail="Rider phone is required")
+    worker_type = validate_worker_type(payload.worker_type)
     db = SessionLocal()
     try:
         clean_email = (payload.email or "").strip().lower()
@@ -10082,7 +10107,7 @@ def create_rider(payload: RiderPayload, request: Request):
             email=account_email,
             phone=phone,
             password=_hash_new_password(uuid4().hex),
-            role="rider",
+            role=worker_type,
             is_active=True,
         )
         db.add(user)
@@ -10090,11 +10115,11 @@ def create_rider(payload: RiderPayload, request: Request):
         ensure_profile(db, user)
         worker = DBDeliveryWorker(
             user_id=user.id,
-            worker_type="rider",
+            worker_type=worker_type,
             full_name=full_name,
             phone=phone,
             email=clean_email,
-            vehicle_type=(payload.vehicle_type or "").strip(),
+            vehicle_type=(payload.vehicle_type or "").strip() if worker_type == "rider" else "Messenger",
             plate_number=(payload.vehicle_number or "").strip(),
             kyc_status=rider_status_input_to_lifecycle(payload.status or "ONBOARDING"),
             operational_status="OFFLINE",
@@ -10136,6 +10161,15 @@ def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
             worker.phone = updates["phone"].strip()
         if "email" in updates and updates["email"] is not None:
             worker.email = updates["email"].strip()
+        if "worker_type" in updates and updates["worker_type"] is not None:
+            worker.worker_type = validate_worker_type(updates["worker_type"])
+            user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+            if user:
+                user.role = worker.worker_type
+                user.updated_at = datetime.utcnow()
+            if worker.worker_type == "messenger":
+                worker.vehicle_type = worker.vehicle_type or "Messenger"
+                worker.inside_zone = bool(worker.inside_zone)
         if "vehicle_type" in updates and updates["vehicle_type"] is not None:
             worker.vehicle_type = updates["vehicle_type"].strip()
         if "vehicle_number" in updates and updates["vehicle_number"] is not None:

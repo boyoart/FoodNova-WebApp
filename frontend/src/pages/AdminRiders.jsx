@@ -9,6 +9,7 @@ const emptyForm = {
   full_name: '',
   phone: '',
   email: '',
+  worker_type: 'rider',
   vehicle_type: '',
   vehicle_number: '',
   status: 'ONBOARDING',
@@ -58,7 +59,7 @@ export default function AdminRiders() {
     const term = search.trim().toLowerCase()
     return riders.filter((rider) => {
       const matchesStatus = statusFilter === 'all' || statusClass(rider.status) === statusFilter
-      const matchesSearch = !term || [rider.full_name, rider.name, rider.phone, rider.email, rider.vehicle_type, rider.vehicle_number]
+      const matchesSearch = !term || [rider.full_name, rider.name, rider.phone, rider.email, rider.worker_type, rider.vehicle_type, rider.vehicle_number]
         .some((value) => String(value || '').toLowerCase().includes(term))
       return matchesStatus && matchesSearch
     })
@@ -76,6 +77,7 @@ export default function AdminRiders() {
       full_name: rider.full_name || rider.name || '',
       phone: rider.phone || '',
       email: rider.email || '',
+      worker_type: rider.worker_type === 'messenger' ? 'messenger' : 'rider',
       vehicle_type: rider.vehicle_type || '',
       vehicle_number: rider.vehicle_number || '',
       status: displayStatus(rider.status || 'ONBOARDING'),
@@ -186,6 +188,7 @@ export default function AdminRiders() {
                 <th>Name</th>
                 <th>Rider ID</th>
                 <th>Phone</th>
+                <th>Type</th>
                 <th>Vehicle</th>
                 <th>NIN</th>
                 <th>Status</th>
@@ -198,6 +201,7 @@ export default function AdminRiders() {
                   <td><strong>{rider.full_name || rider.name}</strong><small>{rider.email || 'No email'}</small></td>
                   <td>#{rider.rider_id || rider.id}</td>
                   <td>{rider.phone}</td>
+                  <td>{rider.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</td>
                   <td>{[rider.vehicle_type, rider.vehicle_number || rider.plate_number].filter(Boolean).join(' - ') || 'N/A'}</td>
                   <td><span className={`rider-status ${rider.nin_verified ? 'active' : 'inactive'}`}>{rider.nin_status || (rider.nin_verified ? 'verified' : 'not verified')}</span></td>
                   <td><span className={`rider-status ${statusClass(rider.status)}`}>{displayStatus(rider.approval_status || rider.status)}</span></td>
@@ -232,6 +236,10 @@ export default function AdminRiders() {
                 <label>Full Name<input value={form.full_name} onChange={(event) => updateForm('full_name', event.target.value)} required /></label>
                 <label>Phone<input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} required /></label>
                 <label>Email<input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} /></label>
+                <label>Worker Type<select value={form.worker_type} onChange={(event) => updateForm('worker_type', event.target.value)}>
+                  <option value="rider">Delivery Rider</option>
+                  <option value="messenger">Messenger</option>
+                </select></label>
                 <label>Vehicle Type<input placeholder="Bike, Van, Car" value={form.vehicle_type} onChange={(event) => updateForm('vehicle_type', event.target.value)} /></label>
                 <label>Vehicle Number<input value={form.vehicle_number} onChange={(event) => updateForm('vehicle_number', event.target.value)} /></label>
                 <label>Status<select value={form.status} onChange={(event) => updateForm('status', event.target.value)}>

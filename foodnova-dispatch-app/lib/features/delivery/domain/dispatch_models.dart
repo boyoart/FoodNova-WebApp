@@ -7,6 +7,8 @@ class RiderProfile {
   String get phone => '${raw['phone'] ?? ''}';
   String get email => '${raw['email'] ?? ''}';
   String get vehicleType => '${raw['vehicle_type'] ?? ''}';
+  String get workerType =>
+      '${raw['worker_type'] ?? raw['delivery_worker_type'] ?? 'rider'}';
   String get vehicleMake => '${raw['vehicle_make'] ?? ''}';
   String get vehicleModel => '${raw['vehicle_model'] ?? ''}';
   String get vehicleColor => '${raw['vehicle_color'] ?? ''}';

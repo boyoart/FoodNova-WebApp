@@ -14,7 +14,7 @@ const _currentOnboardingStepKey = 'foodnova_dispatch_current_step';
 const _onboardingDraftKey = 'foodnova_dispatch_onboarding_draft';
 const _verifiedIdentityKey = 'foodnova_dispatch_verified_identity';
 
-const dispatchOnboardingTotalSteps = 9;
+const dispatchOnboardingTotalSteps = 10;
 
 final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 

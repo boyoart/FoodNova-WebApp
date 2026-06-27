@@ -161,13 +161,14 @@ class AuthRepository {
     required String email,
     required String password,
     required String otp,
+    required String workerType,
   }) async {
     debugPrint('ONBOARDING_API_BEFORE endpoint=/delivery/auth/register');
     final response = await _dio.post('/delivery/auth/register', data: {
       'email': email.trim(),
       'password': password,
       'otp': otp.trim(),
-      'worker_type': 'rider',
+      'worker_type': workerType,
     });
     final data = Map<String, dynamic>.from(response.data as Map);
     final token = '${data['access_token'] ?? data['token'] ?? ''}';
@@ -189,7 +190,7 @@ class AuthRepository {
           onboardingCompleted: false,
           profileExists: true,
           profileSource: 'backend',
-          currentStep: int.tryParse('${progress['current_step'] ?? 3}') ?? 3,
+          currentStep: int.tryParse('${progress['current_step'] ?? 4}') ?? 4,
         );
     await _registerPushToken();
     return data;

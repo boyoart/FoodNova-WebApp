@@ -17,6 +17,7 @@ import '../data/auth_repository.dart';
 
 enum _StepId {
   account,
+  workerType,
   otp,
   nin,
   personal,
@@ -29,6 +30,7 @@ enum _StepId {
 
 const _steps = [
   _StepId.account,
+  _StepId.workerType,
   _StepId.otp,
   _StepId.nin,
   _StepId.personal,
@@ -41,6 +43,7 @@ const _steps = [
 
 const _titles = {
   _StepId.account: 'Create Account',
+  _StepId.workerType: 'Worker Type',
   _StepId.otp: 'Verify Email',
   _StepId.nin: 'NIN Verification',
   _StepId.personal: 'Personal Information',
@@ -81,6 +84,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   bool _submittedRedirectQueued = false;
   String _message = '';
   String _existingAccount = '';
+  String _workerType = 'rider';
   String _documentType = 'driver_license';
   Timer? _otpTimer;
   int _otpSeconds = 0;
@@ -96,6 +100,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     'voters_card',
     'international_passport',
   };
+  static const _workerTypes = <String>{'rider', 'messenger'};
 
   @override
   void initState() {
@@ -124,6 +129,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           entry.value.text = '${data[entry.key] ?? ''}';
         }
         _termsAccepted = data['terms_accepted'] == true;
+        final savedWorkerType = '${data['worker_type'] ?? _workerType}';
+        _workerType =
+            _workerTypes.contains(savedWorkerType) ? savedWorkerType : 'rider';
         final savedDocumentType = '${data['document_type'] ?? _documentType}';
         _documentType = _documentTypes.contains(savedDocumentType)
             ? savedDocumentType
@@ -144,6 +152,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     final data = {
       for (final entry in _controllers.entries) entry.key: entry.value.text,
       'terms_accepted': _termsAccepted,
+      'worker_type': _workerType,
       'document_type': _documentType,
     };
     await ref
@@ -180,6 +189,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       switch (_step) {
         case _StepId.account:
           await _sendOtp();
+          break;
+        case _StepId.workerType:
+          await _setStep(_index + 1);
           break;
         case _StepId.otp:
           await _verifyOtpAndCreateAccount();
@@ -241,6 +253,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       email: email,
       password: _text('password'),
       otp: otp,
+      workerType: _workerType,
     );
     await _setStep(_index + 1);
   }
@@ -273,8 +286,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       'emergency_contact_name': _text('emergency_name'),
       'emergency_contact_phone': _text('emergency_phone'),
       'emergency_contact_relationship': 'Emergency Contact',
-      'rider_type': 'motorcycle',
-      'vehicle_type': 'Motorcycle',
+      'rider_type': _workerType == 'messenger' ? 'walker' : 'motorcycle',
+      'vehicle_type': _workerType == 'messenger' ? 'Messenger' : 'Motorcycle',
     });
     await _setStep(_index + 1);
   }
@@ -588,6 +601,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     switch (_step) {
       case _StepId.account:
         return _accountStep();
+      case _StepId.workerType:
+        return _workerTypeStep();
       case _StepId.otp:
         return _otpStep();
       case _StepId.nin:
@@ -639,6 +654,92 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _workerTypeStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _notice('Choose how you will deliver FoodNova orders.'),
+        const SizedBox(height: 14),
+        _workerTypeTile(
+          value: 'rider',
+          title: 'Delivery Rider',
+          subtitle: 'Motorcycle or vehicle delivery across wider areas.',
+          icon: Icons.two_wheeler_rounded,
+        ),
+        const SizedBox(height: 12),
+        _workerTypeTile(
+          value: 'messenger',
+          title: 'Messenger',
+          subtitle: 'Hyperlocal delivery eligible for future geofence rules.',
+          icon: Icons.directions_walk_rounded,
+        ),
+      ],
+    );
+  }
+
+  Widget _workerTypeTile({
+    required String value,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final selected = _workerType == value;
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: _loading
+          ? null
+          : () {
+              setState(() => _workerType = value);
+              _saveDraft();
+            },
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? FoodNovaColors.primary.withValues(alpha: .08)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected ? FoodNovaColors.primary : FoodNovaColors.border,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, color: FoodNovaColors.primary),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(color: FoodNovaColors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected
+                    ? Icons.check_circle_rounded
+                    : Icons.radio_button_unchecked_rounded,
+                color: selected
+                    ? FoodNovaColors.primary
+                    : FoodNovaColors.secondaryText,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

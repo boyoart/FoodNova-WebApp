@@ -124,6 +124,21 @@ export default function AdminRiderVerificationQueue() {
 
   const submitReview = async () => runReviewAction(reviewAction)
 
+  const updateSelectedWorkerType = async (workerType) => {
+    if (!selected?.worker?.id || !canManage) return
+    try {
+      setActionSaving(true)
+      const response = await adminAPI.updateRider(selected.worker.id, { worker_type: workerType })
+      setSelected((current) => current ? { ...current, worker: { ...current.worker, ...(response.rider || response.data || {}), worker_type: workerType } } : current)
+      toast.success('Worker type updated')
+      await loadQueue()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to update worker type')
+    } finally {
+      setActionSaving(false)
+    }
+  }
+
   const deleteRider = async () => {
     if (!deleteTarget || !canManage) return
     try {
@@ -198,7 +213,7 @@ export default function AdminRiderVerificationQueue() {
                   <th>Name</th>
                   <th>Phone</th>
                   <th>Email</th>
-                  <th>Rider Type</th>
+                  <th>Worker Type</th>
                   <th>NIN Status</th>
                   <th>Approval Status</th>
                   <th>Submission Date</th>
@@ -208,12 +223,7 @@ export default function AdminRiderVerificationQueue() {
               <tbody>
                 {riders.map((item) => {
                   const worker = item.worker || {}
-                  const rawRiderType = `${worker.rider_type || ''}`.toLowerCase()
-                  const riderType = worker.worker_type === 'messenger' || rawRiderType === 'walker'
-                    ? 'Walker'
-                    : rawRiderType === 'vehicle'
-                      ? 'Vehicle Rider'
-                      : 'Motorcycle Rider'
+                  const riderType = worker.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'
                   return (
                     <tr key={worker.id} className={selected?.worker?.id === worker.id ? 'selected' : ''}>
                       <td>
@@ -260,7 +270,16 @@ export default function AdminRiderVerificationQueue() {
                 <div><strong>Verification</strong><span>{selected.kyc.nin_verified ? 'Verified' : label(selected.kyc.identity_status)} {selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
                 <div><strong>Email</strong><span>{selected.worker.email || 'No email'}</span></div>
                 <div><strong>Approval status</strong><span>{label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</span></div>
-                <div><strong>Rider type</strong><span>{selected.worker.worker_type === 'messenger' ? 'Walker' : selected.worker.rider_type === 'vehicle' ? 'Vehicle Rider' : 'Motorcycle Rider'}</span></div>
+                <div><strong>Worker type</strong><span>{selected.worker.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</span></div>
+                {canManage && (
+                  <label>
+                    <strong>Edit worker type</strong>
+                    <select value={selected.worker.worker_type === 'messenger' ? 'messenger' : 'rider'} onChange={(event) => updateSelectedWorkerType(event.target.value)} disabled={actionSaving}>
+                      <option value="rider">Delivery Rider</option>
+                      <option value="messenger">Messenger</option>
+                    </select>
+                  </label>
+                )}
                 <div><strong>Vehicle type</strong><span>{selected.worker.vehicle_type || 'Not applicable'}</span></div>
                 <div><strong>Plate number</strong><span>{selected.worker.plate_number || 'Not applicable'}</span></div>
                 <div><strong>Registration date</strong><span>{selected.worker.created_at ? new Date(selected.worker.created_at).toLocaleString() : 'N/A'}</span></div>

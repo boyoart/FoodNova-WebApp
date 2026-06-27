@@ -4,6 +4,7 @@ import '../../../core/theme/colors.dart';
 
 const foodNovaOnboardingSteps = [
   'Create Account',
+  'Worker Type',
   'Verify Email',
   'NIN',
   'Personal Info',
@@ -24,7 +25,7 @@ class OnboardingProgressStepper extends StatelessWidget {
   final int currentStep;
   final String? status;
 
-  static const totalSteps = 9;
+  static const totalSteps = 10;
 
   @override
   Widget build(BuildContext context) {

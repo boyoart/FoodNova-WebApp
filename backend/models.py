@@ -160,7 +160,7 @@ class DeliveryWorker(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
-    worker_type = Column(String(30), default="messenger", index=True)
+    worker_type = Column(String(30), default="rider", index=True)
     full_name = Column(String(150), nullable=False, index=True)
     phone = Column(String(50), nullable=False, index=True)
     email = Column(String(150), default="", index=True)
