@@ -4314,6 +4314,11 @@ def hard_delete_delivery_worker(
         order.rider_vehicle_number = ""
         order.updated_at = datetime.utcnow()
 
+    # The admin detail snapshot can load and normalize the linked rider row.
+    # Flush those pending ORM updates before bulk-deleting child rows; otherwise
+    # SQLAlchemy may try to UPDATE a rider row after the bulk DELETE removed it.
+    db.flush()
+
     delete_counts = {
         "delivery_offers": db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker_id).count(),
         "rider_documents": db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker_id).count(),
