@@ -143,13 +143,19 @@ export default function AdminRiderVerificationQueue() {
     if (!deleteTarget || !canManage) return
     try {
       setActionSaving(true)
+      console.info('ADMIN_DELETE_RIDER_REQUEST', {
+        endpoint: `/admin/rider-verification-queue/${deleteTarget.worker.id}`,
+        worker_id: deleteTarget.worker.id,
+        worker_name: deleteTarget.worker?.full_name || '',
+      })
       await adminAPI.permanentlyDeleteRiderVerification(deleteTarget.worker.id)
       toast.success('Rider permanently deleted')
       setDeleteTarget(null)
       if (selected?.worker?.id === deleteTarget.worker.id) setSelected(null)
       await loadQueue()
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to delete rider')
+      console.error('ADMIN_DELETE_RIDER_REQUEST failed', error?.response?.data || error)
+      toast.error(error?.response?.data?.detail || error?.response?.data?.error || 'Failed to delete rider')
     } finally {
       setActionSaving(false)
     }

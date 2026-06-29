@@ -143,11 +143,17 @@ export default function AdminRiders() {
     if (!secureConfirm) return;
 
     try {
+      console.info('ADMIN_DELETE_RIDER_REQUEST', {
+        endpoint: `/admin/riders/${rider.id}`,
+        worker_id: rider.id,
+        worker_name: rider.full_name || rider.name || '',
+      })
       await adminAPI.deleteRider(rider.id);
       toast.success('Rider permanently deleted');
       await loadRiders();
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to delete rider permanently');
+      console.error('ADMIN_DELETE_RIDER_REQUEST failed', error?.response?.data || error);
+      toast.error(error?.response?.data?.detail || error?.response?.data?.error || 'Failed to delete rider permanently');
     }
   }
 

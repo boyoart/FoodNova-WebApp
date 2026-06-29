@@ -4255,6 +4255,109 @@ def log_backend_exception(event: str, error: Exception, **context) -> str:
     return trace
 
 
+def hard_delete_delivery_worker(
+    db,
+    worker: DBDeliveryWorker,
+    admin: dict,
+    request: Request,
+    *,
+    reason: str,
+    old_data: dict,
+) -> dict:
+    worker_id = worker.id
+    user_id = worker.user_id
+    worker_name = worker.full_name or f"Rider #{worker_id}"
+    print("BACKEND_DELETE_RIDER_START", json_dump({
+        "worker_id": worker_id,
+        "user_id": user_id,
+        "admin_id": admin.get("id"),
+        "hard_delete": True,
+        "reason": reason,
+        "timestamp": iso(datetime.utcnow()),
+    }))
+    revoked_sessions = revoke_rider_sessions(db, worker, admin, reason)
+    released_orders = db.query(DBOrder).filter(
+        or_(DBOrder.delivery_worker_id == worker_id, DBOrder.rider_id == worker_id),
+        DBOrder.order_status.notin_(["delivered", "cancelled"]),
+    ).all()
+    for order in released_orders:
+        order.delivery_worker_id = None
+        order.delivery_worker_type = ""
+        order.delivery_status = ""
+        order.rider_id = None
+        order.rider_name = ""
+        order.rider_phone = ""
+        order.rider_vehicle_type = ""
+        order.rider_vehicle_number = ""
+        order.updated_at = datetime.utcnow()
+
+    delete_counts = {
+        "delivery_offers": db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker_id).count(),
+        "rider_documents": db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker_id).count(),
+        "rider_status_logs": db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker_id).count(),
+        "verification_logs": db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker_id).count(),
+        "rider_sessions": db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker_id).count(),
+        "admin_reviews": db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker_id).count(),
+        "rider_kyc": db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker_id).count(),
+        "riders": db.query(DBRider).filter(DBRider.delivery_worker_id == worker_id).count(),
+    }
+    db.add(DBDeletedRiderLog(
+        delivery_worker_id=worker_id,
+        admin_id=admin.get("id"),
+        admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+        reason=reason,
+        snapshot_json=json_dump({
+            "rider": old_data,
+            "deleted_at": iso(datetime.utcnow()),
+            "deleted_by": admin.get("id"),
+            "revoked_sessions": revoked_sessions,
+            "released_order_ids": [order.id for order in released_orders],
+            "delete_counts": delete_counts,
+            "ip": get_request_ip(request),
+            "device": parse_user_agent(request.headers.get("user-agent", "")),
+        }),
+        hard_deleted=True,
+    ))
+
+    db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker_id).delete(synchronize_session=False)
+    db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker_id).delete(synchronize_session=False)
+    db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker_id).delete(synchronize_session=False)
+    db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker_id).delete(synchronize_session=False)
+    db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker_id).delete(synchronize_session=False)
+    db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker_id).delete(synchronize_session=False)
+    db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker_id).delete(synchronize_session=False)
+    db.query(DBRider).filter(DBRider.delivery_worker_id == worker_id).delete(synchronize_session=False)
+    db.delete(worker)
+
+    db.query(DBAddress).filter(DBAddress.user_id == user_id).delete(synchronize_session=False)
+    db.query(DBProfile).filter(DBProfile.user_id == user_id).delete(synchronize_session=False)
+    user = db.query(DBUser).filter(DBUser.id == user_id).first()
+    if user:
+        db.delete(user)
+    db.commit()
+    result = {
+        "worker_id": worker_id,
+        "user_id": user_id,
+        "admin_id": admin.get("id"),
+        "hard_deleted": True,
+        "revoked_sessions": revoked_sessions,
+        "released_orders": len(released_orders),
+        "delete_counts": delete_counts,
+        "timestamp": iso(datetime.utcnow()),
+    }
+    print("BACKEND_DELETE_RIDER_SUCCESS", json_dump(result))
+    create_admin_audit_log(
+        request,
+        admin,
+        "rider_deleted",
+        "delivery_worker",
+        worker_id,
+        f"Admin permanently deleted rider {worker_name}",
+        {"before": old_data, **result},
+    )
+    return result
+
+
 def get_delivery_worker_record_for_request(request: Request):
     user = require_user(request)
     if user.get("role") not in ["messenger", "rider"]:
@@ -9476,79 +9579,25 @@ def permanently_delete_rider(worker_id: int, request: Request):
     admin = require_workforce_manage(request)
     db = SessionLocal()
     try:
+        print("ADMIN_DELETE_RIDER_REQUEST", json_dump({
+            "route": f"/admin/rider-verification-queue/{worker_id}",
+            "worker_id": worker_id,
+            "admin_id": admin.get("id"),
+            "hard_delete": True,
+            "timestamp": iso(datetime.utcnow()),
+        }))
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type.in_(["rider", "messenger"])).first()
         if not worker:
             raise HTTPException(status_code=404, detail="Rider verification profile not found")
         old_data = rider_detail_payload(db, worker)
-        worker_name = worker.full_name or f"Rider #{worker.id}"
-        user_id = worker.user_id
-        revoked_sessions = revoke_rider_sessions(db, worker, admin, "Rider permanently deleted")
-        released_orders = db.query(DBOrder).filter(
-            DBOrder.delivery_worker_id == worker.id,
-            DBOrder.order_status.notin_(["delivered", "cancelled"]),
-        ).all()
-        for order in released_orders:
-            order.delivery_worker_id = None
-            order.delivery_worker_type = ""
-            order.delivery_status = ""
-            order.rider_name = ""
-            order.rider_phone = ""
-            order.rider_vehicle_type = ""
-            order.rider_vehicle_number = ""
-            order.updated_at = datetime.utcnow()
-        offer_count = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).count()
-        db.add(DBDeletedRiderLog(
-            delivery_worker_id=worker.id,
-            admin_id=admin.get("id"),
-            admin_name=admin.get("full_name") or admin.get("email") or "Admin",
-            reason="Permanent admin deletion",
-            snapshot_json=json_dump({
-                "rider": old_data,
-                "deleted_at": iso(datetime.utcnow()),
-                "deleted_by": admin.get("id"),
-                "revoked_sessions": revoked_sessions,
-                "released_order_ids": [order.id for order in released_orders],
-                "removed_delivery_offers": offer_count,
-                "ip": get_request_ip(request),
-                "device": parse_user_agent(request.headers.get("user-agent", "")),
-            }),
-            hard_deleted=True,
-        ))
-        db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.delete(worker)
-        db.query(DBAddress).filter(DBAddress.user_id == user_id).delete(synchronize_session=False)
-        db.query(DBProfile).filter(DBProfile.user_id == user_id).delete(synchronize_session=False)
-        user = db.query(DBUser).filter(DBUser.id == user_id).first()
-        if user:
-            db.delete(user)
-        db.commit()
-        print("RIDER_DELETED", json_dump({
-            "worker_id": worker_id,
-            "user_id": user_id,
-            "admin_id": admin.get("id"),
-            "hard_deleted": True,
-            "revoked_sessions": revoked_sessions,
-            "released_orders": len(released_orders),
-            "removed_delivery_offers": offer_count,
-            "timestamp": iso(datetime.utcnow()),
-        }))
-        create_admin_audit_log(
-            request,
-            admin,
-            "rider_deleted",
-            "delivery_worker",
-            worker_id,
-            f"Admin permanently deleted rider {worker_name}",
-            {"before": old_data, "hard_deleted": True, "revoked_sessions": revoked_sessions, "released_orders": len(released_orders), "removed_delivery_offers": offer_count},
-        )
-        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": worker_id, "released_orders": len(released_orders), "removed_delivery_offers": offer_count}
+        result = hard_delete_delivery_worker(db, worker, admin, request, reason="Permanent admin deletion", old_data=old_data)
+        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": worker_id, "released_orders": result["released_orders"], "delete_counts": result["delete_counts"]}
+    except HTTPException:
+        raise
+    except Exception as error:
+        db.rollback()
+        log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/rider-verification-queue/{worker_id}", worker_id=worker_id, admin_id=admin.get("id"), hard_delete=True)
+        return JSONResponse(status_code=500, content={"success": False, "detail": "Failed to delete rider. FoodNova has logged the backend error."})
     finally:
         db.close()
 
@@ -10206,83 +10255,25 @@ def deactivate_rider(rider_id: int, request: Request):
     admin = require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
     db = SessionLocal()
     try:
+        print("ADMIN_DELETE_RIDER_REQUEST", json_dump({
+            "route": f"/admin/riders/{rider_id}",
+            "worker_id": rider_id,
+            "admin_id": admin.get("id"),
+            "hard_delete": True,
+            "timestamp": iso(datetime.utcnow()),
+        }))
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == rider_id, DBDeliveryWorker.worker_type.in_(["rider", "messenger"])).first()
         if not worker:
             raise HTTPException(status_code=404, detail="Rider not found")
         old_data = worker_to_dict(worker)
-        worker_name = worker.full_name or f"Rider #{worker.id}"
-        user_id = worker.user_id
-        revoked = revoke_rider_sessions(db, worker, admin, "Rider deleted from admin rider management")
-
-        released_orders = db.query(DBOrder).filter(
-            or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id),
-            DBOrder.order_status.notin_(["delivered", "cancelled"]),
-        ).all()
-        for order in released_orders:
-            order.delivery_worker_id = None
-            order.delivery_worker_type = ""
-            order.delivery_status = ""
-            order.rider_id = None
-            order.rider_name = ""
-            order.rider_phone = ""
-            order.rider_vehicle_type = ""
-            order.rider_vehicle_number = ""
-            order.updated_at = datetime.utcnow()
-
-        offer_count = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).count()
-        db.add(DBDeletedRiderLog(
-            delivery_worker_id=worker.id,
-            admin_id=admin.get("id"),
-            admin_name=admin.get("full_name") or admin.get("email") or "Admin",
-            reason="Permanent admin deletion from rider management",
-            snapshot_json=json_dump({
-                "rider": old_data,
-                "deleted_at": iso(datetime.utcnow()),
-                "deleted_by": admin.get("id"),
-                "revoked_sessions": revoked,
-                "released_order_ids": [order.id for order in released_orders],
-                "removed_delivery_offers": offer_count,
-                "ip": get_request_ip(request),
-                "device": parse_user_agent(request.headers.get("user-agent", "")),
-            }),
-            hard_deleted=True,
-        ))
-        db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderDocument).filter(DBRiderDocument.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderStatusLog).filter(DBRiderStatusLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.query(DBRider).filter(DBRider.delivery_worker_id == worker.id).delete(synchronize_session=False)
-        db.delete(worker)
-
-        db.query(DBAddress).filter(DBAddress.user_id == user_id).delete(synchronize_session=False)
-        db.query(DBProfile).filter(DBProfile.user_id == user_id).delete(synchronize_session=False)
-        user = db.query(DBUser).filter(DBUser.id == user_id).first()
-        if user:
-            db.delete(user)
-        db.commit()
-        print("RIDER_DELETED", json_dump({
-            "worker_id": rider_id,
-            "user_id": user_id,
-            "admin_id": admin.get("id"),
-            "hard_deleted": True,
-            "revoked_sessions": revoked,
-            "released_orders": len(released_orders),
-            "removed_delivery_offers": offer_count,
-            "timestamp": iso(datetime.utcnow()),
-        }))
-        create_admin_audit_log(
-            request,
-            admin,
-            "rider_deleted",
-            "delivery_worker",
-            rider_id,
-            f"Admin permanently deleted rider {worker_name}",
-            {"before": old_data, "hard_deleted": True, "revoked_sessions": revoked, "released_orders": len(released_orders), "removed_delivery_offers": offer_count},
-        )
-        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": rider_id, "released_orders": len(released_orders), "removed_delivery_offers": offer_count}
+        result = hard_delete_delivery_worker(db, worker, admin, request, reason="Permanent admin deletion from rider management", old_data=old_data)
+        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": rider_id, "released_orders": result["released_orders"], "delete_counts": result["delete_counts"]}
+    except HTTPException:
+        raise
+    except Exception as error:
+        db.rollback()
+        log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/riders/{rider_id}", worker_id=rider_id, admin_id=admin.get("id"), hard_delete=True)
+        return JSONResponse(status_code=500, content={"success": False, "detail": "Failed to delete rider. FoodNova has logged the backend error."})
     finally:
         db.close()
 
