@@ -2919,6 +2919,17 @@ def rider_onboarding_progress_percent(current_step: int = 1) -> int:
     return int(round((step / RIDER_ONBOARDING_TOTAL_STEPS) * 100))
 
 
+def rider_profile_photo_url(worker: Optional[DBDeliveryWorker]) -> str:
+    if not worker:
+        return ""
+    return (
+        getattr(worker, "selfie_url", None)
+        or getattr(worker, "profile_photo_url", None)
+        or getattr(worker, "verified_photo_url", None)
+        or ""
+    )
+
+
 def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     assignment_policy = worker_assignment_policy(worker)
     review_meta = delivery_worker_review_meta(worker)
@@ -2944,6 +2955,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         and (worker.full_name or "").strip()
         and (worker.phone or "").strip()
     )
+    photo_url = rider_profile_photo_url(worker)
     return {
         "id": worker.id,
         "user_id": worker.user_id,
@@ -2973,7 +2985,10 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "verified_birthdate": getattr(worker, "verified_birthdate", "") or "",
         "verified_photo_url": getattr(worker, "verified_photo_url", "") or "",
         "selfie_url": getattr(worker, "selfie_url", "") or "",
-        "profile_photo_url": worker.profile_photo_url or "",
+        "profile_photo_url": photo_url,
+        "rider_photo_url": photo_url,
+        "photo_url": photo_url,
+        "profile_picture": photo_url,
         "id_document_url": worker.id_document_url or "",
         "documents_uploaded": documents_complete,
         "profile_completed": profile_completed,
@@ -3122,6 +3137,8 @@ def order_to_dict(order: DBOrder) -> dict:
         "rider_phone": getattr(order, "rider_phone", "") or "",
         "rider_vehicle_type": getattr(order, "rider_vehicle_type", "") or "",
         "rider_vehicle_number": getattr(order, "rider_vehicle_number", "") or "",
+        "rider_photo_url": getattr(order, "rider_photo_url", "") or "",
+        "rider_photo": getattr(order, "rider_photo_url", "") or "",
         "delivery_assigned_at": iso(getattr(order, "delivery_assigned_at", None)),
         "delivery_started_at": iso(getattr(order, "delivery_started_at", None)),
         "delivery_completed_at": iso(getattr(order, "delivery_completed_at", None)),
@@ -3445,6 +3462,8 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
             "phone": (worker.phone if worker else None) or getattr(order, "rider_phone", "") or "",
             "vehicle_type": (worker.vehicle_type if worker else None) or getattr(order, "rider_vehicle_type", "") or "",
             "vehicle_number": (worker.plate_number if worker else None) or getattr(order, "rider_vehicle_number", "") or "",
+            "photo_url": rider_profile_photo_url(worker) or getattr(order, "rider_photo_url", "") or "",
+            "rider_photo_url": rider_profile_photo_url(worker) or getattr(order, "rider_photo_url", "") or "",
             "latitude": float(rider_lat) if rider_valid else None,
             "longitude": float(rider_lng) if rider_valid else None,
             "accuracy": getattr(worker, "latest_accuracy", None) if worker else None,
@@ -3674,6 +3693,7 @@ def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliver
     order.rider_phone = worker.phone
     order.rider_vehicle_type = worker.vehicle_type or ""
     order.rider_vehicle_number = worker.plate_number or ""
+    order.rider_photo_url = rider_profile_photo_url(worker)
     order.delivery_assigned_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()
     worker.operational_status = "BUSY"
@@ -3791,6 +3811,8 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
         "refund_status": getattr(order, "refund_status", "none") or "none",
         "rider_name": getattr(order, "rider_name", "") or "",
         "rider_phone": getattr(order, "rider_phone", "") or "",
+        "rider_photo_url": getattr(order, "rider_photo_url", "") or "",
+        "rider_photo": getattr(order, "rider_photo_url", "") or "",
         "delivery_note": getattr(order, "delivery_note", "") or "",
         "delivery_assigned_at": iso(getattr(order, "delivery_assigned_at", None)),
         "delivery_started_at": iso(getattr(order, "delivery_started_at", None)),
@@ -4312,6 +4334,7 @@ def hard_delete_delivery_worker(
         order.rider_phone = ""
         order.rider_vehicle_type = ""
         order.rider_vehicle_number = ""
+        order.rider_photo_url = ""
         order.updated_at = datetime.utcnow()
 
     # The admin detail snapshot can load and normalize the linked rider row.
@@ -5152,6 +5175,7 @@ def ensure_database_compatibility():
             "rider_phone": "VARCHAR(50) DEFAULT ''",
             "rider_vehicle_type": "VARCHAR(80) DEFAULT ''",
             "rider_vehicle_number": "VARCHAR(80) DEFAULT ''",
+            "rider_photo_url": "TEXT DEFAULT ''",
             "delivery_assigned_at": "TIMESTAMP",
             "delivery_started_at": "TIMESTAMP",
             "delivery_completed_at": "TIMESTAMP",
@@ -9996,6 +10020,7 @@ def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Reques
             order.rider_phone = rider.phone
             order.rider_vehicle_type = rider.vehicle_type or ""
             order.rider_vehicle_number = rider.plate_number or ""
+            order.rider_photo_url = rider_profile_photo_url(rider)
             order.delivery_note = payload.delivery_note or ""
             order.delivery_assigned_at = now
             if payload.mark_out_for_delivery:
@@ -10374,6 +10399,7 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         order.rider_phone = rider.phone
         order.rider_vehicle_type = rider.vehicle_type or ""
         order.rider_vehicle_number = rider.plate_number or ""
+        order.rider_photo_url = rider_profile_photo_url(rider)
         order.delivery_note = payload.delivery_note or ""
         order.delivery_assigned_at = datetime.utcnow()
         if payload.mark_out_for_delivery:

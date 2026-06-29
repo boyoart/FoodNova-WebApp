@@ -29,14 +29,14 @@ class ProfileScreen extends ConsumerWidget {
                   children: [
                     CircleAvatar(
                       radius: 34,
-                      backgroundImage: rider.raw['profile_picture'] == null
+                      backgroundImage: rider.profilePhotoUrl.isEmpty
                           ? null
                           : NetworkImage(
                               AppConfig.resolveMediaUrl(
-                                '${rider.raw['profile_picture']}',
+                                rider.profilePhotoUrl,
                               ),
                             ),
-                      child: rider.raw['profile_picture'] == null
+                      child: rider.profilePhotoUrl.isEmpty
                           ? const Icon(Icons.person)
                           : null,
                     ),

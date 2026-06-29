@@ -6,6 +6,9 @@ class RiderProfile {
   String get name => '${raw['full_name'] ?? raw['name'] ?? ''}'.trim();
   String get phone => '${raw['phone'] ?? ''}';
   String get email => '${raw['email'] ?? ''}';
+  String get profilePhotoUrl =>
+      '${raw['rider_photo_url'] ?? raw['profile_photo_url'] ?? raw['selfie_url'] ?? raw['photo_url'] ?? raw['profile_picture'] ?? ''}'
+          .trim();
   String get vehicleType => '${raw['vehicle_type'] ?? ''}';
   String get workerType =>
       '${raw['worker_type'] ?? raw['delivery_worker_type'] ?? 'rider'}';

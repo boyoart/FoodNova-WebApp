@@ -101,7 +101,7 @@ class RiderLocation {
       riderName: '${rider['name'] ?? ''}',
       riderPhone: '${rider['phone'] ?? ''}',
       riderPhotoUrl:
-          '${rider['photo'] ?? rider['photo_url'] ?? rider['profile_photo_url'] ?? ''}',
+          '${rider['rider_photo_url'] ?? rider['photo'] ?? rider['photo_url'] ?? rider['profile_photo_url'] ?? ''}',
       vehicleType:
           '${rider['vehicle_type'] ?? rider['vehicleType'] ?? json['vehicle_type'] ?? ''}',
       riderLatitude:

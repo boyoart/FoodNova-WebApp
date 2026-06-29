@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
 import { Plus, Search, ShieldCheck, X } from 'lucide-react'
-import { adminAPI } from '../services/api'
+import { adminAPI, resolveMediaUrl } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './AdminRiders.css'
 
@@ -21,6 +21,10 @@ const lifecycleStatuses = ['active', 'inactive', 'onboarding', 'suspended']
 const displayStatus = (status = '') => String(status || 'ONBOARDING').toUpperCase()
 
 const statusClass = (status = '') => displayStatus(status).toLowerCase()
+
+const riderPhotoUrl = (rider = {}) => String(rider.rider_photo_url || rider.profile_photo_url || rider.selfie_url || rider.photo_url || '').trim()
+
+const riderInitial = (rider = {}) => String(rider.full_name || rider.name || 'R').trim().slice(0, 1).toUpperCase() || 'R'
 
 export default function AdminRiders() {
   const { isAdmin, admin } = useAuthStore()
@@ -204,7 +208,14 @@ export default function AdminRiders() {
             <tbody>
               {filteredRiders.map((rider) => (
                 <tr key={rider.id}>
-                  <td><strong>{rider.full_name || rider.name}</strong><small>{rider.email || 'No email'}</small></td>
+                  <td>
+                    <div className="rider-identity-cell">
+                      <span className="rider-photo-avatar">
+                        {riderPhotoUrl(rider) ? <img src={resolveMediaUrl(riderPhotoUrl(rider))} alt="" /> : riderInitial(rider)}
+                      </span>
+                      <span><strong>{rider.full_name || rider.name}</strong><small>{rider.email || 'No email'}</small></span>
+                    </div>
+                  </td>
                   <td>#{rider.rider_id || rider.id}</td>
                   <td>{rider.phone}</td>
                   <td>{rider.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</td>

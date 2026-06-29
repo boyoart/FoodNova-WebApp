@@ -12,6 +12,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../shared/models/order.dart';
 import '../../../services/notification_service.dart';
@@ -1218,8 +1219,9 @@ class _RiderAvatar extends StatelessWidget {
       radius: 30,
       backgroundColor: scheme.primary,
       foregroundColor: scheme.onPrimary,
-      backgroundImage:
-          photoUrl.trim().isEmpty ? null : NetworkImage(photoUrl.trim()),
+      backgroundImage: photoUrl.trim().isEmpty
+          ? null
+          : NetworkImage(AppConfig.resolveMediaUrl(photoUrl.trim())),
       child: photoUrl.trim().isEmpty
           ? Text(
               initials.isEmpty ? 'FN' : initials,

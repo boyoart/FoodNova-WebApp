@@ -38,6 +38,14 @@ function riskLevel(item) {
   return 'Low'
 }
 
+function riderPhotoUrl(worker = {}) {
+  return String(worker.rider_photo_url || worker.profile_photo_url || worker.selfie_url || worker.photo_url || '').trim()
+}
+
+function riderInitial(worker = {}) {
+  return String(worker.full_name || worker.name || 'R').trim().slice(0, 1).toUpperCase() || 'R'
+}
+
 export default function AdminRiderVerificationQueue() {
   const { isAdmin, admin } = useAuthStore()
   const [riders, setRiders] = useState([])
@@ -234,7 +242,7 @@ export default function AdminRiderVerificationQueue() {
                     <tr key={worker.id} className={selected?.worker?.id === worker.id ? 'selected' : ''}>
                       <td>
                         <div className="rider-cell">
-                          <span className="rider-avatar">{worker.profile_photo_url ? <img src={resolveMediaUrl(worker.profile_photo_url)} alt="" /> : (worker.full_name || 'R').slice(0, 1)}</span>
+                          <span className="rider-avatar">{riderPhotoUrl(worker) ? <img src={resolveMediaUrl(riderPhotoUrl(worker))} alt="" /> : riderInitial(worker)}</span>
                           <div><strong>{worker.full_name}</strong><small>{worker.email || 'No email'}</small></div>
                         </div>
                       </td>
@@ -265,9 +273,12 @@ export default function AdminRiderVerificationQueue() {
           ) : (
             <>
               <div className="workforce-card-head">
-                <div>
-                  <h2>{selected.worker.full_name}</h2>
-                  <p>{label(selected.kyc?.onboarding_stage)} - {selected.worker.phone}</p>
+                <div className="workforce-head-identity">
+                  <span className="rider-avatar rider-avatar-large">{riderPhotoUrl(selected.worker) ? <img src={resolveMediaUrl(riderPhotoUrl(selected.worker))} alt="" /> : riderInitial(selected.worker)}</span>
+                  <div>
+                    <h2>{selected.worker.full_name}</h2>
+                    <p>{label(selected.kyc?.onboarding_stage)} - {selected.worker.phone}</p>
+                  </div>
                 </div>
                 <span className={`worker-status ${chip(selected.worker.kyc_status)}`}>{selected.worker.kyc_status}</span>
               </div>

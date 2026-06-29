@@ -520,6 +520,7 @@ class Order(Base):
     rider_phone = Column(String(50), default="")
     rider_vehicle_type = Column(String(80), default="")
     rider_vehicle_number = Column(String(80), default="")
+    rider_photo_url = Column(Text, default="")
     delivery_assigned_at = Column(DateTime, nullable=True)
     delivery_started_at = Column(DateTime, nullable=True)
     delivery_completed_at = Column(DateTime, nullable=True)
