@@ -4255,6 +4255,29 @@ def log_backend_exception(event: str, error: Exception, **context) -> str:
     return trace
 
 
+OPTIONAL_DELIVERY_WORKER_CHILD_TABLES = (
+    ("delivery_documents", "delivery_worker_id"),
+    ("onboarding_records", "delivery_worker_id"),
+)
+
+
+def delete_optional_delivery_worker_child_rows(db, table_name: str, column_name: str, worker_id: int) -> int:
+    allowed = set(OPTIONAL_DELIVERY_WORKER_CHILD_TABLES)
+    if (table_name, column_name) not in allowed:
+        raise ValueError(f"Unsupported optional rider delete table: {table_name}.{column_name}")
+    inspector = inspect(db.bind)
+    if not inspector.has_table(table_name):
+        return 0
+    column_names = {column["name"] for column in inspector.get_columns(table_name)}
+    if column_name not in column_names:
+        return 0
+    result = db.execute(
+        text(f"DELETE FROM {table_name} WHERE {column_name} = :worker_id"),
+        {"worker_id": worker_id},
+    )
+    return result.rowcount or 0
+
+
 def hard_delete_delivery_worker(
     db,
     worker: DBDeliveryWorker,
@@ -4301,6 +4324,8 @@ def hard_delete_delivery_worker(
         "rider_kyc": db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker_id).count(),
         "riders": db.query(DBRider).filter(DBRider.delivery_worker_id == worker_id).count(),
     }
+    for table_name, column_name in OPTIONAL_DELIVERY_WORKER_CHILD_TABLES:
+        delete_counts[table_name] = delete_optional_delivery_worker_child_rows(db, table_name, column_name, worker_id)
     db.add(DBDeletedRiderLog(
         delivery_worker_id=worker_id,
         admin_id=admin.get("id"),
@@ -4328,6 +4353,7 @@ def hard_delete_delivery_worker(
     db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker_id).delete(synchronize_session=False)
     db.query(DBRider).filter(DBRider.delivery_worker_id == worker_id).delete(synchronize_session=False)
     db.delete(worker)
+    db.flush()
 
     db.query(DBAddress).filter(DBAddress.user_id == user_id).delete(synchronize_session=False)
     db.query(DBProfile).filter(DBProfile.user_id == user_id).delete(synchronize_session=False)
