@@ -5333,6 +5333,15 @@ def ensure_database_compatibility():
             "latency_ms": "INTEGER",
             "created_at": "TIMESTAMP",
         },
+        "deleted_rider_logs": {
+            "delivery_worker_id": "INTEGER",
+            "admin_id": "INTEGER",
+            "admin_name": "VARCHAR(150) DEFAULT ''",
+            "reason": "TEXT DEFAULT ''",
+            "snapshot_json": "TEXT DEFAULT '{}'",
+            "hard_deleted": "BOOLEAN DEFAULT FALSE",
+            "created_at": "TIMESTAMP",
+        },
         "operational_zones": {
             "zone_name": "VARCHAR(150) DEFAULT 'FoodNova Local Zone'",
             "center_latitude": "FLOAT DEFAULT 6.5244",
