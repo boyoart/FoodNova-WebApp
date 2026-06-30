@@ -27,13 +27,18 @@ class _ActiveDeliveryScreenState extends ConsumerState<ActiveDeliveryScreen> {
   late final DeliveryOffer offer = DeliveryOffer(
     Map<String, dynamic>.from((widget.extra as Map?) ?? {}),
   );
-  DeliveryStage stage = DeliveryStage.accepted;
+  late DeliveryStage stage;
   Timer? timer;
   String message = '';
 
   @override
   void initState() {
     super.initState();
+    stage = DeliveryStageCopy.fromStatus(offer.deliveryStatus);
+    debugPrint(
+      'DELIVERY_STATUS_RESTORED orderId=${offer.orderId} '
+      'status=${offer.deliveryStatus} stage=${stage.apiValue}',
+    );
     _ping();
     timer = Timer.periodic(const Duration(seconds: 5), (_) => _ping());
   }

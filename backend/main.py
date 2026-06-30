@@ -1979,6 +1979,13 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
         "token_count": len(tokens),
         "primary_token_present": bool(worker.fcm_token),
     }))
+    if not tokens:
+        print("ORDER_OFFER_NOTIFICATION_FAILED", json_dump({
+            "worker_id": worker.id,
+            "offer_id": offer.id,
+            "order_id": offer.order_id,
+            "error": "no_fcm_token_registered",
+        }))
     for token in tokens:
         result = send_fcm_push_token_result(
             token,
@@ -1995,6 +2002,14 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
                 "click_action": "/rider/dashboard" if offer.worker_type == "rider" else "/messenger/dashboard",
             },
         )
+        print(("ORDER_OFFER_NOTIFICATION_SENT" if result.get("success") else "ORDER_OFFER_NOTIFICATION_FAILED"), json_dump({
+            "worker_id": worker.id,
+            "offer_id": offer.id,
+            "order_id": offer.order_id,
+            "provider": result.get("provider"),
+            "status": result.get("status"),
+            "error": result.get("error", ""),
+        }))
         print(("DELIVERY_REQUEST_PUSH_SENT" if result.get("success") else "DELIVERY_REQUEST_PUSH_FAILED"), json_dump({
             "worker_id": worker.id,
             "offer_id": offer.id,
@@ -3406,6 +3421,17 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
             duration_seconds = (leg.get("duration") or {}).get("value")
             polyline = ((route.get("overview_polyline") or {}).get("points") or "")
             if distance_meters_value is not None and duration_seconds is not None and polyline:
+                print("TRACKING_ROUTE_CREATED", json_dump({
+                    "provider": "google_directions",
+                    "distance_meters": distance_meters_value,
+                    "eta_seconds": duration_seconds,
+                    "status": body.get("status") or "OK",
+                }))
+                print("TRACKING_ROUTE_DISTANCE", json_dump({
+                    "provider": "google_directions",
+                    "distance_meters": distance_meters_value,
+                    "eta_minutes": max(1, math.ceil(float(duration_seconds) / 60)),
+                }))
                 return {
                     "distance_meters": float(distance_meters_value),
                     "eta_minutes": max(1, math.ceil(float(duration_seconds) / 60)),
@@ -3413,8 +3439,16 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
                     "route_provider": "google_directions",
                     "route_status": body.get("status") or "OK",
                 }
+            print("TRACKING_ROUTE_FAILED", json_dump({
+                "provider": "google_directions",
+                "status": body.get("status") or "NO_ROUTE",
+                "error_message": body.get("error_message", ""),
+                "origin": f"{rider_lat},{rider_lng}",
+                "destination": f"{customer_lat},{customer_lng}",
+            }))
             return {"route_provider": "google_directions", "route_status": body.get("status") or "NO_ROUTE"}
         except Exception as error:
+            print("TRACKING_ROUTE_FAILED", json_dump({"provider": "google_directions", "error": repr(error)}))
             print("TRACK_RIDER_ROUTE_ERROR", json_dump({"provider": "google_directions", "error": repr(error)}))
 
     osrm_url = (
@@ -3428,6 +3462,17 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
         route = (body.get("routes") or [{}])[0]
         coordinates = (((route.get("geometry") or {}).get("coordinates")) or [])
         if route.get("distance") is not None and route.get("duration") is not None and coordinates:
+            print("TRACKING_ROUTE_CREATED", json_dump({
+                "provider": "osrm",
+                "distance_meters": route.get("distance"),
+                "eta_seconds": route.get("duration"),
+                "status": body.get("code") or "Ok",
+            }))
+            print("TRACKING_ROUTE_DISTANCE", json_dump({
+                "provider": "osrm",
+                "distance_meters": route.get("distance"),
+                "eta_minutes": max(1, math.ceil(float(route.get("duration")) / 60)),
+            }))
             return {
                 "distance_meters": float(route.get("distance")),
                 "eta_minutes": max(1, math.ceil(float(route.get("duration")) / 60)),
@@ -3435,8 +3480,15 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
                 "route_provider": "osrm",
                 "route_status": body.get("code") or "Ok",
             }
+        print("TRACKING_ROUTE_FAILED", json_dump({
+            "provider": "osrm",
+            "status": body.get("code") or "NO_ROUTE",
+            "origin": f"{rider_lat},{rider_lng}",
+            "destination": f"{customer_lat},{customer_lng}",
+        }))
         return {"route_provider": "osrm", "route_status": body.get("code") or "NO_ROUTE"}
     except Exception as error:
+        print("TRACKING_ROUTE_FAILED", json_dump({"provider": "osrm", "error": repr(error)}))
         print("TRACK_RIDER_ROUTE_ERROR", json_dump({"provider": "osrm", "error": repr(error)}))
     return {"route_provider": "none", "route_status": "UNAVAILABLE"}
 
@@ -3669,6 +3721,14 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
     )
     db.add(offer)
     db.flush()
+    print("ORDER_OFFER_CREATED", json_dump({
+        "offer_id": offer.id,
+        "order_id": order.id,
+        "order_code": order.order_code,
+        "worker_id": worker.id,
+        "worker_type": worker.worker_type,
+        "delivery_type": offer.delivery_type,
+    }))
     print("DELIVERY_OFFER_CREATED", json_dump({
         "offer_id": offer.id,
         "order_id": order.id,
@@ -3765,24 +3825,14 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
     return offer
 
 
-DELIVERY_MATCH_READY_PAYMENTS = {
+DELIVERY_MATCH_CONFIRMED_PAYMENTS = {
     "payment_confirmed",
     "confirmed",
     "paid",
     "successful",
     "success",
-    "pending_payment",
-    "pending",
-    "receipt_submitted",
-    "submitted",
 }
-DELIVERY_MATCH_READY_STATUSES = {
-    "order_placed",
-    "placed",
-    "new",
-    "pending",
-    "pending_payment",
-    "receipt_submitted",
+DELIVERY_MATCH_ADMIN_CONFIRMED_STATUSES = {
     "processing",
     "confirmed",
     "ready",
@@ -3819,11 +3869,11 @@ def delivery_order_ready_for_matching(order: DBOrder) -> tuple[bool, str]:
     payment_status = str(getattr(order, "payment_status", "") or "").strip().lower()
     if payment_status in DELIVERY_MATCH_BLOCKED_PAYMENTS:
         return False, f"payment_blocked_{payment_status}"
-    if statuses.intersection(DELIVERY_MATCH_READY_STATUSES):
-        return True, "ready_status"
-    if payment_status in DELIVERY_MATCH_READY_PAYMENTS:
-        return True, "payment_ready"
-    return False, f"order_not_ready_statuses_{','.join(sorted(statuses)) or 'missing'}"
+    if payment_status not in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
+        return False, f"payment_not_confirmed_{payment_status or 'missing'}"
+    if not statuses.intersection(DELIVERY_MATCH_ADMIN_CONFIRMED_STATUSES):
+        return False, f"admin_order_not_confirmed_{','.join(sorted(statuses)) or 'missing'}"
+    return True, "payment_and_admin_confirmed"
 
 
 def auto_match_ready_delivery_orders(db, request: Request = None, reason: str = "unspecified", limit: int = 50) -> dict:
@@ -11571,6 +11621,24 @@ def delivery_worker_orders(request: Request, status: Optional[str] = None):
         clean_status = (status or "").strip().upper()
         orders = query.order_by(DBOrder.delivery_assigned_at.desc(), DBOrder.updated_at.desc(), DBOrder.id.desc()).all()
         items = [dispatch_order_to_dict(order) for order in orders if not clean_status or canonical_dispatch_status(order) == clean_status]
+        print("ORDER_HISTORY_QUERY", json_dump({
+            "worker_id": worker.id,
+            "status_filter": clean_status,
+            "returned": len(items),
+            "order_ids": [item.get("id") for item in items],
+            "dispatch_statuses": [item.get("dispatch_status") for item in items],
+        }))
+        print("DELIVERY_STATUS_RESTORED", json_dump({
+            "worker_id": worker.id,
+            "orders": [
+                {
+                    "order_id": item.get("id"),
+                    "dispatch_status": item.get("dispatch_status"),
+                    "delivery_status": item.get("delivery_status"),
+                }
+                for item in items
+            ],
+        }))
         return {"success": True, "orders": items, "data": items}
     finally:
         db.close()
@@ -11582,6 +11650,8 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
     try:
         order = _delivery_worker_order_or_404(db, worker, order_id)
         raw_status = (payload.delivery_status or payload.status or "").strip().lower()
+        old_delivery_status = order.delivery_status or ""
+        old_status = order.status or ""
         allowed = {
             "assigned",
             "accepted",
@@ -11623,7 +11693,18 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
         worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)
-        data = order_to_dict(order)
+        data = dispatch_order_to_dict(order)
+        print("DELIVERY_STATUS_CHANGED", json_dump({
+            "worker_id": worker.id,
+            "order_id": order.id,
+            "order_code": order.order_code,
+            "requested_status": raw_status,
+            "old_delivery_status": old_delivery_status,
+            "new_delivery_status": order.delivery_status,
+            "old_status": old_status,
+            "new_status": order.status,
+            "dispatch_status": data.get("dispatch_status"),
+        }))
         customer_event = {
             "accepted": ("Delivery Accepted", f"Your rider accepted order {order.order_code}.", "delivery_accepted"),
             "picked_up": ("Order Picked Up", f"Your order {order.order_code} has been picked up.", "order_picked_up"),

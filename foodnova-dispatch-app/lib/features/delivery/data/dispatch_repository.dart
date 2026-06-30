@@ -26,6 +26,11 @@ final deliveryOrdersProvider = FutureProvider.autoDispose<List<DeliveryOrder>>((
   return ref.read(dispatchRepositoryProvider).orders();
 });
 
+final deliveryHistoryProvider =
+    FutureProvider.autoDispose<List<DeliveryOrder>>((ref) {
+  return ref.read(dispatchRepositoryProvider).history();
+});
+
 final dashboardStatsProvider =
     FutureProvider.autoDispose<DashboardStats>((ref) {
   return ref.read(dispatchRepositoryProvider).dashboardStats();
@@ -232,6 +237,21 @@ class DispatchRepository {
     return items
         .map((item) => DeliveryOrder(Map<String, dynamic>.from(item)))
         .toList();
+  }
+
+  Future<List<DeliveryOrder>> history() async {
+    final response = await _dio.get('/delivery/orders');
+    debugPrint('ORDER_HISTORY_QUERY ${response.data}');
+    final body = response.data as Map;
+    final items = (body['orders'] ?? body['data'] ?? []) as List;
+    return items
+        .map((item) => DeliveryOrder(Map<String, dynamic>.from(item)))
+        .where((order) {
+      final status = order.status.trim().toUpperCase();
+      return status == 'DELIVERED' ||
+          status == 'CANCELLED' ||
+          status == 'CANCELED';
+    }).toList();
   }
 
   Future<DeliveryOffer> accept(int offerId) async {

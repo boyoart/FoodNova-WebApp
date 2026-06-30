@@ -77,6 +77,8 @@ class DeliveryOffer {
   String get orderCode =>
       '${raw['order_code'] ?? raw['order_number'] ?? 'Order'}';
   String get status => '${raw['status'] ?? 'PENDING'}';
+  String get deliveryStatus =>
+      '${raw['dispatch_status'] ?? raw['delivery_status'] ?? raw['status'] ?? ''}';
   String get customerName =>
       '${raw['customer_name'] ?? raw['name'] ?? 'Customer'}';
   String get customerPhone => '${raw['customer_phone'] ?? raw['phone'] ?? ''}';
@@ -139,6 +141,23 @@ enum DeliveryStage {
 }
 
 extension DeliveryStageCopy on DeliveryStage {
+  static DeliveryStage fromStatus(String value) {
+    final normalized = value.trim().toLowerCase();
+    return switch (normalized) {
+      'assigned' => DeliveryStage.assigned,
+      'accepted' => DeliveryStage.accepted,
+      'picked_up' || 'pickedup' => DeliveryStage.pickedUp,
+      'in_transit' ||
+      'out_for_delivery' ||
+      'en_route_to_customer' =>
+        DeliveryStage.inTransit,
+      'arrived' || 'arrived_at_customer' => DeliveryStage.arrived,
+      'delivered' => DeliveryStage.delivered,
+      'cancelled' || 'canceled' => DeliveryStage.cancelled,
+      _ => DeliveryStage.accepted,
+    };
+  }
+
   String get label => switch (this) {
         DeliveryStage.assigned => 'Assigned',
         DeliveryStage.accepted => 'Accepted',
