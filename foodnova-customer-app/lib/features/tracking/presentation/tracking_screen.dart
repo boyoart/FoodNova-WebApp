@@ -317,15 +317,18 @@ class _OrderDetailsView extends StatelessWidget {
         const SizedBox(height: 14),
         _ProductListCard(order: order, currency: currency),
         const SizedBox(height: 14),
-        _ReceiptCard(
-          selectedReceipt: selectedReceipt,
-          uploading: uploading,
-          progress: uploadProgress,
-          onPickCamera: onPickCamera,
-          onPickGallery: onPickGallery,
-          onPickFile: onPickFile,
-          onUpload: onUpload,
-        ),
+        if (order.paymentConfirmed)
+          _PaymentConfirmedReceiptCard(order: order)
+        else
+          _ReceiptCard(
+            selectedReceipt: selectedReceipt,
+            uploading: uploading,
+            progress: uploadProgress,
+            onPickCamera: onPickCamera,
+            onPickGallery: onPickGallery,
+            onPickFile: onPickFile,
+            onUpload: onUpload,
+          ),
         const SizedBox(height: 14),
         _RiderInformationCard(
           order: order,
@@ -936,6 +939,59 @@ class _ReceiptCard extends StatelessWidget {
   }
 }
 
+class _PaymentConfirmedReceiptCard extends StatelessWidget {
+  const _PaymentConfirmedReceiptCard({required this.order});
+
+  final OrderSummary order;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return _Card(
+      title: 'Payment confirmed',
+      icon: Icons.verified_rounded,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer.withValues(alpha: .5),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: scheme.primary.withValues(alpha: .2)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.check_circle_rounded, color: scheme.primary, size: 30),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Payment Confirmed',
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Receipt upload is closed for this order. Your invoice is available below.',
+                    style: TextStyle(
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _RiderInformationCard extends StatelessWidget {
   const _RiderInformationCard({
     required this.order,
@@ -967,7 +1023,7 @@ class _RiderInformationCard extends StatelessWidget {
             )
           else
             const _MutedText(
-              'Rider details will appear here once FoodNova assigns your delivery partner.',
+              'Looking for an available rider...',
             ),
           if (order.deliveryNotes.isNotEmpty) ...[
             const SizedBox(height: 10),

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, CheckCircle, RefreshCw, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { notificationsAPI, ordersAPI } from '../services/api'
+import { useAuthStore } from '../store/authStore'
 import {
   createBroadcastNotifications,
   createDerivedNotificationsFromOrders,
@@ -18,6 +19,7 @@ import './InboxPage.css'
 
 export default function InboxPage() {
   const navigate = useNavigate()
+  const { isAdmin } = useAuthStore()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
@@ -34,18 +36,20 @@ export default function InboxPage() {
       setLoading(true)
       const [notificationsRes, ordersRes] = await Promise.allSettled([
         notificationsAPI.getAll(),
-        ordersAPI.getCustomerOrders(),
+        isAdmin ? Promise.resolve([]) : ordersAPI.getCustomerOrders(),
       ])
 
       const backendBody = notificationsRes.status === 'fulfilled' ? notificationsRes.value || {} : {}
       const backendNotifications = backendBody.notifications || backendBody.data || []
       if (notificationsRes.status === 'fulfilled') {
         setNotifications(backendNotifications)
-      } else {
+      } else if (!isAdmin) {
         const orders = ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : []
         const derived = createDerivedNotificationsFromOrders(orders)
         const broadcasts = createBroadcastNotifications()
         setNotifications(mergeNotifications([], derived, broadcasts))
+      } else {
+        setNotifications([])
       }
     } catch (error) {
       console.error('Failed to load inbox', error)
@@ -62,6 +66,10 @@ export default function InboxPage() {
   const filteredNotifications = notifications.filter((item) => {
     if (filter === 'all') return true
     if (filter === 'unread') return !item.is_read
+    if (filter === 'orders') return ['order', 'delivery'].includes(String(item.category || item.type || '').toLowerCase())
+    if (filter === 'riders') return ['rider', 'worker', 'workforce'].some((term) => String(item.category || item.type || '').toLowerCase().includes(term))
+    if (filter === 'payments') return String(item.category || item.type || '').toLowerCase().includes('payment')
+    if (filter === 'system') return String(item.category || item.type || '').toLowerCase().includes('system') || String(item.type || '').toLowerCase().includes('admin')
     return item.category === filter || item.type === filter
   })
 
@@ -100,7 +108,10 @@ export default function InboxPage() {
 
   const handleOpen = async (notification) => {
     await markOneRead(notification)
-    if (notification.order_id) navigate('/orders')
+    if (isAdmin) {
+      if (notification.order_id) navigate('/admin/orders')
+      else navigate('/admin/notifications')
+    } else if (notification.order_id) navigate('/orders')
   }
 
   return (
@@ -108,7 +119,7 @@ export default function InboxPage() {
       <div className="inbox-header">
         <div>
           <h1><Bell size={30} /> Inbox</h1>
-          <p>View FoodNova order updates, service messages, and broadcasts.</p>
+          <p>View FoodNova order updates, rider alerts, service messages, and broadcasts.</p>
         </div>
         <div className="inbox-actions">
           <button type="button" className="btn-secondary" onClick={loadInbox}><RefreshCw size={16} /> Refresh</button>
@@ -117,7 +128,7 @@ export default function InboxPage() {
       </div>
 
       <div className="inbox-filters">
-        {['all', 'unread', 'payment', 'order', 'delivery', 'service', 'broadcast'].map((item) => (
+        {['all', 'unread', 'orders', 'riders', 'payments', 'system', 'payment', 'order', 'delivery', 'service', 'broadcast'].map((item) => (
           <button key={item} type="button" className={filter === item ? 'active' : ''} onClick={() => setFilter(item)}>
             {item.charAt(0).toUpperCase() + item.slice(1)}
           </button>

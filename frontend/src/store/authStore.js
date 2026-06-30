@@ -45,10 +45,12 @@ export const useAuthStore = create((set) => ({
 
   adminLogin: (admin, token) => {
     localStorage.setItem('admin_token', token)
+    localStorage.setItem('token', token)
+    localStorage.setItem('foodnova_token', token)
     localStorage.setItem('admin', JSON.stringify(admin))
     localStorage.setItem('foodnova_admin', JSON.stringify(admin))
     updateLastActivity()
-    set({ admin, isAdmin: true })
+    set({ user: admin, admin, isAuthenticated: true, isAdmin: true })
   },
 
   logout: () => {

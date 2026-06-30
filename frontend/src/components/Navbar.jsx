@@ -4,6 +4,7 @@ import { Bell, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Shopp
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI, resolveMediaUrl } from '../services/api'
+import { requestDeliveryPushToken } from '../services/pushNotifications'
 import FoodNovaLogo from './FoodNovaLogo'
 import {
   createBroadcastNotifications,
@@ -73,15 +74,15 @@ export default function Navbar() {
     ['nav-link', isActivePath(path) ? 'active' : '', extra].filter(Boolean).join(' ')
 
   const loadCustomerHeaderData = async () => {
-    if (!isAuthenticated || isAdmin) return
+    if (!isAuthenticated && !isAdmin) return
 
     try {
       setRefreshingNotifications(true)
       const [notificationsRes, countRes, profileRes, ordersRes] = await Promise.allSettled([
         notificationsAPI.getAll(),
         notificationsAPI.getUnreadCount(),
-        profileAPI.getProfile(),
-        ordersAPI.getCustomerOrders(),
+        isAdmin ? Promise.resolve(null) : profileAPI.getProfile(),
+        isAdmin ? Promise.resolve([]) : ordersAPI.getCustomerOrders(),
       ])
 
       let backendNotifications = []
@@ -91,9 +92,9 @@ export default function Navbar() {
       }
 
       const backendAvailable = notificationsRes.status === 'fulfilled'
-      const orders = backendAvailable ? [] : (ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : [])
+      const orders = backendAvailable || isAdmin ? [] : (ordersRes.status === 'fulfilled' ? normalizeOrders(ordersRes.value) : [])
       const derivedNotifications = backendAvailable ? [] : createDerivedNotificationsFromOrders(orders)
-      const broadcastNotifications = backendAvailable ? [] : createBroadcastNotifications()
+      const broadcastNotifications = backendAvailable || isAdmin ? [] : createBroadcastNotifications()
       const merged = backendAvailable ? backendNotifications : mergeNotifications([], derivedNotifications, broadcastNotifications)
       setNotifications(merged)
 
@@ -104,7 +105,7 @@ export default function Navbar() {
         setUnreadCount(merged.filter((item) => !item.is_read).length)
       }
 
-      if (profileRes.status === 'fulfilled') {
+      if (!isAdmin && profileRes.status === 'fulfilled') {
         const body = profileRes.value || {}
         setProfile(body.profile || body.data?.profile || body.data || null)
       }
@@ -123,7 +124,7 @@ export default function Navbar() {
   }, [location.pathname])
 
   useEffect(() => {
-    if (!isAuthenticated || isAdmin) {
+    if (!isAuthenticated && !isAdmin) {
       setNotifications([])
       setUnreadCount(0)
       setProfile(null)
@@ -142,6 +143,27 @@ export default function Navbar() {
       window.removeEventListener('foodnova-profile-updated', handleProfileUpdate)
     }
   }, [isAuthenticated, isAdmin])
+
+  useEffect(() => {
+    if (!isAdmin) return undefined
+    let cancelled = false
+    const registerAdminPushToken = async () => {
+      try {
+        const result = await requestDeliveryPushToken()
+        if (cancelled || !result?.token) return
+        await notificationsAPI.registerFcmToken({
+          token: result.token,
+          platform: result.platform || 'web',
+        })
+      } catch (error) {
+        console.warn('Admin FCM registration skipped', error)
+      }
+    }
+    registerAdminPushToken()
+    return () => {
+      cancelled = true
+    }
+  }, [isAdmin])
 
   useEffect(() => {
     if (!notificationsOpen && !avatarOpen && !adminMenuOpen) return undefined
@@ -200,7 +222,8 @@ export default function Navbar() {
       setUnreadCount((current) => Math.max(0, current - (notification.is_read ? 0 : 1)))
 
       setNotificationsOpen(false)
-      if (notification.order_id) navigate('/orders')
+      if (isAdmin) navigate('/admin/notifications')
+      else if (notification.order_id) navigate('/orders')
       else navigate('/inbox')
     } catch (error) {
       console.warn('Failed to open notification', error)
@@ -366,6 +389,45 @@ export default function Navbar() {
                     ) : (
                       <span className="admin-menu-empty">No admin tools available</span>
                     )}
+                  </div>
+                )}
+              </li>
+              <li className="nav-item nav-bell" ref={notificationRef}>
+                <button type="button" className="nav-link bell-btn" onClick={toggleNotifications} aria-label="Notifications">
+                  <Bell size={18} />
+                  {unreadCount > 0 && <span className="notif-badge">{unreadCount}</span>}
+                </button>
+
+                {notificationsOpen && (
+                  <div className="notif-dropdown">
+                    <div className="notif-dropdown-header">
+                      <strong>Notifications</strong>
+                      <div className="notif-header-actions">
+                        <button type="button" onClick={loadCustomerHeaderData} title="Refresh notifications"><RefreshCw size={14} /> Refresh</button>
+                        <button type="button" onClick={handleMarkAllRead}>Mark all as read</button>
+                      </div>
+                    </div>
+                    {refreshingNotifications && <p className="notif-empty">Refreshing...</p>}
+                    {notifications.length ? (
+                      notifications.slice(0, 10).map((notification) => (
+                        <button
+                          type="button"
+                          key={getNotificationKey(notification)}
+                          className={`notif-item notif-button ${notification.is_read ? '' : 'unread'}`}
+                          onClick={() => handleNotificationClick(notification)}
+                        >
+                          <span className="notif-item-top">
+                            <strong>{notification.title}</strong>
+                            {notification.category && <em>{notification.category}</em>}
+                          </span>
+                          <p>{notification.message}</p>
+                          {notification.order_code && <small>{notification.order_code}</small>}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="notif-empty">No notifications yet</p>
+                    )}
+                    <button type="button" className="notif-view-all" onClick={() => { setNotificationsOpen(false); navigate('/admin/notifications') }}>Open Inbox</button>
                   </div>
                 )}
               </li>

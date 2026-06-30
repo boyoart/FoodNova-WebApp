@@ -107,6 +107,9 @@ class DispatchNotificationService {
       final token = await FirebaseMessaging.instance.getToken();
       debugPrint(
           'FCM TOKEN ${token == null || token.isEmpty ? 'missing' : token}');
+      debugPrint(
+        'DISPATCH_FCM_TOKEN_GENERATED ${token == null || token.isEmpty ? 'missing' : 'present'}',
+      );
       return token;
     } catch (error) {
       debugPrint('[FoodNova Dispatch Push] token unavailable: $error');

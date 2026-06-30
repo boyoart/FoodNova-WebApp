@@ -1630,18 +1630,21 @@ def _create_admin_notifications(title: str, message: str, notif_type: str = "adm
             )
             db.add(notification)
             db.flush()
-            print(
-                "NOTIFICATION_CREATED "
-                f"id={notification.id} email={email} type={notif_type} category={category} "
-                f"order_id={order.get('id') if order else ''}"
-            )
+            print("ADMIN_NOTIFICATION_CREATED", json_dump({
+                "id": notification.id,
+                "email": email,
+                "type": notif_type,
+                "category": category,
+                "order_id": order.get("id") if order else None,
+                "order_code": order.get("order_code") if order else "",
+            }))
             is_dispatch_user = (getattr(admin, "role", "") or "") in {"rider", "messenger"}
             for token in user_push_tokens(admin):
                 push_targets.append((token, notification.id, email, is_dispatch_user))
             count += 1
         db.commit()
         for token, notification_id, email, is_dispatch_user in push_targets:
-            send_fcm_push_token(token, title, message, {
+            result = send_fcm_push_token_result(token, title, message, {
                 "type": notif_type,
                 "category": category,
                 "notification_id": str(notification_id),
@@ -1654,6 +1657,13 @@ def _create_admin_notifications(title: str, message: str, notif_type: str = "adm
                 "click_action": "/notifications",
                 "recipient_email": email,
             })
+            print(("ADMIN_NOTIFICATION_SENT" if result.get("success") else "ADMIN_NOTIFICATION_FAILED"), json_dump({
+                "notification_id": notification_id,
+                "email": email,
+                "provider": result.get("provider"),
+                "status": result.get("status"),
+                "error": result.get("error", ""),
+            }))
         return count
     finally:
         db.close()
@@ -1961,8 +1971,16 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
     for token in json_load(getattr(worker, "fcm_tokens_json", None), []) or []:
         if token and token not in tokens:
             tokens.append(token)
+    print("RIDER_PUSH_LOOKUP", json_dump({
+        "worker_id": worker.id,
+        "worker_type": worker.worker_type,
+        "offer_id": offer.id,
+        "order_id": offer.order_id,
+        "token_count": len(tokens),
+        "primary_token_present": bool(worker.fcm_token),
+    }))
     for token in tokens:
-        send_fcm_push_token(
+        result = send_fcm_push_token_result(
             token,
             "New Delivery Request",
             "You have a new FoodNova delivery offer.",
@@ -1977,6 +1995,14 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
                 "click_action": "/rider/dashboard" if offer.worker_type == "rider" else "/messenger/dashboard",
             },
         )
+        print(("DELIVERY_REQUEST_PUSH_SENT" if result.get("success") else "DELIVERY_REQUEST_PUSH_FAILED"), json_dump({
+            "worker_id": worker.id,
+            "offer_id": offer.id,
+            "order_id": offer.order_id,
+            "provider": result.get("provider"),
+            "status": result.get("status"),
+            "error": result.get("error", ""),
+        }))
 
 
 def safe_email_call(label: str, func, *args, **kwargs):
@@ -3437,7 +3463,14 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
         route_status = route.get("route_status") or "UNAVAILABLE"
 
     dispatch_status = canonical_dispatch_status(order)
-    tracking_visible = dispatch_status in {"PICKED_UP", "IN_TRANSIT", "ARRIVED"}
+    tracking_visible = dispatch_status in {"ASSIGNED", "ACCEPTED", "PICKED_UP", "IN_TRANSIT", "ARRIVED"}
+    if rider_valid and customer_valid and not route_polyline:
+        route_polyline = [
+            {"latitude": float(rider_lat), "longitude": float(rider_lng)},
+            {"latitude": float(customer_lat), "longitude": float(customer_lng)},
+        ]
+        route_provider = route_provider if route_provider != "none" else "fallback"
+        route_status = route_status if route_status != "WAITING_FOR_COORDINATES" else "STRAIGHT_LINE"
     tracking_available = tracking_visible and rider_valid and customer_valid and bool(route_polyline)
     if getattr(order, "delivery_confirmed_at", None):
         tracking_visible = False
@@ -3537,6 +3570,7 @@ def delivery_offer_to_dict(offer: DBDeliveryOffer, worker: DBDeliveryWorker = No
         "customer_name": order.customer_name if order else "",
         "customer_phone": (order.customer_phone or order.phone) if order else "",
         "status": offer.status or "PENDING",
+        "assignment_status": getattr(offer, "assignment_status", None) or offer.status or "PENDING",
         "delivery_type": offer.delivery_type or "needs_admin_review",
         "estimated_distance_meters": offer.estimated_distance_meters,
         "pickup_area": offer.pickup_area or "FoodNova pickup",
@@ -3562,6 +3596,7 @@ def expire_stale_delivery_offers(db) -> list[int]:
     order_ids = [offer.order_id for offer in stale]
     for offer in stale:
         offer.status = "EXPIRED"
+        offer.assignment_status = "EXPIRED"
         offer.updated_at = datetime.utcnow()
         create_admin_audit_log(None, {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"}, "delivery_offer_expired", "delivery_offer", offer.id, f"Delivery offer expired for order {offer.order_code}", {"order_id": offer.order_id, "worker_id": offer.worker_id})
     return order_ids
@@ -3622,6 +3657,7 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
         worker_id=worker.id,
         worker_type=worker.worker_type or "",
         status="PENDING",
+        assignment_status="PENDING",
         delivery_type=order.delivery_type or "needs_admin_review",
         estimated_distance_meters=order.estimated_distance_meters,
         pickup_area="FoodNova pickup",
@@ -3690,11 +3726,13 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
 
 def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliveryWorker, order: DBOrder, request: Request, actor: dict, automatic: bool = False) -> dict:
     offer.status = "ASSIGNED"
+    offer.assignment_status = "ASSIGNED"
+    offer.accepted_at = offer.accepted_at or datetime.utcnow()
     offer.updated_at = datetime.utcnow()
     ensure_order_delivery_pin(db, order)
     order.delivery_worker_id = worker.id
     order.delivery_worker_type = worker.worker_type or ""
-    order.delivery_status = "ASSIGNED"
+    order.delivery_status = "ACCEPTED"
     order.rider_id = worker.id
     order.rider_name = worker.full_name
     order.rider_phone = worker.phone
@@ -3717,8 +3755,8 @@ def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliver
     )
     _create_order_notification(
         order_data,
-        "Delivery Assigned",
-        "Your order has been assigned for delivery.",
+        "Delivery Accepted",
+        f"{worker.full_name} has accepted your delivery. Live tracking will appear as location updates are received.",
         "delivery_update",
         "delivery",
     )
@@ -3731,6 +3769,8 @@ def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliver
     )
     action = "delivery_auto_assigned" if automatic else "delivery_manual_assigned"
     create_admin_audit_log(request, actor, action, "delivery_offer", offer.id, f"{'System auto assigned' if automatic else 'Admin assigned'} {worker.full_name} to order {order.order_code}", {"offer": delivery_offer_to_dict(offer, worker, order)})
+    socket_emit(f"order:update:{order.id}", {"order_id": order.id, "order": order_data}, room=f"order:{order.id}")
+    socket_emit("dispatch:order_assigned", {"order": order_data, "worker": worker_to_dict(worker)}, room="role:admin")
     return order_data
 
 
@@ -5733,6 +5773,7 @@ def ensure_database_compatibility():
             "worker_id": "INTEGER",
             "worker_type": "VARCHAR(30) DEFAULT ''",
             "status": "VARCHAR(30) DEFAULT 'PENDING'",
+            "assignment_status": "VARCHAR(30) DEFAULT 'PENDING'",
             "delivery_type": "VARCHAR(40) DEFAULT 'needs_admin_review'",
             "estimated_distance_meters": "FLOAT",
             "pickup_area": "VARCHAR(180) DEFAULT ''",
@@ -5779,6 +5820,8 @@ def ensure_database_compatibility():
             connection.execute(text("UPDATE users SET is_active = TRUE WHERE is_active IS NULL"))
         if "delivery_workers" in existing_tables and "worker_type" in table_columns.get("delivery_workers", {}):
             connection.execute(text("UPDATE delivery_workers SET worker_type = 'rider' WHERE worker_type IS NULL OR worker_type = '' OR LOWER(worker_type) NOT IN ('rider', 'messenger')"))
+        if "delivery_offers" in existing_tables:
+            connection.execute(text("UPDATE delivery_offers SET assignment_status = COALESCE(NULLIF(assignment_status, ''), status, 'PENDING') WHERE assignment_status IS NULL OR assignment_status = ''"))
         if "products" in existing_tables:
             connection.execute(text("UPDATE products SET stock_qty = COALESCE(stock_qty, stock, 0), stock = COALESCE(stock, stock_qty, 0)"))
             connection.execute(text("UPDATE products SET category_name = COALESCE(NULLIF(category_name, ''), category, '') WHERE category_name IS NULL OR category_name = ''"))
@@ -8567,6 +8610,13 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
         db.refresh(worker)
         data = worker_to_dict(worker)
         create_admin_audit_log(request, user, "worker_go_online", "delivery_worker", worker.id, f"{worker.worker_type.title()} {worker.full_name} went online", {"worker": data, "gps_provided": bool(payload), "gps_recent": data.get("gps_recent")})
+        _create_admin_notifications(
+            f"{worker.worker_type.title()} online",
+            f"{worker.full_name} went online and is available for delivery requests.",
+            "worker_go_online",
+            "riders",
+            {"id": None, "order_code": ""},
+        )
         socket_emit("rider:availability", {"worker": data, "status": "ONLINE"}, room=f"user:{worker.user_id}")
         socket_emit("dispatch:availability", {"worker": data, "status": "ONLINE"}, room=f"role:admin")
         print("GO_ONLINE_SUCCESS", json_dump({
@@ -8617,6 +8667,13 @@ def delivery_go_offline(request: Request):
         db.refresh(worker)
         data = worker_to_dict(worker)
         create_admin_audit_log(request, user, "worker_go_offline", "delivery_worker", worker.id, f"{worker.worker_type.title()} {worker.full_name} went offline", {"worker": data})
+        _create_admin_notifications(
+            f"{worker.worker_type.title()} offline",
+            f"{worker.full_name} went offline.",
+            "worker_go_offline",
+            "riders",
+            {"id": None, "order_code": ""},
+        )
         socket_emit("rider:availability", {"worker": data, "status": "OFFLINE"}, room=f"user:{worker.user_id}")
         socket_emit("dispatch:availability", {"worker": data, "status": "OFFLINE"}, room=f"role:admin")
         return {"success": True, "worker": data, "data": data}
@@ -8698,6 +8755,14 @@ def register_delivery_worker_fcm_token(payload: FCMTokenPayload, request: Reques
         worker.fcm_token = token
         worker.fcm_tokens_json = json_dump(tokens[:5])
         worker.updated_at = datetime.utcnow()
+        print("DISPATCH_FCM_TOKEN_REGISTERED", json_dump({
+            "worker_id": worker.id,
+            "user_id": user.get("id"),
+            "worker_type": worker.worker_type,
+            "token_length": len(token),
+            "token_suffix": token[-12:],
+            "token_count": len(tokens[:5]),
+        }))
         db.commit()
         return {"success": True, "message": "Push notification token registered"}
     finally:
@@ -8743,25 +8808,30 @@ def accept_delivery_offer(offer_id: int, request: Request):
             raise HTTPException(status_code=400, detail="Delivery offer is no longer pending")
         if not worker_eligible_for_offer(db, worker, offer.delivery_type, offer.id):
             raise HTTPException(status_code=403, detail="You are no longer eligible for this delivery request")
-        offer.status = "ACCEPTED"
         offer.accepted_at = datetime.utcnow()
         offer.updated_at = datetime.utcnow()
         worker.operational_status = "BUSY"
         worker.updated_at = datetime.utcnow()
         order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
-        order_data = order_to_dict(order) if order else {"id": offer.order_id, "order_code": offer.order_code}
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
         worker_type_label = "Rider" if (worker.worker_type or "") == "rider" else "Messenger"
-        assignment_mode = get_delivery_assignment_mode(db)
-        if assignment_mode == "automatic" and order:
-            order_data = assign_delivery_offer_to_order(db, offer, worker, order, request, {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"}, automatic=True)
-        else:
-            _create_admin_notifications(
-                f"{worker_type_label} accepted order #{offer.order_code}",
-                f"{worker_type_label} accepted order #{offer.order_code}. Confirm assignment.",
-                "delivery_offer_accepted",
-                "delivery",
-                order_data,
-            )
+        order_data = assign_delivery_offer_to_order(
+            db,
+            offer,
+            worker,
+            order,
+            request,
+            {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
+            automatic=True,
+        )
+        _create_admin_notifications(
+            f"{worker_type_label} accepted order #{offer.order_code}",
+            f"{worker_type_label} accepted order #{offer.order_code} and was assigned automatically.",
+            "delivery_offer_accepted",
+            "delivery",
+            order_data,
+        )
         db.commit()
         db.refresh(offer)
         create_admin_audit_log(request, user, "delivery_offer_accepted", "delivery_offer", offer.id, f"{worker.full_name} accepted order {offer.order_code}", {"offer": delivery_offer_to_dict(offer, worker, order)})
@@ -8779,6 +8849,7 @@ def decline_delivery_offer(offer_id: int, request: Request, payload: DeliveryOff
             raise HTTPException(status_code=404, detail="Delivery offer not found")
         if offer.status == "PENDING":
             offer.status = "DECLINED"
+            offer.assignment_status = "DECLINED"
             offer.declined_at = datetime.utcnow()
             offer.updated_at = datetime.utcnow()
             if not worker_has_active_assignment(db, worker, offer.id):
@@ -8786,6 +8857,14 @@ def decline_delivery_offer(offer_id: int, request: Request, payload: DeliveryOff
                 worker.updated_at = datetime.utcnow()
             create_admin_audit_log(request, user, "delivery_offer_declined", "delivery_offer", offer.id, f"{worker.full_name} declined order {offer.order_code}", {"offer": delivery_offer_to_dict(offer, worker)})
             order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
+            order_data = order_to_dict(order) if order else {"id": offer.order_id, "order_code": offer.order_code}
+            _create_admin_notifications(
+                f"{worker.full_name} declined order #{offer.order_code}",
+                f"{worker.full_name} declined delivery request for order #{offer.order_code}. The order has returned to the dispatch queue.",
+                "delivery_offer_declined",
+                "riders",
+                order_data,
+            )
             if order:
                 start_delivery_matching(db, order, request)
             db.commit()
@@ -9069,6 +9148,14 @@ def register_customer_fcm_token(payload: FCMTokenPayload, request: Request):
         db_user.fcm_token = token
         db_user.fcm_tokens_json = json_dump(tokens[:5])
         db_user.updated_at = datetime.utcnow()
+        if (db_user.role or "") == "admin":
+            print("ADMIN_FCM_TOKEN_REGISTERED", json_dump({
+                "user_id": db_user.id,
+                "email": str(db_user.email or "").strip().lower(),
+                "token_length": len(token),
+                "token_suffix": token[-12:],
+                "token_count": len(tokens[:5]),
+            }))
         print(
             "FCM_TOKEN_UPDATED "
             f"table=users user_id={db_user.id} email={str(db_user.email or '').strip().lower()} "
@@ -9116,6 +9203,12 @@ def mark_notification_read(notification_id: int, request: Request):
         db.commit()
         db.refresh(notification)
         data = notification_to_dict(notification)
+        if user.get("role") == "admin":
+            print("ADMIN_NOTIFICATION_READ", json_dump({
+                "notification_id": notification.id,
+                "email": email,
+                "single": True,
+            }))
         return {"success": True, "notification": data, "data": data}
     finally:
         db.close()
@@ -9127,11 +9220,17 @@ def mark_all_notifications_read(request: Request):
     email = user.get("email")
     db = SessionLocal()
     try:
-        db.query(DBNotification).filter(
+        updated = db.query(DBNotification).filter(
             DBNotification.user_email == email,
             DBNotification.deleted_at.is_(None),
         ).update({"is_read": True})
         db.commit()
+        if user.get("role") == "admin":
+            print("ADMIN_NOTIFICATION_READ", json_dump({
+                "email": email,
+                "single": False,
+                "updated": updated,
+            }))
         return {"success": True, "message": "Notifications marked as read"}
     finally:
         db.close()
@@ -9682,6 +9781,7 @@ def reject_delivery_offer(offer_id: int, request: Request, payload: DeliveryOffe
             raise HTTPException(status_code=404, detail="Delivery offer not found")
         if offer.status in ["PENDING", "ACCEPTED"]:
             offer.status = "DECLINED"
+            offer.assignment_status = "DECLINED"
             offer.updated_at = datetime.utcnow()
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == offer.order_id).first()
         if order:
@@ -9833,7 +9933,7 @@ def admin_dispatch_cancel_order(order_id: int, payload: DeliveryOfferActionPaylo
             if worker:
                 worker.operational_status = "ONLINE"
                 worker.updated_at = datetime.utcnow()
-        db.query(DBDeliveryOffer).filter(DBDeliveryOffer.order_id == order.id, DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"])).update({"status": "DECLINED", "updated_at": datetime.utcnow()}, synchronize_session=False)
+        db.query(DBDeliveryOffer).filter(DBDeliveryOffer.order_id == order.id, DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"])).update({"status": "DECLINED", "assignment_status": "DECLINED", "updated_at": datetime.utcnow()}, synchronize_session=False)
         db.commit()
         db.refresh(order)
         data = dispatch_order_to_dict(order)
@@ -10104,6 +10204,7 @@ def permanently_delete_rider(worker_id: int, request: Request):
     except Exception as error:
         db.rollback()
         log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/rider-verification-queue/{worker_id}", worker_id=worker_id, admin_id=admin.get("id"), hard_delete=True)
+        print("BACKEND_DELETE_RIDER_FAILED", json_dump({"worker_id": worker_id, "admin_id": admin.get("id"), "error": str(error)}))
         return JSONResponse(status_code=500, content={"success": False, "detail": "Failed to delete rider. FoodNova has logged the backend error."})
     finally:
         db.close()
@@ -10781,6 +10882,7 @@ def deactivate_rider(rider_id: int, request: Request):
     except Exception as error:
         db.rollback()
         log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/riders/{rider_id}", worker_id=rider_id, admin_id=admin.get("id"), hard_delete=True)
+        print("BACKEND_DELETE_RIDER_FAILED", json_dump({"worker_id": rider_id, "admin_id": admin.get("id"), "error": str(error)}))
         return JSONResponse(status_code=500, content={"success": False, "detail": "Failed to delete rider. FoodNova has logged the backend error."})
     finally:
         db.close()

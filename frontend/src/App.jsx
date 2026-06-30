@@ -234,6 +234,8 @@ function App() {
               <Route path="/admin/stock" element={<AdminStock />} />
               <Route path="/admin/payments" element={<AdminPayments />} />
               <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
+              <Route path="/admin/notifications" element={<InboxPage />} />
+              <Route path="/admin/inbox" element={<InboxPage />} />
               <Route path="/admin/announcements" element={<AdminAnnouncements />} />
               <Route path="/admin/customers" element={<AdminCustomers />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />

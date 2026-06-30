@@ -458,6 +458,7 @@ class DeliveryOffer(Base):
     worker_id = Column(Integer, nullable=False, index=True)
     worker_type = Column(String(30), default="", index=True)
     status = Column(String(30), default="PENDING", index=True)
+    assignment_status = Column(String(30), default="PENDING", index=True)
     delivery_type = Column(String(40), default="needs_admin_review", index=True)
     estimated_distance_meters = Column(Float, nullable=True)
     pickup_area = Column(String(180), default="")

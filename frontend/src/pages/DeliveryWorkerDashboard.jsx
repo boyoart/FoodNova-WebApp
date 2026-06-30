@@ -349,7 +349,7 @@ export default function DeliveryWorkerDashboard({ workerType }) {
     try {
       setBusy(true)
       await workerAPI.acceptOffer(offer.id)
-      toast.success('Delivery request accepted. Admin will confirm assignment.')
+      toast.success('Delivery request accepted. You are now assigned to this order.')
       await loadOffers()
       await loadWorker()
     } catch (error) {

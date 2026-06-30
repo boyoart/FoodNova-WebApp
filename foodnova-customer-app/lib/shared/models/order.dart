@@ -108,15 +108,23 @@ class OrderSummary {
 
   bool get hasAssignedRider {
     final riderId = raw['rider_id'] ?? raw['delivery_worker_id'];
-    return riderId != null ||
-        riderName.trim().isNotEmpty ||
-        riderPhone.trim().isNotEmpty;
+    final acceptedOrLater = {
+      'ACCEPTED',
+      'PICKED_UP',
+      'IN_TRANSIT',
+      'ARRIVED',
+      'DELIVERED',
+    }.contains(canonicalDeliveryStatus);
+    return acceptedOrLater &&
+        (riderId != null ||
+            riderName.trim().isNotEmpty ||
+            riderPhone.trim().isNotEmpty);
   }
 
   bool get isDeliveryTrackingVisible {
     final value = canonicalDeliveryStatus;
     if (isDelivered) return false;
-    return {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}.contains(value);
+    return {'ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}.contains(value);
   }
 
   bool get riderArrived {

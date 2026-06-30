@@ -597,6 +597,11 @@ export const notificationsAPI = {
     const response = await api.patch("/notifications/read-all");
     return response.data;
   },
+
+  registerFcmToken: async (payload) => {
+    const response = await api.post("/notifications/register-fcm-token", payload);
+    return response.data;
+  },
 };
 
 export const getProducts = async () => {
