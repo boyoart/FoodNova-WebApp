@@ -2923,8 +2923,8 @@ def rider_profile_photo_url(worker: Optional[DBDeliveryWorker]) -> str:
     if not worker:
         return ""
     return (
-        getattr(worker, "selfie_url", None)
-        or getattr(worker, "profile_photo_url", None)
+        getattr(worker, "profile_photo_url", None)
+        or getattr(worker, "selfie_url", None)
         or getattr(worker, "verified_photo_url", None)
         or ""
     )
@@ -2955,6 +2955,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         and (worker.full_name or "").strip()
         and (worker.phone or "").strip()
     )
+    custom_profile_photo_url = getattr(worker, "profile_photo_url", "") or ""
     photo_url = rider_profile_photo_url(worker)
     return {
         "id": worker.id,
@@ -2987,7 +2988,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "verified_birthdate": getattr(worker, "verified_birthdate", "") or "",
         "verified_photo_url": getattr(worker, "verified_photo_url", "") or "",
         "selfie_url": getattr(worker, "selfie_url", "") or "",
-        "profile_photo_url": photo_url,
+        "profile_photo_url": custom_profile_photo_url,
         "rider_photo_url": photo_url,
         "photo_url": photo_url,
         "profile_picture": photo_url,
@@ -3143,6 +3144,7 @@ def order_to_dict(order: DBOrder) -> dict:
         "rider_vehicle_number": getattr(order, "rider_vehicle_number", "") or "",
         "rider_photo_url": getattr(order, "rider_photo_url", "") or "",
         "rider_photo": getattr(order, "rider_photo_url", "") or "",
+        "profile_photo_url": getattr(order, "rider_photo_url", "") or "",
         "delivery_assigned_at": iso(getattr(order, "delivery_assigned_at", None)),
         "delivery_started_at": iso(getattr(order, "delivery_started_at", None)),
         "delivery_completed_at": iso(getattr(order, "delivery_completed_at", None)),
@@ -6484,7 +6486,6 @@ async def delivery_worker_signup(
             verified_birthdate=nin_data.get("birthdate") or "",
             verified_photo_url="",
             selfie_url=selfie_url,
-            profile_photo_url=selfie_url,
             id_document_url=id_document_url,
             vehicle_type=(vehicle_type or "").strip() if worker_type == "rider" else "Walker",
             partner_company=(partner_company or "").strip() if worker_type == "rider" else "",
@@ -7641,7 +7642,6 @@ async def delivery_onboarding_document(
             }))
         if clean_type == "selfie":
             worker.selfie_url = url
-            worker.profile_photo_url = worker.profile_photo_url or url
         elif clean_type == "driver_license":
             worker.id_document_url = url
         document_key = "address_proof" if clean_type == "proof_of_address" else clean_type
@@ -7724,6 +7724,105 @@ async def delivery_upload_document(
     if not mapped_type:
         raise HTTPException(status_code=400, detail="Upload one valid government ID document.")
     return await delivery_onboarding_document(request, document_type=mapped_type, document=document)
+
+
+@app.post("/delivery/profile-photo")
+async def delivery_upload_profile_photo(request: Request, file: UploadFile = File(...)):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        print("PROFILE_PHOTO_UPLOAD_START", json_dump({
+            "route": str(request.url.path),
+            "user_id": user.get("id"),
+            "worker_id": getattr(worker, "id", None),
+            "filename": getattr(file, "filename", ""),
+            "content_type": getattr(file, "content_type", ""),
+            "existing_profile_photo": bool(getattr(worker, "profile_photo_url", "")),
+            "selfie_url_present": bool(getattr(worker, "selfie_url", "")),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        if not file or not file.filename:
+            raise HTTPException(status_code=400, detail="Select a profile photo to upload.")
+        if file.content_type not in IMAGE_CONTENT_TYPES:
+            raise HTTPException(status_code=400, detail="Only JPG, PNG, or WEBP profile photos are allowed.")
+        photo_url = await save_workforce_upload(file, allow_pdf=False, folder="foodnova/workforce/profile-photos")
+        if not photo_url:
+            raise HTTPException(status_code=400, detail="Unable to upload profile photo.")
+        worker.profile_photo_url = photo_url
+        meta = delivery_worker_review_meta(worker)
+        meta["profile_photo"] = {
+            "url": photo_url,
+            "uploaded_at": iso(datetime.utcnow()),
+            "filename": file.filename or "",
+            "content_type": file.content_type or "",
+        }
+        worker.review_note = json_dump(meta)
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        print("PROFILE_PHOTO_UPLOAD_RESPONSE", json_dump({
+            "route": str(request.url.path),
+            "worker_id": getattr(worker, "id", None),
+            "success": True,
+            "profile_photo_url_present": bool(data.get("profile_photo_url")),
+            "display_photo_url_present": bool(data.get("rider_photo_url")),
+            "selfie_url_present": bool(data.get("selfie_url")),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        return {"success": True, "profile_photo_url": photo_url, "worker": data, "data": data}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as error:
+        db.rollback()
+        log_backend_exception("PROFILE_PHOTO_UPLOAD_ERROR", error, route=str(request.url.path), worker_id=getattr(worker, "id", None), user_id=user.get("id"))
+        return JSONResponse(status_code=500, content={"success": False, "error": "Unable to update profile photo. Please try again shortly."})
+    finally:
+        db.close()
+
+
+@app.delete("/delivery/profile-photo")
+def delivery_remove_profile_photo(request: Request):
+    db, user, worker = get_delivery_worker_record_for_request(request)
+    try:
+        print("PROFILE_PHOTO_REMOVE_START", json_dump({
+            "route": str(request.url.path),
+            "user_id": user.get("id"),
+            "worker_id": getattr(worker, "id", None),
+            "profile_photo_url_present": bool(getattr(worker, "profile_photo_url", "")),
+            "selfie_url_present": bool(getattr(worker, "selfie_url", "")),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        meta = delivery_worker_review_meta(worker)
+        meta["profile_photo"] = {
+            "url": "",
+            "removed_at": iso(datetime.utcnow()),
+        }
+        worker.review_note = json_dump(meta)
+        worker.profile_photo_url = ""
+        worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(worker)
+        data = worker_to_dict(worker)
+        print("PROFILE_PHOTO_REMOVE_RESPONSE", json_dump({
+            "route": str(request.url.path),
+            "worker_id": getattr(worker, "id", None),
+            "success": True,
+            "profile_photo_url_present": bool(data.get("profile_photo_url")),
+            "display_photo_url_present": bool(data.get("rider_photo_url")),
+            "selfie_url_present": bool(data.get("selfie_url")),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        return {"success": True, "worker": data, "data": data}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as error:
+        db.rollback()
+        log_backend_exception("PROFILE_PHOTO_REMOVE_ERROR", error, route=str(request.url.path), worker_id=getattr(worker, "id", None), user_id=user.get("id"))
+        return JSONResponse(status_code=500, content={"success": False, "error": "Unable to remove profile photo. Please try again shortly."})
+    finally:
+        db.close()
 
 
 @app.post("/delivery/onboarding/training")
@@ -7844,7 +7943,6 @@ async def delivery_identity_kyc(
         worker.id_number = worker.id_number or clean_nin[-4:]
         worker.nin_last4 = clean_nin[-4:]
         worker.selfie_url = selfie_url
-        worker.profile_photo_url = worker.profile_photo_url or selfie_url
         if (worker.kyc_status or "") in ["", "NOT_STARTED", "KYC_NOT_STARTED"]:
             worker.kyc_status = "KYC_PENDING"
         existing_identity = (delivery_worker_review_meta(worker).get("identity_verification") or {})

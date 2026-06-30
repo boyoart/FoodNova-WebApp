@@ -153,6 +153,47 @@ class DispatchRepository {
     );
   }
 
+  Future<RiderProfile> uploadProfilePhoto(String path) async {
+    debugPrint('PROFILE_PHOTO_UPLOAD_START endpoint=/delivery/profile-photo');
+    late final Response<dynamic> response;
+    try {
+      final form = FormData.fromMap({
+        'file': await MultipartFile.fromFile(path),
+      });
+      response = await _dio.post('/delivery/profile-photo', data: form);
+    } on DioException catch (error) {
+      debugPrint(
+        'PROFILE_PHOTO_UPLOAD_FAILURE status=${error.response?.statusCode} '
+        'body=${error.response?.data}',
+      );
+      throw Exception(apiMessage(error));
+    }
+    debugPrint('PROFILE_PHOTO_UPLOAD_RESPONSE ${response.data}');
+    final data = response.data as Map;
+    return RiderProfile(
+      Map<String, dynamic>.from(data['worker'] ?? data['data'] ?? {}),
+    );
+  }
+
+  Future<RiderProfile> removeProfilePhoto() async {
+    debugPrint('PROFILE_PHOTO_REMOVE_START endpoint=/delivery/profile-photo');
+    late final Response<dynamic> response;
+    try {
+      response = await _dio.delete('/delivery/profile-photo');
+    } on DioException catch (error) {
+      debugPrint(
+        'PROFILE_PHOTO_REMOVE_FAILURE status=${error.response?.statusCode} '
+        'body=${error.response?.data}',
+      );
+      throw Exception(apiMessage(error));
+    }
+    debugPrint('PROFILE_PHOTO_REMOVE_RESPONSE ${response.data}');
+    final data = response.data as Map;
+    return RiderProfile(
+      Map<String, dynamic>.from(data['worker'] ?? data['data'] ?? {}),
+    );
+  }
+
   Future<void> pingLocation(Map<String, dynamic> location) {
     debugPrint('LOCATION_PING $location');
     return _dio

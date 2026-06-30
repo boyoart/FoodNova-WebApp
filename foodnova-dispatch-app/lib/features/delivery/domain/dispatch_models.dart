@@ -6,8 +6,11 @@ class RiderProfile {
   String get name => '${raw['full_name'] ?? raw['name'] ?? ''}'.trim();
   String get phone => '${raw['phone'] ?? ''}';
   String get email => '${raw['email'] ?? ''}';
+  String get customProfilePhotoUrl =>
+      '${raw['profile_photo_url'] ?? ''}'.trim();
+  String get selfieUrl => '${raw['selfie_url'] ?? ''}'.trim();
   String get profilePhotoUrl =>
-      '${raw['rider_photo_url'] ?? raw['profile_photo_url'] ?? raw['selfie_url'] ?? raw['photo_url'] ?? raw['profile_picture'] ?? ''}'
+      '${raw['profile_photo_url'] ?? raw['rider_photo_url'] ?? raw['selfie_url'] ?? raw['photo_url'] ?? raw['profile_picture'] ?? ''}'
           .trim();
   String get vehicleType => '${raw['vehicle_type'] ?? ''}';
   String get workerType =>

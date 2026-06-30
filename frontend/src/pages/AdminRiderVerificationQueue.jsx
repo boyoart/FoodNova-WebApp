@@ -39,7 +39,15 @@ function riskLevel(item) {
 }
 
 function riderPhotoUrl(worker = {}) {
-  return String(worker.rider_photo_url || worker.profile_photo_url || worker.selfie_url || worker.photo_url || '').trim()
+  return String(worker.profile_photo_url || worker.rider_photo_url || worker.selfie_url || worker.photo_url || '').trim()
+}
+
+function profilePhotoUrl(worker = {}) {
+  return String(worker.profile_photo_url || '').trim()
+}
+
+function selfiePhotoUrl(worker = {}) {
+  return String(worker.selfie_url || '').trim()
 }
 
 function riderInitial(worker = {}) {
@@ -300,26 +308,40 @@ export default function AdminRiderVerificationQueue() {
                 ))}
               </div>
               {detailTab === 'information' && (
-                <div className="rider-information-table">
-                  <div><strong>Worker Type</strong><span>{selected.worker.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</span></div>
-                  {canManage && (
-                    <label>
-                      <strong>Edit Worker Type</strong>
-                      <select value={selected.worker.worker_type === 'messenger' ? 'messenger' : 'rider'} onChange={(event) => updateSelectedWorkerType(event.target.value)} disabled={actionSaving}>
-                        <option value="rider">Delivery Rider</option>
-                        <option value="messenger">Messenger</option>
-                      </select>
-                    </label>
-                  )}
-                  <div><strong>Vehicle Type</strong><span>{selected.worker.vehicle_type || 'Not applicable'}</span></div>
-                  <div><strong>Plate Number</strong><span>{selected.worker.plate_number || 'Not applicable'}</span></div>
-                  <div><strong>Status</strong><span className="soft-success">{label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</span></div>
-                  <div><strong>NIN Status</strong><span>{selected.kyc?.nin_verified ? `****${selected.kyc?.nin_last4 || selected.worker.nin_last4 || ''}` : label(selected.kyc?.identity_status || 'not_started')}</span></div>
-                  <div><strong>Selfie Verification Status</strong><span>{riderPhotoUrl(selected.worker) ? '✓ Verified' : 'Pending'}</span></div>
-                  <div><strong>Government ID Verification Status</strong><span>{selected.worker.id_document_url ? '✓ Verified' : 'Pending'}</span></div>
-                  <div><strong>Address</strong><span>{selected.worker.home_address || label(selected.kyc?.address_status)}</span></div>
-                  <div><strong>Risk</strong><span>{riskLevel(selected)}</span></div>
-                </div>
+                <>
+                  <div className="rider-photo-compare">
+                    <div>
+                      <span>Profile Photo</span>
+                      {profilePhotoUrl(selected.worker) ? <img src={resolveMediaUrl(profilePhotoUrl(selected.worker))} alt="Rider profile" /> : <strong>{riderInitial(selected.worker)}</strong>}
+                      <p>Editable public rider photo.</p>
+                    </div>
+                    <div>
+                      <span>Verified Selfie</span>
+                      {selfiePhotoUrl(selected.worker) ? <img src={resolveMediaUrl(selfiePhotoUrl(selected.worker))} alt="Verified selfie" /> : <strong>Pending</strong>}
+                      <p>KYC selfie from onboarding.</p>
+                    </div>
+                  </div>
+                  <div className="rider-information-table">
+                    <div><strong>Worker Type</strong><span>{selected.worker.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</span></div>
+                    {canManage && (
+                      <label>
+                        <strong>Edit Worker Type</strong>
+                        <select value={selected.worker.worker_type === 'messenger' ? 'messenger' : 'rider'} onChange={(event) => updateSelectedWorkerType(event.target.value)} disabled={actionSaving}>
+                          <option value="rider">Delivery Rider</option>
+                          <option value="messenger">Messenger</option>
+                        </select>
+                      </label>
+                    )}
+                    <div><strong>Vehicle Type</strong><span>{selected.worker.vehicle_type || 'Not applicable'}</span></div>
+                    <div><strong>Plate Number</strong><span>{selected.worker.plate_number || 'Not applicable'}</span></div>
+                    <div><strong>Status</strong><span className="soft-success">{label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</span></div>
+                    <div><strong>NIN Status</strong><span>{selected.kyc?.nin_verified ? `****${selected.kyc?.nin_last4 || selected.worker.nin_last4 || ''}` : label(selected.kyc?.identity_status || 'not_started')}</span></div>
+                    <div><strong>Selfie Verification Status</strong><span>{selfiePhotoUrl(selected.worker) ? '✓ Verified' : 'Pending'}</span></div>
+                    <div><strong>Government ID Verification Status</strong><span>{selected.worker.id_document_url ? '✓ Verified' : 'Pending'}</span></div>
+                    <div><strong>Address</strong><span>{selected.worker.home_address || label(selected.kyc?.address_status)}</span></div>
+                    <div><strong>Risk</strong><span>{riskLevel(selected)}</span></div>
+                  </div>
+                </>
               )}
               {detailTab === 'documents' && (
                 <>

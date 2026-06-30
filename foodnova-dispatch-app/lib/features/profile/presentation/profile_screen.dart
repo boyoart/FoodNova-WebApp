@@ -1,17 +1,148 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../config/app_config.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../delivery/data/dispatch_repository.dart';
 import '../../delivery/domain/dispatch_models.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  final ImagePicker _picker = ImagePicker();
+  bool _photoSaving = false;
+
+  Future<void> _showPhotoActions(RiderProfile rider) async {
+    if (_photoSaving) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Profile photo',
+                  style: Theme.of(sheetContext)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'This updates your public rider profile photo. Your verified onboarding selfie stays unchanged for KYC.',
+                  style: Theme.of(sheetContext).textTheme.bodyMedium?.copyWith(
+                        color:
+                            Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_rounded),
+                  title: const Text('Take Photo'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickAndUploadPhoto(ImageSource.camera);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_rounded),
+                  title: const Text('Choose From Gallery'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickAndUploadPhoto(ImageSource.gallery);
+                  },
+                ),
+                if (rider.customProfilePhotoUrl.isNotEmpty)
+                  ListTile(
+                    leading: Icon(
+                      Icons.delete_outline_rounded,
+                      color: Theme.of(sheetContext).colorScheme.error,
+                    ),
+                    title: Text(
+                      'Remove Photo',
+                      style: TextStyle(
+                        color: Theme.of(sheetContext).colorScheme.error,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _removeProfilePhoto();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _pickAndUploadPhoto(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        imageQuality: 78,
+        maxWidth: 1200,
+        maxHeight: 1200,
+      );
+      if (picked == null) return;
+      setState(() => _photoSaving = true);
+      await ref
+          .read(dispatchRepositoryProvider)
+          .uploadProfilePhoto(picked.path);
+      ref.invalidate(riderProfileProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo updated.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _photoSaving = false);
+    }
+  }
+
+  Future<void> _removeProfilePhoto() async {
+    try {
+      setState(() => _photoSaving = true);
+      await ref.read(dispatchRepositoryProvider).removeProfilePhoto();
+      ref.invalidate(riderProfileProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile photo removed.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _photoSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profile = ref.watch(riderProfileProvider);
     return PopScope(
       canPop: false,
@@ -24,6 +155,8 @@ class ProfileScreen extends ConsumerWidget {
         body: profile.when(
           data: (rider) => _ProfileBody(
             rider: rider,
+            photoSaving: _photoSaving,
+            onEditPhoto: () => _showPhotoActions(rider),
             onLogout: () async {
               await ref.read(authRepositoryProvider).logout();
               if (context.mounted) context.go('/login');
@@ -75,9 +208,16 @@ class _ProfileTabBar extends StatelessWidget {
 }
 
 class _ProfileBody extends StatelessWidget {
-  const _ProfileBody({required this.rider, required this.onLogout});
+  const _ProfileBody({
+    required this.rider,
+    required this.photoSaving,
+    required this.onEditPhoto,
+    required this.onLogout,
+  });
 
   final RiderProfile rider;
+  final bool photoSaving;
+  final VoidCallback onEditPhoto;
   final Future<void> Function() onLogout;
 
   @override
@@ -92,6 +232,8 @@ class _ProfileBody extends StatelessWidget {
             rider: rider,
             photoUrl: photo,
             status: status,
+            photoSaving: photoSaving,
+            onEditPhoto: onEditPhoto,
           ),
         ),
         SliverPadding(
@@ -162,9 +304,7 @@ class _ProfileBody extends StatelessWidget {
                     _InfoRow(
                       icon: Icons.camera_alt_outlined,
                       label: 'Selfie',
-                      value: rider.profilePhotoUrl.isEmpty
-                          ? 'Missing'
-                          : 'Verified',
+                      value: rider.selfieUrl.isEmpty ? 'Missing' : 'Verified',
                       valueChip: true,
                     ),
                     _InfoRow(
@@ -210,11 +350,15 @@ class _ProfileHero extends StatelessWidget {
     required this.rider,
     required this.photoUrl,
     required this.status,
+    required this.photoSaving,
+    required this.onEditPhoto,
   });
 
   final RiderProfile rider;
   final String photoUrl;
   final String status;
+  final bool photoSaving;
+  final VoidCallback onEditPhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -257,9 +401,9 @@ class _ProfileHero extends StatelessWidget {
                 ),
               ),
               IconButton(
-                onPressed: null,
+                onPressed: photoSaving ? null : onEditPhoto,
                 icon: const Icon(Icons.edit_rounded),
-                color: Colors.white70,
+                color: Colors.white,
                 tooltip: 'Edit profile',
               ),
             ],
@@ -302,18 +446,30 @@ class _ProfileHero extends StatelessWidget {
               Positioned(
                 right: 2,
                 bottom: 6,
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFFE8F5EE)),
-                  ),
-                  child: const Icon(
-                    Icons.camera_alt_rounded,
-                    color: Color(0xFF087A34),
-                    size: 19,
+                child: Tooltip(
+                  message: 'Edit profile photo',
+                  child: InkWell(
+                    onTap: photoSaving ? null : onEditPhoto,
+                    customBorder: const CircleBorder(),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE8F5EE)),
+                      ),
+                      child: photoSaving
+                          ? const Padding(
+                              padding: EdgeInsets.all(9),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(
+                              Icons.camera_alt_rounded,
+                              color: Color(0xFF087A34),
+                              size: 19,
+                            ),
+                    ),
                   ),
                 ),
               ),

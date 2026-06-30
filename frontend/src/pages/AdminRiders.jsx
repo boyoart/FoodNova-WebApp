@@ -22,7 +22,7 @@ const displayStatus = (status = '') => String(status || 'ONBOARDING').toUpperCas
 
 const statusClass = (status = '') => displayStatus(status).toLowerCase()
 
-const riderPhotoUrl = (rider = {}) => String(rider.rider_photo_url || rider.profile_photo_url || rider.selfie_url || rider.photo_url || '').trim()
+const riderPhotoUrl = (rider = {}) => String(rider.profile_photo_url || rider.rider_photo_url || rider.selfie_url || rider.photo_url || '').trim()
 
 const riderInitial = (rider = {}) => String(rider.full_name || rider.name || 'R').trim().slice(0, 1).toUpperCase() || 'R'
 
