@@ -236,7 +236,6 @@ export const adminAPI = {
     const response = await api.patch(`/admin/orders/${id}`, {
       ...payload,
       payment_status: payload.payment_status || payload.status,
-      status: payload.status || payload.payment_status,
     });
     return response.data;
   },

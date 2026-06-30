@@ -252,6 +252,19 @@ export default function AdminOrders() {
     }
   }
 
+  const handleConfirmOrder = async (orderId) => {
+    try {
+      await adminAPI.updateFulfillmentStatus(orderId, {
+        order_status: 'processing',
+        fulfillment_status: 'processing',
+      })
+      toast.success('Order confirmed for dispatch')
+      fetchOrders()
+    } catch (error) {
+      toast.error('Failed to confirm order')
+    }
+  }
+
   const toggleOrderSelection = (orderId) => {
     const id = Number(orderId)
     if (!id) return
@@ -725,6 +738,14 @@ export default function AdminOrders() {
                       >
                         Details
                       </button>
+                      {paymentStatus === 'payment_confirmed' && orderStatus === 'order_placed' && (
+                        <button
+                          className="btn-view"
+                          onClick={() => handleConfirmOrder(order.id)}
+                        >
+                          Confirm Order
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )
@@ -993,6 +1014,16 @@ export default function AdminOrders() {
                       </option>
                     ))}
                   </select>
+                  {(selectedOrder.payment_status || selectedOrder.status) === 'payment_confirmed' &&
+                    (selectedOrder.order_status || selectedOrder.fulfillment_status || selectedOrder.status || 'order_placed') === 'order_placed' && (
+                      <button
+                        type="button"
+                        className="btn-view"
+                        onClick={() => handleConfirmOrder(selectedOrder.id)}
+                      >
+                        Confirm Order
+                      </button>
+                    )}
                 </div>
               </div>
 

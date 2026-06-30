@@ -11459,6 +11459,23 @@ def update_order(order_id: int, payload: dict, request: Request):
         old_fulfillment_status = order.fulfillment_status
         old_admin_note = order.admin_note
         old_service_note = order.service_note
+        print("ADMIN_ORDER_ACTION", json_dump({
+            "order_id": order.id,
+            "order_code": order.order_code,
+            "admin_id": admin.get("id"),
+            "payload_keys": sorted(list(payload.keys())),
+            "payment_update_requested": bool(payment_update_requested),
+            "order_update_requested": bool(order_update_requested),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+        print("ORDER_STATUS_BEFORE", json_dump({
+            "order_id": order.id,
+            "status": old_status,
+            "payment_status": old_payment_status,
+            "order_status": old_order_status,
+            "fulfillment_status": old_fulfillment_status,
+            "dispatch_status": canonical_dispatch_status(order),
+        }))
 
         generated_delivery_code = False
         new_status = payload.get("status") or payload.get("order_status") or payload.get("fulfillment_status")
@@ -11472,12 +11489,29 @@ def update_order(order_id: int, payload: dict, request: Request):
             "status", "payment_status", "order_status", "fulfillment_status", "admin_note", "service_note",
         }
         for key, value in payload.items():
+            if key == "status" and str(value or "") in ["payment_confirmed", "payment_rejected", "receipt_submitted"]:
+                continue
             if key in allowed_fields:
                 setattr(order, key, value)
             elif key == "delivery_address_snapshot":
                 order.delivery_address_snapshot = json_dump(value)
             elif key == "receipt":
                 order.receipt = json_dump(value)
+        if order.payment_status == "payment_confirmed" and (order.delivery_method or "delivery") == "delivery":
+            dispatch_admin_statuses = {"order_placed", "pending_payment", "receipt_submitted", "payment_confirmed", "", None}
+            if (order.order_status in dispatch_admin_statuses and
+                    order.fulfillment_status in dispatch_admin_statuses and
+                    order.status in dispatch_admin_statuses):
+                order.status = "processing"
+                order.order_status = "processing"
+                order.fulfillment_status = "processing"
+            elif order.order_status in dispatch_admin_statuses and order.fulfillment_status in dispatch_admin_statuses:
+                order.order_status = "processing"
+                order.fulfillment_status = "processing"
+            elif order.order_status in dispatch_admin_statuses:
+                order.order_status = "processing"
+            elif order.fulfillment_status in dispatch_admin_statuses:
+                order.fulfillment_status = "processing"
         if order.order_status == "out_for_delivery" or order.fulfillment_status == "out_for_delivery" or order.status == "out_for_delivery":
             order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
         if order.order_status == "delivered" or order.fulfillment_status == "delivered" or order.status == "delivered":
@@ -11486,6 +11520,14 @@ def update_order(order_id: int, payload: dict, request: Request):
         db.commit()
         db.refresh(order)
         order_data = order_to_dict(order)
+        print("ORDER_STATUS_AFTER", json_dump({
+            "order_id": order.id,
+            "status": order.status,
+            "payment_status": order.payment_status,
+            "order_status": order.order_status,
+            "fulfillment_status": order.fulfillment_status,
+            "dispatch_status": canonical_dispatch_status(order),
+        }))
 
         if order_data.get("customer_email"):
             notified_statuses = set()
@@ -11577,6 +11619,18 @@ def update_order(order_id: int, payload: dict, request: Request):
             payment_log = create_payment_approval_log(db, request, admin, order, "payment_confirmed", old_payment_status, order.payment_status, note=note)
             if (order.delivery_method or "delivery") == "delivery":
                 classify_and_save_order_delivery(order, db)
+                gate_ok, gate_reason = delivery_order_ready_for_matching(order)
+                print("DISPATCH_MATCHING_GATE", json_dump({
+                    "order_id": order.id,
+                    "order_code": order.order_code,
+                    "ready": gate_ok,
+                    "reason": gate_reason,
+                    "payment_status": order.payment_status,
+                    "order_status": order.order_status,
+                    "fulfillment_status": order.fulfillment_status,
+                    "status": order.status,
+                    "dispatch_status": canonical_dispatch_status(order),
+                }))
                 start_delivery_matching(db, order, request)
             db.commit()
             db.refresh(payment_log)
@@ -11607,6 +11661,18 @@ def update_order(order_id: int, payload: dict, request: Request):
             safe_email_call("customer_delivered", send_customer_order_email, order_data, "delivered")
         if "processing" in delivery_statuses and (order.delivery_method or "delivery") == "delivery":
             classify_and_save_order_delivery(order, db)
+            gate_ok, gate_reason = delivery_order_ready_for_matching(order)
+            print("DISPATCH_MATCHING_GATE", json_dump({
+                "order_id": order.id,
+                "order_code": order.order_code,
+                "ready": gate_ok,
+                "reason": gate_reason,
+                "payment_status": order.payment_status,
+                "order_status": order.order_status,
+                "fulfillment_status": order.fulfillment_status,
+                "status": order.status,
+                "dispatch_status": canonical_dispatch_status(order),
+            }))
             start_delivery_matching(db, order, request)
             db.commit()
             db.refresh(order)
