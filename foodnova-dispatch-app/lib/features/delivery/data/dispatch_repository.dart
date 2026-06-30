@@ -217,6 +217,7 @@ class DispatchRepository {
 
   Future<List<DeliveryOffer>> offers() async {
     final response = await _dio.get('/delivery/offers');
+    debugPrint('DELIVERY_OFFERS_RESPONSE ${response.data}');
     final body = response.data as Map;
     final items = (body['offers'] ?? body['data'] ?? []) as List;
     return items
@@ -234,7 +235,7 @@ class DispatchRepository {
   }
 
   Future<DeliveryOffer> accept(int offerId) async {
-    debugPrint('DELIVERY_OFFER_ACCEPT_REQUEST offerId=$offerId');
+    debugPrint('DELIVERY_ACCEPT_REQUEST offerId=$offerId');
     late final Response<dynamic> response;
     try {
       response = await _dio.post('/delivery/offers/$offerId/accept');
@@ -254,7 +255,7 @@ class DispatchRepository {
   }
 
   Future<void> decline(int offerId) async {
-    debugPrint('DELIVERY_OFFER_DECLINE_REQUEST offerId=$offerId');
+    debugPrint('DELIVERY_DECLINE_REQUEST offerId=$offerId');
     try {
       final response = await _dio.post('/delivery/offers/$offerId/decline');
       debugPrint('DELIVERY_OFFER_DECLINE_RESPONSE ${response.data}');

@@ -3669,6 +3669,15 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
     )
     db.add(offer)
     db.flush()
+    print("DELIVERY_OFFER_CREATED", json_dump({
+        "offer_id": offer.id,
+        "order_id": order.id,
+        "order_code": order.order_code,
+        "worker_id": worker.id,
+        "worker_type": worker.worker_type,
+        "delivery_type": offer.delivery_type,
+        "expires_at": iso(offer.expires_at),
+    }))
     _create_user_notification(
         worker.email,
         "New delivery request available",
@@ -3762,8 +3771,18 @@ DELIVERY_MATCH_READY_PAYMENTS = {
     "paid",
     "successful",
     "success",
+    "pending_payment",
+    "pending",
+    "receipt_submitted",
+    "submitted",
 }
 DELIVERY_MATCH_READY_STATUSES = {
+    "order_placed",
+    "placed",
+    "new",
+    "pending",
+    "pending_payment",
+    "receipt_submitted",
     "processing",
     "confirmed",
     "ready",
@@ -3772,6 +3791,14 @@ DELIVERY_MATCH_READY_STATUSES = {
     "out_for_delivery",
 }
 DELIVERY_MATCH_TERMINAL_STATUSES = {"delivered", "cancelled", "canceled", "refunded"}
+DELIVERY_MATCH_BLOCKED_PAYMENTS = {
+    "payment_rejected",
+    "rejected",
+    "failed",
+    "cancelled",
+    "canceled",
+    "refunded",
+}
 
 
 def delivery_order_ready_for_matching(order: DBOrder) -> tuple[bool, str]:
@@ -3790,11 +3817,13 @@ def delivery_order_ready_for_matching(order: DBOrder) -> tuple[bool, str]:
     if statuses.intersection(DELIVERY_MATCH_TERMINAL_STATUSES):
         return False, "terminal_order_status"
     payment_status = str(getattr(order, "payment_status", "") or "").strip().lower()
-    if payment_status not in DELIVERY_MATCH_READY_PAYMENTS:
-        return False, f"payment_not_ready_{payment_status or 'missing'}"
+    if payment_status in DELIVERY_MATCH_BLOCKED_PAYMENTS:
+        return False, f"payment_blocked_{payment_status}"
     if statuses.intersection(DELIVERY_MATCH_READY_STATUSES):
         return True, "ready_status"
-    return True, "payment_confirmed"
+    if payment_status in DELIVERY_MATCH_READY_PAYMENTS:
+        return True, "payment_ready"
+    return False, f"order_not_ready_statuses_{','.join(sorted(statuses)) or 'missing'}"
 
 
 def auto_match_ready_delivery_orders(db, request: Request = None, reason: str = "unspecified", limit: int = 50) -> dict:
@@ -3808,12 +3837,24 @@ def auto_match_ready_delivery_orders(db, request: Request = None, reason: str = 
     stats = {"scanned": 0, "eligible": 0, "created": 0, "existing": 0, "no_worker": 0, "skipped": 0}
     orders = active_order_filter(db.query(DBOrder)).filter(
         DBOrder.delivery_method == "delivery",
-    ).order_by(DBOrder.created_at.asc(), DBOrder.id.asc()).limit(limit).all()
+    ).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).limit(limit).all()
     for order in orders:
         stats["scanned"] += 1
         ready, ready_reason = delivery_order_ready_for_matching(order)
         if not ready:
             stats["skipped"] += 1
+            print("AUTO_ASSIGNMENT_ORDER_SKIPPED", json_dump({
+                "order_id": order.id,
+                "order_code": order.order_code,
+                "reason": ready_reason,
+                "status": getattr(order, "status", ""),
+                "order_status": getattr(order, "order_status", ""),
+                "fulfillment_status": getattr(order, "fulfillment_status", ""),
+                "payment_status": getattr(order, "payment_status", ""),
+                "delivery_status": getattr(order, "delivery_status", ""),
+                "delivery_worker_id": getattr(order, "delivery_worker_id", None),
+                "rider_id": getattr(order, "rider_id", None),
+            }))
             continue
         stats["eligible"] += 1
         before = db.query(DBDeliveryOffer).filter(
@@ -8922,6 +8963,14 @@ def get_worker_delivery_offers(request: Request):
         for offer in offers:
             order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
             items.append(delivery_offer_to_dict(offer, worker, order))
+        print("DELIVERY_OFFERS_RESPONSE", json_dump({
+            "worker_id": worker.id,
+            "worker_status": worker.operational_status,
+            "offer_count": len(items),
+            "offer_ids": [item.get("id") for item in items],
+            "order_ids": [item.get("order_id") for item in items],
+            "statuses": [item.get("status") for item in items],
+        }))
         return {"success": True, "offers": items, "data": items}
     finally:
         db.close()

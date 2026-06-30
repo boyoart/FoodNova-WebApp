@@ -665,6 +665,12 @@ class _OfferCardState extends ConsumerState<_OfferCard> {
   @override
   Widget build(BuildContext context) {
     final busy = _accepting || _declining;
+    debugPrint(
+      'DELIVERY_OFFER_RENDERED offerId=${offer.id} '
+      'orderId=${offer.orderId} status=${offer.status}',
+    );
+    debugPrint('DELIVERY_ACCEPT_BUTTON_RENDERED offerId=${offer.id}');
+    debugPrint('DELIVERY_DECLINE_BUTTON_RENDERED offerId=${offer.id}');
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: FnCard(
