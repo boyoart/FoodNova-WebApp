@@ -54,6 +54,7 @@ export default function AdminRiderVerificationQueue() {
   const [filters, setFilters] = useState({ status: 'all', stage: 'all', search: '' })
   const [reviewAction, setReviewAction] = useState('')
   const [reviewNote, setReviewNote] = useState('')
+  const [detailTab, setDetailTab] = useState('information')
   const [actionSaving, setActionSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [balance, setBalance] = useState(null)
@@ -257,7 +258,7 @@ export default function AdminRiderVerificationQueue() {
                       </td>
                       <td><span className={`worker-status ${chip(worker.kyc_status)}`}>{label(worker.kyc_status || item.rider?.status || 'KYC_PENDING')}</span></td>
                       <td>{worker.created_at ? new Date(worker.created_at).toLocaleDateString() : 'N/A'}</td>
-                      <td><button type="button" onClick={() => setSelected(item)}>Review</button></td>
+                      <td><button type="button" onClick={() => { setSelected(item); setDetailTab('information') }}>Review</button></td>
                     </tr>
                   )
                 })}
@@ -272,75 +273,90 @@ export default function AdminRiderVerificationQueue() {
             <div className="empty-detail"><ShieldCheck size={28} /><p>Select a rider to review profile, NIN result, documents, selfie, and activity history.</p></div>
           ) : (
             <>
-              <div className="workforce-card-head">
-                <div className="workforce-head-identity">
-                  <span className="rider-avatar rider-avatar-large">{riderPhotoUrl(selected.worker) ? <img src={resolveMediaUrl(riderPhotoUrl(selected.worker))} alt="" /> : riderInitial(selected.worker)}</span>
-                  <div>
-                    <h2>{selected.worker.full_name}</h2>
-                    <p>{label(selected.kyc?.onboarding_stage)} - {selected.worker.phone}</p>
-                  </div>
+              <div className="rider-detail-hero-card">
+                <span className="rider-detail-photo">{riderPhotoUrl(selected.worker) ? <img src={resolveMediaUrl(riderPhotoUrl(selected.worker))} alt="" /> : riderInitial(selected.worker)}</span>
+                <div className="rider-detail-identity">
+                  <h2>{selected.worker.full_name}</h2>
+                  <span className="rider-type-pill">{selected.worker.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</span>
+                  <p>Rider ID: {selected.worker.rider_id || `FN-RDR-${selected.worker.id}`}</p>
+                  <p>{selected.worker.email || 'No email'}</p>
+                  <p>{selected.worker.phone || 'No phone'}</p>
+                  <p>Joined: {selected.worker.created_at ? new Date(selected.worker.created_at).toLocaleDateString() : 'N/A'}</p>
+                  <p className={`approval-line ${chip(selected.worker.kyc_status).toLowerCase()}`}>● {label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</p>
+                  {canManage && (
+                    <div className="rider-detail-actions">
+                      <button type="button" disabled={actionSaving} onClick={() => runReviewAction('approve')}><UserCheck size={16} /> Approve</button>
+                      <button type="button" disabled={actionSaving} onClick={() => runReviewAction('reject')}><UserX size={16} /> Reject</button>
+                      <button type="button" disabled={actionSaving} onClick={() => runReviewAction('suspend')}><PauseCircle size={16} /> Suspend</button>
+                      <button type="button" disabled={actionSaving} onClick={() => runReviewAction('reactivate')}><RotateCcw size={16} /> Reactivate</button>
+                      <button type="button" className="danger-worker-button" disabled={actionSaving} onClick={() => setDeleteTarget(selected)}><Trash2 size={16} /> Delete Rider</button>
+                    </div>
+                  )}
                 </div>
-                <span className={`worker-status ${chip(selected.worker.kyc_status)}`}>{selected.worker.kyc_status}</span>
               </div>
-              <div className="worker-detail-grid">
-                <div><strong>Submitted NIN</strong><span>{selected.kyc.submitted_nin || (selected.kyc.nin_last4 ? `*******${selected.kyc.nin_last4}` : 'Not submitted')}</span></div>
-                <div><strong>Verification</strong><span>{selected.kyc.nin_verified ? 'Verified' : label(selected.kyc.identity_status)} {selected.kyc.provider_report_id || selected.worker.nin_report_id || 'No report'}</span></div>
-                <div><strong>Email</strong><span>{selected.worker.email || 'No email'}</span></div>
-                <div><strong>Approval status</strong><span>{label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</span></div>
-                <div><strong>Worker type</strong><span>{selected.worker.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</span></div>
-                {canManage && (
-                  <label>
-                    <strong>Edit worker type</strong>
-                    <select value={selected.worker.worker_type === 'messenger' ? 'messenger' : 'rider'} onChange={(event) => updateSelectedWorkerType(event.target.value)} disabled={actionSaving}>
-                      <option value="rider">Delivery Rider</option>
-                      <option value="messenger">Messenger</option>
-                    </select>
-                  </label>
-                )}
-                <div><strong>Vehicle type</strong><span>{selected.worker.vehicle_type || 'Not applicable'}</span></div>
-                <div><strong>Plate number</strong><span>{selected.worker.plate_number || 'Not applicable'}</span></div>
-                <div><strong>Registration date</strong><span>{selected.worker.created_at ? new Date(selected.worker.created_at).toLocaleString() : 'N/A'}</span></div>
-                <div><strong>Verified name</strong><span>{[selected.worker.verified_first_name, selected.worker.verified_middle_name, selected.worker.verified_surname].filter(Boolean).join(' ') || 'No provider name'}</span></div>
-                <div><strong>Provider phone</strong><span>{selected.worker.verified_phone || 'No provider phone'}</span></div>
-                <div><strong>Verified at</strong><span>{selected.kyc.timestamps?.identity_verified_at ? new Date(selected.kyc.timestamps.identity_verified_at).toLocaleString() : selected.kyc.timestamps?.last_verification_at ? new Date(selected.kyc.timestamps.last_verification_at).toLocaleString() : 'No verification timestamp'}</span></div>
-                <div><strong>Failed attempts</strong><span>{selected.kyc.failed_verification_attempts || 0}</span></div>
-                <div><strong>Residential address</strong><span>{selected.worker.home_address || label(selected.kyc.address_status)}</span></div>
-                <div><strong>GPS</strong><span>{selected.worker.latest_latitude ? `${selected.worker.latest_latitude}, ${selected.worker.latest_longitude}` : 'No GPS ping'}</span></div>
-                <div><strong>Risk</strong><span>{riskLevel(selected)}</span></div>
+              <div className="rider-detail-tabs">
+                {['information', 'documents', 'activity', 'earnings'].map((tab) => (
+                  <button key={tab} type="button" className={detailTab === tab ? 'active' : ''} onClick={() => setDetailTab(tab)}>{label(tab)}</button>
+                ))}
               </div>
-              {selected.worker.verified_photo_url && (
-                <div className="verified-photo-strip">
-                  <img src={resolveMediaUrl(selected.worker.verified_photo_url)} alt="" />
-                  <div><strong>Provider profile photo</strong><span>Returned by NINBVNPORTAL after successful verification.</span></div>
+              {detailTab === 'information' && (
+                <div className="rider-information-table">
+                  <div><strong>Worker Type</strong><span>{selected.worker.worker_type === 'messenger' ? 'Messenger' : 'Delivery Rider'}</span></div>
+                  {canManage && (
+                    <label>
+                      <strong>Edit Worker Type</strong>
+                      <select value={selected.worker.worker_type === 'messenger' ? 'messenger' : 'rider'} onChange={(event) => updateSelectedWorkerType(event.target.value)} disabled={actionSaving}>
+                        <option value="rider">Delivery Rider</option>
+                        <option value="messenger">Messenger</option>
+                      </select>
+                    </label>
+                  )}
+                  <div><strong>Vehicle Type</strong><span>{selected.worker.vehicle_type || 'Not applicable'}</span></div>
+                  <div><strong>Plate Number</strong><span>{selected.worker.plate_number || 'Not applicable'}</span></div>
+                  <div><strong>Status</strong><span className="soft-success">{label(selected.worker.kyc_status || selected.rider?.status || 'pending_review')}</span></div>
+                  <div><strong>NIN Status</strong><span>{selected.kyc?.nin_verified ? `****${selected.kyc?.nin_last4 || selected.worker.nin_last4 || ''}` : label(selected.kyc?.identity_status || 'not_started')}</span></div>
+                  <div><strong>Selfie Verification Status</strong><span>{riderPhotoUrl(selected.worker) ? '✓ Verified' : 'Pending'}</span></div>
+                  <div><strong>Government ID Verification Status</strong><span>{selected.worker.id_document_url ? '✓ Verified' : 'Pending'}</span></div>
+                  <div><strong>Address</strong><span>{selected.worker.home_address || label(selected.kyc?.address_status)}</span></div>
+                  <div><strong>Risk</strong><span>{riskLevel(selected)}</span></div>
                 </div>
               )}
+              {detailTab === 'documents' && (
+                <>
+                  {selected.worker.verified_photo_url && (
+                    <div className="verified-photo-strip">
+                      <img src={resolveMediaUrl(selected.worker.verified_photo_url)} alt="" />
+                      <div><strong>Provider profile photo</strong><span>Returned by NINBVNPORTAL after successful verification.</span></div>
+                    </div>
+                  )}
+                  <div className="document-link-row">
+                    {(selected.documents || []).map((doc) => <a key={doc.id} href={resolveMediaUrl(doc.url)} target="_blank" rel="noopener noreferrer">{label(doc.type)}</a>)}
+                    {!selected.documents?.length && <p>No uploaded documents yet.</p>}
+                  </div>
+                </>
+              )}
+              {detailTab === 'activity' && (
+                <>
+                  <h3>Verification response</h3>
+                  <div className="status-log-list">
+                    {(selected.verification_logs || []).slice(0, 4).map((log) => <p key={log.id}><strong>{log.provider}</strong> {log.success ? 'verified' : log.error_code || log.status} - {log.message || 'No message'}</p>)}
+                    {!selected.verification_logs?.length && <p>No provider log yet.</p>}
+                  </div>
+                  <h3>Activity history</h3>
+                  <div className="status-log-list">
+                    {(selected.status_logs || []).slice(0, 5).map((log) => <p key={log.id}><strong>{label(log.new_stage)}</strong> by {log.actor_name} - {log.created_at ? new Date(log.created_at).toLocaleString() : ''}</p>)}
+                  </div>
+                  <h3>Login history</h3>
+                  <div className="status-log-list">
+                    {(selected.login_history || []).slice(0, 4).map((session) => <p key={session.id}><strong>{session.active ? 'Active' : 'Revoked'}</strong> {session.device?.device_type || 'Device'} - {session.ip_address || 'No IP'} - {session.created_at ? new Date(session.created_at).toLocaleString() : ''}</p>)}
+                    {!selected.login_history?.length && <p>No rider session history yet.</p>}
+                  </div>
+                </>
+              )}
+              {detailTab === 'earnings' && <p className="verification-warning">FoodNova riders are paid directly by customers. No platform wallet or payout balance is tracked here.</p>}
               {selected.approval_blockers?.length > 0 && <p className="verification-warning"><strong>Blockers:</strong> {selected.approval_blockers.join(' ')}</p>}
-              <div className="document-link-row">
-                {(selected.documents || []).map((doc) => <a key={doc.id} href={resolveMediaUrl(doc.url)} target="_blank" rel="noopener noreferrer">{label(doc.type)}</a>)}
-              </div>
-              <h3>Verification response</h3>
-              <div className="status-log-list">
-                {(selected.verification_logs || []).slice(0, 4).map((log) => <p key={log.id}><strong>{log.provider}</strong> {log.success ? 'verified' : log.error_code || log.status} - {log.message || 'No message'}</p>)}
-                {!selected.verification_logs?.length && <p>No provider log yet.</p>}
-              </div>
-              <h3>Activity history</h3>
-              <div className="status-log-list">
-                {(selected.status_logs || []).slice(0, 5).map((log) => <p key={log.id}><strong>{label(log.new_stage)}</strong> by {log.actor_name} - {log.created_at ? new Date(log.created_at).toLocaleString() : ''}</p>)}
-              </div>
-              <h3>Login history</h3>
-              <div className="status-log-list">
-                {(selected.login_history || []).slice(0, 4).map((session) => <p key={session.id}><strong>{session.active ? 'Active' : 'Revoked'}</strong> {session.device?.device_type || 'Device'} - {session.ip_address || 'No IP'} - {session.created_at ? new Date(session.created_at).toLocaleString() : ''}</p>)}
-                {!selected.login_history?.length && <p>No rider session history yet.</p>}
-              </div>
               {canManage && (
                 <div className="worker-review-actions">
-                  <div className="rider-management-buttons">
-                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('approve')}><UserCheck size={16} /> Approve</button>
-                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('reject')}><UserX size={16} /> Reject</button>
-                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('suspend')}><PauseCircle size={16} /> Suspend</button>
-                    <button type="button" disabled={actionSaving} onClick={() => runReviewAction('reactivate')}><RotateCcw size={16} /> Reactivate</button>
-                    <button type="button" className="danger-worker-button" disabled={actionSaving} onClick={() => setDeleteTarget(selected)}><Trash2 size={16} /> Delete Permanently</button>
-                  </div>
                   <select value={reviewAction} onChange={(event) => setReviewAction(event.target.value)}>
                     <option value="">Select action</option>
                     <option value="approve">Approve</option>

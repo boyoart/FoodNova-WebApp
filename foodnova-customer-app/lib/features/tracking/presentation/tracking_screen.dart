@@ -225,6 +225,8 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
               onPickFile: _pickFile,
               onUpload: _uploadReceipt,
               onCancel: () => _showCancelRequestSheet(context, ref, order),
+              onCallRider: () => _callRider(order),
+              onMessageRider: () => _messageRider(order),
             ),
           );
         },
@@ -273,6 +275,8 @@ class _OrderDetailsView extends StatelessWidget {
     required this.onPickFile,
     required this.onUpload,
     required this.onCancel,
+    required this.onCallRider,
+    required this.onMessageRider,
   });
 
   final OrderSummary order;
@@ -286,6 +290,8 @@ class _OrderDetailsView extends StatelessWidget {
   final VoidCallback onPickFile;
   final VoidCallback onUpload;
   final VoidCallback onCancel;
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +327,11 @@ class _OrderDetailsView extends StatelessWidget {
           onUpload: onUpload,
         ),
         const SizedBox(height: 14),
-        _RiderInformationCard(order: order),
+        _RiderInformationCard(
+          order: order,
+          onCallRider: onCallRider,
+          onMessageRider: onMessageRider,
+        ),
         if (showTracking) ...[
           const SizedBox(height: 14),
           _RiderTrackingCard(
@@ -927,9 +937,15 @@ class _ReceiptCard extends StatelessWidget {
 }
 
 class _RiderInformationCard extends StatelessWidget {
-  const _RiderInformationCard({required this.order});
+  const _RiderInformationCard({
+    required this.order,
+    required this.onCallRider,
+    required this.onMessageRider,
+  });
 
   final OrderSummary order;
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
 
   @override
   Widget build(BuildContext context) {
@@ -944,36 +960,17 @@ class _RiderInformationCard extends StatelessWidget {
               phone: order.riderPhone,
               photoUrl: order.riderPhotoUrl,
               vehicleType: order.riderVehicleType,
+              riderId: order.riderDisplayId,
+              rating: order.riderRatingText,
+              onCallRider: onCallRider,
+              onMessageRider: onMessageRider,
             )
           else
             const _MutedText(
               'Rider details will appear here once FoodNova assigns your delivery partner.',
             ),
-          const SizedBox(height: 10),
-          _InfoRow(
-            label: 'Phone',
-            value: order.riderPhone.trim().isEmpty
-                ? 'Not available yet'
-                : order.riderPhone.trim(),
-          ),
-          const SizedBox(height: 8),
-          _InfoRow(
-            label: 'WhatsApp',
-            value: order.riderPhone.trim().isEmpty
-                ? 'Not available yet'
-                : order.riderPhone.trim(),
-          ),
-          const SizedBox(height: 8),
-          _InfoRow(
-            label: 'Vehicle',
-            value: order.riderVehicleType.trim().isEmpty
-                ? 'Pending assignment'
-                : _labelize(order.riderVehicleType),
-          ),
-          const SizedBox(height: 10),
-          const _RatingReserve(),
           if (order.deliveryNotes.isNotEmpty) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             _InfoRow(label: 'Notes', value: order.deliveryNotes),
           ],
         ],
@@ -1076,6 +1073,10 @@ class _RiderTrackingCard extends StatelessWidget {
                 vehicleType: data.vehicleType.isEmpty
                     ? order.riderVehicleType
                     : data.vehicleType,
+                riderId: order.riderDisplayId,
+                rating: order.riderRatingText,
+                onCallRider: null,
+                onMessageRider: null,
               ),
               const SizedBox(height: 12),
               ClipRRect(
@@ -1122,12 +1123,20 @@ class _RiderProfileTile extends StatelessWidget {
     required this.phone,
     required this.photoUrl,
     required this.vehicleType,
+    required this.riderId,
+    required this.rating,
+    required this.onCallRider,
+    required this.onMessageRider,
   });
 
   final String name;
   final String phone;
   final String photoUrl;
   final String vehicleType;
+  final String riderId;
+  final String rating;
+  final VoidCallback? onCallRider;
+  final VoidCallback? onMessageRider;
 
   @override
   Widget build(BuildContext context) {
@@ -1137,64 +1146,196 @@ class _RiderProfileTile extends StatelessWidget {
     final displayVehicle = vehicleType.trim().isEmpty
         ? 'Delivery partner'
         : _labelize(vehicleType);
+    final canContact = phone.trim().isNotEmpty;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: scheme.primaryContainer.withValues(alpha: .36),
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: scheme.primary.withValues(alpha: .18)),
-      ),
-      child: Row(
-        children: [
-          _RiderAvatar(photoUrl: photoUrl, name: displayName),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  style: TextStyle(
-                    color: scheme.onSurface,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  displayPhone,
-                  style: TextStyle(
-                    color: scheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Row(
-                  children: [
-                    Icon(Icons.two_wheeler_rounded,
-                        size: 16, color: scheme.primary),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        displayVehicle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: scheme.primary,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
+      child: Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _RiderAvatar(photoUrl: photoUrl, name: displayName),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _RatingChip(rating: rating),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Rider ID: $riderId',
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _WorkerBadge(displayVehicle),
+                        if (displayPhone != 'Phone pending')
+                          Text(
+                            displayPhone,
+                            style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (onCallRider != null || onMessageRider != null) ...[
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _RiderActionButton(
+                  icon: Icons.phone_rounded,
+                  label: 'Call',
+                  onPressed: canContact ? onCallRider : null,
+                ),
+                const SizedBox(width: 18),
+                _RiderActionButton(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  label: 'Message',
+                  onPressed: canContact ? onMessageRider : null,
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RatingChip extends StatelessWidget {
+  const _RatingChip({required this.rating});
+
+  final String rating;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.star_rounded, color: scheme.primary, size: 17),
+        const SizedBox(width: 3),
+        Text(
+          rating,
+          style: TextStyle(
+            color: scheme.onSurface,
+            fontWeight: FontWeight.w900,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WorkerBadge extends StatelessWidget {
+  const _WorkerBadge(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: scheme.primaryContainer.withValues(alpha: .6),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: scheme.primary,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderActionButton extends StatelessWidget {
+  const _RiderActionButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        IconButton.filledTonal(
+          onPressed: onPressed,
+          icon: Icon(icon),
+          style: IconButton.styleFrom(
+            fixedSize: const Size(48, 48),
+            backgroundColor: scheme.primaryContainer.withValues(alpha: .42),
+            foregroundColor: scheme.primary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: scheme.onSurface,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1228,38 +1369,6 @@ class _RiderAvatar extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w900),
             )
           : null,
-    );
-  }
-}
-
-class _RatingReserve extends StatelessWidget {
-  const _RatingReserve();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.star_border_rounded, color: scheme.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'Rider rating space reserved',
-              style: TextStyle(
-                color: scheme.onSurfaceVariant,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

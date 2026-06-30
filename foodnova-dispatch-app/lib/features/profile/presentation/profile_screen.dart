@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../config/app_config.dart';
-import '../../../core/widgets/fn_widgets.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../delivery/data/dispatch_repository.dart';
+import '../../delivery/domain/dispatch_models.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -19,153 +19,15 @@ class ProfileScreen extends ConsumerWidget {
         if (!didPop) context.go('/dashboard');
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Rider profile')),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        bottomNavigationBar: const _ProfileTabBar(),
         body: profile.when(
-          data: (rider) => ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              FnCard(
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 34,
-                      backgroundImage: rider.profilePhotoUrl.isEmpty
-                          ? null
-                          : NetworkImage(
-                              AppConfig.resolveMediaUrl(
-                                rider.profilePhotoUrl,
-                              ),
-                            ),
-                      child: rider.profilePhotoUrl.isEmpty
-                          ? const Icon(Icons.person)
-                          : null,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            rider.name,
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          Text(rider.email),
-                          Text(rider.phone),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              _SectionTitle('Verified details'),
-              _Detail(label: 'Account Status', value: rider.accountStatus),
-              _Detail(label: 'KYC Status', value: rider.kycStatus),
-              _Detail(
-                label: 'NIN Status',
-                value:
-                    '${rider.raw['nin_status'] ?? rider.raw['nin_verified'] ?? 'Pending'}',
-              ),
-              _Detail(
-                label: 'Verified Name',
-                value: '${rider.raw['verified_first_name'] ?? ''} ${rider.raw['verified_surname'] ?? ''}'
-                        .trim()
-                        .isEmpty
-                    ? rider.name
-                    : '${rider.raw['verified_first_name'] ?? ''} ${rider.raw['verified_surname'] ?? ''}'
-                        .trim(),
-              ),
-              _Detail(
-                label: 'Verified Phone',
-                value: '${rider.raw['verified_phone'] ?? rider.phone}',
-              ),
-              const SizedBox(height: 12),
-              _SectionTitle('Vehicle information'),
-              _Detail(
-                label: 'Vehicle Type',
-                value: rider.vehicleType.isEmpty
-                    ? 'Not provided'
-                    : rider.vehicleType,
-              ),
-              _Detail(
-                label: 'Make / Model',
-                value: [rider.vehicleMake, rider.vehicleModel]
-                        .where((part) => part.trim().isNotEmpty)
-                        .join(' ')
-                        .trim()
-                        .isEmpty
-                    ? 'Not provided'
-                    : [rider.vehicleMake, rider.vehicleModel]
-                        .where((part) => part.trim().isNotEmpty)
-                        .join(' '),
-              ),
-              _Detail(
-                label: 'Color',
-                value: rider.vehicleColor.isEmpty
-                    ? 'Not provided'
-                    : rider.vehicleColor,
-              ),
-              _Detail(
-                label: 'Plate Number',
-                value: rider.plateNumber.isEmpty
-                    ? 'Not provided'
-                    : rider.plateNumber,
-              ),
-              _Detail(
-                label: 'Vehicle Photo',
-                value: '${rider.raw['vehicle_photo_url'] ?? ''}'.trim().isEmpty
-                    ? 'Optional'
-                    : 'Uploaded',
-              ),
-              const SizedBox(height: 12),
-              _SectionTitle('Emergency contact'),
-              _Detail(
-                label: 'Name',
-                value: '${rider.raw['emergency_contact_name'] ?? ''}'.isEmpty
-                    ? 'Not provided'
-                    : '${rider.raw['emergency_contact_name']}',
-              ),
-              _Detail(
-                label: 'Phone',
-                value: '${rider.raw['emergency_contact_phone'] ?? ''}'.isEmpty
-                    ? 'Not provided'
-                    : '${rider.raw['emergency_contact_phone']}',
-              ),
-              _Detail(
-                label: 'Relationship',
-                value: '${rider.raw['emergency_contact_relationship'] ?? ''}'
-                        .isEmpty
-                    ? 'Not provided'
-                    : '${rider.raw['emergency_contact_relationship']}',
-              ),
-              const SizedBox(height: 12),
-              _SectionTitle('Uploaded documents'),
-              _Detail(
-                label: 'Selfie',
-                value: '${rider.raw['selfie_url'] ?? ''}'.trim().isEmpty
-                    ? 'Missing'
-                    : 'Uploaded',
-              ),
-              _Detail(
-                label: 'Government ID',
-                value: '${rider.raw['id_document_url'] ?? ''}'.trim().isEmpty
-                    ? 'Missing'
-                    : 'Uploaded',
-              ),
-              const SizedBox(height: 12),
-              _SectionTitle('Support'),
-              _Detail(label: 'Support Email', value: AppConfig.supportEmail),
-              _Detail(label: 'App Version', value: '1.0.0'),
-              const SizedBox(height: 10),
-              FilledButton.icon(
-                onPressed: () async {
-                  await ref.read(authRepositoryProvider).logout();
-                  if (context.mounted) context.go('/login');
-                },
-                icon: const Icon(Icons.logout),
-                label: const Text('Logout'),
-              ),
-            ],
+          data: (rider) => _ProfileBody(
+            rider: rider,
+            onLogout: () async {
+              await ref.read(authRepositoryProvider).logout();
+              if (context.mounted) context.go('/login');
+            },
           ),
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('$e')),
@@ -175,48 +37,483 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
-  final String text;
+class _ProfileTabBar extends StatelessWidget {
+  const _ProfileTabBar();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8, left: 2),
-      child: Text(
-        text,
-        style: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.w900),
+    const routes = ['/dashboard', '/orders', '/history', '/profile'];
+    return NavigationBar(
+      selectedIndex: 3,
+      onDestinationSelected: (index) {
+        if (index != 3) context.go(routes[index]);
+      },
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home_rounded),
+          label: 'Home',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.assignment_outlined),
+          selectedIcon: Icon(Icons.assignment_rounded),
+          label: 'Orders',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.account_balance_wallet_outlined),
+          selectedIcon: Icon(Icons.account_balance_wallet_rounded),
+          label: 'Earnings',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.person_outline_rounded),
+          selectedIcon: Icon(Icons.person_rounded),
+          label: 'Profile',
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileBody extends StatelessWidget {
+  const _ProfileBody({required this.rider, required this.onLogout});
+
+  final RiderProfile rider;
+  final Future<void> Function() onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final photo = AppConfig.resolveMediaUrl(rider.profilePhotoUrl);
+    final status = _profileStatus(rider);
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: _ProfileHero(
+            rider: rider,
+            photoUrl: photo,
+            status: status,
+          ),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+          sliver: SliverList.list(
+            children: [
+              Transform.translate(
+                offset: const Offset(0, -28),
+                child: _InfoCard(
+                  title: 'Personal Information',
+                  children: [
+                    _InfoRow(
+                      icon: Icons.mail_outline_rounded,
+                      label: 'Email',
+                      value: rider.email.isEmpty ? 'Not provided' : rider.email,
+                    ),
+                    _InfoRow(
+                      icon: Icons.phone_outlined,
+                      label: 'Phone Number',
+                      value: rider.phone.isEmpty ? 'Not provided' : rider.phone,
+                    ),
+                    _InfoRow(
+                      icon: Icons.badge_outlined,
+                      label: 'Rider ID',
+                      value: _riderId(rider),
+                    ),
+                    _InfoRow(
+                      icon: Icons.delivery_dining_rounded,
+                      label: 'Vehicle Type',
+                      value: rider.vehicleType.isEmpty
+                          ? 'Not provided'
+                          : rider.vehicleType,
+                    ),
+                    _InfoRow(
+                      icon: Icons.credit_card_rounded,
+                      label: 'Plate Number',
+                      value: rider.plateNumber.isEmpty
+                          ? 'Not provided'
+                          : rider.plateNumber,
+                    ),
+                    _InfoRow(
+                      icon: Icons.person_pin_circle_outlined,
+                      label: 'Worker Type',
+                      value: _workerTypeLabel(rider.workerType),
+                    ),
+                    _InfoRow(
+                      icon: Icons.verified_user_outlined,
+                      label: 'Status',
+                      value: status,
+                      valueChip: true,
+                    ),
+                  ],
+                ),
+              ),
+              Transform.translate(
+                offset: const Offset(0, -16),
+                child: _InfoCard(
+                  title: 'Verification',
+                  children: [
+                    _InfoRow(
+                      icon: Icons.fact_check_outlined,
+                      label: 'NIN',
+                      value: rider.raw['nin_verified'] == true
+                          ? 'Verified'
+                          : 'Pending',
+                      valueChip: true,
+                    ),
+                    _InfoRow(
+                      icon: Icons.camera_alt_outlined,
+                      label: 'Selfie',
+                      value: rider.profilePhotoUrl.isEmpty
+                          ? 'Missing'
+                          : 'Verified',
+                      valueChip: true,
+                    ),
+                    _InfoRow(
+                      icon: Icons.assignment_ind_outlined,
+                      label: 'Government ID',
+                      value:
+                          '${rider.raw['id_document_url'] ?? ''}'.trim().isEmpty
+                              ? 'Missing'
+                              : 'Verified',
+                      valueChip: true,
+                    ),
+                    _InfoRow(
+                      icon: Icons.support_agent_rounded,
+                      label: 'Support',
+                      value: AppConfig.supportEmail,
+                    ),
+                  ],
+                ),
+              ),
+              FilledButton.icon(
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Logout'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: scheme.error,
+                  foregroundColor: scheme.onError,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ProfileHero extends StatelessWidget {
+  const _ProfileHero({
+    required this.rider,
+    required this.photoUrl,
+    required this.status,
+  });
+
+  final RiderProfile rider;
+  final String photoUrl;
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        20,
+        MediaQuery.paddingOf(context).top + 12,
+        20,
+        52,
+      ),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF058C45), Color(0xFF0A6B35), Color(0xFF094523)],
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              IconButton(
+                onPressed: () => context.go('/dashboard'),
+                icon: const Icon(Icons.arrow_back_rounded),
+                color: Colors.white,
+                tooltip: 'Back',
+              ),
+              const Expanded(
+                child: Text(
+                  'Profile',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: null,
+                icon: const Icon(Icons.edit_rounded),
+                color: Colors.white70,
+                tooltip: 'Edit profile',
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 124,
+                height: 124,
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: CircleAvatar(
+                  backgroundColor: scheme.primaryContainer,
+                  backgroundImage:
+                      photoUrl.isEmpty ? null : NetworkImage(photoUrl),
+                  child: photoUrl.isEmpty
+                      ? Text(
+                          _initials(rider.name),
+                          style: TextStyle(
+                            color: scheme.primary,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 28,
+                          ),
+                        )
+                      : null,
+                ),
+              ),
+              Positioned(
+                right: 2,
+                bottom: 6,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFFE8F5EE)),
+                  ),
+                  child: const Icon(
+                    Icons.camera_alt_rounded,
+                    color: Color(0xFF087A34),
+                    size: 19,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            rider.name.isEmpty ? 'FoodNova Rider' : rider.name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HeroBadge(_workerTypeLabel(rider.workerType)),
+              _HeroBadge(status),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _Detail extends StatelessWidget {
-  const _Detail({required this.label, required this.value});
-  final String label;
-  final String value;
+class _HeroBadge extends StatelessWidget {
+  const _HeroBadge(this.text);
+
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: FnCard(
-        child: Row(
-          children: [
-            Expanded(child: Text(label)),
-            Flexible(
-              child: Text(
-                value,
-                textAlign: TextAlign.right,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-          ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF087A34),
+          fontWeight: FontWeight.w900,
+          fontSize: 12,
         ),
       ),
     );
   }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 26,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+            ),
+          ),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueChip = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool valueChip;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final displayValue = value.trim().isEmpty ? 'Not provided' : value.trim();
+    final valueWidget = valueChip
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: scheme.primaryContainer.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              displayValue,
+              style: TextStyle(
+                color: scheme.primary,
+                fontWeight: FontWeight.w900,
+                fontSize: 12,
+              ),
+            ),
+          )
+        : Text(
+            displayValue,
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w800,
+            ),
+          );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: scheme.outlineVariant.withValues(alpha: 0.55)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: scheme.primary, size: 20),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(child: valueWidget),
+        ],
+      ),
+    );
+  }
+}
+
+String _workerTypeLabel(String value) {
+  return value.toLowerCase().contains('messenger')
+      ? 'Messenger'
+      : 'Delivery Rider';
+}
+
+String _riderId(RiderProfile rider) {
+  final raw = '${rider.raw['rider_id'] ?? rider.raw['id'] ?? ''}'.trim();
+  if (raw.isEmpty) return 'Not assigned';
+  if (raw.startsWith('FN-')) return raw;
+  return 'FN-RDR-$raw';
+}
+
+String _profileStatus(RiderProfile rider) {
+  final kyc = rider.normalizedKycStatus;
+  if (rider.isOnline) return 'Online';
+  if (kyc == 'ACTIVE' || kyc == 'APPROVED') {
+    return rider.accountStatus.toUpperCase() == 'OFFLINE'
+        ? 'Approved & Offline'
+        : 'Approved & Active';
+  }
+  if (kyc == 'SUSPENDED') return 'Suspended';
+  if (kyc == 'PENDING_REVIEW') return 'Pending Review';
+  if (kyc == 'ONBOARDING') return 'Pending Review';
+  return kyc.replaceAll('_', ' ');
+}
+
+String _initials(String value) {
+  final parts = value
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .take(2)
+      .map((part) => part[0].toUpperCase())
+      .join();
+  return parts.isEmpty ? 'FN' : parts;
 }

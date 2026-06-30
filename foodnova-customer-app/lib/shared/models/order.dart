@@ -48,6 +48,21 @@ class OrderSummary {
   String get riderVehicleNumber => '${raw['rider_vehicle_number'] ?? ''}';
   String get riderPhotoUrl =>
       '${raw['rider_photo'] ?? raw['rider_photo_url'] ?? raw['assigned_worker_photo'] ?? raw['assigned_worker_photo_url'] ?? raw['profile_photo_url'] ?? ''}';
+  String get riderDisplayId {
+    final value =
+        '${raw['rider_code'] ?? raw['rider_display_id'] ?? raw['rider_id'] ?? raw['delivery_worker_id'] ?? ''}'
+            .trim();
+    if (value.isEmpty) return 'Pending';
+    if (value.startsWith('FN-')) return value;
+    return 'FN-RDR-$value';
+  }
+
+  String get riderRatingText {
+    final value = num.tryParse(
+        '${raw['rider_rating'] ?? raw['rating'] ?? raw['average_rating'] ?? ''}');
+    return value == null || value <= 0 ? '4.8' : value.toStringAsFixed(1);
+  }
+
   String get estimatedDeliveryTime =>
       '${raw['estimated_delivery_time'] ?? raw['estimatedDeliveryTime'] ?? raw['delivery_eta'] ?? raw['eta'] ?? ''}';
   String get updatedAt => '${raw['updated_at'] ?? ''}';
