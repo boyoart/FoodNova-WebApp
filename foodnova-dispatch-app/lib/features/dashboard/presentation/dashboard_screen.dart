@@ -614,12 +614,57 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _OfferCard extends ConsumerWidget {
+class _OfferCard extends ConsumerStatefulWidget {
   const _OfferCard({required this.offer});
   final DeliveryOffer offer;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_OfferCard> createState() => _OfferCardState();
+}
+
+class _OfferCardState extends ConsumerState<_OfferCard> {
+  bool _accepting = false;
+  bool _declining = false;
+
+  DeliveryOffer get offer => widget.offer;
+
+  Future<void> _accept() async {
+    if (_accepting || _declining) return;
+    setState(() => _accepting = true);
+    try {
+      final accepted =
+          await ref.read(dispatchRepositoryProvider).accept(offer.id);
+      if (!mounted) return;
+      context.go('/active-delivery', extra: accepted.raw);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(apiMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _accepting = false);
+    }
+  }
+
+  Future<void> _decline() async {
+    if (_accepting || _declining) return;
+    setState(() => _declining = true);
+    try {
+      await ref.read(dispatchRepositoryProvider).decline(offer.id);
+      ref.invalidate(deliveryOffersProvider);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(apiMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _declining = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final busy = _accepting || _declining;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: FnCard(
@@ -649,27 +694,27 @@ class _OfferCard extends ConsumerWidget {
               children: [
                 Expanded(
                   child: FilledButton(
-                    onPressed: () async {
-                      final accepted = await ref
-                          .read(dispatchRepositoryProvider)
-                          .accept(offer.id);
-                      if (!context.mounted) return;
-                      context.go('/active-delivery', extra: accepted.raw);
-                    },
-                    child: const Text('Accept'),
+                    onPressed: busy ? null : _accept,
+                    child: _accepting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Accept'),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () async {
-                      await ref
-                          .read(dispatchRepositoryProvider)
-                          .decline(offer.id);
-                      if (!context.mounted) return;
-                      ref.invalidate(deliveryOffersProvider);
-                    },
-                    child: const Text('Decline'),
+                    onPressed: busy ? null : _decline,
+                    child: _declining
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Decline'),
                   ),
                 ),
               ],

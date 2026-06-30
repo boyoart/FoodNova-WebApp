@@ -214,6 +214,28 @@ class DispatchNotificationService {
   }
 
   static String _targetFromData(Map<String, dynamic> data) {
+    final rawTarget =
+        '${data['route'] ?? data['target'] ?? data['screen'] ?? data['click_action'] ?? ''}'
+            .trim();
+    final type =
+        '${data['type'] ?? data['event'] ?? data['notification_type'] ?? ''}'
+            .toLowerCase();
+    if (rawTarget.startsWith('/')) {
+      if (rawTarget == '/rider/dashboard' || rawTarget == '/dashboard') {
+        return '/dashboard';
+      }
+      if (rawTarget == '/orders' || rawTarget == '/notifications') {
+        return rawTarget;
+      }
+    }
+    if (type.contains('delivery_offer') ||
+        type.contains('delivery_request') ||
+        type.contains('order_assigned')) {
+      return '/dashboard';
+    }
+    if (type.contains('delivery') || type.contains('order')) {
+      return '/orders';
+    }
     return '/notifications';
   }
 

@@ -234,7 +234,18 @@ class DispatchRepository {
   }
 
   Future<DeliveryOffer> accept(int offerId) async {
-    final response = await _dio.post('/delivery/offers/$offerId/accept');
+    debugPrint('DELIVERY_OFFER_ACCEPT_REQUEST offerId=$offerId');
+    late final Response<dynamic> response;
+    try {
+      response = await _dio.post('/delivery/offers/$offerId/accept');
+    } on DioException catch (error) {
+      debugPrint(
+        'DELIVERY_OFFER_ACCEPT_FAILURE offerId=$offerId '
+        'status=${error.response?.statusCode} body=${error.response?.data}',
+      );
+      rethrow;
+    }
+    debugPrint('DELIVERY_OFFER_ACCEPT_RESPONSE ${response.data}');
     return DeliveryOffer(
       Map<String, dynamic>.from(
         response.data['offer'] ?? response.data['data'] ?? {},
@@ -243,7 +254,17 @@ class DispatchRepository {
   }
 
   Future<void> decline(int offerId) async {
-    await _dio.post('/delivery/offers/$offerId/decline');
+    debugPrint('DELIVERY_OFFER_DECLINE_REQUEST offerId=$offerId');
+    try {
+      final response = await _dio.post('/delivery/offers/$offerId/decline');
+      debugPrint('DELIVERY_OFFER_DECLINE_RESPONSE ${response.data}');
+    } on DioException catch (error) {
+      debugPrint(
+        'DELIVERY_OFFER_DECLINE_FAILURE offerId=$offerId '
+        'status=${error.response?.statusCode} body=${error.response?.data}',
+      );
+      rethrow;
+    }
   }
 
   Future<void> confirmDeliveryOtp(int orderId, String otp) async {

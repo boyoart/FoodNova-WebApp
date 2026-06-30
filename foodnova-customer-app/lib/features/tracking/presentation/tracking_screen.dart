@@ -1068,32 +1068,28 @@ class _RiderTrackingCard extends StatelessWidget {
               'Tracking will appear when your rider picks up the order.',
             );
           }
-          if (!data.trackingAvailable ||
-              !data.hasRiderCoordinates ||
-              !data.hasCustomerCoordinates) {
+          if (!data.hasRiderCoordinates) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: const [
                 _MutedText(
-                  'Live map will appear when rider and destination coordinates are available.',
+                  'Waiting for rider location...',
                 ),
               ],
             );
           }
-          final riderPoint = data.hasRiderCoordinates
-              ? LatLng(data.riderLatitude!, data.riderLongitude!)
-              : null;
+          final riderPoint = LatLng(data.riderLatitude!, data.riderLongitude!);
           final customerPoint = data.hasCustomerCoordinates
               ? LatLng(data.customerLatitude!, data.customerLongitude!)
               : null;
           final routePoints = data.routePolyline
               .map((point) => LatLng(point['latitude']!, point['longitude']!))
               .toList();
-          if (routePoints.length < 2) {
+          if (customerPoint != null && routePoints.length < 2) {
             routePoints
               ..clear()
-              ..add(riderPoint!)
-              ..add(customerPoint!);
+              ..add(riderPoint)
+              ..add(customerPoint);
           }
           debugPrint(
             'TRACK_RIDER_RENDER rider=${data.riderLatitude},${data.riderLongitude} '
@@ -1140,13 +1136,19 @@ class _RiderTrackingCard extends StatelessWidget {
                 child: SizedBox(
                   height: 240,
                   child: _TrackingMap(
-                    riderPoint: riderPoint!,
-                    customerPoint: customerPoint!,
+                    riderPoint: riderPoint,
+                    customerPoint: customerPoint,
                     routePoints: routePoints,
                     riderName: data.riderName,
                   ),
                 ),
               ),
+              if (customerPoint == null) ...[
+                const SizedBox(height: 10),
+                const _MutedText(
+                  'Rider location is live. Destination coordinates are not available yet, so route distance may be delayed.',
+                ),
+              ],
               const SizedBox(height: 12),
               _InfoRow(
                 label: 'Distance remaining',
@@ -1438,7 +1440,7 @@ class _TrackingMap extends StatefulWidget {
   });
 
   final LatLng riderPoint;
-  final LatLng customerPoint;
+  final LatLng? customerPoint;
   final List<LatLng> routePoints;
   final String riderName;
 
@@ -1467,14 +1469,21 @@ class _TrackingMapState extends State<_TrackingMap> {
   Future<void> _fitBounds() async {
     final controller = _controller;
     if (controller == null) return;
-    final south =
-        math.min(widget.riderPoint.latitude, widget.customerPoint.latitude);
-    final west =
-        math.min(widget.riderPoint.longitude, widget.customerPoint.longitude);
-    final north =
-        math.max(widget.riderPoint.latitude, widget.customerPoint.latitude);
-    final east =
-        math.max(widget.riderPoint.longitude, widget.customerPoint.longitude);
+    final customerPoint = widget.customerPoint;
+    if (customerPoint == null) {
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      if (!mounted) return;
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: widget.riderPoint, zoom: 15),
+        ),
+      );
+      return;
+    }
+    final south = math.min(widget.riderPoint.latitude, customerPoint.latitude);
+    final west = math.min(widget.riderPoint.longitude, customerPoint.longitude);
+    final north = math.max(widget.riderPoint.latitude, customerPoint.latitude);
+    final east = math.max(widget.riderPoint.longitude, customerPoint.longitude);
     await Future<void>.delayed(const Duration(milliseconds: 150));
     if (!mounted) return;
     try {
@@ -1503,7 +1512,7 @@ class _TrackingMapState extends State<_TrackingMap> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final markers = {
+    final markers = <Marker>{
       Marker(
         markerId: const MarkerId('rider'),
         position: widget.riderPoint,
@@ -1512,20 +1521,23 @@ class _TrackingMapState extends State<_TrackingMap> {
         ),
         icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
       ),
-      Marker(
-        markerId: const MarkerId('customer'),
-        position: widget.customerPoint,
-        infoWindow: const InfoWindow(title: 'Delivery address'),
-      ),
+      if (widget.customerPoint != null)
+        Marker(
+          markerId: const MarkerId('customer'),
+          position: widget.customerPoint!,
+          infoWindow: const InfoWindow(title: 'Delivery address'),
+        ),
     };
-    final polylines = {
-      Polyline(
-        polylineId: const PolylineId('route'),
-        points: widget.routePoints,
-        width: 5,
-        color: scheme.primary,
-      ),
-    };
+    final polylines = widget.routePoints.length >= 2
+        ? {
+            Polyline(
+              polylineId: const PolylineId('route'),
+              points: widget.routePoints,
+              width: 5,
+              color: scheme.primary,
+            ),
+          }
+        : <Polyline>{};
     return GoogleMap(
       initialCameraPosition:
           CameraPosition(target: widget.riderPoint, zoom: 13),

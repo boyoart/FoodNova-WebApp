@@ -3259,7 +3259,7 @@ def classify_order_delivery(order: DBOrder, db) -> tuple[str, Optional[float]]:
         return "needs_admin_review", None
     lat, lng = get_order_delivery_coordinates(order)
     if lat is None or lng is None:
-        return "needs_admin_review", None
+        return "long_distance", None
     zone = ensure_default_operational_zone(db)
     distance = distance_meters(lat, lng, zone.center_latitude, zone.center_longitude)
     return ("short_distance" if distance <= float(zone.radius_meters or 0) else "long_distance"), distance
@@ -3479,6 +3479,9 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
     print("TRACK_RIDER_COORDINATES", json_dump({
         "order_id": order.id,
         "rider_id": worker_id,
+        "tracking_visible": tracking_visible,
+        "tracking_available": tracking_available,
+        "dispatch_status": dispatch_status,
         "rider_coordinates": {"latitude": rider_lat, "longitude": rider_lng, "valid": rider_valid},
         "customer_coordinates": {"latitude": customer_lat, "longitude": customer_lng, "valid": customer_valid},
         "route_provider": route_provider,
@@ -3679,18 +3682,35 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
 
 
 def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Optional[DBDeliveryOffer]:
+    print("DISPATCH_MATCHING_START", json_dump({
+        "order_id": getattr(order, "id", None),
+        "order_code": getattr(order, "order_code", ""),
+        "delivery_method": getattr(order, "delivery_method", ""),
+        "delivery_type": getattr(order, "delivery_type", ""),
+        "payment_status": getattr(order, "payment_status", ""),
+        "order_status": getattr(order, "order_status", ""),
+        "delivery_status": getattr(order, "delivery_status", ""),
+    }))
     if (order.delivery_method or "delivery") != "delivery":
+        print("DISPATCH_MATCHING_SKIPPED", json_dump({"order_id": order.id, "reason": "not_delivery"}))
         return None
     expire_stale_delivery_offers(db)
-    if not getattr(order, "delivery_type", None):
+    if not getattr(order, "delivery_type", None) or order.delivery_type == "needs_admin_review":
         classify_and_save_order_delivery(order, db)
     if order.delivery_type == "needs_admin_review":
+        print("DISPATCH_MATCHING_SKIPPED", json_dump({"order_id": order.id, "reason": "needs_admin_review"}))
         return None
     existing = db.query(DBDeliveryOffer).filter(
         DBDeliveryOffer.order_id == order.id,
         DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"]),
     ).first()
     if existing:
+        print("DISPATCH_MATCHING_EXISTING_OFFER", json_dump({
+            "order_id": order.id,
+            "offer_id": existing.id,
+            "worker_id": existing.worker_id,
+            "status": existing.status,
+        }))
         return existing
     excluded = {
         offer.worker_id
@@ -3701,8 +3721,20 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
     }
     worker = find_available_delivery_worker(db, order.delivery_type, excluded)
     if not worker:
+        print("DISPATCH_MATCHING_NO_WORKER", json_dump({
+            "order_id": order.id,
+            "delivery_type": order.delivery_type,
+            "excluded_worker_ids": sorted(excluded),
+        }))
         return None
     offer = create_delivery_offer_for_order(db, order, worker)
+    print("DISPATCH_MATCHING_OFFER_CREATED", json_dump({
+        "order_id": order.id,
+        "offer_id": offer.id,
+        "worker_id": worker.id,
+        "worker_type": worker.worker_type,
+        "delivery_type": order.delivery_type,
+    }))
     create_admin_audit_log(
         request,
         {"id": None, "full_name": "FoodNova System", "email": "system@foodnova.com.ng"},
@@ -3722,6 +3754,89 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
         {"order_code": order.order_code, "worker_id": worker.id, "worker_type": worker.worker_type},
     )
     return offer
+
+
+DELIVERY_MATCH_READY_PAYMENTS = {
+    "payment_confirmed",
+    "confirmed",
+    "paid",
+    "successful",
+    "success",
+}
+DELIVERY_MATCH_READY_STATUSES = {
+    "processing",
+    "confirmed",
+    "ready",
+    "ready_for_pickup",
+    "packed",
+    "out_for_delivery",
+}
+DELIVERY_MATCH_TERMINAL_STATUSES = {"delivered", "cancelled", "canceled", "refunded"}
+
+
+def delivery_order_ready_for_matching(order: DBOrder) -> tuple[bool, str]:
+    if (order.delivery_method or "delivery") != "delivery":
+        return False, "not_delivery"
+    if getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None):
+        return False, "already_assigned"
+    delivery_status = str(getattr(order, "delivery_status", "") or "").strip().lower()
+    if delivery_status in {"accepted", "assigned", "picked_up", "in_transit", "arrived", "delivered", "cancelled"}:
+        return False, f"delivery_status_{delivery_status}"
+    statuses = {
+        str(getattr(order, "status", "") or "").strip().lower(),
+        str(getattr(order, "order_status", "") or "").strip().lower(),
+        str(getattr(order, "fulfillment_status", "") or "").strip().lower(),
+    }
+    if statuses.intersection(DELIVERY_MATCH_TERMINAL_STATUSES):
+        return False, "terminal_order_status"
+    payment_status = str(getattr(order, "payment_status", "") or "").strip().lower()
+    if payment_status not in DELIVERY_MATCH_READY_PAYMENTS:
+        return False, f"payment_not_ready_{payment_status or 'missing'}"
+    if statuses.intersection(DELIVERY_MATCH_READY_STATUSES):
+        return True, "ready_status"
+    return True, "payment_confirmed"
+
+
+def auto_match_ready_delivery_orders(db, request: Request = None, reason: str = "unspecified", limit: int = 50) -> dict:
+    print("AUTO_ASSIGNMENT_SCAN_START", json_dump({"reason": reason, "limit": limit}))
+    expired_order_ids = expire_stale_delivery_offers(db)
+    for order_id in set(expired_order_ids):
+        order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+        if order:
+            start_delivery_matching(db, order, request)
+
+    stats = {"scanned": 0, "eligible": 0, "created": 0, "existing": 0, "no_worker": 0, "skipped": 0}
+    orders = active_order_filter(db.query(DBOrder)).filter(
+        DBOrder.delivery_method == "delivery",
+    ).order_by(DBOrder.created_at.asc(), DBOrder.id.asc()).limit(limit).all()
+    for order in orders:
+        stats["scanned"] += 1
+        ready, ready_reason = delivery_order_ready_for_matching(order)
+        if not ready:
+            stats["skipped"] += 1
+            continue
+        stats["eligible"] += 1
+        before = db.query(DBDeliveryOffer).filter(
+            DBDeliveryOffer.order_id == order.id,
+            DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"]),
+        ).first()
+        classify_and_save_order_delivery(order, db)
+        print("AUTO_ASSIGNMENT_ORDER_READY", json_dump({
+            "order_id": order.id,
+            "order_code": order.order_code,
+            "reason": ready_reason,
+            "delivery_type": order.delivery_type,
+            "estimated_distance_meters": order.estimated_distance_meters,
+        }))
+        offer = start_delivery_matching(db, order, request)
+        if offer and before and offer.id == before.id:
+            stats["existing"] += 1
+        elif offer:
+            stats["created"] += 1
+        else:
+            stats["no_worker"] += 1
+    print("AUTO_ASSIGNMENT_SCAN_DONE", json_dump({"reason": reason, **stats}))
+    return stats
 
 
 def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliveryWorker, order: DBOrder, request: Request, actor: dict, automatic: bool = False) -> dict:
@@ -8601,6 +8716,8 @@ def delivery_go_online(request: Request, payload: Optional[LocationPingPayload] 
             raise HTTPException(status_code=403, detail=MESSENGER_OUTSIDE_ZONE_MESSAGE)
         worker.operational_status = "ONLINE"
         worker.updated_at = datetime.utcnow()
+        db.flush()
+        auto_match_ready_delivery_orders(db, request, reason=f"worker_{worker.id}_go_online", limit=50)
         db.commit()
         print("DB_COMMIT_SUCCESS", json_dump({
             "worker_id": worker.id,
@@ -8685,6 +8802,15 @@ def delivery_go_offline(request: Request):
 def delivery_location_ping(payload: LocationPingPayload, request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
+        print("DISPATCH_GPS_UPDATE_RECEIVED", json_dump({
+            "worker_id": worker.id,
+            "worker_type": worker.worker_type,
+            "operational_status": worker.operational_status,
+            "latitude": payload.latitude,
+            "longitude": payload.longitude,
+            "accuracy": payload.accuracy,
+            "timestamp": iso(payload.timestamp),
+        }))
         if promote_verified_approved_rider(worker):
             sync_rider_onboarding_state(db, worker, {"id": "system", "email": "system"}, "Auto-activated verified approved worker on location ping")
         if rider_lifecycle_status(worker) != "ACTIVE":
@@ -8724,6 +8850,12 @@ def delivery_location_ping(payload: LocationPingPayload, request: Request):
                 {"order_id": active_order.id, "location": location_update},
                 room=f"order:{active_order.id}",
             )
+        print("DISPATCH_GPS_UPDATE_SAVED", json_dump({
+            "worker_id": worker.id,
+            "inside_zone": worker.inside_zone,
+            "last_seen_at": iso(worker.last_seen_at),
+            "active_order_ids": [order.id for order in active_orders],
+        }))
         return {"success": True, "worker": data, "data": data}
     finally:
         db.close()
@@ -8773,11 +8905,14 @@ def register_delivery_worker_fcm_token(payload: FCMTokenPayload, request: Reques
 def get_worker_delivery_offers(request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
-        expired_order_ids = expire_stale_delivery_offers(db)
-        for order_id in set(expired_order_ids):
-            order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
-            if order:
-                start_delivery_matching(db, order, request)
+        if worker.operational_status == "ONLINE":
+            auto_match_ready_delivery_orders(db, request, reason=f"worker_{worker.id}_offer_feed", limit=50)
+        else:
+            expired_order_ids = expire_stale_delivery_offers(db)
+            for order_id in set(expired_order_ids):
+                order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+                if order:
+                    start_delivery_matching(db, order, request)
         db.commit()
         offers = db.query(DBDeliveryOffer).filter(
             DBDeliveryOffer.worker_id == worker.id,
@@ -8796,6 +8931,7 @@ def get_worker_delivery_offers(request: Request):
 def accept_delivery_offer(offer_id: int, request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
+        print("DELIVERY_OFFER_ACCEPT_START", json_dump({"offer_id": offer_id, "worker_id": worker.id}))
         expired_order_ids = expire_stale_delivery_offers(db)
         for order_id in set(expired_order_ids):
             order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
@@ -8835,7 +8971,21 @@ def accept_delivery_offer(offer_id: int, request: Request):
         db.commit()
         db.refresh(offer)
         create_admin_audit_log(request, user, "delivery_offer_accepted", "delivery_offer", offer.id, f"{worker.full_name} accepted order {offer.order_code}", {"offer": delivery_offer_to_dict(offer, worker, order)})
+        print("DELIVERY_OFFER_ACCEPT_SUCCESS", json_dump({
+            "offer_id": offer.id,
+            "order_id": order.id,
+            "worker_id": worker.id,
+            "offer_status": offer.status,
+            "order_delivery_status": order.delivery_status,
+        }))
         return {"success": True, "offer": delivery_offer_to_dict(offer, worker, order), "data": delivery_offer_to_dict(offer, worker, order)}
+    except Exception as error:
+        print("DELIVERY_OFFER_ACCEPT_FAILED", json_dump({
+            "offer_id": offer_id,
+            "worker_id": getattr(worker, "id", None),
+            "error": repr(error),
+        }))
+        raise
     finally:
         db.close()
 
@@ -8844,6 +8994,7 @@ def accept_delivery_offer(offer_id: int, request: Request):
 def decline_delivery_offer(offer_id: int, request: Request, payload: DeliveryOfferActionPayload = None):
     db, user, worker = get_current_worker_record(request)
     try:
+        print("DELIVERY_OFFER_DECLINE_START", json_dump({"offer_id": offer_id, "worker_id": worker.id}))
         offer = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.id == offer_id, DBDeliveryOffer.worker_id == worker.id).first()
         if not offer:
             raise HTTPException(status_code=404, detail="Delivery offer not found")
@@ -8867,8 +9018,21 @@ def decline_delivery_offer(offer_id: int, request: Request, payload: DeliveryOff
             )
             if order:
                 start_delivery_matching(db, order, request)
+                auto_match_ready_delivery_orders(db, request, reason=f"offer_{offer.id}_declined", limit=50)
             db.commit()
+            print("DELIVERY_OFFER_DECLINE_SUCCESS", json_dump({
+                "offer_id": offer.id,
+                "order_id": offer.order_id,
+                "worker_id": worker.id,
+            }))
         return {"success": True, "message": "Delivery offer declined"}
+    except Exception as error:
+        print("DELIVERY_OFFER_DECLINE_FAILED", json_dump({
+            "offer_id": offer_id,
+            "worker_id": getattr(worker, "id", None),
+            "error": repr(error),
+        }))
+        raise
     finally:
         db.close()
 
@@ -9834,7 +9998,7 @@ def get_admin_dispatch_board(request: Request):
     require_any_permission(request, ["orders:view", "orders:delivery", "delivery:manage", "workforce:view", "workforce:manage"])
     db = SessionLocal()
     try:
-        expire_stale_delivery_offers(db)
+        auto_match_ready_delivery_orders(db, request, reason="admin_dispatch_board", limit=50)
         active_orders = active_order_filter(db.query(DBOrder)).filter(
             DBOrder.delivery_method == "delivery",
             DBOrder.order_status.notin_(["delivered", "cancelled"]),
