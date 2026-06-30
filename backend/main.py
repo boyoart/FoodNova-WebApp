@@ -3842,6 +3842,94 @@ def _money(value: object) -> str:
     return f"NGN {amount:,.0f}"
 
 
+def _invoice_text(value: object, fallback: str = "") -> str:
+    text_value = str(value or "").strip()
+    return text_value or fallback
+
+
+def _invoice_title(value: object, fallback: str = "") -> str:
+    text_value = _invoice_text(value, fallback)
+    return text_value.replace("_", " ").replace("-", " ").title()
+
+
+def _invoice_float(value: object) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _project_logo_path() -> Optional[Path]:
+    root = Path(__file__).resolve().parents[1]
+    candidates = [
+        root / "frontend" / "public" / "foodnova-logo.png",
+        root / "foodnova-customer-app" / "assets" / "brand" / "foodnova-logo.png",
+        root / "foodnova-dispatch-app" / "assets" / "brand" / "foodnova-logo.png",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _invoice_config() -> dict:
+    return {
+        "website": os.environ.get("FOODNOVA_WEBSITE", "https://foodnova.com.ng").rstrip("/"),
+        "support_email": os.environ.get("FOODNOVA_SUPPORT_EMAIL", "support@foodnova.com.ng"),
+        "support_phone": os.environ.get("FOODNOVA_PHONE", os.environ.get("SUPPORT_PHONE", "+2348025801125")),
+        "instagram": os.environ.get("FOODNOVA_INSTAGRAM", "@foodnovalimited"),
+        "tiktok": os.environ.get("FOODNOVA_TIKTOK", "@foodnovalimited"),
+        "tagline": os.environ.get("FOODNOVA_TAGLINE", "Quality Food, Delivered Fresh"),
+    }
+
+
+def _invoice_tracking_url(order: dict) -> str:
+    config = _invoice_config()
+    order_id = _invoice_text(order.get("id"))
+    if order_id:
+        return f"{config['website']}/orders/{order_id}"
+    return config["website"]
+
+
+def _invoice_address_parts(order: dict) -> dict:
+    snapshot = order.get("delivery_address_snapshot")
+    if isinstance(snapshot, str):
+        snapshot = json_load(snapshot, {}) or {}
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+    address = _invoice_text(
+        order.get("delivery_address") or snapshot.get("address") or snapshot.get("street"),
+        "Delivery address unavailable",
+    )
+    return {
+        "address": address,
+        "city": _invoice_text(snapshot.get("city") or snapshot.get("locality") or order.get("delivery_city"), "Lagos"),
+        "state": _invoice_text(snapshot.get("state") or snapshot.get("region") or order.get("delivery_state"), "Lagos"),
+        "country": _invoice_text(snapshot.get("country") or order.get("delivery_country"), "Nigeria"),
+    }
+
+
+def _invoice_fetch_image_reader(source: str):
+    if not source:
+        return None
+    try:
+        from reportlab.lib.utils import ImageReader
+
+        value = str(source).strip()
+        if value.startswith("http://") or value.startswith("https://"):
+            request = urllib.request.Request(value, headers={"User-Agent": "FoodNovaInvoice/1.0"})
+            with urllib.request.urlopen(request, timeout=6) as response:
+                return ImageReader(io.BytesIO(response.read()))
+        path = Path(value)
+        if not path.is_absolute():
+            path = Path(__file__).resolve().parents[1] / value.lstrip("/\\")
+        if path.exists():
+            return ImageReader(str(path))
+    except Exception as error:
+        print("INVOICE_IMAGE_LOAD_ERROR", json_dump({"source_present": bool(source), "error": f"{type(error).__name__}: {error}"}))
+    return None
+
+
 def invoice_file_path(order: dict) -> Path:
     order_id = str(order.get("id") or "").strip() or "unknown"
     order_code = str(order.get("order_code") or order_id).strip()
@@ -3850,6 +3938,259 @@ def invoice_file_path(order: dict) -> Path:
 
 
 def build_invoice_pdf_bytes(order: dict) -> bytes:
+    return build_premium_invoice_pdf_bytes(order)
+
+
+def build_premium_invoice_pdf_bytes(order: dict) -> bytes:
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+    import qrcode
+
+    config = _invoice_config()
+    buffer = io.BytesIO()
+    width, height = A4
+    c = canvas.Canvas(buffer, pagesize=A4)
+    green = colors.HexColor("#087A34")
+    green_dark = colors.HexColor("#05652C")
+    green_soft = colors.HexColor("#E8F6EE")
+    yellow = colors.HexColor("#F7C600")
+    cream = colors.HexColor("#FFF7DC")
+    border = colors.HexColor("#DCE9E2")
+    text = colors.HexColor("#17231C")
+    muted = colors.HexColor("#627268")
+    margin = 26
+    usable = width - (margin * 2)
+
+    def set_font(name="Helvetica", size=9, color=text):
+        c.setFont(name, size)
+        c.setFillColor(color)
+
+    def draw_text(value, x, y, size=9, font="Helvetica", color=text, max_width=None, leading=12):
+        value = _invoice_text(value)
+        set_font(font, size, color)
+        if not max_width:
+            c.drawString(x, y, value)
+            return y - leading
+        words = value.split()
+        line_value = ""
+        current_y = y
+        for word in words or [""]:
+            test = f"{line_value} {word}".strip()
+            if c.stringWidth(test, font, size) <= max_width:
+                line_value = test
+            else:
+                c.drawString(x, current_y, line_value)
+                current_y -= leading
+                line_value = word
+        if line_value:
+            c.drawString(x, current_y, line_value)
+            current_y -= leading
+        return current_y
+
+    def draw_right(value, x, y, size=9, font="Helvetica", color=text):
+        value = _invoice_text(value)
+        set_font(font, size, color)
+        c.drawRightString(x, y, value)
+
+    def draw_badge(value, x, y, fill=green_soft, color=green_dark, padding=8, font_size=9):
+        value = _invoice_text(value)
+        set_font("Helvetica-Bold", font_size, color)
+        badge_width = c.stringWidth(value, "Helvetica-Bold", font_size) + padding * 2
+        c.setFillColor(fill)
+        c.roundRect(x, y - 5, badge_width, 20, 10, stroke=0, fill=1)
+        c.setFillColor(color)
+        c.drawString(x + padding, y, value)
+        return badge_width
+
+    def draw_circle_icon(label, x, y, radius=19, fill=green):
+        c.setFillColor(fill)
+        c.circle(x + radius, y - radius, radius, stroke=0, fill=1)
+        set_font("Helvetica-Bold", 12, colors.white if fill != yellow else green_dark)
+        c.drawCentredString(x + radius, y - radius - 4, label)
+
+    def draw_section_label(label, x, y):
+        set_font("Helvetica-Bold", 11, green)
+        c.drawString(x, y, label)
+        c.setFillColor(yellow)
+        c.roundRect(x, y - 10, 28, 2, 1, stroke=0, fill=1)
+
+    def draw_card(x, y, w, h, fill=colors.white):
+        c.setFillColor(fill)
+        c.setStrokeColor(border)
+        c.roundRect(x, y - h, w, h, 8, stroke=1, fill=1)
+
+    def parse_dt(value):
+        raw = _invoice_text(value)
+        if not raw:
+            return "N/A", "N/A"
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return parsed.strftime("%Y-%m-%d"), parsed.strftime("%I:%M %p WAT")
+        except Exception:
+            parts = raw.replace("T", " ").split()
+            return parts[0] if parts else raw, parts[1] if len(parts) > 1 else "N/A"
+
+    def logo():
+        logo_path = _project_logo_path()
+        if logo_path:
+            try:
+                c.drawImage(ImageReader(str(logo_path)), margin - 12, height - 116, width=285, height=112, preserveAspectRatio=True, mask="auto")
+                return
+            except Exception as error:
+                print("INVOICE_LOGO_RENDER_ERROR", json_dump({"error": f"{type(error).__name__}: {error}"}))
+        set_font("Helvetica-Bold", 30, green_dark)
+        c.drawString(margin + 12, height - 62, "FoodNova")
+
+    order_code = _invoice_text(order.get("order_code") or order.get("id"), "N/A")
+    invoice_date, invoice_time = parse_dt(order.get("created_at") or order.get("updated_at"))
+    logo()
+    set_font("Helvetica", 11, muted)
+    c.drawString(margin + 44, height - 118, config["tagline"])
+    c.setStrokeColor(border)
+    c.line(width / 2, height - 116, width / 2, height - 20)
+    set_font("Helvetica-Bold", 24, green_dark)
+    c.drawString(width / 2 + 36, height - 42, "INVOICE / RECEIPT")
+    draw_badge(f"Order ID: {order_code}", width / 2 + 36, height - 70, fill=green_dark, color=colors.white, padding=12, font_size=10)
+    draw_text(f"Date: {invoice_date}", width / 2 + 36, height - 96, size=10, font="Helvetica-Bold")
+    draw_text(f"Order Time: {invoice_time}", width / 2 + 36, height - 118, size=10, font="Helvetica-Bold")
+    c.setStrokeColor(green_dark)
+    c.setLineWidth(1.5)
+    c.line(margin, height - 145, width - margin, height - 145)
+
+    address = _invoice_address_parts(order)
+    section_y = height - 178
+    left_x = margin + 18
+    right_x = width / 2 + 24
+    draw_section_label("BILL TO", left_x, section_y)
+    draw_circle_icon("P", left_x, section_y - 28, 20)
+    draw_text(order.get("customer_name") or "FoodNova Customer", left_x + 58, section_y - 32, size=12, font="Helvetica-Bold")
+    draw_text(f"Email: {_invoice_text(order.get('customer_email'), 'Not provided')}", left_x + 58, section_y - 55, size=9)
+    draw_text(f"Phone: {_invoice_text(order.get('customer_phone') or order.get('phone'), 'Not provided')}", left_x + 58, section_y - 76, size=9)
+    c.setStrokeColor(colors.HexColor("#EEF4F0"))
+    c.line(width / 2 - 8, section_y + 10, width / 2 - 8, section_y - 112)
+    draw_section_label("DELIVERY TO", right_x, section_y)
+    draw_circle_icon("L", right_x, section_y - 28, 20)
+    draw_text(address["address"], right_x + 58, section_y - 32, size=9.5, max_width=205, leading=12)
+    draw_text(f"{address['city']}, {address['state']}, {address['country']}", right_x + 58, section_y - 78, size=9.2, color=muted, max_width=205)
+
+    items = order.get("items") if isinstance(order.get("items"), list) else []
+    table_top = section_y - 145
+    col_x = [margin, margin + 270, margin + 345, margin + 445, width - margin]
+    c.setFillColor(green_dark)
+    c.roundRect(margin, table_top - 32, usable, 32, 6, stroke=0, fill=1)
+    headers = [("PRODUCT", col_x[0] + 14), ("QTY", col_x[1] + 16), ("UNIT PRICE", col_x[2] + 16), ("TOTAL", col_x[3] + 16)]
+    for header, x in headers:
+        draw_text(header, x, table_top - 21, size=9.5, font="Helvetica-Bold", color=colors.white)
+    y = table_top - 50
+    row_height = 42
+    c.setStrokeColor(border)
+    c.roundRect(margin, table_top - 32 - (max(1, min(len(items), 7)) * row_height), usable, max(1, min(len(items), 7)) * row_height + 32, 6, stroke=1, fill=0)
+    def item_name(item):
+        return item.get("name") or item.get("product_name") or item.get("title") or "FoodNova Item"
+    def qty(item):
+        return item.get("quantity") or item.get("qty") or 1
+    def price(item):
+        return _invoice_float(item.get("unit_price") or item.get("price"))
+    def total(item):
+        return _invoice_float(item.get("line_total")) or price(item) * (_invoice_float(qty(item)) or 1)
+    shown_items = items[:7] or [{"name": "Order items unavailable", "quantity": "", "unit_price": 0, "line_total": 0}]
+    for item in shown_items:
+        draw_text(item_name(item), col_x[0] + 14, y, size=10, font="Helvetica-Bold", max_width=230)
+        draw_text(qty(item), col_x[1] + 24, y, size=10)
+        draw_right(_money(price(item)), col_x[3] - 18, y, size=10)
+        draw_right(_money(total(item)), col_x[4] - 18, y, size=10, font="Helvetica-Bold")
+        c.setStrokeColor(colors.HexColor("#EDF2EF"))
+        c.line(margin, y - 18, width - margin, y - 18)
+        y -= row_height
+    if len(items) > 7:
+        draw_text(f"+ {len(items) - 7} more item(s) included in this order", margin + 14, y + 10, size=8.5, color=muted)
+
+    lower_top = y - 20
+    subtotal = sum(total(item) for item in items) or _invoice_float(order.get("subtotal") or order.get("total_amount"))
+    delivery_fee = _invoice_float(order.get("delivery_fee") or order.get("delivery_charge"))
+    discount = _invoice_float(order.get("discount"))
+    grand_total = _invoice_float(order.get("total_amount") or order.get("total") or (subtotal + delivery_fee - discount))
+    payment_status = _invoice_title(order.get("payment_status") or order.get("status"), "Pending")
+    order_status = _invoice_title(order.get("order_status") or order.get("fulfillment_status") or order.get("status"), "Processing")
+    payment_method = _invoice_title(order.get("payment_method"), "Online Payment")
+    receipt = order.get("receipt") if isinstance(order.get("receipt"), dict) else {}
+    transaction_ref = _invoice_text(order.get("transaction_reference") or order.get("payment_reference") or receipt.get("reference"), order_code)
+
+    payment_x = margin + 6
+    draw_card(payment_x, lower_top, 205, 142, fill=colors.HexColor("#FBFDFC"))
+    status_rows = [("C", "Payment Status", payment_status, green), ("O", "Order Status", order_status, green), ("M", "Payment Method", payment_method, yellow), ("R", "Reference", transaction_ref, green_soft)]
+    status_y = lower_top - 24
+    for icon, label, value, color_value in status_rows:
+        draw_circle_icon(icon, payment_x + 16, status_y + 10, 14, fill=color_value)
+        draw_text(label, payment_x + 54, status_y + 1, size=8, color=muted)
+        draw_text(value, payment_x + 54, status_y - 14, size=9.2, font="Helvetica-Bold", color=green_dark if icon != "M" else text, max_width=130)
+        status_y -= 34
+
+    totals_x = width - margin - 250
+    draw_card(totals_x, lower_top, 250, 130, fill=colors.HexColor("#FBFDFC"))
+    totals_y = lower_top - 24
+    for label, value in [("Subtotal", _money(subtotal)), ("Delivery Fee", "FREE" if delivery_fee <= 0 else _money(delivery_fee)), ("Discount", _money(discount))]:
+        draw_text(label, totals_x + 18, totals_y, size=10)
+        draw_right(value, totals_x + 232, totals_y, size=10, font="Helvetica-Bold", color=green_dark if value == "FREE" else text)
+        c.setStrokeColor(border)
+        c.line(totals_x + 16, totals_y - 13, totals_x + 234, totals_y - 13)
+        totals_y -= 34
+    c.setFillColor(green_dark)
+    c.roundRect(totals_x, lower_top - 130, 250, 48, 8, stroke=0, fill=1)
+    draw_text("TOTAL", totals_x + 18, lower_top - 112, size=14, font="Helvetica-Bold", color=colors.white)
+    draw_right(_money(grand_total), totals_x + 230, lower_top - 112, size=18, font="Helvetica-Bold", color=colors.white)
+
+    after_totals_y = lower_top - 160
+    if _invoice_text(order.get("rider_name")):
+        draw_card(margin + 6, after_totals_y, usable - 12, 54, fill=colors.HexColor("#FBFDFC"))
+        rider_reader = _invoice_fetch_image_reader(order.get("rider_photo_url") or order.get("rider_photo"))
+        if rider_reader:
+            c.drawImage(rider_reader, margin + 18, after_totals_y - 44, width=36, height=36, preserveAspectRatio=True, mask="auto")
+        else:
+            draw_circle_icon("R", margin + 18, after_totals_y - 9, 18)
+        draw_text("Delivery Rider", margin + 66, after_totals_y - 16, size=8.5, font="Helvetica-Bold", color=green)
+        draw_text(order.get("rider_name"), margin + 66, after_totals_y - 33, size=10.5, font="Helvetica-Bold")
+        draw_text(_invoice_text(order.get("rider_phone"), "Phone not provided"), margin + 220, after_totals_y - 33, size=9)
+        draw_text(_invoice_title(order.get("delivery_worker_type") or order.get("rider_vehicle_type"), "Delivery Rider"), margin + 350, after_totals_y - 33, size=9, font="Helvetica-Bold", color=green_dark)
+        after_totals_y -= 72
+
+    c.setFillColor(cream)
+    c.roundRect(margin + 6, after_totals_y - 68, usable - 12, 68, 10, stroke=0, fill=1)
+    draw_circle_icon("H", margin + 26, after_totals_y - 15, 18)
+    draw_text("Thank you for shopping with FoodNova.", margin + 82, after_totals_y - 25, size=12, font="Helvetica-Bold", color=green_dark)
+    draw_text("We appreciate your trust and look forward to serving you again!", margin + 82, after_totals_y - 44, size=9.5)
+
+    footer_y = max(after_totals_y - 96, 104)
+    draw_text("Need Help?", margin + 18, footer_y, size=9.5, font="Helvetica-Bold", color=green_dark)
+    draw_text(config["support_phone"], margin + 18, footer_y - 22, size=8.5)
+    draw_text(config["support_email"], margin + 18, footer_y - 40, size=8.5)
+    qr = qrcode.QRCode(box_size=4, border=1)
+    qr.add_data(_invoice_tracking_url(order))
+    qr.make(fit=True)
+    qr_buffer = io.BytesIO()
+    qr.make_image(fill_color="#087A34", back_color="white").save(qr_buffer, format="PNG")
+    qr_buffer.seek(0)
+    c.drawImage(ImageReader(qr_buffer), width / 2 - 24, footer_y - 55, width=48, height=48, mask="auto")
+    draw_text("Shop with us again", width / 2 - 42, footer_y, size=9.5, font="Helvetica-Bold", color=green_dark)
+    set_font("Helvetica-Bold", 8.5, green_dark)
+    c.drawCentredString(width / 2, footer_y - 66, config["website"])
+    draw_text("Follow Us", width - margin - 145, footer_y, size=9.5, font="Helvetica-Bold", color=green_dark)
+    draw_text(f"Instagram: {config['instagram']}", width - margin - 145, footer_y - 22, size=8.5)
+    draw_text(f"TikTok: {config['tiktok']}", width - margin - 145, footer_y - 40, size=8.5)
+
+    c.setFillColor(green_dark)
+    c.roundRect(margin, 8, usable, 28, 10, stroke=0, fill=1)
+    set_font("Helvetica-Bold", 8.5, colors.white)
+    c.drawString(margin + 48, 19, "100% Secure Payments")
+    c.drawRightString(width - margin - 48, 19, "Fresh Products  -  Fast Delivery  -  Great Value")
+    c.showPage()
+    c.save()
+    return buffer.getvalue()
+
+
+def build_invoice_legacy_pdf_bytes(order: dict) -> bytes:
     items = order.get("items") if isinstance(order.get("items"), list) else []
     lines = [
         "FoodNova Invoice / Receipt",
@@ -3918,8 +4259,6 @@ def build_invoice_pdf_bytes(order: dict) -> bytes:
 
 def ensure_order_invoice_pdf(order: dict) -> Path:
     path = invoice_file_path(order)
-    if path.exists() and path.stat().st_size > 0:
-        return path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(build_invoice_pdf_bytes(order))
     return path

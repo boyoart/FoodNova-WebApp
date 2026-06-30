@@ -3,6 +3,7 @@ export const FOODNOVA_DOMAIN = "foodnova.com.ng"
 export const FOODNOVA_WEBSITE = "https://foodnova.com.ng"
 
 export const FOODNOVA_CONTACT = {
+  tagline: "Quality Food, Delivered Fresh",
   email: "support@foodnova.com.ng",
   phone: "+2348025801125",
   address: "33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria",

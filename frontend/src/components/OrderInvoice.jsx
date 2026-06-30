@@ -1,27 +1,15 @@
-import { formatPrice } from '../utils/formatters'
-import FoodNovaLogo from './FoodNovaLogo'
+import { resolveMediaUrl } from '../services/api'
+import { FOODNOVA_CONTACT, FOODNOVA_WEBSITE } from '../utils/contactUtils'
+import { formatPrice, getImageFallbackAttrs, getImageUrl, handleImageError } from '../utils/formatters'
 import CopyButton from './ui/CopyButton'
 import './OrderInvoice.css'
 
-const BUSINESS = {
-  name: 'FoodNova',
-  tagline: 'Quality Foodstuff. Reliable Supply.',
-  website: 'foodnova.com.ng',
-  email: 'support@foodnova.com.ng',
-  phone: '+2348025801125',
-  address: '33 Ariyo Akinloye Street, Isheri-Bucknor, Lagos, Nigeria',
-}
+const LOGO_SRC = '/foodnova-logo.png'
 
-const PAYMENT = {
-  accountNumber: '6427173992',
-  bank: 'OPay',
-  accountName: 'FOODNOVA LIMITED',
+const titleCase = (value, fallback = '') => {
+  const text = String(value || fallback || '').replace(/_/g, ' ').trim()
+  return text.replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
-
-const titleCase = (value) =>
-  String(value || '')
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase())
 
 const getOrderCode = (order) => order?.order_code || (order?.id ? `FN-${order.id}` : 'N/A')
 const getOrderDate = (order) => order?.created_at || order?.date || order?.order_date
@@ -29,14 +17,17 @@ const getItemName = (item) => item?.name || item?.product_name || (item?.variant
 const getItemQty = (item) => Number(item?.quantity || item?.qty || 1)
 const getItemPrice = (item) => Number(item?.price || item?.unit_price || 0)
 const getItemLineTotal = (item) => Number(item?.line_total || getItemPrice(item) * getItemQty(item))
+const getItems = (order) => Array.isArray(order?.items) ? order.items : []
 
 const formatDate = (value) => {
-  if (!value) return 'N/A'
+  if (!value) return { date: 'N/A', time: 'N/A' }
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+  if (Number.isNaN(date.getTime())) return { date: value, time: 'N/A' }
+  return {
+    date: date.toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' }),
+    time: date.toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
+  }
 }
-
-const getItems = (order) => Array.isArray(order?.items) ? order.items : []
 
 const getSubtotal = (order) => {
   const itemsTotal = getItems(order).reduce((sum, item) => sum + getItemLineTotal(item), 0)
@@ -45,55 +36,79 @@ const getSubtotal = (order) => {
 
 const getGrandTotal = (order) => Number(order?.total_amount || order?.total || getSubtotal(order))
 
+const getAddressParts = (order) => {
+  const snapshot = typeof order?.delivery_address_snapshot === 'object' && order.delivery_address_snapshot
+    ? order.delivery_address_snapshot
+    : {}
+
+  return {
+    address: order?.delivery_address || order?.address || snapshot.address || 'Delivery address unavailable',
+    city: snapshot.city || snapshot.locality || order?.delivery_city || 'N/A',
+    state: snapshot.state || snapshot.region || order?.delivery_state || 'N/A',
+    country: snapshot.country || order?.delivery_country || 'Nigeria',
+  }
+}
+
+const getRiderPhoto = (order) => {
+  const photo = order?.rider_photo_url || order?.rider_photo || order?.rider?.photo_url || order?.rider?.profile_photo_url
+  return photo ? resolveMediaUrl(photo) : ''
+}
+
+const getTrackingUrl = (order) => `${FOODNOVA_WEBSITE}/track-order${order?.id ? `?order=${order.id}` : ''}`
+
 export default function OrderInvoice({ order }) {
   const items = getItems(order)
   const subtotal = getSubtotal(order)
   const deliveryFee = Number(order?.delivery_fee || order?.delivery_charge || 0)
   const discount = Number(order?.discount || 0)
   const grandTotal = getGrandTotal(order)
-  const deliveryMethod = order?.delivery_method === 'pickup' ? 'Pickup' : 'Delivery'
-  const deliveryAddress = order?.delivery_method === 'pickup'
-    ? (order?.pickup_note || 'Pickup selected. FoodNova will contact the customer when the order is ready.')
-    : (order?.delivery_address || order?.address || 'Delivery address unavailable')
+  const orderCode = getOrderCode(order)
+  const { date, time } = formatDate(getOrderDate(order))
+  const address = getAddressParts(order)
+  const paymentStatus = titleCase(order?.payment_status || order?.status, 'Pending')
+  const orderStatus = titleCase(order?.order_status || order?.fulfillment_status || order?.status, 'Processing')
+  const paymentMethod = titleCase(order?.payment_method, 'Online Payment')
+  const transactionReference = order?.transaction_reference || order?.payment_reference || order?.receipt?.reference || orderCode
+  const riderPhoto = getRiderPhoto(order)
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(getTrackingUrl(order))}`
 
   return (
     <article className="invoice-card">
       <header className="invoice-header">
         <div className="invoice-brand">
-          <FoodNovaLogo variant="inline" className="invoice-logo" />
-          <div>
-            <h1>{BUSINESS.name}</h1>
-            <p>{BUSINESS.tagline}</p>
-          </div>
+          <img src={LOGO_SRC} className="invoice-logo" alt="FoodNova" />
+          <p>{FOODNOVA_CONTACT.tagline || 'Quality Food, Delivered Fresh'}</p>
         </div>
+        <div className="invoice-divider" aria-hidden="true" />
         <div className="invoice-title-block">
-          <h2>FoodNova Invoice / Receipt</h2>
-          <p className="copyable-value">Order {getOrderCode(order)} <CopyButton value={getOrderCode(order)} label="Copy" /></p>
-          <p>{formatDate(getOrderDate(order))}</p>
+          <h2>Invoice / Receipt</h2>
+          <p className="invoice-order-pill">Order ID: {orderCode}</p>
+          <p><span>Date:</span> {date}</p>
+          <p><span>Order Time:</span> {time}</p>
         </div>
       </header>
 
-      <section className="invoice-business-details">
-        <p>Website: {BUSINESS.website}</p>
-        <p>{BUSINESS.email}</p>
-        <p>{BUSINESS.phone}</p>
-        <p>{BUSINESS.address}</p>
-      </section>
-
-      <section className="invoice-info-grid">
-        <div>
+      <section className="invoice-party-grid">
+        <div className="invoice-party-card">
           <h3>Bill To</h3>
-          <p><strong>{order?.customer_name || 'FoodNova Customer'}</strong></p>
-          <p>{order?.customer_phone || order?.phone || 'Phone not available'}</p>
-          {order?.customer_email && <p>{order.customer_email}</p>}
-          <p>{deliveryAddress}</p>
+          <div className="invoice-party-body">
+            <span className="invoice-round-icon">P</span>
+            <div>
+              <strong>{order?.customer_name || 'FoodNova Customer'}</strong>
+              <p>Email: {order?.customer_email || 'Not provided'}</p>
+              <p>Phone: {order?.customer_phone || order?.phone || 'Not provided'}</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <h3>Order Info</h3>
-          <p><span>Payment Status</span><strong>{titleCase(order?.payment_status || order?.status || 'pending_payment')}</strong></p>
-          <p><span>Order Status</span><strong>{titleCase(order?.order_status || order?.fulfillment_status || order?.status || 'order_placed')}</strong></p>
-          <p><span>Delivery Method</span><strong>{deliveryMethod}</strong></p>
-          <p><span>Order Code</span><strong className="copyable-value">{getOrderCode(order)} <CopyButton value={getOrderCode(order)} label="Copy" /></strong></p>
+        <div className="invoice-party-card">
+          <h3>Delivery To</h3>
+          <div className="invoice-party-body">
+            <span className="invoice-round-icon">L</span>
+            <div>
+              <strong>{address.address}</strong>
+              <p>{address.city}, {address.state}, {address.country}</p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -101,19 +116,29 @@ export default function OrderInvoice({ order }) {
         <table className="invoice-items-table">
           <thead>
             <tr>
-              <th>Item/Product Name</th>
+              <th>Product</th>
               <th>Quantity</th>
               <th>Unit Price</th>
-              <th>Line Total</th>
+              <th>Total</th>
             </tr>
           </thead>
           <tbody>
             {items.length ? items.map((item, index) => (
               <tr key={`${getItemName(item)}-${index}`}>
-                <td>{getItemName(item)}</td>
+                <td>
+                  <div className="invoice-product-cell">
+                    <img
+                      src={getImageUrl(item)}
+                      alt=""
+                      onError={handleImageError}
+                      {...getImageFallbackAttrs(item)}
+                    />
+                    <strong>{getItemName(item)}</strong>
+                  </div>
+                </td>
                 <td>{getItemQty(item)}</td>
                 <td>{formatPrice(getItemPrice(item))}</td>
-                <td>{formatPrice(getItemLineTotal(item))}</td>
+                <td><strong>{formatPrice(getItemLineTotal(item))}</strong></td>
               </tr>
             )) : (
               <tr>
@@ -124,24 +149,67 @@ export default function OrderInvoice({ order }) {
         </table>
       </section>
 
-      <section className="invoice-totals">
-        <div><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div>
-        {deliveryFee > 0 && <div><span>Delivery Fee</span><strong>{formatPrice(deliveryFee)}</strong></div>}
-        {discount > 0 && <div><span>Discount</span><strong>-{formatPrice(discount)}</strong></div>}
-        <div className="invoice-grand-total"><span>Grand Total</span><strong>{formatPrice(grandTotal)}</strong></div>
+      <section className="invoice-summary-grid">
+        <div className="invoice-status-card">
+          <div><span className="invoice-round-icon">C</span><p>Payment Status<strong>{paymentStatus}</strong></p></div>
+          <div><span className="invoice-round-icon">O</span><p>Order Status<strong>{orderStatus}</strong></p></div>
+          <div><span className="invoice-round-icon invoice-round-icon-accent">M</span><p>Payment Method<strong>{paymentMethod}</strong></p></div>
+          <div><span className="invoice-round-icon invoice-round-icon-muted">R</span><p>Transaction Reference<strong className="copyable-value">{transactionReference} <CopyButton value={transactionReference} label="Copy" /></strong></p></div>
+        </div>
+
+        <div className="invoice-totals">
+          <div><span>Subtotal</span><strong>{formatPrice(subtotal)}</strong></div>
+          <div><span>Delivery Fee</span><strong>{deliveryFee > 0 ? formatPrice(deliveryFee) : 'FREE'}</strong></div>
+          {discount > 0 && <div><span>Discount</span><strong>-{formatPrice(discount)}</strong></div>}
+          <div className="invoice-grand-total"><span>Total</span><strong>{formatPrice(grandTotal)}</strong></div>
+        </div>
       </section>
 
-      <section className="invoice-payment-details">
-        <h3>Payment Details</h3>
-        <p>Account Number: <span className="copyable-value">{PAYMENT.accountNumber} <CopyButton value={PAYMENT.accountNumber} label="Copy" /></span></p>
-        <p>Bank: {PAYMENT.bank}</p>
-        <p>Account Name: <span className="copyable-value">{PAYMENT.accountName} <CopyButton value={PAYMENT.accountName} label="Copy" /></span></p>
+      {order?.rider_name && (
+        <section className="invoice-rider-card">
+          {riderPhoto ? (
+            <img src={riderPhoto} alt="" onError={(event) => { event.currentTarget.style.display = 'none' }} />
+          ) : (
+            <span className="invoice-round-icon">R</span>
+          )}
+          <div>
+            <p>Delivery Rider</p>
+            <strong>{order.rider_name}</strong>
+          </div>
+          <span>{order?.rider_phone || 'Phone not provided'}</span>
+          <strong>{titleCase(order?.delivery_worker_type || order?.worker_type, 'Delivery Rider')}</strong>
+        </section>
+      )}
+
+      <section className="invoice-thank-you">
+        <span className="invoice-round-icon">H</span>
+        <div>
+          <h3>Thank you for shopping with FoodNova.</h3>
+          <p>We appreciate your trust and look forward to serving you again.</p>
+        </div>
       </section>
 
       <footer className="invoice-footer">
-        <p>Thank you for shopping with FoodNova.</p>
-        <p>For support, contact {BUSINESS.email} or {BUSINESS.phone}. Use your Order Code for all support inquiries.</p>
+        <div>
+          <h3>Need Help?</h3>
+          <p>{FOODNOVA_CONTACT.phone}</p>
+          <p>{FOODNOVA_CONTACT.email}</p>
+        </div>
+        <div>
+          <h3>Shop with us again</h3>
+          <img className="invoice-qr" src={qrUrl} alt="FoodNova website QR code" />
+          <p>{FOODNOVA_WEBSITE}</p>
+        </div>
+        <div>
+          <h3>Follow Us</h3>
+          <p>Instagram: {FOODNOVA_CONTACT.instagram}</p>
+          <p>TikTok: {FOODNOVA_CONTACT.tiktok}</p>
+        </div>
       </footer>
+      <div className="invoice-security-bar">
+        <span>100% Secure Payments</span>
+        <span>Fresh Products - Fast Delivery - Great Value</span>
+      </div>
     </article>
   )
 }
