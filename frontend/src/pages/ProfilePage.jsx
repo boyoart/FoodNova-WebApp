@@ -460,7 +460,7 @@ export default function ProfilePage() {
           {addresses.length === 0 ? (
             <div className="empty-address-state">
               <Home size={32} />
-              <p>No saved addresses yet. Add your first Nigerian delivery address below.</p>
+              <p>No saved addresses yet. Add your first delivery address below.</p>
             </div>
           ) : (
             <div className="address-list">

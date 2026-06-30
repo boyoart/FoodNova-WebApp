@@ -635,6 +635,8 @@ class _OfferCardState extends ConsumerState<_OfferCard> {
       final accepted =
           await ref.read(dispatchRepositoryProvider).accept(offer.id);
       if (!mounted) return;
+      ref.invalidate(deliveryOffersProvider);
+      ref.invalidate(deliveryOrdersProvider);
       context.go('/active-delivery', extra: accepted.raw);
     } catch (error) {
       if (!mounted) return;

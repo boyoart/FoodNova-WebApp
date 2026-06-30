@@ -3852,27 +3852,47 @@ DELIVERY_MATCH_BLOCKED_PAYMENTS = {
 
 
 def delivery_order_ready_for_matching(order: DBOrder) -> tuple[bool, str]:
-    if (order.delivery_method or "delivery") != "delivery":
-        return False, "not_delivery"
-    if getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None):
-        return False, "already_assigned"
-    delivery_status = str(getattr(order, "delivery_status", "") or "").strip().lower()
-    if delivery_status in {"accepted", "assigned", "picked_up", "in_transit", "arrived", "delivered", "cancelled"}:
-        return False, f"delivery_status_{delivery_status}"
     statuses = {
         str(getattr(order, "status", "") or "").strip().lower(),
         str(getattr(order, "order_status", "") or "").strip().lower(),
         str(getattr(order, "fulfillment_status", "") or "").strip().lower(),
     }
-    if statuses.intersection(DELIVERY_MATCH_TERMINAL_STATUSES):
-        return False, "terminal_order_status"
     payment_status = str(getattr(order, "payment_status", "") or "").strip().lower()
+    dispatch_status = canonical_dispatch_status(order)
+    print("ORDER_ELIGIBILITY_CHECK", json_dump({
+        "order_id": getattr(order, "id", None),
+        "order_code": getattr(order, "order_code", ""),
+        "payment_status": payment_status,
+        "approval_status": ",".join(sorted(statuses)),
+        "order_status": getattr(order, "order_status", ""),
+        "dispatch_status": dispatch_status,
+        "delivery_status": getattr(order, "delivery_status", ""),
+        "delivery_worker_id": getattr(order, "delivery_worker_id", None),
+        "rider_id": getattr(order, "rider_id", None),
+    }))
+    if (order.delivery_method or "delivery") != "delivery":
+        print("ORDER_ELIGIBILITY_FAILED", json_dump({"order_id": order.id, "reason": "not_delivery"}))
+        return False, "not_delivery"
+    if getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None):
+        print("ORDER_ELIGIBILITY_FAILED", json_dump({"order_id": order.id, "reason": "already_assigned"}))
+        return False, "already_assigned"
+    delivery_status = str(getattr(order, "delivery_status", "") or "").strip().lower()
+    if delivery_status in {"accepted", "assigned", "picked_up", "in_transit", "arrived", "delivered", "cancelled"}:
+        print("ORDER_ELIGIBILITY_FAILED", json_dump({"order_id": order.id, "reason": f"delivery_status_{delivery_status}"}))
+        return False, f"delivery_status_{delivery_status}"
+    if statuses.intersection(DELIVERY_MATCH_TERMINAL_STATUSES):
+        print("ORDER_ELIGIBILITY_FAILED", json_dump({"order_id": order.id, "reason": "terminal_order_status"}))
+        return False, "terminal_order_status"
     if payment_status in DELIVERY_MATCH_BLOCKED_PAYMENTS:
+        print("ORDER_ELIGIBILITY_FAILED", json_dump({"order_id": order.id, "reason": f"payment_blocked_{payment_status}"}))
         return False, f"payment_blocked_{payment_status}"
     if payment_status not in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
+        print("ORDER_ELIGIBILITY_FAILED", json_dump({"order_id": order.id, "reason": f"payment_not_confirmed_{payment_status or 'missing'}"}))
         return False, f"payment_not_confirmed_{payment_status or 'missing'}"
     if not statuses.intersection(DELIVERY_MATCH_ADMIN_CONFIRMED_STATUSES):
+        print("ORDER_ELIGIBILITY_FAILED", json_dump({"order_id": order.id, "reason": f"admin_order_not_confirmed_{','.join(sorted(statuses)) or 'missing'}"}))
         return False, f"admin_order_not_confirmed_{','.join(sorted(statuses)) or 'missing'}"
+    print("ORDER_ELIGIBILITY_PASSED", json_dump({"order_id": order.id, "reason": "payment_and_admin_confirmed"}))
     return True, "payment_and_admin_confirmed"
 
 
@@ -5000,6 +5020,116 @@ def hard_delete_delivery_worker(
         "delivery_worker",
         worker_id,
         f"Admin permanently deleted rider {worker_name}",
+        {"before": old_data, **result},
+    )
+    return result
+
+
+def soft_delete_delivery_worker(
+    db,
+    worker: DBDeliveryWorker,
+    admin: dict,
+    request: Request,
+    *,
+    reason: str,
+    old_data: dict,
+) -> dict:
+    worker_id = worker.id
+    user_id = worker.user_id
+    now = datetime.utcnow()
+    worker_name = worker.full_name or f"Rider #{worker_id}"
+    print("RIDER_DELETE_REQUEST", json_dump({
+        "worker_id": worker_id,
+        "user_id": user_id,
+        "admin_id": admin.get("id"),
+        "strategy": "soft_delete",
+        "reason": reason,
+        "timestamp": iso(now),
+    }))
+    released_orders = db.query(DBOrder).filter(
+        or_(DBOrder.delivery_worker_id == worker_id, DBOrder.rider_id == worker_id),
+        DBOrder.order_status.notin_(["delivered", "cancelled"]),
+    ).all()
+    for order in released_orders:
+        order.delivery_worker_id = None
+        order.delivery_worker_type = ""
+        order.delivery_status = ""
+        order.rider_id = None
+        order.rider_name = ""
+        order.rider_phone = ""
+        order.rider_vehicle_type = ""
+        order.rider_vehicle_number = ""
+        order.rider_photo_url = ""
+        order.updated_at = now
+    active_offers = db.query(DBDeliveryOffer).filter(
+        DBDeliveryOffer.worker_id == worker_id,
+        DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"]),
+    ).all()
+    for offer in active_offers:
+        offer.status = "DECLINED"
+        offer.assignment_status = "DECLINED"
+        offer.updated_at = now
+    revoked_sessions = revoke_rider_sessions(db, worker, admin, reason)
+    worker.operational_status = "OFFLINE"
+    worker.kyc_status = "DELETED"
+    worker.deleted_at = now
+    worker.deleted_by_admin_id = admin.get("id")
+    worker.deleted_reason = reason
+    worker.fcm_token = ""
+    worker.fcm_tokens_json = "[]"
+    worker.force_logout_at = now
+    worker.updated_at = now
+    user = db.query(DBUser).filter(DBUser.id == user_id).first()
+    if user:
+        user.is_active = False
+        user.updated_at = now
+    linked_rider = db.query(DBRider).filter(DBRider.delivery_worker_id == worker_id).first()
+    if linked_rider:
+        linked_rider.status = "deleted"
+        linked_rider.can_go_online = False
+        linked_rider.can_accept_orders = False
+        linked_rider.updated_at = now
+    rider_kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker_id).first()
+    if rider_kyc:
+        rider_kyc.onboarding_stage = "deleted"
+        rider_kyc.admin_review_status = "deleted"
+        rider_kyc.admin_reviewed_at = now
+        rider_kyc.updated_at = now
+    db.add(DBDeletedRiderLog(
+        delivery_worker_id=worker_id,
+        admin_id=admin.get("id"),
+        admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+        reason=reason,
+        snapshot_json=json_dump({
+            "rider": old_data,
+            "deleted_at": iso(now),
+            "deleted_by": admin.get("id"),
+            "revoked_sessions": revoked_sessions,
+            "released_order_ids": [order.id for order in released_orders],
+            "declined_offer_ids": [offer.id for offer in active_offers],
+            "ip": get_request_ip(request),
+            "device": parse_user_agent(request.headers.get("user-agent", "")),
+        }),
+        hard_deleted=False,
+    ))
+    db.commit()
+    result = {
+        "worker_id": worker_id,
+        "user_id": user_id,
+        "soft_deleted": True,
+        "released_orders": len(released_orders),
+        "declined_offers": len(active_offers),
+        "revoked_sessions": revoked_sessions,
+        "timestamp": iso(now),
+    }
+    print("RIDER_DELETE_SUCCESS", json_dump(result))
+    create_admin_audit_log(
+        request,
+        admin,
+        "rider_soft_deleted",
+        "delivery_worker",
+        worker_id,
+        f"Admin soft deleted rider {worker_name}",
         {"before": old_data, **result},
     )
     return result
@@ -9007,7 +9137,7 @@ def get_worker_delivery_offers(request: Request):
         db.commit()
         offers = db.query(DBDeliveryOffer).filter(
             DBDeliveryOffer.worker_id == worker.id,
-            DBDeliveryOffer.status.in_(["PENDING", "ACCEPTED", "ASSIGNED"]),
+            DBDeliveryOffer.status == "PENDING",
         ).order_by(DBDeliveryOffer.created_at.desc(), DBDeliveryOffer.id.desc()).all()
         items = []
         for offer in offers:
@@ -9019,6 +9149,12 @@ def get_worker_delivery_offers(request: Request):
             "offer_count": len(items),
             "offer_ids": [item.get("id") for item in items],
             "order_ids": [item.get("order_id") for item in items],
+            "statuses": [item.get("status") for item in items],
+        }))
+        print("OFFER_FEED_RESPONSE", json_dump({
+            "worker_id": worker.id,
+            "offer_count": len(items),
+            "offer_ids": [item.get("id") for item in items],
             "statuses": [item.get("status") for item in items],
         }))
         return {"success": True, "offers": items, "data": items}
@@ -9070,6 +9206,17 @@ def accept_delivery_offer(offer_id: int, request: Request):
         db.commit()
         db.refresh(offer)
         create_admin_audit_log(request, user, "delivery_offer_accepted", "delivery_offer", offer.id, f"{worker.full_name} accepted order {offer.order_code}", {"offer": delivery_offer_to_dict(offer, worker, order)})
+        print("OFFER_ACCEPTED", json_dump({
+            "offer_id": offer.id,
+            "order_id": order.id,
+            "worker_id": worker.id,
+            "offer_status": offer.status,
+        }))
+        print("OFFER_REMOVED_FROM_FEED", json_dump({
+            "offer_id": offer.id,
+            "worker_id": worker.id,
+            "reason": "accepted_offers_not_returned_by_delivery_offers_feed",
+        }))
         print("DELIVERY_OFFER_ACCEPT_SUCCESS", json_dump({
             "offer_id": offer.id,
             "order_id": order.id,
@@ -10453,20 +10600,22 @@ def permanently_delete_rider(worker_id: int, request: Request):
             "route": f"/admin/rider-verification-queue/{worker_id}",
             "worker_id": worker_id,
             "admin_id": admin.get("id"),
-            "hard_delete": True,
+            "hard_delete": False,
             "timestamp": iso(datetime.utcnow()),
         }))
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type.in_(["rider", "messenger"])).first()
         if not worker:
+            print("RIDER_DELETE_BLOCKED", json_dump({"worker_id": worker_id, "reason": "not_found"}))
             raise HTTPException(status_code=404, detail="Rider verification profile not found")
         old_data = rider_detail_payload(db, worker)
-        result = hard_delete_delivery_worker(db, worker, admin, request, reason="Permanent admin deletion", old_data=old_data)
-        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": worker_id, "released_orders": result["released_orders"], "delete_counts": result["delete_counts"]}
+        result = soft_delete_delivery_worker(db, worker, admin, request, reason="Admin rider deletion", old_data=old_data)
+        return {"success": True, "message": "Rider deleted", "deleted_worker_id": worker_id, "released_orders": result["released_orders"], "soft_deleted": True}
     except HTTPException:
         raise
     except Exception as error:
         db.rollback()
-        log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/rider-verification-queue/{worker_id}", worker_id=worker_id, admin_id=admin.get("id"), hard_delete=True)
+        log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/rider-verification-queue/{worker_id}", worker_id=worker_id, admin_id=admin.get("id"), hard_delete=False)
+        print("RIDER_DELETE_FAILED", json_dump({"worker_id": worker_id, "admin_id": admin.get("id"), "error": str(error)}))
         print("BACKEND_DELETE_RIDER_FAILED", json_dump({"worker_id": worker_id, "admin_id": admin.get("id"), "error": str(error)}))
         return JSONResponse(status_code=500, content={"success": False, "detail": "Failed to delete rider. FoodNova has logged the backend error."})
     finally:
@@ -11131,20 +11280,22 @@ def deactivate_rider(rider_id: int, request: Request):
             "route": f"/admin/riders/{rider_id}",
             "worker_id": rider_id,
             "admin_id": admin.get("id"),
-            "hard_delete": True,
+            "hard_delete": False,
             "timestamp": iso(datetime.utcnow()),
         }))
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == rider_id, DBDeliveryWorker.worker_type.in_(["rider", "messenger"])).first()
         if not worker:
+            print("RIDER_DELETE_BLOCKED", json_dump({"worker_id": rider_id, "reason": "not_found"}))
             raise HTTPException(status_code=404, detail="Rider not found")
         old_data = worker_to_dict(worker)
-        result = hard_delete_delivery_worker(db, worker, admin, request, reason="Permanent admin deletion from rider management", old_data=old_data)
-        return {"success": True, "message": "Rider permanently deleted", "deleted_worker_id": rider_id, "released_orders": result["released_orders"], "delete_counts": result["delete_counts"]}
+        result = soft_delete_delivery_worker(db, worker, admin, request, reason="Admin rider deletion from rider management", old_data=old_data)
+        return {"success": True, "message": "Rider deleted", "deleted_worker_id": rider_id, "released_orders": result["released_orders"], "soft_deleted": True}
     except HTTPException:
         raise
     except Exception as error:
         db.rollback()
-        log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/riders/{rider_id}", worker_id=rider_id, admin_id=admin.get("id"), hard_delete=True)
+        log_backend_exception("BACKEND_DELETE_RIDER_ERROR", error, route=f"/admin/riders/{rider_id}", worker_id=rider_id, admin_id=admin.get("id"), hard_delete=False)
+        print("RIDER_DELETE_FAILED", json_dump({"worker_id": rider_id, "admin_id": admin.get("id"), "error": str(error)}))
         print("BACKEND_DELETE_RIDER_FAILED", json_dump({"worker_id": rider_id, "admin_id": admin.get("id"), "error": str(error)}))
         return JSONResponse(status_code=500, content={"success": False, "detail": "Failed to delete rider. FoodNova has logged the backend error."})
     finally:

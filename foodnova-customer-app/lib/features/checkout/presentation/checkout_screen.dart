@@ -235,7 +235,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Text(
-                                    'Add a Nigerian delivery address to continue checkout.',
+                                    'Add a delivery address to continue checkout.',
                                     style: TextStyle(
                                         color: Theme.of(context)
                                             .colorScheme

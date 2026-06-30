@@ -84,7 +84,6 @@ export default function AddressAutocomplete({ onSelect, label = 'Search Address 
       .then((google) => {
         if (!active || !inputRef.current) return
         autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-          componentRestrictions: { country: ['ng'] },
           fields: ['address_components', 'formatted_address', 'geometry', 'place_id', 'name'],
           types: ['geocode'],
         })
@@ -92,6 +91,12 @@ export default function AddressAutocomplete({ onSelect, label = 'Search Address 
         autocompleteRef.current.addListener('place_changed', () => {
           const place = autocompleteRef.current.getPlace()
           if (!place?.formatted_address && !place?.address_components) return
+          console.info('ADDRESS_AUTOCOMPLETE_RESULTS', {
+            query: inputRef.current?.value || '',
+            placeId: place?.place_id || '',
+            formattedAddress: place?.formatted_address || '',
+            country: getAddressPart(place?.address_components || [], 'country') || '',
+          })
           onSelect(buildAddressPayload(place), place)
         })
         setStatus('ready')
@@ -113,7 +118,13 @@ export default function AddressAutocomplete({ onSelect, label = 'Search Address 
   return (
     <div className="address-autocomplete-field">
       <label>{label}</label>
-      <input ref={inputRef} type="text" placeholder={placeholder} autoComplete="off" />
+      <input
+        ref={inputRef}
+        type="text"
+        placeholder={placeholder}
+        autoComplete="off"
+        onChange={(event) => console.info('ADDRESS_AUTOCOMPLETE_QUERY', { query: event.target.value })}
+      />
       {status === 'loading' && <small>Loading Google address search...</small>}
       {status === 'ready' && <small>Select an address, then review/edit the fields below.</small>}
       {status === 'error' && <small>Google address search could not load. Please enter the address manually.</small>}

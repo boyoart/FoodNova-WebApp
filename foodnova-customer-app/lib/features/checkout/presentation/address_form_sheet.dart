@@ -190,12 +190,6 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
               Text('Complete recipient, phone, address, city, and state.')));
       return;
     }
-    if (next.country.trim().isNotEmpty &&
-        next.country.toLowerCase() != 'nigeria') {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('FoodNova delivery addresses must be in Nigeria.')));
-      return;
-    }
     if (!mounted) return;
     setState(() => _saving = true);
     try {
@@ -242,7 +236,7 @@ class _AddressFormSheetState extends ConsumerState<_AddressFormSheet> {
               labelText: 'Search delivery address',
               helperText: places.usesGooglePlaces
                   ? 'Powered by Google Places'
-                  : 'Search enabled for Nigerian delivery addresses',
+                  : 'Search enabled for international delivery addresses',
               prefixIcon: const Icon(Icons.place_outlined),
               suffixIcon: _searching
                   ? const Padding(

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../config/app_config.dart';
@@ -16,19 +17,19 @@ class PlacesRepository {
     final query = input.trim();
     if (query.length < 3) return const [];
     if (!usesGooglePlaces) return _fallbackAutocomplete(query);
+    debugPrint('ADDRESS_AUTOCOMPLETE_QUERY query=$query provider=google');
     final response = await _dio.get(
       'https://maps.googleapis.com/maps/api/place/autocomplete/json',
       queryParameters: {
         'input': query,
         'key': AppConfig.googlePlacesApiKey,
-        'components': 'country:ng',
-        'location': '6.5244,3.3792',
-        'radius': '70000',
         'types': 'address',
       },
     );
     final body = Map<String, dynamic>.from(response.data as Map);
     final items = body['predictions'] as List? ?? [];
+    debugPrint(
+        'ADDRESS_AUTOCOMPLETE_RESULTS query=$query provider=google count=${items.length} status=${body['status'] ?? ''}');
     return items
         .map(
             (item) => PlacePrediction.fromJson(Map<String, dynamic>.from(item)))
@@ -55,6 +56,7 @@ class PlacesRepository {
   }
 
   Future<List<PlacePrediction>> _fallbackAutocomplete(String query) async {
+    debugPrint('ADDRESS_AUTOCOMPLETE_QUERY query=$query provider=nominatim');
     final response = await _dio.get(
       'https://nominatim.openstreetmap.org/search',
       options: Options(headers: {
@@ -64,11 +66,12 @@ class PlacesRepository {
         'q': query,
         'format': 'jsonv2',
         'addressdetails': '1',
-        'countrycodes': 'ng',
         'limit': '6',
       },
     );
     final items = response.data as List? ?? [];
+    debugPrint(
+        'ADDRESS_AUTOCOMPLETE_RESULTS query=$query provider=nominatim count=${items.length}');
     return items.map((item) {
       final json = Map<String, dynamic>.from(item);
       final address = PlaceAddress.fromNominatim(json);
