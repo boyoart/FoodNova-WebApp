@@ -80,6 +80,15 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
+**/.gradle/
+**/.idea/
+**/local.properties
+**/build/
+**/build-debug.log
+**/analysis.txt
+**/errorlog.txt
+**/fullbuild.txt
+**/hs_err_pid*.log
 .env
 .env.*
 *.env

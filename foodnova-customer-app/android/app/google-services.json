@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1051555081244",
+    "project_id": "foodnova-customer-app",
+    "storage_bucket": "foodnova-customer-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1051555081244:android:1d470be7b4e8c2ee4943d9",
+        "android_client_info": {
+          "package_name": "app.foodnova.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCNoco0i7L2ylLw6z4nGIn986-uGaO6-ZQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
