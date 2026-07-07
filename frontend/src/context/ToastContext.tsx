@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -35,9 +35,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (message: string, tone: Tone = "info") => {
       setToast({ message, tone });
       if (timer.current) clearTimeout(timer.current);
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: Platform.OS !== "web" }).start();
       timer.current = setTimeout(() => {
-        Animated.timing(opacity, { toValue: 0, duration: 250, useNativeDriver: true }).start(
+        Animated.timing(opacity, { toValue: 0, duration: 250, useNativeDriver: Platform.OS !== "web" }).start(
           () => setToast(null)
         );
       }, 3200);
@@ -52,10 +52,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         <Animated.View
           testID="toast"
           pointerEvents="none"
-          style={[
-            styles.wrap,
-            { top: insets.top + spacing.sm, opacity },
-          ]}
+          style={[styles.wrap, { top: insets.top + spacing.sm, opacity }]}
         >
           <View style={[styles.toast, { borderLeftColor: TONE_COLOR[toast.tone] }]}>
             <Ionicons name={TONE_ICON[toast.tone]} size={20} color={TONE_COLOR[toast.tone]} />

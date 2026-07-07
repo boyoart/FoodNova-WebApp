@@ -12,7 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.riderofferflow.mpig0l",
       "config": {
-        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_IOS_API_KEY"
+        "googleMapsApiKey": "AIzaSyDgsBi_YK8BZeIbQsaClGXdqVaGr6Q9NQk"
       },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Share your live location for delivery tracking",
@@ -39,7 +39,7 @@
       ],
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_ANDROID_API_KEY"
+          "apiKey": "AIzaSyDgsBi_YK8BZeIbQsaClGXdqVaGr6Q9NQk"
         }
       }
     },
