@@ -1,24 +1,47 @@
 {
   "expo": {
-    "name": "frontend",
+    "name": "FoodNova Dispatch",
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
-    "userInterfaceStyle": "automatic",
+    "scheme": "foodnovadispatch",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.riderofferflow.mpig0l"
+      "bundleIdentifier": "com.emergent.riderofferflow.mpig0l",
+      "config": {
+        "googleMapsApiKey": "YOUR_GOOGLE_MAPS_IOS_API_KEY"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Share your live location for delivery tracking",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Track deliveries in the background while on the road",
+        "NSCameraUsageDescription": "Take selfies and delivery proof photos",
+        "NSPhotoLibraryUsageDescription": "Upload verification documents from your gallery"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#00C261"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.riderofferflow.mpig0l"
+      "package": "com.emergent.riderofferflow.mpig0l",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "CAMERA",
+        "POST_NOTIFICATIONS"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_ANDROID_API_KEY"
+        }
+      }
     },
     "web": {
       "bundler": "metro",
@@ -33,9 +56,17 @@
           "image": "./assets/images/splash-image.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#00C261"
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Track deliveries while you are on the road"
+        }
+      ],
+      "expo-notifications",
+      "expo-image-picker"
     ],
     "experiments": {
       "typedRoutes": true
