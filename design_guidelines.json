@@ -1,0 +1,162 @@
+{
+  "app_name": "FoodNova Dispatch",
+  "personality": "5 Brutalist Mobile structure (Light) with 7 Utility operational layouts",
+  "personality_one_liner": "A high-visibility, operational command center built for speed, contrast, and outdoor legibility.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#1F2937",
+    "surfaceSecondary": "#F3F4F6",
+    "onSurfaceSecondary": "#111827",
+    "surfaceTertiary": "#E5E7EB",
+    "onSurfaceTertiary": "#374151",
+    "surfaceInverse": "#111827",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#00C261",
+    "brandPrimary": "#00C261",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#111827",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#D1FAE5",
+    "onBrandTertiary": "#065F46",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "border": "#E5E7EB",
+    "borderStrong": "#111827",
+    "divider": "#F3F4F6"
+  },
+  "typography": {
+    "displayFontFamily": "Space Grotesk",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous spacing for outdoor usage. High tap-target clearance.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 4,
+    "md": 8,
+    "lg": 12,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [
+      "Use solid surfaceSecondary and surfaceInverse for elevated components to ensure maximum contrast and legibility under sunlight."
+    ],
+    "dont's": [
+      "No blur or glassmorphism. This is a fast, operational rider app running on diverse Android devices."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "solid surfaceSecondary",
+      "android": "solid surfaceSecondary",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "none",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Splash & Auth",
+      "purpose": "High-impact brand entry and fast phone/OTP login.",
+      "states": {
+        "loading": "Brand color spinner",
+        "empty": "N/A",
+        "error": "Inline text or toast with retry."
+      },
+      "layout": "Centered FoodNova logo. Phone number input with massive, full-width sticky submit button at the bottom."
+    },
+    {
+      "name": "Onboarding (KYC)",
+      "purpose": "Frictionless multi-step document collection (Selfie, ID, Vehicle).",
+      "states": {
+        "loading": "Skeleton rows for document status",
+        "empty": "N/A",
+        "error": "Red borderStrong on missing/failed document upload."
+      },
+      "layout": "Progress bar at top. Clear, single-column upload zones. Large 'Next' button pinned above keyboard."
+    },
+    {
+      "name": "Dashboard (Home)",
+      "purpose": "Primary operational hub to go online, view earnings, and accept incoming offers.",
+      "states": {
+        "loading": "Skeleton stat cards",
+        "empty": "Offline state: Map is grayed out or shows 'You are offline'.",
+        "error": "Banner at top if GPS/Network fails."
+      },
+      "layout": "Map background occupying upper 60%. Bottom 40% houses a sticky surface container with Earnings overview and a massive 'Swipe to Go Online' or primary toggle button. Incoming offer pops up as an edge-to-edge bottom sheet with a countdown ring."
+    },
+    {
+      "name": "Active Delivery (Live)",
+      "purpose": "Step-by-step navigation and status tracking for the current order.",
+      "states": {
+        "loading": "Fetching route...",
+        "empty": "N/A",
+        "error": "Rerouting prompt."
+      },
+      "layout": "Full-screen map. Persistent bottom sheet detailing current step (e.g., 'Head to Restaurant', 'Confirm Pickup'). Large slider/button to transition states. Essential details (Customer name, Order #, PIN) presented in high-contrast typography."
+    },
+    {
+      "name": "Deliveries & Earnings",
+      "purpose": "Historical queue and performance metrics.",
+      "states": {
+        "loading": "Skeleton list",
+        "empty": "Illustration with 'No deliveries yet today'",
+        "error": "Failed to load data, tap to retry."
+      },
+      "layout": "Large numeric metrics at the top. Filter pills (Today, Week). Flat list of delivery cards with strict structural borders."
+    },
+    {
+      "name": "Profile & Settings",
+      "purpose": "Rider documents, vehicle info, and app preferences.",
+      "states": {
+        "loading": "Skeleton",
+        "empty": "N/A",
+        "error": "Error fetching profile."
+      },
+      "layout": "Standard single-column list with structural dividers. High-visibility 'Log Out' action at the bottom."
+    }
+  ],
+  "images": {
+    "login_hero": {
+      "url": "https://images.unsplash.com/photo-1695654390723-479197a8c4a3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxmb29kJTIwZGVsaXZlcnklMjBkcml2ZXIlMjBzY29vdGVyfGVufDB8fHx8MTc4MzQ1ODgxNXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Food delivery driver on a scooter"
+    },
+    "map_placeholder": {
+      "url": "https://images.unsplash.com/photo-1605764949087-2870b557821c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwxfHxhYnN0cmFjdCUyMGdyZWVuJTIwbWFwJTIwYmFja2dyb3VuZCUyMHJvdXRlfGVufDB8fHx8MTc4MzQ1ODgxNXww&ixlib=rb-4.1.0&q=85",
+      "alt": "Abstract map representation"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the color palette: FoodNova Green (#00C261) is the primary signal color. Charcoal (#111827 / #1F2937) provides high-contrast structure. Do not introduce any blue or purple.",
+    "Typography: Use Space Grotesk for large numeric metrics and primary headings. Use Plus Jakarta Sans for high legibility in body/UI elements.",
+    "Layout: Optimize for driver motion. Primary actions (Go Online, Accept Offer, Confirm Pickup) must be massively scaled (min 56pt height, often full width) and pinned to the bottom (thumb zone).",
+    "Disable glassmorphism completely. Rely on solid surfaceInverse or surfaceSecondary containers for maximum visibility under direct sunlight (Brutalist Utility approach).",
+    "For the active delivery screen, ensure a clear timeline/step approach. Avoid burying the delivery PIN or customer contact info.",
+    "Implement haptics prominently on status toggles (e.g., 'Go Online', 'Confirm Dropoff') to give physical feedback while driving."
+  ]
+}
