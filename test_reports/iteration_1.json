@@ -1,0 +1,54 @@
+{
+  "summary": "Frontend-only smoke test of the FoodNova Dispatch (Rider) Expo/React Native web preview. Verified splash-to-login redirect, all required testIDs on login/register/forgot screens, empty-submit validation toast, show/hide password toggle, and navigation between login/register/forgot with back buttons. Confirmed the app makes REAL network calls to https://foodnova-webapp.onrender.com for /delivery/auth/login, /delivery/auth/check-email and /delivery/auth/send-otp. All three requests are FIRED correctly (captured in the browser network layer) and a direct backend curl to /delivery/auth/login returned {\"success\":false,\"detail\":\"Delivery account not found.\"} (HTTP 404), proving live backend connectivity works. HOWEVER, from within the web preview browser, every response is blocked by CORS ('No Access-Control-Allow-Origin header'), so the app displays a generic 'Failed to fetch' error toast instead of the backend's 'Delivery account not found.' message. This is a limitation of the production backend not whitelisting the preview origin — it will not affect the native Android build. Registration/forgot OTP flows therefore could not be verified end-to-end from the web preview beyond confirming the network calls are dispatched. No red screen, no crash, all testIDs present, all navigation works.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Live backend response verification (login/register/forgot)",
+        "issue": "Production backend https://foodnova-webapp.onrender.com does not include the web preview origin (https://rider-offer-flow.preview.emergentagent.com) in Access-Control-Allow-Origin. Browser preflight fails, so requests never receive a body and the app shows 'Failed to fetch' instead of the real backend message (e.g. 'Delivery account not found.'). Curl against the same endpoints from server-side returns the expected JSON, confirming the API is reachable and the frontend is correctly wired. On a native Android build there is no CORS enforcement, so this will work as designed on device.",
+        "affected_testIDs": ["login-submit-button", "register-send-otp", "forgot-submit"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "ToastContext (Animated.View)",
+        "issue": "Console warning: 'props.pointerEvents is deprecated. Use style.pointerEvents'. Reference: /app/frontend/src/context/ToastContext.tsx:54 — move pointerEvents=\"none\" into the style object."
+      },
+      {
+        "component": "Global styles (shadow*)",
+        "issue": "Console warning: '\"shadow*\" style props are deprecated. Use \"boxShadow\".' Native RN still supports shadow*, but React Native Web 0.19+ prefers boxShadow. Non-blocking on device; suppress or migrate for cleaner web preview. Reference: /app/frontend/src/context/ToastContext.tsx (shadowColor/shadowOpacity/shadowRadius/shadowOffset) and any other StyleSheet using shadow*."
+      },
+      {
+        "component": "Animated (useNativeDriver on web)",
+        "issue": "Console warning: 'Animated: useNativeDriver is not supported ... Falling back to JS-based animation.' Toast uses useNativeDriver: true which is fine on device but noisy on web preview. Optional: pass Platform.OS !== 'web' or ignore. Reference: /app/frontend/src/context/ToastContext.tsx:38,40."
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "PRODUCTION BACKEND: Add https://rider-offer-flow.preview.emergentagent.com (and preview/emergentagent.com wildcard if possible) to CORS Access-Control-Allow-Origin on foodnova-webapp.onrender.com so QA can validate real error messages from the web preview. Without this, the review request's 'shows a backend error toast (e.g. Delivery account not found.)' cannot be automated from web — only from a native Android build. This is out of scope of the frontend repo but blocks full web-preview verification.",
+    "OPTIONAL (frontend polish, not blocking): (1) In /app/frontend/src/context/ToastContext.tsx move pointerEvents from prop to style. (2) Migrate shadow* -> boxShadow in shared style tokens or wrap in Platform.select for RN-Web compatibility. (3) Gate useNativeDriver: true behind Platform.OS !== 'web' inside the Toast animation.",
+    "No changes required for the tested flows themselves — they are implemented correctly per the review request."
+  ],
+  "critical_code_review_comments": [
+    "client.ts (line 11) uses `process.env.EXPO_PUBLIC_FOODNOVA_API ?? 'https://foodnova-webapp.onrender.com'`. Per project rules, hardcoded default URLs should be omitted so missing env fails fast. Non-blocking but recommended cleanup.",
+    "AuthApi.login extracts token client-side but does not validate the response shape. Fine given loose backend typings, but consider logging when extractToken returns null so the 'no session token was returned' branch is diagnosable.",
+    "Register step 1 blocks progression on emailCheck.exists but relies on the backend returning a truthy `exists` field. Works, but a defensive fallback (e.g., surface backend message if returned) would be a nicer UX.",
+    "All screens correctly wrap text in <Text>, use StyleSheet.create(), TouchableOpacity for taps, KeyboardAvoidingView on iOS, and expose testIDs — meets React Native best practices."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only run; external production backend verified reachable via curl, returned expected auth-error JSON)",
+    "frontend": "9/11 verifiable checks PASS. 2 checks (backend error message text after invalid login, and OTP-step transition after register-send-otp / forgot-submit) are BLOCKED by CORS in the web preview but the underlying network calls fire correctly."
+  },
+  "seed_data_creation": "None. Used random qa_probe_<timestamp>@example.com emails per instructions; none reached the backend due to CORS.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The Expo web preview cannot receive responses from https://foodnova-webapp.onrender.com due to CORS. All frontend logic (splash gate, login form, validation toast, password toggle, register 4-field flow, forgot-password flow, back navigation, testIDs) has been verified as functionally correct. Full auth verification must happen on (a) native Android build, or (b) after the production backend whitelists the preview origin. Do not modify frontend to work around CORS. Approved-rider credentials are still pending in /app/memory/test_credentials.md — until they are supplied, authenticated flows (tabs, offers, orders, onboarding) remain untestable.",
+  "rca_of_issue": "Root cause of the 'error toast shows Failed to fetch instead of Delivery account not found.' observation: production backend at foodnova-webapp.onrender.com does not set Access-Control-Allow-Origin for the preview host. Browser blocks the response body before the app can read it, so client.ts throws ApiError('Failed to fetch', 0, null) from the fetch() catch, and the login/register/forgot handlers show that message via toast. Reproduction: (1) open the web preview, (2) submit invalid login, (3) DevTools -> Network shows POST /delivery/auth/login with CORS error, (4) app displays 'Failed to fetch' toast. Server-side curl to the same endpoint returns the expected {success:false, detail:'Delivery account not found.'} JSON, confirming the frontend is wired correctly and the backend is alive. Mitigation: add the preview origin to the backend's CORS allowlist, OR run the app as a native Android build (no CORS in-app) — either resolves it without any frontend change."
+}
