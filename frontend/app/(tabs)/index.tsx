@@ -29,7 +29,6 @@ import {
   requestForegroundPermission,
   getCurrentCoords,
 } from "@/src/lib/location";
-import { registerPushToken } from "@/src/lib/push";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 const POLL_MS = 12000;
@@ -60,7 +59,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     initOnline();
-    registerPushToken();
   }, [initOnline]);
 
   const loadStats = useCallback(async () => {

@@ -4,7 +4,7 @@ import * as Device from "expo-device";
 
 import { NotifApi } from "@/src/api/endpoints";
 
-// Foreground behaviour
+// Foreground behaviour — show banner + list + sound while app is open.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -14,19 +14,26 @@ Notifications.setNotificationHandler({
   }),
 });
 
+const isNative = Platform.OS !== "web";
+
+async function ensureAndroidChannel() {
+  if (Platform.OS !== "android") return;
+  await Notifications.setNotificationChannelAsync("dispatch", {
+    name: "Delivery Offers",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#00C261",
+    sound: "default",
+  });
+}
+
 // Register the native FCM device token with the existing backend.
 // Works only on a real Android/iOS build (needs google-services.json + FCM creds).
 export async function registerPushToken(): Promise<string | null> {
-  if (Platform.OS === "web" || !Device.isDevice) return null;
+  if (!isNative || !Device.isDevice) return null;
   try {
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("dispatch", {
-        name: "Delivery Offers",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#00C261",
-      });
-    }
+    await ensureAndroidChannel();
+
     const existing = await Notifications.getPermissionsAsync();
     let status = existing.status;
     if (status !== "granted") {
@@ -38,22 +45,44 @@ export async function registerPushToken(): Promise<string | null> {
     const tokenResp = await Notifications.getDevicePushTokenAsync();
     const token = (tokenResp as any)?.data ?? "";
     if (token) {
-      await NotifApi.registerFcmToken(token, Platform.OS).catch(() => {});
+      await NotifApi.registerFcmToken(String(token), Platform.OS).catch(() => {});
     }
-    return token || null;
+    return token ? String(token) : null;
   } catch {
     return null;
   }
 }
 
+// Fires when FCM rotates the device token — re-register with the backend.
+export function addTokenRefreshListener(cb: (token: string) => void) {
+  if (!isNative) return () => {};
+  const sub = Notifications.addPushTokenListener((t) => {
+    const token = (t as any)?.data ?? "";
+    if (token) cb(String(token));
+  });
+  return () => sub.remove();
+}
+
+// Foreground receipt + tap (from background/quit) listeners.
 export function addNotificationListeners(onTap: (data: any) => void) {
+  if (!isNative) return () => {};
   const received = Notifications.addNotificationReceivedListener(() => {});
   const response = Notifications.addNotificationResponseReceivedListener((resp) => {
-    const data = resp.notification.request.content.data;
-    onTap(data);
+    onTap(resp.notification.request.content.data);
   });
   return () => {
     received.remove();
     response.remove();
   };
+}
+
+// Data payload of the notification that cold-started the app (tap from killed state).
+export async function getInitialNotificationData(): Promise<any | null> {
+  if (!isNative) return null;
+  try {
+    const last = await Notifications.getLastNotificationResponseAsync();
+    return last?.notification?.request?.content?.data ?? null;
+  } catch {
+    return null;
+  }
 }
