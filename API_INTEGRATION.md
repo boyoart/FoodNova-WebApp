@@ -59,6 +59,18 @@ Rider routes are **un-prefixed** (NOT under `/api`).
 | PATCH | `/notifications/{id}/read` · `/notifications/read-all` | |
 | POST | `/delivery-workers/register-fcm-token` | `{token, platform}` |
 
+## Login identifier (email or phone)
+The login screen accepts **email OR phone** in one field (`smartLogin` in `src/api/endpoints.ts`):
+- **Phone** → `POST /delivery/auth/login {phone_number, password}` (dedicated rider login). ✅ Fully supported.
+- **Email** → `POST /auth/login {email, password}` (unified login), then the app verifies the token grants a
+  rider session via `GET /delivery/me`. If it doesn't, the user is told to sign in with their phone number.
+
+> ⚠️ **Backend gap (email login):** the dedicated rider login is **phone-only** and rejects email
+> (`"Enter a valid Nigerian phone number."`). Email sign-in only works if the unified `/auth/login`
+> token authorizes `/delivery/*` routes. To guarantee email login for riders, add email support to
+> `/delivery/auth/login` (accept `{email}` as an alternative to `{phone_number}`) OR ensure the unified
+> token is accepted by rider endpoints. Registration OTP is **email-only** (no phone OTP), as required.
+
 ## Real-time strategy
 No Socket.IO/WebSocket route is present in the backend OpenAPI. Offers are delivered via
 **REST polling (12s) + FCM push**. If a socket channel exists, provide the URL + event names to
