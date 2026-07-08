@@ -41,3 +41,12 @@ is built in Expo/React Native and integrates with the existing backend over its 
 ## Next Tasks
 1. Get an approved rider login + create google-services.json → device build.
 2. Run full E2E via testing agent with real credentials.
+
+## Update 2026-07-08 — Live integration hardening (approved rider #13)
+- Verified against real approved rider (08034622339): login, /delivery/me, stats, offers, orders — 21/21 API checks PASS (non-destructive).
+- FIXED from real data: approval flag read at TOP level of /delivery/me (was drilling into nested `worker`); order mapping now uses `order_code`, `total_amount`, `delivery_address_snapshot.latitude/longitude`; status `IN_TRANSIT`/`out_for_delivery` handled.
+- FIXED: backend IGNORES `?status=` on /delivery/orders → app now buckets active/completed/cancelled CLIENT-SIDE (dashboard, deliveries, earnings).
+- Firebase: `google-services.json` added; Android package set to `com.foodnova.dispatch` + `googleServicesFile` wired in app.json.
+- Backend email-login patch spec delivered → `/app/BACKEND_EMAIL_LOGIN_PATCH.md`.
+- GAPS confirmed: /delivery/stats exposes NO earnings fields (earnings show ₦0 until backend adds them); web preview CORS-blocked (native unaffected).
+- STILL PENDING: destructive UI workflow E2E (accept→pickup→en-route→arrived→PIN) — needs a device build (CORS) + a disposable test order (won't run against live customer order FN-00030).
