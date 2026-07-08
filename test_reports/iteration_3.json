@@ -1,0 +1,45 @@
+{
+  "summary": "Backend-only READ-ONLY verification of the FoodNova rider integration against the live production backend (https://foodnova-webapp.onrender.com) using the approved rider account (phone 08034622339). All 21 pytest checks PASS in 1.77s. Confirmed: (1) POST /delivery/auth/login returns 200 with success=true, JWT in access_token (3-segment JWT) AND mirrored in the `token` alias. (2) GET /delivery/me exposes approval_status='ACTIVE' AND kyc_status at the TOP LEVEL (not inside nested worker) — validating the main-agent's mapping fix; nested worker.approval_status (if present) does not disagree. (3) GET /delivery/stats returns a wrapper object with a nested `stats` object that contains ALL required keys {today_deliveries, completed, active, lifetime_completed, acceptance_rate, average_rating} and ZERO earnings-like fields (earnings/today_earnings/lifetime_earnings/balance/wallet/wallet_balance/payout all absent). (4) GET /delivery/offers returns success with an offers array of length 0. (5) GET /delivery/orders (no query) returns 1 order (FN-00030); GET /delivery/orders?status=active|completed|cancelled EACH return 0 — confirming the backend IGNORES ?status and justifying the app's client-side bucketing. (6) The FN-00030 order carries every field the app maps: order_code='FN-00030', status='out_for_delivery', delivery_status='IN_TRANSIT', total_amount=45000.0, customer_name+customer_phone present, delivery_address present, delivery PIN present (delivery_pin OR delivery_code), and delivery_address_snapshot={latitude:43.7198399, longitude:-79.760483} — a valid Ontario coordinate that will drive the tracking map. Strict rule respected: only the single allowed POST (login) was fired; every other request was a GET. No destructive endpoint was called (no go-online/offline, accept/decline, PATCH status, proof, location-ping, panic-alert).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /delivery/orders?status=<any>",
+        "issue": "Backend silently ignores the ?status query parameter — returns 0 orders regardless (active/completed/cancelled). App compensates by bucketing client-side; this is a known upstream gap, not a rider-app bug. If the backend team ever wires the filter, the client-side bucketing becomes redundant."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_rider_api_integration.py",
+    "/app/test_reports/pytest/rider_api_integration.xml"
+  ],
+  "action_items": [
+    "No action required — all field-mapping fixes are confirmed correct against the real API.",
+    "Optional (upstream, out of scope of this app): fix ?status filter on /delivery/orders in the FoodNova backend so the app can drop client-side bucketing.",
+    "Optional pytest polish: convert TestStats class-scoped fixtures to @classmethod to silence PytestRemovedIn10Warning (cosmetic only, non-blocking)."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/src/api/endpoints.ts::AuthApi.login correctly captures access_token via extractToken() — the live payload confirms both `access_token` and `token` are present, so the extractor's fallback path is safe.",
+    "RiderApi.orders(status?) forwards the ?status query to a backend that ignores it — confirmed at API level. The client-side bucketing in (tabs)/deliveries.tsx is therefore mandatory; leave it in.",
+    "Approval gating logic must read `me.approval_status` at the TOP LEVEL (confirmed value 'ACTIVE'). Nested `worker.approval_status` should only be used as a fallback — matches the main-agent's fix.",
+    "Stats screen must NOT surface earnings — confirmed the API does not expose any earnings/wallet/payout key at either the wrapper or the inner `stats` object. Any earnings UI would be dead code."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rider_api_integration.py (new)"
+  ],
+  "success_rate": {
+    "backend": "21/21 PASS (100%)",
+    "frontend": "N/A — not tested this iteration (CORS-blocked web preview; backend-only scope per review request)"
+  },
+  "seed_data_creation": "None. Read-only tests against a live production account. No writes issued beyond the single mandatory login POST.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Live account: phone 08034622339 / password Spider1234# — APPROVED rider with in-flight order FN-00030 (out_for_delivery, IN_TRANSIT, delivery in Ontario). Reuse /app/backend/tests/test_rider_api_integration.py for future regressions; it strictly avoids all write endpoints. If FN-00030 gets delivered, the TestOrders.test_unfiltered_orders_returns_at_least_one test may fail — that would be an environment change, not a code regression. When the backend eventually honors ?status, TestOrders.test_status_filter_is_ignored_returns_zero will start failing intentionally — flip it to assert >0 at that point.",
+  "rca_of_issue": "N/A — no bug found. The one documented backend quirk (?status ignored on /delivery/orders) is upstream and already handled by client-side bucketing in the app; the field-mapping fixes made by the main agent (top-level approval_status, order_code/total_amount/delivery_address_snapshot coords, no earnings) all match the live production payload exactly."
+}

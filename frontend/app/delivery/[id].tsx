@@ -36,8 +36,9 @@ function statusIndex(status: string): number {
   const s = status.toLowerCase();
   const idx = FLOW.findIndex((f) => f.key === s);
   if (idx >= 0) return idx;
-  if (["assigned", "accepted", "confirmed"].includes(s)) return -1;
-  if (["out_for_delivery", "enroute"].includes(s)) return 1;
+  if (["assigned", "accepted", "confirmed", "pending"].includes(s)) return -1;
+  if (["out_for_delivery", "enroute", "in_transit"].includes(s)) return 1;
+  if (["at_pickup", "picked", "collected"].includes(s)) return 0;
   return -1;
 }
 
@@ -79,8 +80,12 @@ export default function DeliveryDetail() {
   const idx = useMemo(() => statusIndex(String(currentStatus)), [currentStatus]);
   const nextStep = idx + 1 < FLOW.length ? FLOW[idx + 1] : null;
 
-  const pickup = coordFrom(order, ["pickup_lat", "pickup_latitude", "restaurant_lat"], ["pickup_lng", "pickup_longitude", "restaurant_lng"]);
-  const customer = coordFrom(order, ["dropoff_lat", "customer_lat", "delivery_lat", "latitude"], ["dropoff_lng", "customer_lng", "delivery_lng", "longitude"]);
+  const pickup = coordFrom(order, ["pickup_lat", "pickup_latitude", "restaurant_lat", "vendor_lat"], ["pickup_lng", "pickup_longitude", "restaurant_lng", "vendor_lng"]);
+  const customer = coordFrom(
+    order,
+    ["dropoff_lat", "customer_lat", "delivery_lat", "delivery_address_snapshot.latitude", "latitude"],
+    ["dropoff_lng", "customer_lng", "delivery_lng", "delivery_address_snapshot.longitude", "longitude"]
+  );
 
   async function advance() {
     if (!nextStep || !order) return;
@@ -141,8 +146,8 @@ export default function DeliveryDetail() {
     );
   }
 
-  const customerName = pick(order, ["customer_name", "customer.name", "recipient_name"], "Customer");
-  const customerPhone = pick(order, ["customer_phone", "customer.phone", "recipient_phone", "phone"], null);
+  const customerName = pick(order, ["customer_name", "delivery_address_snapshot.recipient_name", "recipient_name"], "Customer");
+  const customerPhone = pick(order, ["customer_phone", "delivery_address_snapshot.phone", "recipient_phone", "phone"], null);
   const dropoff = pick(order, ["dropoff_address", "customer_address", "delivery_address"], "Delivery address");
   const pickupAddr = pick(order, ["pickup_address", "restaurant_address", "vendor_address"], "Pickup location");
   const isDelivered = String(currentStatus).toLowerCase() === "delivered";
@@ -165,7 +170,7 @@ export default function DeliveryDetail() {
         <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.orderNo}>Order #{pick(order, ["order_number", "order_no", "reference", "id"], "")}</Text>
+              <Text style={styles.orderNo}>Order #{pick(order, ["order_code", "order_number", "order_no", "reference", "id"], "")}</Text>
               <StatusPill status={currentStatus} testID="delivery-status-pill" />
             </View>
 

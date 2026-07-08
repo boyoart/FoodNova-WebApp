@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { RiderApi } from "@/src/api/endpoints";
 import { Card, EmptyState, Loader, StatusPill } from "@/src/components/ui";
 import { asList, pick } from "@/src/lib/normalize";
-import { formatMoney, timeAgo } from "@/src/lib/format";
+import { formatMoney, timeAgo, orderBucket, orderStatus } from "@/src/lib/format";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 const FILTERS = [
@@ -27,8 +27,10 @@ export default function Deliveries() {
   const load = useCallback(async (status: string) => {
     setLoading(true);
     try {
-      const data = await RiderApi.orders(status || undefined);
-      setOrders(asList(data));
+      // Backend ignores ?status=, so fetch all and bucket client-side.
+      const data = await RiderApi.orders();
+      const all = asList(data);
+      setOrders(status ? all.filter((o) => orderBucket(orderStatus(o)) === status) : all);
     } catch {
       setOrders([]);
     } finally {
@@ -88,25 +90,25 @@ export default function Deliveries() {
                 <Card style={styles.item}>
                   <View style={styles.itemTop}>
                     <Text style={styles.orderNo}>
-                      #{pick(item, ["order_number", "order_no", "reference", "id"], "")}
+                      #{pick(item, ["order_code", "order_number", "order_no", "reference", "id"], "")}
                     </Text>
                     <StatusPill status={pick(item, ["delivery_status", "status"], "")} />
                   </View>
                   <View style={styles.addrRow}>
                     <View style={[styles.pin, { backgroundColor: colors.warning }]} />
                     <Text style={styles.addr} numberOfLines={1}>
-                      {pick(item, ["pickup_address", "restaurant_address"], "Pickup")}
+                      {pick(item, ["pickup_address", "restaurant_address", "vendor_address"], "FoodNova pickup")}
                     </Text>
                   </View>
                   <View style={styles.addrRow}>
                     <View style={[styles.pin, { backgroundColor: colors.brandSecondary }]} />
                     <Text style={styles.addr} numberOfLines={1}>
-                      {pick(item, ["dropoff_address", "customer_address", "delivery_address"], "Customer")}
+                      {pick(item, ["delivery_address", "dropoff_address", "customer_address"], "Customer")}
                     </Text>
                   </View>
                   <View style={styles.itemFooter}>
                     <Text style={styles.amount}>
-                      {formatMoney(pick(item, ["payout", "fee", "delivery_fee", "total", "amount"], 0))}
+                      {formatMoney(pick(item, ["total_amount", "payout", "fee", "delivery_fee", "total", "amount"], 0))}
                     </Text>
                     <Text style={styles.time}>
                       {timeAgo(pick(item, ["created_at", "assigned_at", "updated_at"], null))}

@@ -7,7 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { RiderApi } from "@/src/api/endpoints";
 import { Card } from "@/src/components/ui";
 import { asObject, asList, pick } from "@/src/lib/normalize";
-import { formatMoney, timeAgo } from "@/src/lib/format";
+import { formatMoney, timeAgo, orderBucket, orderStatus } from "@/src/lib/format";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 export default function Earnings() {
@@ -18,9 +18,10 @@ export default function Earnings() {
 
   const load = useCallback(async () => {
     try {
-      const [s, c] = await Promise.all([RiderApi.stats(), RiderApi.orders("completed")]);
+      const [s, c] = await Promise.all([RiderApi.stats(), RiderApi.orders()]);
       setStats(asObject(s, "stats", "data"));
-      setCompleted(asList(c));
+      // Backend ignores ?status=; bucket completed client-side.
+      setCompleted(asList(c).filter((o) => orderBucket(orderStatus(o)) === "completed"));
     } catch {}
   }, []);
 

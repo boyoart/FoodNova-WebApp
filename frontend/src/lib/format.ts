@@ -49,3 +49,16 @@ function pretty(s: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase())
     .trim();
 }
+
+// The backend does not filter /delivery/orders by ?status=, so we bucket client-side.
+export function orderBucket(status?: string | null): "active" | "completed" | "cancelled" {
+  const s = (status || "").toLowerCase();
+  if (["delivered", "completed", "complete", "fulfilled", "confirmed_delivery"].includes(s))
+    return "completed";
+  if (["cancelled", "canceled", "failed", "rejected", "returned"].includes(s)) return "cancelled";
+  return "active";
+}
+
+export function orderStatus(o: any): string {
+  return (o?.delivery_status || o?.status || o?.order_status || "").toString();
+}

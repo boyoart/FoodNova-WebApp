@@ -23,7 +23,7 @@ import { Card, StatusPill } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
 import { OfferModal, Offer, offerId } from "@/src/components/OfferModal";
 import { asList, asObject, pick } from "@/src/lib/normalize";
-import { formatMoney } from "@/src/lib/format";
+import { formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
 import {
   getForegroundPermission,
   requestForegroundPermission,
@@ -72,9 +72,11 @@ export default function Dashboard() {
 
   const loadActive = useCallback(async () => {
     try {
-      const data = await RiderApi.orders("active");
+      const data = await RiderApi.orders();
       const list = asList(data);
-      setActiveOrder(list.length ? list[0] : null);
+      // Backend ignores ?status=, so bucket client-side to find the in-progress order.
+      const active = list.find((o) => orderBucket(orderStatus(o)) === "active");
+      setActiveOrder(active || null);
     } catch {}
   }, []);
 
@@ -267,7 +269,7 @@ export default function Dashboard() {
             <Card inverse style={{ gap: spacing.md }}>
               <View style={styles.activeTop}>
                 <Text style={styles.activeOrderNo}>
-                  Order #{pick(activeOrder, ["order_number", "order_no", "reference", "id"], "")}
+                  Order #{pick(activeOrder, ["order_code", "order_number", "order_no", "reference", "id"], "")}
                 </Text>
                 <StatusPill status={pick(activeOrder, ["delivery_status", "status"], "assigned")} />
               </View>

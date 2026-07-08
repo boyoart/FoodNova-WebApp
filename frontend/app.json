@@ -27,7 +27,8 @@
         "backgroundColor": "#00C261"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.riderofferflow.mpig0l",
+      "package": "com.foodnova.dispatch",
+      "googleServicesFile": "./google-services.json",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

@@ -21,12 +21,15 @@ const AuthContext = createContext<AuthState>({} as AuthState);
 
 function deriveApproval(r: Rider): string | null {
   if (!r) return null;
-  const src = r.worker || r.rider || r.profile || r;
+  const w = (r.worker || r.rider || r.profile || {}) as Record<string, any>;
   return (
-    src.approval_status ||
-    src.verification_status ||
-    src.status ||
-    src.kyc_status ||
+    r.approval_status ||
+    r.kyc_status ||
+    r.verification_status ||
+    r.status ||
+    w.approval_status ||
+    w.kyc_status ||
+    w.status ||
     null
   );
 }
@@ -45,7 +48,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshRider = useCallback(async (): Promise<Rider> => {
     try {
       const data = await RiderApi.me();
-      const r = (data && (data.worker || data.rider || data.data || data)) as Rider;
+      // /delivery/me returns useful fields at the TOP level (approval_status,
+      // full_name, phone_number) plus a nested `worker` with detail. Merge so
+      // top-level wins but worker detail (email, vehicle, nin) is preserved.
+      const r = data
+        ? ({ ...(data.worker || data.rider || {}), ...data } as Rider)
+        : null;
       setRider(r);
       setAuthed(true);
       return r;
