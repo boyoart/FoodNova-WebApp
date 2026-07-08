@@ -1,0 +1,51 @@
+{
+  "summary": "Frontend-only regression of the redesigned onboarding + login for FoodNova Dispatch (Expo/React Native web preview). All 9 requested checks PASS: (1) first-launch splash routes to 3-slide intro carousel with intro-skip and intro-next testIDs and pagination dots; (2) intro-next advances slides one-by-one; (3) last slide button label switches from 'Next' -> 'Get started' with a forward-arrow icon; (4) tapping 'Get started' persists fn_intro_seen=true in web localStorage and lands on login (login-identifier-input visible); (5) hard reload after the flag is set skips the intro and goes straight to login; (6) intro-skip also finishes intro, sets fn_intro_seen=true, and navigates to login; (7) empty login submit shows a warning toast with text 'Enter your email or phone, and password' (testID toast); (8) phone identifier '08100000099' + password fires POST https://foodnova-webapp.onrender.com/delivery/auth/login (verified in the network layer); (9) email identifier 'probe@example.com' + password fires POST https://foodnova-webapp.onrender.com/auth/login (email branch of smartLogin, verified in the network layer); go-register navigates to Register step 1 and the go-login back link returns; register-send-otp with all four fields fires POST /delivery/auth/check-email. Password toggle (Show/Hide) flips input type=password<->text as expected. As documented in iteration_1 the production backend does not whitelist the preview origin, so the /check-email response never reaches the app and /delivery/auth/send-otp is not fired in web preview — this is expected and NOT a bug (it will work on the native Android build). No red screen, no crash, no navigation dead-ends.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Register step 1 -> send-otp chain in web preview",
+        "issue": "CORS on foodnova-webapp.onrender.com blocks the /delivery/auth/check-email response, so the client throws before /delivery/auth/send-otp is dispatched. On native Android this proceeds correctly. Verified frontend wiring is correct: /check-email is fired with the entered email; sendOtp() would be invoked next given a non-null exists:false response.",
+        "affected_testIDs": ["register-send-otp"]
+      }
+    ],
+    "design_issues": [],
+    "react_native_issues": [
+      {
+        "component": "Global styles (shadow*)",
+        "issue": "Console warning 'shadow* style props are deprecated. Use boxShadow.' persists (React Native Web 0.19+). Non-blocking on native. Reference: shared theme tokens / ToastContext."
+      },
+      {
+        "component": "ToastContext (Animated.View pointerEvents)",
+        "issue": "Console warning 'props.pointerEvents is deprecated. Use style.pointerEvents' fires when a toast renders. Reference: /app/frontend/src/context/ToastContext.tsx."
+      },
+      {
+        "component": "expo-notifications on web",
+        "issue": "Console warning 'Listening to push token changes is not yet fully supported on web. Adding a listener will have no effect.' Web-preview only; expected on device."
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "No blocking action items for the redesigned onboarding/login flow — all requested behaviours pass in the web preview.",
+    "Recurring polish (unchanged from iteration_1): move pointerEvents to style, migrate shadow* -> boxShadow via Platform.select, and gate useNativeDriver on non-web to silence web-preview console noise.",
+    "External (out-of-scope of this repo): whitelist https://rider-offer-flow.preview.emergentagent.com on foodnova-webapp.onrender.com CORS so QA can validate real backend responses for /check-email, /send-otp, /login from web preview. Without this, chained flows (check-email -> send-otp -> otp step) cannot be automated from web."
+  ],
+  "critical_code_review_comments": [
+    "intro.tsx and index.tsx correctly persist and read fn_intro_seen via the shared storage helper; on web this is backed by AsyncStorage which uses localStorage with the exact key 'fn_intro_seen' — verified in-browser after finish().",
+    "login.tsx uses a single Field for identifier with keyboardType='email-address' — placeholder 'you@email.com  ·  080...' communicates dual purpose; smartLogin() correctly branches on '@' to choose /auth/login vs /delivery/auth/login.",
+    "register.tsx correctly calls checkEmail then sendOtp (email OTP only, no phone OTP), matching the review requirement.",
+    "Minor: hardcoded HERO Unsplash URL in login.tsx — acceptable for now, but consider bundling to avoid a first-paint external image request."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only)",
+    "frontend": "9/9 requested checks PASS in web preview (chained /send-otp only observable on device due to CORS on /check-email response)."
+  },
+  "seed_data_creation": "None. Used ephemeral qa_probe_test@example.com and 08100000099 solely to trigger network calls; no data reached the backend due to CORS.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The redesigned onboarding + single-field login flow is verified. Persistence key 'fn_intro_seen' works via AsyncStorage/localStorage on web. Deeper verification of chained auth flows (send-otp, verify-otp, register, forgot-password) still requires either (a) the production backend to whitelist the preview origin in CORS, or (b) a native Android build. No approved rider credentials available, so authenticated screens (tabs/onboarding/offers/orders) remain untestable.",
+  "rca_of_issue": "N/A — no regression. The only 'blocked' step (register /send-otp not fired) is the same CORS-on-preview root cause documented in iteration_1 and is not a frontend bug."
+}

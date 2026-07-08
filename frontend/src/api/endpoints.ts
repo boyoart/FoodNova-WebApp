@@ -53,6 +53,23 @@ export const AuthApi = {
     return { data, token };
   },
 
+  // Smart login: accepts email OR phone.
+  // - phone  -> dedicated rider login /delivery/auth/login (phone-only backend)
+  // - email  -> unified /auth/login; caller must verify it grants a rider session
+  smartLogin: async (identifier: string, password: string) => {
+    const isEmail = identifier.includes("@");
+    const data = isEmail
+      ? await api("/auth/login", { method: "POST", auth: false, body: { email: identifier, password } })
+      : await api("/delivery/auth/login", {
+          method: "POST",
+          auth: false,
+          body: { phone_number: identifier, password },
+        });
+    const token = extractToken(data);
+    if (token) await setToken(token);
+    return { data, token, isEmail };
+  },
+
   logout: async () => {
     try {
       await api("/delivery/auth/logout", { method: "POST" });

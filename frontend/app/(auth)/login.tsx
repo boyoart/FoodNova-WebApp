@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthApi } from "@/src/api/endpoints";
 import { useAuth } from "@/src/context/AuthContext";
 import { useToast } from "@/src/context/ToastContext";
-import { ApiError } from "@/src/api/client";
+import { ApiError, setToken } from "@/src/api/client";
 import { Button, Field } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
@@ -29,24 +29,35 @@ export default function Login() {
   const toast = useToast();
   const { refreshRider } = useAuth();
 
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function onLogin() {
-    if (!phone.trim() || !password) {
-      toast.show("Enter your phone number and password", "warning");
+    if (!identifier.trim() || !password) {
+      toast.show("Enter your email or phone, and password", "warning");
       return;
     }
     setLoading(true);
     try {
-      const { token } = await AuthApi.login(phone.trim(), password);
+      const { token, isEmail } = await AuthApi.smartLogin(identifier.trim(), password);
       if (!token) {
-        toast.show("Login succeeded but no session token was returned", "error");
+        toast.show("Login failed — no session token returned", "error");
         return;
       }
       const rider = await refreshRider();
+      if (!rider) {
+        // token isn't valid for the rider (/delivery) session
+        await setToken(null);
+        toast.show(
+          isEmail
+            ? "This email isn't linked to a rider account yet. Please sign in with your phone number."
+            : "Could not load your rider profile. Please try again.",
+          "error"
+        );
+        return;
+      }
       toast.show("Welcome back!", "success");
       const s = (
         rider?.approval_status ||
@@ -90,13 +101,14 @@ export default function Login() {
 
           <View style={{ gap: spacing.lg, marginTop: spacing.xl }}>
             <Field
-              testID="login-phone-input"
-              label="Phone number"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              placeholder="080..."
+              testID="login-identifier-input"
+              label="Email or phone number"
+              value={identifier}
+              onChangeText={setIdentifier}
+              keyboardType="email-address"
+              placeholder="you@email.com  ·  080..."
               autoCapitalize="none"
+              autoCorrect={false}
             />
             <View>
               <Field
