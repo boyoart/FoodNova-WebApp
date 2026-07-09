@@ -19,10 +19,11 @@ import { useAuth } from "@/src/context/AuthContext";
 import { useToast } from "@/src/context/ToastContext";
 import { ApiError } from "@/src/api/client";
 import { Button, Field } from "@/src/components/ui";
-import { pickImage, toFormData, PickedImage } from "@/src/lib/image";
+import { pickImage, toFormData, PickedImage, validateImageUpload } from "@/src/lib/image";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 const STEPS = ["Identity", "Selfie", "Documents", "Vehicle", "Emergency", "Review"] as const;
+const PHONE_RE = /^[+\d][\d\s().-]{7,}$/;
 
 export default function Onboarding() {
   const insets = useSafeAreaInsets();
@@ -82,13 +83,15 @@ export default function Onboarding() {
   }
 
   async function uploadSelfie() {
-    if (!selfie) {
-      toast.show("Please add a selfie first", "warning");
+    const error = validateImageUpload(selfie, "Selfie");
+    if (error) {
+      toast.show(error, "warning");
       return;
     }
+    const selectedSelfie = selfie!;
     setLoading(true);
     try {
-      await RiderApi.uploadSelfie(toFormData(selfie, "document"));
+      await RiderApi.uploadSelfie(toFormData(selectedSelfie, "document"));
       toast.show("Selfie uploaded", "success");
       next();
     } catch (e) {
@@ -99,13 +102,15 @@ export default function Onboarding() {
   }
 
   async function uploadDoc() {
-    if (!doc) {
-      toast.show("Please add your utility bill", "warning");
+    const error = validateImageUpload(doc, "Proof of address");
+    if (error) {
+      toast.show(error, "warning");
       return;
     }
+    const selectedDoc = doc!;
     setLoading(true);
     try {
-      await RiderApi.uploadDocument(toFormData(doc, "document", { document_type: "utility_bill" }));
+      await RiderApi.uploadDocument(toFormData(selectedDoc, "document", { document_type: "utility_bill" }));
       toast.show("Document uploaded", "success");
       next();
     } catch (e) {
@@ -139,8 +144,16 @@ export default function Onboarding() {
   }
 
   async function saveEmergency() {
-    if (!ecName.trim() || !ecPhone.trim()) {
-      toast.show("Enter emergency contact name and phone", "warning");
+    if (ecName.trim().length < 2) {
+      toast.show("Enter the emergency contact's full name", "warning");
+      return;
+    }
+    if (!ecRel.trim()) {
+      toast.show("Enter your relationship to the emergency contact", "warning");
+      return;
+    }
+    if (!PHONE_RE.test(ecPhone.trim())) {
+      toast.show("Enter a valid emergency contact phone number", "warning");
       return;
     }
     setLoading(true);
@@ -193,7 +206,7 @@ export default function Onboarding() {
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
         </View>
         <Text style={styles.stepLabel}>
-          Step {step + 1} of {STEPS.length} · {STEPS[step]}
+          Step {step + 1} of {STEPS.length} - {STEPS[step]}
         </Text>
       </View>
 
@@ -211,7 +224,7 @@ export default function Onboarding() {
                   I consent to FoodNova verifying my NIN for identity and background checks.
                 </Text>
               </Pressable>
-              <Button testID="verify-nin-button" label={ninVerified ? "Verified ✓  Continue" : "Verify NIN"} onPress={ninVerified ? next : verifyNin} loading={loading} />
+              <Button testID="verify-nin-button" label={ninVerified ? "Verified - Continue" : "Verify NIN"} onPress={ninVerified ? next : verifyNin} loading={loading} />
             </View>
           )}
 
@@ -220,7 +233,6 @@ export default function Onboarding() {
               <StepHead icon="happy-outline" title="Selfie verification" desc="Take a clear selfie in good lighting to match your ID." />
               <UploadZone image={selfie} label="Add selfie" onPick={() => pick(setSelfie, true)} testID="selfie-upload" round />
               <Button testID="selfie-submit" label="Upload & continue" onPress={uploadSelfie} loading={loading} />
-              <SkipButton onSkip={next} />
             </View>
           )}
 
@@ -229,7 +241,6 @@ export default function Onboarding() {
               <StepHead icon="document-text-outline" title="Proof of address" desc="Upload a recent utility bill (electricity, water, etc.)." />
               <UploadZone image={doc} label="Add utility bill" onPick={() => pick(setDoc, false)} testID="doc-upload" />
               <Button testID="doc-submit" label="Upload & continue" onPress={uploadDoc} loading={loading} />
-              <SkipButton onSkip={next} />
             </View>
           )}
 
@@ -273,7 +284,7 @@ export default function Onboarding() {
               <ReviewRow label="NIN verified" value={ninVerified ? "Yes" : "Pending"} />
               <ReviewRow label="Selfie" value={selfie ? "Added" : "Not added"} />
               <ReviewRow label="Utility bill" value={doc ? "Added" : "Not added"} />
-              <ReviewRow label="Vehicle" value={`${vehicleType}${make ? ` · ${make}` : ""}`} />
+              <ReviewRow label="Vehicle" value={`${vehicleType}${make ? ` - ${make}` : ""}`} />
               <ReviewRow label="Plate" value={plate || "--"} />
               <ReviewRow label="Emergency" value={ecName || "--"} />
               <Button testID="onboarding-submit" label="Submit application" onPress={submitAll} loading={loading} />
@@ -324,14 +335,6 @@ function UploadZone({
   );
 }
 
-function SkipButton({ onSkip }: { onSkip: () => void }) {
-  return (
-    <TouchableOpacity testID="skip-step" onPress={onSkip} style={{ alignSelf: "center", padding: spacing.sm }}>
-      <Text style={styles.skip}>Skip for now</Text>
-    </TouchableOpacity>
-  );
-}
-
 function ReviewRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.reviewRow}>
@@ -364,7 +367,6 @@ const styles = StyleSheet.create({
   uploadRound: { alignSelf: "center", width: 180 },
   uploadImg: { width: "100%", height: "100%", borderRadius: radius.lg },
   uploadLabel: { fontFamily: fonts.text, fontSize: type.base, fontWeight: "600", color: colors.muted },
-  skip: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted, fontWeight: "600" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   chipOn: { backgroundColor: colors.surfaceInverse, borderColor: colors.surfaceInverse },

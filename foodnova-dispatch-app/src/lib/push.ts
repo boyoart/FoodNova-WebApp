@@ -15,6 +15,14 @@ Notifications.setNotificationHandler({
 });
 
 const isNative = Platform.OS !== "web";
+const foregroundListeners = new Set<(data: any) => void>();
+
+export function addForegroundNotificationListener(cb: (data: any) => void) {
+  foregroundListeners.add(cb);
+  return () => {
+    foregroundListeners.delete(cb);
+  };
+}
 
 async function ensureAndroidChannel() {
   if (Platform.OS !== "android") return;
@@ -66,7 +74,10 @@ export function addTokenRefreshListener(cb: (token: string) => void) {
 // Foreground receipt + tap (from background/quit) listeners.
 export function addNotificationListeners(onTap: (data: any) => void) {
   if (!isNative) return () => {};
-  const received = Notifications.addNotificationReceivedListener(() => {});
+  const received = Notifications.addNotificationReceivedListener((notification) => {
+    const data = notification.request.content.data;
+    foregroundListeners.forEach((listener) => listener(data));
+  });
   const response = Notifications.addNotificationResponseReceivedListener((resp) => {
     onTap(resp.notification.request.content.data);
   });

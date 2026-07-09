@@ -50,11 +50,12 @@ export const radius = {
   pill: 999,
 };
 
-// Font families registered in use-app-fonts.ts
+// Font families registered in use-app-fonts.ts. Keep operational UI on a
+// clean professional stack; avoid decorative/handwritten fonts in workflows.
 export const fonts = {
-  display: "SpaceGrotesk", // large metrics / headings
-  displayBold: "SpaceGrotesk",
-  text: "PlusJakartaSans", // body / UI
+  display: "Poppins",
+  displayBold: "Poppins",
+  text: "Inter",
 };
 
 export const type = {

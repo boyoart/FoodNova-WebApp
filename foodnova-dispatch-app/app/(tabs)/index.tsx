@@ -22,6 +22,7 @@ import { Logo } from "@/src/components/Logo";
 import { OfferModal, Offer, offerId } from "@/src/components/OfferModal";
 import { asList, asObject, pick } from "@/src/lib/normalize";
 import { formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
+import { addForegroundNotificationListener } from "@/src/lib/push";
 import {
   getForegroundPermission,
   requestForegroundPermission,
@@ -49,6 +50,11 @@ export default function Dashboard() {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const seenOffers = useRef<Set<string>>(new Set());
+  const currentOfferRef = useRef<Offer | null>(null);
+
+  useEffect(() => {
+    currentOfferRef.current = currentOffer;
+  }, [currentOffer]);
 
   const initOnline = useCallback(() => {
     const s = (rider?.status || rider?.availability || "").toString().toLowerCase();
@@ -91,13 +97,13 @@ export default function Dashboard() {
       setOffers(list);
       // Surface the first genuinely new offer
       const fresh = list.find((o) => !seenOffers.current.has(offerId(o)));
-      if (fresh && !currentOffer) {
+      if (fresh && !currentOfferRef.current) {
         seenOffers.current.add(offerId(fresh));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         setCurrentOffer(fresh);
       }
     } catch {}
-  }, [currentOffer]);
+  }, []);
 
   const sendPing = useCallback(async () => {
     const coords = await getCurrentCoords();
@@ -120,6 +126,18 @@ export default function Dashboard() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [online, pollOffers, sendPing, loadActive]);
+
+  useEffect(() => {
+    return addForegroundNotificationListener((data) => {
+      const type = String(data?.type || data?.notification_type || data?.category || "").toLowerCase();
+      if (type.includes("offer") || type.includes("delivery")) {
+        console.log("OFFER_AUTO_REFRESH_TRIGGERED", data);
+        pollOffers();
+        loadActive();
+        loadUnread();
+      }
+    });
+  }, [pollOffers, loadActive, loadUnread]);
 
   useFocusEffect(
     useCallback(() => {
@@ -166,6 +184,8 @@ export default function Dashboard() {
     try {
       await RiderApi.acceptOffer(offerId(currentOffer));
       toast.show("Delivery accepted!", "success");
+      const acceptedId = offerId(currentOffer);
+      setOffers((prev) => prev.filter((o) => offerId(o) !== acceptedId));
       setCurrentOffer(null);
       await loadActive();
       const id = pick(currentOffer, ["order_id", "order.id", "id"], "");

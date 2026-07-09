@@ -110,8 +110,12 @@ class RiderLocation {
       deliveryStatus:
           '${json['delivery_status'] ?? json['deliveryStatus'] ?? ''}',
       trackingVisible: json['tracking_visible'] == true ||
-          {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}
-              .contains('${json['deliveryStatus'] ?? ''}'.toUpperCase()),
+          json['trackingVisible'] == true ||
+          {'ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'ARRIVED'}
+              .contains(
+            '${json['delivery_status'] ?? json['deliveryStatus'] ?? ''}'
+                .toUpperCase(),
+          ),
       trackingAvailable: json['tracking_available'] == true ||
           json['trackingAvailable'] == true,
       riderName: '${rider['name'] ?? ''}',
