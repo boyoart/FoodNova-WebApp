@@ -8,15 +8,13 @@ import * as Linking from "expo-linking";
 
 import { RiderApi } from "@/src/api/endpoints";
 import { useAuth } from "@/src/context/AuthContext";
-import { useToast } from "@/src/context/ToastContext";
 import { Button, Card, InfoRow, StatusPill } from "@/src/components/ui";
 import { asObject, pick } from "@/src/lib/normalize";
-import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
+import { colors, fonts, spacing, type } from "@/src/theme/tokens";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const toast = useToast();
   const { rider, refreshRider, signOut, approvalStatus } = useAuth();
   const [profile, setProfile] = useState<Record<string, any>>({});
   const [notifPref, setNotifPref] = useState(true);
@@ -34,7 +32,7 @@ export default function Profile() {
     useCallback(() => {
       load();
       refreshRider();
-    }, [load])
+    }, [load, refreshRider])
   );
 
   const p = { ...(rider || {}), ...profile };

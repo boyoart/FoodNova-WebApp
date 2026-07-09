@@ -55,7 +55,7 @@ export default function Notifications() {
   async function openItem(item: any) {
     const id = pick(item, ["id", "_id", "notification_id"], "");
     if (id) NotifApi.markRead(String(id)).catch(() => {});
-    const orderId = pick(item, ["order_id", "data.order_id", "metadata.order_id"], null);
+    const orderId = pick(item, ["order_id", "orderId", "delivery_order_id", "data.order_id", "data.orderId", "data.delivery_order_id", "metadata.order_id", "metadata.orderId", "metadata.delivery_order_id"], null);
     if (orderId) router.push(`/delivery/${orderId}`);
   }
 
@@ -72,7 +72,7 @@ export default function Notifications() {
       </View>
 
       {loading ? (
-        <Loader label="Loading…" />
+        <Loader label="Loading..." />
       ) : items.length === 0 ? (
         <EmptyState testID="notif-empty" icon="notifications-outline" title="No notifications" subtitle="You're all caught up!" />
       ) : (
@@ -112,12 +112,12 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surfaceSecondary },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.divider, paddingHorizontal: spacing.sm },
   iconBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  title: { fontFamily: fonts.display, fontSize: type.lg, fontWeight: "700", color: colors.onSurface },
+  title: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onSurface },
   list: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing["3xl"] },
   item: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start", backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md },
   itemUnread: { borderColor: colors.brandPrimary },
   itemIcon: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" },
-  itemTitle: { fontFamily: fonts.display, fontSize: type.base, fontWeight: "700", color: colors.onSurface },
+  itemTitle: { fontFamily: fonts.text, fontSize: type.base, fontWeight: "700", color: colors.onSurface },
   itemBody: { fontFamily: fonts.text, fontSize: type.sm, color: colors.onSurfaceTertiary, marginTop: 2, lineHeight: 18 },
   itemTime: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, marginTop: 4 },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.brandPrimary, marginTop: 4 },

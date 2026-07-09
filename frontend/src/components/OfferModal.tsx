@@ -63,7 +63,7 @@ export function OfferModal({
 
   useEffect(() => {
     if (visible && remaining === 0) onDecline();
-  }, [remaining, visible]);
+  }, [onDecline, remaining, visible]);
 
   if (!offer) return null;
 

@@ -1,4 +1,4 @@
-export const NGN = "₦";
+export const NGN = "NGN ";
 
 export function formatMoney(value: number | string | null | undefined): string {
   const n = typeof value === "string" ? parseFloat(value) : value;

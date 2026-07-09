@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Linking,
@@ -70,21 +70,63 @@ export default function DeliveryDetail() {
     if (c) setRiderCoords({ latitude: c.latitude, longitude: c.longitude });
   }, [id]);
 
+  const syncLocation = useCallback(async () => {
+    const c = await getCurrentCoords();
+    if (!c) return;
+    const coords = { latitude: c.latitude, longitude: c.longitude };
+    setRiderCoords(coords);
+    RiderApi.locationPing(coords).catch(() => {});
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      syncLocation();
+    }, [load, syncLocation])
   );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      syncLocation();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [syncLocation]);
 
   const currentStatus = pick(order, ["delivery_status", "status"], "assigned");
   const idx = useMemo(() => statusIndex(String(currentStatus)), [currentStatus]);
   const nextStep = idx + 1 < FLOW.length ? FLOW[idx + 1] : null;
 
-  const pickup = coordFrom(order, ["pickup_lat", "pickup_latitude", "restaurant_lat", "vendor_lat"], ["pickup_lng", "pickup_longitude", "restaurant_lng", "vendor_lng"]);
+  const pickup = coordFrom(
+    order,
+    ["pickup_lat", "pickup_latitude", "pickup.latitude", "pickup.lat", "restaurant_lat", "vendor_lat", "store_lat", "store.latitude"],
+    ["pickup_lng", "pickup_longitude", "pickup.longitude", "pickup.lng", "restaurant_lng", "vendor_lng", "store_lng", "store.longitude"]
+  );
   const customer = coordFrom(
     order,
-    ["dropoff_lat", "customer_lat", "delivery_lat", "delivery_address_snapshot.latitude", "latitude"],
-    ["dropoff_lng", "customer_lng", "delivery_lng", "delivery_address_snapshot.longitude", "longitude"]
+    [
+      "dropoff_lat",
+      "dropoff_latitude",
+      "customer_lat",
+      "customer.latitude",
+      "destination_lat",
+      "destination.latitude",
+      "delivery_lat",
+      "delivery_address_snapshot.latitude",
+      "delivery_address_snapshot.lat",
+      "latitude",
+    ],
+    [
+      "dropoff_lng",
+      "dropoff_longitude",
+      "customer_lng",
+      "customer.longitude",
+      "destination_lng",
+      "destination.longitude",
+      "delivery_lng",
+      "delivery_address_snapshot.longitude",
+      "delivery_address_snapshot.lng",
+      "longitude",
+    ]
   );
 
   async function advance() {
@@ -116,7 +158,7 @@ export default function DeliveryDetail() {
       await RiderApi.submitProof(String(id), { delivery_code: pin.trim(), note: "Delivered by rider" });
       await RiderApi.updateOrderStatus(String(id), "delivered").catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      toast.show("Delivery completed! 🎉", "success");
+      toast.show("Delivery completed!", "success");
       setPinMode(false);
       router.replace("/(tabs)");
     } catch (e) {
@@ -134,7 +176,7 @@ export default function DeliveryDetail() {
     }
   }
 
-  if (loading) return <View style={styles.root}><Loader label="Loading delivery…" /></View>;
+  if (loading) return <View style={styles.root}><Loader label="Loading delivery..." /></View>;
 
   if (!order) {
     return (
@@ -156,7 +198,7 @@ export default function DeliveryDetail() {
     <View style={styles.root}>
       {/* Map top */}
       <View style={styles.mapWrap}>
-        <TrackingMap rider={riderCoords} pickup={pickup} customer={customer} style={{ flex: 1 }} />
+        <TrackingMap rider={riderCoords} pickup={pickup} customer={customer} status={String(currentStatus)} style={{ flex: 1 }} />
         <TouchableOpacity testID="delivery-close" style={[styles.floatBtn, { top: insets.top + spacing.sm, left: spacing.lg }]} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
         </TouchableOpacity>
@@ -196,15 +238,15 @@ export default function DeliveryDetail() {
                 <View style={[styles.pin, { backgroundColor: colors.warning }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.routeLabel}>PICKUP</Text>
-                  <Text style={styles.routeValue} numberOfLines={2}>{String(pickupAddr)}</Text>
+                  <Text style={styles.routeValue}>{String(pickupAddr)}</Text>
                 </View>
               </View>
               <View style={styles.routeConnector} />
               <View style={styles.routeRow}>
                 <View style={[styles.pin, { backgroundColor: colors.brandSecondary }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.routeLabel}>DROP-OFF · {String(customerName)}</Text>
-                  <Text style={styles.routeValue} numberOfLines={2}>{String(dropoff)}</Text>
+                  <Text style={styles.routeLabel}>DROP-OFF - {String(customerName)}</Text>
+                  <Text style={styles.routeValue}>{String(dropoff)}</Text>
                 </View>
               </View>
             </View>
@@ -221,14 +263,14 @@ export default function DeliveryDetail() {
             {/* PIN entry or action */}
             {pinMode ? (
               <View style={{ gap: spacing.md }}>
-                <Text style={styles.pinLabel}>Enter the customer's delivery PIN to complete</Text>
+                <Text style={styles.pinLabel}>Enter the customer delivery PIN to complete</Text>
                 <TextInput
                   testID="pin-input"
                   value={pin}
                   onChangeText={setPin}
                   keyboardType="number-pad"
                   maxLength={6}
-                  placeholder="••••"
+                  placeholder="----"
                   placeholderTextColor={colors.muted}
                   style={styles.pinInput}
                 />
@@ -267,12 +309,12 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surfaceInverse },
   center: { alignItems: "center", justifyContent: "center", gap: spacing.md },
   muted: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted },
-  mapWrap: { flex: 1 },
+  mapWrap: { flex: 1, minHeight: 280 },
   floatBtn: { position: "absolute", width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
   panic: { backgroundColor: colors.error },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, maxHeight: "62%" },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, maxHeight: "58%" },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  orderNo: { fontFamily: fonts.display, fontSize: type.xl, fontWeight: "700", color: colors.onSurface },
+  orderNo: { flex: 1, fontFamily: fonts.text, fontSize: type.xl, fontWeight: "700", color: colors.onSurface, marginRight: spacing.sm },
   tracker: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm },
   trackStep: { flexDirection: "row", alignItems: "center", flex: 1 },
   trackDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
@@ -285,11 +327,11 @@ const styles = StyleSheet.create({
   routeConnector: { width: 2, height: 20, backgroundColor: colors.surfaceTertiary, marginLeft: 5, marginVertical: 4 },
   pin: { width: 12, height: 12, borderRadius: 6, marginTop: 3 },
   routeLabel: { fontFamily: fonts.text, fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1 },
-  routeValue: { fontFamily: fonts.text, fontSize: type.base, fontWeight: "600", color: colors.onSurface },
+  routeValue: { fontFamily: fonts.text, fontSize: type.base, fontWeight: "600", color: colors.onSurface, lineHeight: 21, flexShrink: 1 },
   callRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.md },
   callText: { flex: 1, fontFamily: fonts.text, fontSize: type.base, fontWeight: "700", color: colors.onBrandTertiary },
   pinLabel: { fontFamily: fonts.text, fontSize: type.base, color: colors.onSurfaceTertiary, textAlign: "center" },
-  pinInput: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 2, borderColor: colors.borderStrong, textAlign: "center", fontSize: type["2xl"], fontFamily: fonts.display, fontWeight: "700", letterSpacing: 8, paddingVertical: spacing.md, color: colors.onSurface },
+  pinInput: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 2, borderColor: colors.borderStrong, textAlign: "center", fontSize: type["2xl"], fontFamily: fonts.text, fontWeight: "700", letterSpacing: 8, paddingVertical: spacing.md, color: colors.onSurface },
   doneBanner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: "#D1FAE5", borderRadius: radius.md, paddingVertical: spacing.lg },
-  doneText: { fontFamily: fonts.display, fontSize: type.lg, fontWeight: "700", color: colors.onBrandTertiary },
+  doneText: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onBrandTertiary },
 });

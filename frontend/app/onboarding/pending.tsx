@@ -1,7 +1,6 @@
 import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -53,7 +52,7 @@ export default function Pending() {
           <StatusPill status={approvalStatus || "pending"} testID="approval-status-pill" />
           <Text style={styles.subtitle}>
             Thanks for applying to ride with FoodNova. Our team is reviewing your documents. This
-            usually takes a few hours. You'll be notified once you're approved.
+            usually takes a few hours. You will be notified once you are approved.
           </Text>
         </View>
 

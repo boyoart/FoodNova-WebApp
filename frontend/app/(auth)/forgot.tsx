@@ -44,7 +44,7 @@ export default function Forgot() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Reset password</Text>
         <Text style={styles.subtitle}>
-          Enter your email and we'll send you a verification code to reset your access.
+          Enter your email and we will send you a verification code to reset your access.
         </Text>
         <View style={{ gap: spacing.lg, marginTop: spacing.xl }}>
           <Field
@@ -64,7 +64,7 @@ export default function Forgot() {
           />
           {sent && (
             <Text style={styles.note}>
-              Check your inbox. Contact FoodNova support if you don't receive a code.
+              Check your inbox. Contact FoodNova support if you do not receive a code.
             </Text>
           )}
         </View>

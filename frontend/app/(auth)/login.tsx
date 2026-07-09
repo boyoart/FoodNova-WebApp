@@ -18,7 +18,7 @@ import { useToast } from "@/src/context/ToastContext";
 import { ApiError, setToken } from "@/src/api/client";
 import { Button, Field } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
-import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
+import { colors, fonts, spacing, type } from "@/src/theme/tokens";
 
 const HERO =
   "https://images.unsplash.com/photo-1695654390723-479197a8c4a3?crop=entropy&cs=srgb&fm=jpg&q=75&w=1000";
@@ -43,7 +43,7 @@ export default function Login() {
     try {
       const { token, isEmail } = await AuthApi.smartLogin(identifier.trim(), password);
       if (!token) {
-        toast.show("Login failed — no session token returned", "error");
+        toast.show("Login failed - no session token returned", "error");
         return;
       }
       const rider = await refreshRider();

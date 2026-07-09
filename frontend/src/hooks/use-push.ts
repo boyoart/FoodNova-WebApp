@@ -16,9 +16,23 @@ function orderIdFrom(data: any): string | null {
   return (
     data.order_id ||
     data.orderId ||
-    (data.data && (data.data.order_id || data.data.orderId)) ||
+    data.delivery_order_id ||
+    data.deliveryOrderId ||
+    data.assignment_id ||
+    data.assignmentId ||
+    (data.data && (data.data.order_id || data.data.orderId || data.data.delivery_order_id || data.data.deliveryOrderId)) ||
+    (data.metadata && (data.metadata.order_id || data.metadata.orderId || data.metadata.delivery_order_id || data.metadata.deliveryOrderId)) ||
     null
   );
+}
+
+function notificationTarget(data: any): string {
+  const type = String(data?.type || data?.notification_type || data?.category || data?.data?.type || "").toLowerCase();
+  const id = orderIdFrom(data);
+  if (id && (type.includes("complete") || type.includes("delivered") || type.includes("history"))) return "/(tabs)/deliveries";
+  if (id) return `/delivery/${id}`;
+  if (type.includes("notification")) return "/notifications";
+  return "/notifications";
 }
 
 // Wires the full FCM lifecycle for an authenticated rider:
@@ -40,15 +54,12 @@ export function usePushNotifications() {
     });
 
     const stopTap = addNotificationListeners((data) => {
-      const id = orderIdFrom(data);
-      if (id) router.push(`/delivery/${id}`);
-      else router.push("/notifications");
+      router.push(notificationTarget(data) as any);
     });
 
     // Cold-start tap (app opened from a killed state via a notification)
     getInitialNotificationData().then((data) => {
-      const id = orderIdFrom(data);
-      if (id) router.push(`/delivery/${id}`);
+      if (data) router.push(notificationTarget(data) as any);
     });
 
     return () => {

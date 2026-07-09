@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,8 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -135,7 +133,7 @@ export default function Dashboard() {
     setToggling(true);
     try {
       if (!online) {
-        // going online → ensure location permission
+        // Going online requires foreground location permission.
         let perm = await getForegroundPermission();
         if (perm === "undetermined") perm = await requestForegroundPermission();
         if (perm === "blocked") {
@@ -147,7 +145,7 @@ export default function Dashboard() {
         await RiderApi.goOnline(coords);
         setOnline(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        toast.show("You're online — offers will appear here", "success");
+        toast.show("You're online - offers will appear here", "success");
       } else {
         await RiderApi.goOffline();
         setOnline(false);
@@ -199,9 +197,28 @@ export default function Dashboard() {
     setRefreshing(false);
   }
 
-  const earningsToday = pick(stats, ["today_earnings", "earnings_today", "today.earnings", "todayEarnings"], 0);
-  const deliveriesToday = pick(stats, ["today_deliveries", "deliveries_today", "completed_today", "today.deliveries"], 0);
-  const rating = pick(stats, ["rating", "average_rating", "avg_rating"], null);
+  const earningsToday = pick(
+    stats,
+    ["today_earnings", "earnings_today", "today.earnings", "todayEarnings", "today_payout", "total_earnings_today", "earnings.today"],
+    0
+  );
+  const deliveriesToday = pick(
+    stats,
+    [
+      "today_deliveries",
+      "deliveries_today",
+      "completed_today",
+      "today_completed",
+      "orders_completed_today",
+      "deliveries_completed_today",
+      "today.deliveries",
+      "today.completed",
+      "completed_deliveries",
+      "completed",
+    ],
+    0
+  );
+  const rating = pick(stats, ["rating", "average_rating", "avg_rating", "ratings.average", "performance.rating"], null);
   const riderName = pick(rider, ["full_name", "name", "first_name"], "Rider");
 
   return (
@@ -240,7 +257,7 @@ export default function Dashboard() {
                 {online ? "You're Online" : "You're Offline"}
               </Text>
               <Text style={[styles.toggleSub, online && { color: "#9CA3AF" }]}>
-                {toggling ? "Updating…" : online ? "Receiving delivery offers" : "Tap to start earning"}
+                {toggling ? "Updating..." : online ? "Receiving delivery offers" : "Tap to start earning"}
               </Text>
             </View>
           </View>
@@ -253,7 +270,7 @@ export default function Dashboard() {
         <View style={styles.statRow}>
           <StatCard testID="stat-earnings" icon="wallet-outline" label="Today" value={formatMoney(earningsToday)} />
           <StatCard testID="stat-deliveries" icon="cube-outline" label="Deliveries" value={String(deliveriesToday)} />
-          <StatCard testID="stat-rating" icon="star-outline" label="Rating" value={rating ? String(rating) : "—"} />
+          <StatCard testID="stat-rating" icon="star-outline" label="Rating" value={rating ? String(rating) : "--"} />
         </View>
 
         {/* Active delivery */}
@@ -273,7 +290,7 @@ export default function Dashboard() {
               </View>
               <View style={styles.activeAddr}>
                 <Ionicons name="location" size={18} color={colors.brandPrimary} />
-                <Text style={styles.activeAddrText} numberOfLines={1}>
+                <Text style={styles.activeAddrText}>
                   {pick(activeOrder, ["dropoff_address", "customer_address", "delivery_address"], "Delivery in progress")}
                 </Text>
               </View>
@@ -287,7 +304,7 @@ export default function Dashboard() {
           <Card style={styles.emptyActive}>
             <Ionicons name="cube-outline" size={28} color={colors.muted} />
             <Text style={styles.emptyActiveText}>
-              {online ? "Waiting for your next offer…" : "Go online to receive delivery offers"}
+              {online ? "Waiting for your next offer..." : "Go online to receive delivery offers"}
             </Text>
           </Card>
         )}
@@ -311,7 +328,7 @@ export default function Dashboard() {
                     <Text style={styles.offerPay}>
                       {formatMoney(pick(o, ["payout", "fee", "delivery_fee", "amount"], 0))}
                     </Text>
-                    <Text style={styles.offerAddr} numberOfLines={1}>
+                    <Text style={styles.offerAddr}>
                       {pick(o, ["dropoff_address", "customer_address", "delivery_address"], "Tap to view")}
                     </Text>
                   </View>
@@ -376,26 +393,26 @@ const styles = StyleSheet.create({
   toggleOn: { backgroundColor: colors.surfaceInverse, borderColor: colors.surfaceInverse },
   toggleLeft: { flexDirection: "row", alignItems: "center", gap: spacing.md, flex: 1 },
   statusDot: { width: 12, height: 12, borderRadius: 6 },
-  toggleTitle: { fontFamily: fonts.display, fontSize: type.lg, fontWeight: "700", color: colors.onSurface },
+  toggleTitle: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onSurface },
   toggleSub: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, marginTop: 2 },
   toggleKnob: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   knobOn: { backgroundColor: colors.brandPrimary },
   knobOff: { backgroundColor: colors.surfaceSecondary },
   statRow: { flexDirection: "row", gap: spacing.md },
   statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 4, alignItems: "flex-start" },
-  statValue: { fontFamily: fonts.display, fontSize: type.xl, fontWeight: "700", color: colors.onSurface },
+  statValue: { fontFamily: fonts.text, fontSize: type.xl, fontWeight: "700", color: colors.onSurface },
   statLabel: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted },
-  sectionTitle: { fontFamily: fonts.display, fontSize: type.lg, fontWeight: "700", color: colors.onSurface, marginTop: spacing.xs },
+  sectionTitle: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onSurface, marginTop: spacing.xs },
   activeTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  activeOrderNo: { fontFamily: fonts.display, fontSize: type.lg, fontWeight: "700", color: colors.onSurfaceInverse },
-  activeAddr: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  activeAddrText: { flex: 1, fontFamily: fonts.text, fontSize: type.base, color: "#E5E7EB" },
+  activeOrderNo: { flex: 1, fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onSurfaceInverse, marginRight: spacing.sm },
+  activeAddr: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
+  activeAddrText: { flex: 1, fontFamily: fonts.text, fontSize: type.base, color: "#E5E7EB", lineHeight: 21 },
   activeCta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.brandPrimary, borderRadius: radius.md, paddingVertical: spacing.md },
-  activeCtaText: { fontFamily: fonts.display, fontSize: type.base, fontWeight: "700", color: colors.onBrandPrimary },
+  activeCtaText: { fontFamily: fonts.text, fontSize: type.base, fontWeight: "700", color: colors.onBrandPrimary },
   emptyActive: { alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xl },
   emptyActiveText: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted, textAlign: "center" },
   offerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
   offerFlash: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
-  offerPay: { fontFamily: fonts.display, fontSize: type.lg, fontWeight: "700", color: colors.onSurface },
-  offerAddr: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted },
+  offerPay: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onSurface },
+  offerAddr: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, lineHeight: 18 },
 });
