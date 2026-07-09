@@ -16,7 +16,7 @@ Admin Web ────┤→  FastAPI Backend (Render, existing)  ←──  Rid
 ```
 
 - The Rider App is a **pure API client** of the existing backend. No backend, DB, or auth logic was added.
-- Base URL is injected via `EXPO_PUBLIC_FOODNOVA_API` (in `frontend/.env`). Rider routes are **un-prefixed** (`/delivery/*`, `/notifications/*`, `/delivery-workers/*`).
+- Base URL is injected via `EXPO_PUBLIC_FOODNOVA_API` (in `foodnova-dispatch-app/.env`). Rider routes are **un-prefixed** (`/delivery/*`, `/notifications/*`, `/delivery-workers/*`).
 - Token stored securely via `expo-secure-store` (`src/api/client.ts`), attached as `Authorization: Bearer <jwt>`.
 - Response envelopes (`{ success, detail|message, ...data }`) and list shapes are parsed **defensively** (`src/lib/normalize.ts`) because the backend OpenAPI types all rider responses as `any`.
 
@@ -58,8 +58,8 @@ Admin Web ────┤→  FastAPI Backend (Render, existing)  ←──  Rid
 | G6 | Info | Approval gating keys assumed: `approval_status` / `verification_status` / `status` in `/delivery/me`. | Confirm which field the app should treat as the approval flag. |
 
 **Missing env vars / config the app needs (all handled in this build):**
-- `EXPO_PUBLIC_FOODNOVA_API` → set in `frontend/.env`.
-- Google Maps Android/iOS key → set in `frontend/app.json` (`android.config.googleMaps.apiKey`, `ios.config.googleMapsApiKey`).
+- `EXPO_PUBLIC_FOODNOVA_API` → set in `foodnova-dispatch-app/.env`.
+- Google Maps Android/iOS key → set in `foodnova-dispatch-app/app.json` (`android.config.googleMaps.apiKey`, `ios.config.googleMapsApiKey`).
 - Firebase `google-services.json` → **required at build time** for FCM (see §5).
 
 ---
@@ -71,8 +71,13 @@ Admin Web ────┤→  FastAPI Backend (Render, existing)  ←──  Rid
 ---
 
 ## 5. Deployment Guide (Android)
-1. Click **Publish** in Emergent (top-right) to generate the Android build. Do **not** use external EAS/CLI.
-2. **Google Maps** already configured with your key in `app.json`. Ensure in Google Cloud that **Maps SDK for Android** + **Directions API** are enabled, and the key is restricted to the app package `com.emergent.riderofferflow.mpig0l` + its SHA-1.
+1. Build from `foodnova-dispatch-app/`:
+   ```bash
+   cd foodnova-dispatch-app
+   npm install
+   npx eas build --platform android --profile preview
+   ```
+2. **Google Maps** already configured with your key in `app.json`. Ensure in Google Cloud that **Maps SDK for Android** + **Directions API** are enabled, and the key is restricted to the app package `com.foodnova.dispatch` + its SHA-1.
 3. **FCM push:** provide `google-services.json` (Firebase → Android app with the same package). Push token registration (`/delivery-workers/register-fcm-token`) fires automatically on first launch after a real build.
 4. Live Google Maps and FCM **do not work in Expo Go or web preview** — they activate only on the device build.
 

@@ -38,20 +38,27 @@ src/
 
 ## Setup
 ```bash
-cd frontend
-yarn install
+cd foodnova-dispatch-app
+npm install
 # configure env (see .env.example)
-yarn start        # Metro on :3000
+npm run start     # Metro on :3000
 ```
 
 ## Configuration
-- `frontend/.env` → `EXPO_PUBLIC_FOODNOVA_API=https://foodnova-webapp.onrender.com`
-- `frontend/app.json` → Google Maps key (Android + iOS), permissions.
+- `foodnova-dispatch-app/.env` → `EXPO_PUBLIC_FOODNOVA_API=https://foodnova-webapp.onrender.com`
+- `foodnova-dispatch-app/app.json` → Google Maps key (Android + iOS), permissions.
 - FCM requires `google-services.json` at build time (Firebase).
 
 See **API_INTEGRATION.md**, **PRODUCTION_CHECKLIST.md**, **DEPLOYMENT_HANDOFF.md**, and
 **FOODNOVA_RIDER_INTEGRATION.md** for full details.
 
 ## Build
-Use the Emergent **Publish** button to generate the Android build. Google Maps and FCM push
-**only work on a real device build** — not Expo Go or the web preview.
+Build from the standardized dispatch app directory:
+
+```bash
+cd foodnova-dispatch-app
+npm install
+npx eas build --platform android --profile preview
+```
+
+Google Maps and FCM push **only work on a real device build** — not Expo Go or the web preview.

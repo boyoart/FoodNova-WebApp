@@ -1,12 +1,12 @@
 # Production Checklist — FoodNova Rider App
 
 ## 1. Environment & Config
-- [x] `EXPO_PUBLIC_FOODNOVA_API` set to production backend (`frontend/.env`).
-- [x] `frontend/.env.example` provided.
+- [x] `EXPO_PUBLIC_FOODNOVA_API` set to production backend (`foodnova-dispatch-app/.env`).
+- [x] `foodnova-dispatch-app/.env.example` provided.
 - [x] Google Maps key present in `app.json` (Android `android.config.googleMaps.apiKey` + iOS `ios.config.googleMapsApiKey`).
-- [ ] **Maps key restricted** in Google Cloud to package `com.emergent.riderofferflow.mpig0l` + release SHA-1, with **Maps SDK for Android** + **Directions API** enabled.
+- [ ] **Maps key restricted** in Google Cloud to package `com.foodnova.dispatch` + release SHA-1, with **Maps SDK for Android** + **Directions API** enabled.
 - [ ] `google-services.json` added for FCM (Firebase → Android app, same package).
-- [ ] Change app `package`/`bundleIdentifier` from the `com.emergent.*` placeholder to a FoodNova-owned id before store submission.
+- [ ] Confirm iOS `bundleIdentifier` is changed to a FoodNova-owned id before App Store submission.
 
 ## 2. Branding assets
 - [x] `icon.png` (512×512), `adaptive-icon.png` (512×512), `splash-image.png`, `favicon.png` exist.
@@ -44,6 +44,6 @@
 - [ ] Full authenticated E2E (needs approved rider + device build).
 
 ## 9. Release
-- [ ] Publish Android build via Emergent.
+- [ ] Build Android from `foodnova-dispatch-app/` with `npx eas build --platform android --profile preview`.
 - [ ] Smoke test on physical Android device.
-- [ ] Push source to GitHub via **Save to GitHub**.
+- [ ] Push source to GitHub from Git.

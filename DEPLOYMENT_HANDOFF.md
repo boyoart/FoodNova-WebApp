@@ -45,7 +45,7 @@ backend. No backend was built or modified.
 - App registers the native device token via `POST /delivery-workers/register-fcm-token {token, platform}`
   on launch (native only).
 - **Required before push works:** Firebase project → Android app with package
-  `com.emergent.riderofferflow.mpig0l` → download `google-services.json` → include in the build.
+  `com.foodnova.dispatch` → download `google-services.json` → include in the build.
   Configure FCM v1 credentials for the sender (backend side, already existing).
 - Push **cannot** be tested in Expo Go / web preview — only on a real build.
 
@@ -58,8 +58,8 @@ backend. No backend was built or modified.
 ## 6. Environment Variables
 | Var | Where | Present |
 |---|---|---|
-| `EXPO_PUBLIC_FOODNOVA_API` | `frontend/.env` | ✅ |
-| Google Maps key | `frontend/app.json` | ✅ |
+| `EXPO_PUBLIC_FOODNOVA_API` | `foodnova-dispatch-app/.env` | ✅ |
+| Google Maps key | `foodnova-dispatch-app/app.json` | ✅ |
 | `google-services.json` | build asset | ❌ (user to provide) |
 | `EXPO_PACKAGER_*` | platform-managed | ✅ |
 No other missing env vars for the app. (Backend-side keys — NIN, FCM sender, DB — live on Render and are out of scope.)
@@ -72,7 +72,12 @@ No other missing env vars for the app. (Backend-side keys — NIN, FCM sender, D
 5. Replace placeholder app package id + default icon/splash art with official FoodNova assets.
 6. (Optional) Backend: whitelist web origins (CORS) for browser QA; expose socket channel for instant offers; confirm defensive field names (API_INTEGRATION.md).
 
-## 8. Push to GitHub
-Source is committed in the workspace automatically. To publish to your GitHub repository, use the
-**Save to GitHub** button in Emergent (the agent cannot push on your behalf). For the Android build,
-use the **Publish** button.
+## 8. Push to GitHub and Build
+Source lives in `foodnova-dispatch-app/`. Commit and push repository changes normally, then build the
+Android app from the standardized dispatch directory:
+
+```bash
+cd foodnova-dispatch-app
+npm install
+npx eas build --platform android --profile preview
+```
