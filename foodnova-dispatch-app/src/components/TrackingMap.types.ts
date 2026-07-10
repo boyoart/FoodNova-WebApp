@@ -1,6 +1,11 @@
 import type { ViewStyle } from "react-native";
 
-export type LatLng = { latitude: number; longitude: number };
+export type LatLng = {
+  latitude: number;
+  longitude: number;
+  heading?: number | null;
+  speed?: number | null;
+};
 
 export type TrackingMapProps = {
   rider?: LatLng | null;

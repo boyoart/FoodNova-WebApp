@@ -51,7 +51,7 @@ export default function DeliveryDetail() {
   const [order, setOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [riderCoords, setRiderCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [riderCoords, setRiderCoords] = useState<{ latitude: number; longitude: number; heading?: number | null; speed?: number | null } | null>(null);
   const [pinMode, setPinMode] = useState(false);
   const [pin, setPin] = useState("");
 
@@ -67,13 +67,13 @@ export default function DeliveryDetail() {
       setLoading(false);
     }
     const c = await getCurrentCoords();
-    if (c) setRiderCoords({ latitude: c.latitude, longitude: c.longitude });
+    if (c) setRiderCoords({ latitude: c.latitude, longitude: c.longitude, heading: c.heading, speed: c.speed });
   }, [id]);
 
   const syncLocation = useCallback(async () => {
     const c = await getCurrentCoords();
     if (!c) return;
-    const coords = { latitude: c.latitude, longitude: c.longitude };
+    const coords = { latitude: c.latitude, longitude: c.longitude, heading: c.heading, speed: c.speed };
     setRiderCoords(coords);
     RiderApi.locationPing(coords).catch(() => {});
   }, []);

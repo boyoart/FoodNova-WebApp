@@ -1161,17 +1161,30 @@ class _RiderTrackingCard extends StatelessWidget {
                 onMessageRider: null,
               ),
               const SizedBox(height: 12),
+              _TrackingStageTimeline(status: data.deliveryStatus),
+              const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(18),
                 child: SizedBox(
                   height: 240,
-                  child: _TrackingMap(
-                    riderPoint: riderPoint,
-                    pickupPoint: pickupPoint,
-                    customerPoint: customerPoint,
-                    routeDestinationPoint: routeDestinationPoint,
-                    routePoints: routePoints,
-                    riderName: data.riderName,
+                  child: Stack(
+                    children: [
+                      _TrackingMap(
+                        riderPoint: riderPoint,
+                        pickupPoint: pickupPoint,
+                        customerPoint: customerPoint,
+                        routeDestinationPoint: routeDestinationPoint,
+                        routePoints: routePoints,
+                        riderName: data.riderName,
+                      ),
+                      Positioned(
+                        left: 12,
+                        top: 12,
+                        child: _LiveTrackingBadge(
+                          label: _trackingStageLabel(data.deliveryStatus),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1339,6 +1352,142 @@ class _RiderProfileTile extends StatelessWidget {
   }
 }
 
+class _TrackingStageTimeline extends StatelessWidget {
+  const _TrackingStageTimeline({required this.status});
+
+  final String status;
+
+  static const _stages = [
+    ('ACCEPTED', 'Accepted', Icons.assignment_turned_in_rounded),
+    ('PICKED_UP', 'Picked Up', Icons.shopping_bag_rounded),
+    ('IN_TRANSIT', 'On Route', Icons.delivery_dining_rounded),
+    ('ARRIVED', 'Arrived', Icons.location_on_rounded),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final normalized = _normalizeTrackingStatus(status);
+    final active = math.max(
+      0,
+      _stages.indexWhere((stage) => stage.$1 == normalized),
+    );
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < _stages.length; i++) ...[
+            Expanded(
+              child: Column(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    width: i == active ? 34 : 28,
+                    height: i == active ? 34 : 28,
+                    decoration: BoxDecoration(
+                      color: i <= active ? scheme.primary : scheme.surface,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: i <= active
+                            ? scheme.primary
+                            : scheme.outlineVariant,
+                      ),
+                    ),
+                    child: Icon(
+                      _stages[i].$3,
+                      size: i == active ? 18 : 15,
+                      color: i <= active
+                          ? scheme.onPrimary
+                          : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _stages[i].$2,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: i == active
+                          ? scheme.onSurface
+                          : scheme.onSurfaceVariant,
+                      fontWeight:
+                          i == active ? FontWeight.w900 : FontWeight.w700,
+                      fontSize: 10,
+                      height: 1.1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (i != _stages.length - 1)
+              Container(
+                width: 18,
+                height: 3,
+                margin: const EdgeInsets.only(bottom: 26),
+                decoration: BoxDecoration(
+                  color: i < active ? scheme.primary : scheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _LiveTrackingBadge extends StatelessWidget {
+  const _LiveTrackingBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: scheme.surface.withValues(alpha: .94),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .12),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: scheme.primary,
+              borderRadius: BorderRadius.circular(999),
+            ),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RatingChip extends StatelessWidget {
   const _RatingChip({required this.rating});
 
@@ -1486,6 +1635,7 @@ class _TrackingMap extends StatefulWidget {
 
 class _TrackingMapState extends State<_TrackingMap> {
   GoogleMapController? _controller;
+  LatLng? _previousRiderPoint;
 
   @override
   void initState() {
@@ -1504,6 +1654,7 @@ class _TrackingMapState extends State<_TrackingMap> {
   @override
   void didUpdateWidget(covariant _TrackingMap oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _previousRiderPoint = oldWidget.riderPoint;
     if (oldWidget.riderPoint != widget.riderPoint ||
         oldWidget.pickupPoint != widget.pickupPoint ||
         oldWidget.customerPoint != widget.customerPoint ||
@@ -1600,6 +1751,13 @@ class _TrackingMapState extends State<_TrackingMap> {
       Marker(
         markerId: const MarkerId('rider'),
         position: widget.riderPoint,
+        anchor: const Offset(.5, .5),
+        flat: true,
+        rotation: _bearing(
+          _previousRiderPoint ??
+              (widget.routePoints.isEmpty ? null : widget.routePoints.first),
+          widget.riderPoint,
+        ),
         infoWindow: InfoWindow(
           title: widget.riderName.isEmpty ? 'Rider' : widget.riderName,
         ),
@@ -2495,6 +2653,41 @@ String _formatDistance(double? meters) {
 String _formatEta(int? minutes) {
   if (minutes == null) return 'Waiting for rider location...';
   return '$minutes min';
+}
+
+String _normalizeTrackingStatus(String status) {
+  final value = status.trim().toUpperCase();
+  if (value == 'OUT_FOR_DELIVERY' || value == 'EN_ROUTE') return 'IN_TRANSIT';
+  if (value == 'PICKED' || value == 'COLLECTED') return 'PICKED_UP';
+  if (value.isEmpty || value == 'ASSIGNED') return 'ACCEPTED';
+  return value;
+}
+
+String _trackingStageLabel(String status) {
+  switch (_normalizeTrackingStatus(status)) {
+    case 'ARRIVED':
+      return 'Rider arrived';
+    case 'IN_TRANSIT':
+      return 'Rider on route';
+    case 'PICKED_UP':
+      return 'Order picked up';
+    default:
+      return 'Live tracking';
+  }
+}
+
+double _bearing(LatLng? from, LatLng to) {
+  if (from == null ||
+      (from.latitude == to.latitude && from.longitude == to.longitude)) {
+    return 0;
+  }
+  final lat1 = from.latitude * math.pi / 180;
+  final lat2 = to.latitude * math.pi / 180;
+  final dLng = (to.longitude - from.longitude) * math.pi / 180;
+  final y = math.sin(dLng) * math.cos(lat2);
+  final x = math.cos(lat1) * math.sin(lat2) -
+      math.sin(lat1) * math.cos(lat2) * math.cos(dLng);
+  return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
 }
 
 String _formatRelativeTime(String value) {
