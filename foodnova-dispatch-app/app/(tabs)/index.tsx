@@ -22,6 +22,7 @@ import { Logo } from "@/src/components/Logo";
 import { OfferModal, Offer, offerId } from "@/src/components/OfferModal";
 import { asList, asObject, pick } from "@/src/lib/normalize";
 import { formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
+import { deliveryOrderId } from "@/src/lib/order";
 import { formatPercent, normalizeRiderStats } from "@/src/lib/stats";
 import { addForegroundNotificationListener } from "@/src/lib/push";
 import {
@@ -189,7 +190,7 @@ export default function Dashboard() {
       setOffers((prev) => prev.filter((o) => offerId(o) !== acceptedId));
       setCurrentOffer(null);
       await loadActive();
-      const id = pick(currentOffer, ["order_id", "order.id", "id"], "");
+      const id = deliveryOrderId(currentOffer);
       if (id) router.push(`/delivery/${id}`);
     } catch (e) {
       toast.show(e instanceof ApiError ? e.message : "Could not accept offer", "error");
@@ -284,7 +285,7 @@ export default function Dashboard() {
           <TouchableOpacity
             testID="active-delivery-card"
             activeOpacity={0.85}
-            onPress={() => router.push(`/delivery/${pick(activeOrder, ["id", "order_id", "_id"], "")}`)}
+            onPress={() => router.push(`/delivery/${deliveryOrderId(activeOrder)}`)}
           >
             <Card inverse style={{ gap: spacing.md }}>
               <View style={styles.activeTop}>

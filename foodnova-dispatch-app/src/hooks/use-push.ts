@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 
 import { useAuth } from "@/src/context/AuthContext";
 import { NotifApi } from "@/src/api/endpoints";
+import { deliveryOrderId } from "@/src/lib/order";
 import {
   registerPushToken,
   addTokenRefreshListener,
@@ -12,18 +13,8 @@ import {
 } from "@/src/lib/push";
 
 function orderIdFrom(data: any): string | null {
-  if (!data) return null;
-  return (
-    data.order_id ||
-    data.orderId ||
-    data.delivery_order_id ||
-    data.deliveryOrderId ||
-    data.assignment_id ||
-    data.assignmentId ||
-    (data.data && (data.data.order_id || data.data.orderId || data.data.delivery_order_id || data.data.deliveryOrderId)) ||
-    (data.metadata && (data.metadata.order_id || data.metadata.orderId || data.metadata.delivery_order_id || data.metadata.deliveryOrderId)) ||
-    null
-  );
+  const id = deliveryOrderId(data);
+  return id || null;
 }
 
 function notificationTarget(data: any): string {

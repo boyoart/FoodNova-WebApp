@@ -21,6 +21,7 @@ import { ApiError } from "@/src/api/client";
 import { Button, Loader, StatusPill } from "@/src/components/ui";
 import { TrackingMap } from "@/src/components/TrackingMap";
 import { asList, pick } from "@/src/lib/normalize";
+import { deliveryOrderId } from "@/src/lib/order";
 import { getCurrentCoords } from "@/src/lib/location";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
@@ -59,7 +60,7 @@ export default function DeliveryDetail() {
     try {
       const data = await RiderApi.orders();
       const list = asList(data);
-      const found = list.find((o) => String(pick(o, ["id", "order_id", "_id"], "")) === String(id));
+      const found = list.find((o) => deliveryOrderId(o) === String(id));
       setOrder(found || list[0] || null);
     } catch {
       setOrder(null);

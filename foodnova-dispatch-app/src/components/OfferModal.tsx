@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/src/components/ui";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 import { formatMoney, formatDistanceKm } from "@/src/lib/format";
+import { deliveryOfferId } from "@/src/lib/order";
 
 export type Offer = Record<string, any>;
 
@@ -19,7 +20,7 @@ function field(o: Offer, keys: string[], fallback: any = null) {
 }
 
 export function offerId(o: Offer): string {
-  return String(field(o, ["id", "offer_id", "_id", "offerId"], ""));
+  return deliveryOfferId(o);
 }
 
 export function OfferModal({

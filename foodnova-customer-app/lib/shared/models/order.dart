@@ -59,7 +59,8 @@ class OrderSummary {
 
   String get riderRatingText {
     final value = num.tryParse(
-        '${raw['rider_rating'] ?? raw['rating'] ?? raw['average_rating'] ?? ''}');
+      '${raw['rider_rating'] ?? raw['rating'] ?? raw['average_rating'] ?? ''}',
+    );
     return value == null || value <= 0 ? '4.8' : value.toStringAsFixed(1);
   }
 
@@ -139,8 +140,11 @@ class OrderSummary {
   String get deliveryConfirmedAt => '${raw['delivery_confirmed_at'] ?? ''}';
   String get deliveryCompletedAt => '${raw['delivery_completed_at'] ?? ''}';
   bool get isOutForDelivery {
-    return {'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}
-        .contains(canonicalDeliveryStatus);
+    return {
+      'PICKED_UP',
+      'IN_TRANSIT',
+      'ARRIVED',
+    }.contains(canonicalDeliveryStatus);
   }
 
   bool get isDelivered {
@@ -151,14 +155,20 @@ class OrderSummary {
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
     return OrderSummary(
-      id: int.tryParse('${json['id']}') ?? 0,
-      orderCode: '${json['order_code'] ?? ''}',
+      id:
+          int.tryParse(
+            '${json['id'] ?? json['order_id'] ?? json['orderId'] ?? json['_id'] ?? 0}',
+          ) ??
+          0,
+      orderCode:
+          '${json['order_code'] ?? json['order_number'] ?? json['order_no'] ?? json['reference'] ?? ''}',
       totalAmount: double.tryParse('${json['total_amount'] ?? 0}') ?? 0,
       status: '${json['order_status'] ?? json['status'] ?? ''}',
       deliveryStatus:
           '${json['delivery_status'] ?? json['fulfillment_status'] ?? ''}',
       paymentStatus: '${json['payment_status'] ?? ''}',
-      deliveryAddress: '${json['delivery_address'] ?? ''}',
+      deliveryAddress:
+          '${json['delivery_address'] ?? json['customer_address'] ?? json['dropoff_address'] ?? ''}',
       dispatcherName:
           '${json['assigned_worker_name'] ?? json['rider_name'] ?? ''}',
       dispatcherType:

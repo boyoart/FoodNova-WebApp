@@ -34,20 +34,33 @@ export default function Register() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedPhone = phone.trim();
+
   async function sendOtp() {
-    if (!fullName.trim() || !email.trim() || !phone.trim() || password.length < 6) {
+    if (!fullName.trim() || !normalizedEmail || !normalizedPhone || password.length < 6) {
       toast.show("Fill all fields (password min 6 chars)", "warning");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      toast.show("Enter a valid email address", "warning");
       return;
     }
     setLoading(true);
     try {
-      const emailCheck: any = await AuthApi.checkEmail(email.trim());
+      const emailCheck: any = await AuthApi.checkEmail(normalizedEmail);
       if (emailCheck?.exists) {
         toast.show("This email already has an account. Please sign in.", "warning");
         setLoading(false);
         return;
       }
-      await AuthApi.sendOtp(email.trim());
+      const phoneCheck: any = await AuthApi.checkPhone(normalizedPhone);
+      if (phoneCheck?.exists) {
+        toast.show("This phone number already has an account. Please sign in.", "warning");
+        setLoading(false);
+        return;
+      }
+      await AuthApi.sendOtp(normalizedEmail);
       toast.show("Verification code sent to your email", "success");
       setStep("otp");
     } catch (e) {
@@ -64,11 +77,11 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      await AuthApi.verifyOtp(email.trim(), otp.trim());
+      await AuthApi.verifyOtp(normalizedEmail, otp.trim());
       await AuthApi.register({
         full_name: fullName.trim(),
-        email: email.trim(),
-        phone_number: phone.trim(),
+        email: normalizedEmail,
+        phone_number: normalizedPhone,
         password,
         otp: otp.trim(),
         worker_type: "rider",

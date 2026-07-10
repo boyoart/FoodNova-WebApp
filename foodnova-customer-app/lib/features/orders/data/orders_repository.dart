@@ -10,10 +10,12 @@ import 'package:path_provider/path_provider.dart';
 import '../../../core/network/api_client.dart';
 import '../../../shared/models/order.dart';
 
-final ordersRepositoryProvider =
-    Provider((ref) => OrdersRepository(ref.watch(dioProvider)));
-final ordersProvider =
-    FutureProvider((ref) => ref.watch(ordersRepositoryProvider).myOrders());
+final ordersRepositoryProvider = Provider(
+  (ref) => OrdersRepository(ref.watch(dioProvider)),
+);
+final ordersProvider = FutureProvider(
+  (ref) => ref.watch(ordersRepositoryProvider).myOrders(),
+);
 
 class InvoiceFile {
   const InvoiceFile({
@@ -96,27 +98,54 @@ class RiderLocation {
         : <String, dynamic>{};
     final route = json['route_polyline'] is List
         ? (json['route_polyline'] as List)
-            .whereType<Map>()
-            .map((point) {
-              final lat = double.tryParse('${point['latitude']}');
-              final lng = double.tryParse('${point['longitude']}');
-              if (lat == null || lng == null) return null;
-              return {'latitude': lat, 'longitude': lng};
-            })
-            .whereType<Map<String, double>>()
-            .toList()
+              .whereType<Map>()
+              .map((point) {
+                final lat = double.tryParse('${point['latitude']}');
+                final lng = double.tryParse('${point['longitude']}');
+                if (lat == null || lng == null) return null;
+                return {'latitude': lat, 'longitude': lng};
+              })
+              .whereType<Map<String, double>>()
+              .toList()
         : <Map<String, double>>[];
+    double? numberFrom(List<dynamic> values) {
+      for (final value in values) {
+        if (value == null) continue;
+        final parsed = double.tryParse('$value');
+        if (parsed != null) return parsed;
+      }
+      return null;
+    }
+
+    int? intFrom(List<dynamic> values) {
+      for (final value in values) {
+        if (value == null) continue;
+        final parsed = int.tryParse('$value');
+        if (parsed != null) return parsed;
+        final asDouble = double.tryParse('$value');
+        if (asDouble != null) return asDouble.round();
+      }
+      return null;
+    }
+
     return RiderLocation(
       deliveryStatus:
           '${json['delivery_status'] ?? json['deliveryStatus'] ?? ''}',
-      trackingVisible: json['tracking_visible'] == true ||
+      trackingVisible:
+          json['tracking_visible'] == true ||
           json['trackingVisible'] == true ||
-          {'ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'ARRIVED'}
-              .contains(
+          {
+            'ACCEPTED',
+            'PICKED_UP',
+            'IN_TRANSIT',
+            'OUT_FOR_DELIVERY',
+            'ARRIVED',
+          }.contains(
             '${json['delivery_status'] ?? json['deliveryStatus'] ?? ''}'
                 .toUpperCase(),
           ),
-      trackingAvailable: json['tracking_available'] == true ||
+      trackingAvailable:
+          json['tracking_available'] == true ||
           json['trackingAvailable'] == true,
       riderName: '${rider['name'] ?? ''}',
       riderPhone: '${rider['phone'] ?? ''}',
@@ -124,21 +153,97 @@ class RiderLocation {
           '${rider['profile_photo_url'] ?? rider['rider_profile_photo_url'] ?? rider['rider_photo_url'] ?? rider['photo'] ?? rider['photo_url'] ?? rider['selfie_url'] ?? ''}',
       vehicleType:
           '${rider['vehicle_type'] ?? rider['vehicleType'] ?? json['vehicle_type'] ?? ''}',
-      riderLatitude:
-          double.tryParse('${rider['latitude'] ?? location['latitude']}'),
-      riderLongitude:
-          double.tryParse('${rider['longitude'] ?? location['longitude']}'),
-      customerLatitude: double.tryParse('${customer['latitude']}'),
-      customerLongitude: double.tryParse('${customer['longitude']}'),
-      pickupLatitude: double.tryParse('${pickup['latitude']}'),
-      pickupLongitude: double.tryParse('${pickup['longitude']}'),
-      routeDestinationLatitude:
-          double.tryParse('${routeDestination['latitude']}'),
-      routeDestinationLongitude:
-          double.tryParse('${routeDestination['longitude']}'),
+      riderLatitude: numberFrom([
+        rider['latitude'],
+        rider['lat'],
+        location['latitude'],
+        location['lat'],
+        json['rider_latitude'],
+        json['rider_lat'],
+        json['latitude'],
+      ]),
+      riderLongitude: numberFrom([
+        rider['longitude'],
+        rider['lng'],
+        rider['lon'],
+        location['longitude'],
+        location['lng'],
+        location['lon'],
+        json['rider_longitude'],
+        json['rider_lng'],
+        json['rider_lon'],
+        json['longitude'],
+      ]),
+      customerLatitude: numberFrom([
+        customer['latitude'],
+        customer['lat'],
+        json['customer_latitude'],
+        json['customer_lat'],
+        json['destination_latitude'],
+        json['destination_lat'],
+        json['dropoff_latitude'],
+        json['dropoff_lat'],
+      ]),
+      customerLongitude: numberFrom([
+        customer['longitude'],
+        customer['lng'],
+        customer['lon'],
+        json['customer_longitude'],
+        json['customer_lng'],
+        json['customer_lon'],
+        json['destination_longitude'],
+        json['destination_lng'],
+        json['destination_lon'],
+        json['dropoff_longitude'],
+        json['dropoff_lng'],
+        json['dropoff_lon'],
+      ]),
+      pickupLatitude: numberFrom([
+        pickup['latitude'],
+        pickup['lat'],
+        json['pickup_latitude'],
+        json['pickup_lat'],
+        json['store_latitude'],
+        json['store_lat'],
+      ]),
+      pickupLongitude: numberFrom([
+        pickup['longitude'],
+        pickup['lng'],
+        pickup['lon'],
+        json['pickup_longitude'],
+        json['pickup_lng'],
+        json['pickup_lon'],
+        json['store_longitude'],
+        json['store_lng'],
+        json['store_lon'],
+      ]),
+      routeDestinationLatitude: numberFrom([
+        routeDestination['latitude'],
+        routeDestination['lat'],
+        json['route_destination_latitude'],
+        json['route_destination_lat'],
+      ]),
+      routeDestinationLongitude: numberFrom([
+        routeDestination['longitude'],
+        routeDestination['lng'],
+        routeDestination['lon'],
+        json['route_destination_longitude'],
+        json['route_destination_lng'],
+        json['route_destination_lon'],
+      ]),
       routeDestinationType: '${routeDestination['type'] ?? ''}',
-      distanceMeters: double.tryParse('${json['distance_meters']}'),
-      etaMinutes: int.tryParse('${json['eta_minutes']}'),
+      distanceMeters: numberFrom([
+        json['distance_meters'],
+        json['distanceMeters'],
+        json['distance_remaining_meters'],
+        json['remaining_distance_meters'],
+      ]),
+      etaMinutes: intFrom([
+        json['eta_minutes'],
+        json['etaMinutes'],
+        json['estimated_minutes'],
+        json['duration_minutes'],
+      ]),
       lastUpdatedAt: '${rider['last_updated_at'] ?? json['updatedAt'] ?? ''}',
       routePolyline: route,
     );
@@ -166,15 +271,15 @@ class OrdersRepository {
   }
 
   Future<Map<String, dynamic>> uploadReceipt(int orderId, String path) async {
-    final form = FormData.fromMap({
-      'file': await MultipartFile.fromFile(path),
-    });
+    final form = FormData.fromMap({'file': await MultipartFile.fromFile(path)});
     final response = await _dio.post('/orders/$orderId/receipt', data: form);
     return Map<String, dynamic>.from(response.data is Map ? response.data : {});
   }
 
-  Future<InvoiceFile> invoicePdf(OrderSummary order,
-      {bool forceRefresh = false}) async {
+  Future<InvoiceFile> invoicePdf(
+    OrderSummary order, {
+    bool forceRefresh = false,
+  }) async {
     final file = await _invoiceFile(order);
     if (!forceRefresh && await file.exists() && await file.length() > 0) {
       return InvoiceFile(
@@ -249,8 +354,8 @@ class OrdersRepository {
     final data = body['tracking'] is Map
         ? Map<String, dynamic>.from(body['tracking'])
         : body['data'] is Map
-            ? Map<String, dynamic>.from(body['data'])
-            : body;
+        ? Map<String, dynamic>.from(body['data'])
+        : body;
     if (data.isEmpty) return null;
     return RiderLocation.fromJson(data);
   }
@@ -260,10 +365,10 @@ class OrdersRepository {
     required String requestType,
     required String reason,
   }) async {
-    final response = await _dio.post('/orders/$orderId/cancel-request', data: {
-      'request_type': requestType,
-      'reason': reason,
-    });
+    final response = await _dio.post(
+      '/orders/$orderId/cancel-request',
+      data: {'request_type': requestType, 'reason': reason},
+    );
     final body = response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};
@@ -271,7 +376,8 @@ class OrdersRepository {
         ? Map<String, dynamic>.from(body['data'])
         : <String, dynamic>{};
     return OrderSummary.fromJson(
-        Map<String, dynamic>.from(body['order'] ?? data['order'] ?? {}));
+      Map<String, dynamic>.from(body['order'] ?? data['order'] ?? {}),
+    );
   }
 
   Future<Map<String, dynamic>?> cancellationRequest(int orderId) async {
@@ -286,8 +392,9 @@ class OrdersRepository {
   Future<File> _invoiceFile(OrderSummary order) async {
     final root = await getApplicationDocumentsDirectory();
     final directory = Directory(p.join(root.path, 'invoices'));
-    final code =
-        order.orderCode.trim().isEmpty ? '${order.id}' : order.orderCode;
+    final code = order.orderCode.trim().isEmpty
+        ? '${order.id}'
+        : order.orderCode;
     final safeCode = code.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     return File(p.join(directory.path, 'foodnova_invoice_$safeCode.pdf'));
   }

@@ -6,6 +6,7 @@ import { RiderApi } from "@/src/api/endpoints";
 import { Card, EmptyState, Loader, StatusPill } from "@/src/components/ui";
 import { asList, pick } from "@/src/lib/normalize";
 import { formatMoney, timeAgo, orderBucket, orderStatus } from "@/src/lib/format";
+import { deliveryOrderId } from "@/src/lib/order";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 const FILTERS = [
@@ -74,11 +75,11 @@ export default function Deliveries() {
       ) : (
         <FlatList
           data={orders}
-          keyExtractor={(item, i) => String(pick(item, ["id", "order_id", "_id"], i))}
+          keyExtractor={(item, i) => deliveryOrderId(item) || String(i)}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => {
-            const id = pick(item, ["id", "order_id", "_id"], "");
+            const id = deliveryOrderId(item);
             return (
               <TouchableOpacity
                 testID={`delivery-item-${id}`}
