@@ -292,7 +292,7 @@ export default function Dashboard() {
                 <Text style={styles.activeOrderNo}>
                   Order #{pick(activeOrder, ["order_code", "order_number", "order_no", "reference", "id"], "")}
                 </Text>
-                <StatusPill status={pick(activeOrder, ["delivery_status", "status"], "assigned")} />
+                <StatusPill status={pick(activeOrder, ["dispatch_status", "delivery_status", "deliveryStatus", "status", "order_status"], "assigned")} />
               </View>
               <View style={styles.activeAddr}>
                 <Ionicons name="location" size={18} color={colors.brandPrimary} />

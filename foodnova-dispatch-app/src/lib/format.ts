@@ -60,5 +60,5 @@ export function orderBucket(status?: string | null): "active" | "completed" | "c
 }
 
 export function orderStatus(o: any): string {
-  return (o?.delivery_status || o?.status || o?.order_status || "").toString();
+  return (o?.dispatch_status || o?.delivery_status || o?.deliveryStatus || o?.status || o?.order_status || "").toString();
 }

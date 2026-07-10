@@ -145,7 +145,7 @@ export const RiderApi = {
 
   submitProof: (
     orderId: string,
-    payload: { delivery_code?: string; photo_url?: string; note?: string }
+    payload: { delivery_code?: string; entered_pin?: string; pin?: string; photo_url?: string; note?: string }
   ) => api(`/delivery/orders/${orderId}/proof`, { method: "POST", body: payload }),
 
   locationPing: (coords: Coords) =>

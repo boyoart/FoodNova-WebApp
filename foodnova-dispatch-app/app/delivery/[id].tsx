@@ -93,7 +93,7 @@ export default function DeliveryDetail() {
     return () => clearInterval(timer);
   }, [syncLocation]);
 
-  const currentStatus = pick(order, ["delivery_status", "status"], "assigned");
+  const currentStatus = pick(order, ["dispatch_status", "delivery_status", "deliveryStatus", "status", "order_status"], "assigned");
   const idx = useMemo(() => statusIndex(String(currentStatus)), [currentStatus]);
   const nextStep = idx + 1 < FLOW.length ? FLOW[idx + 1] : null;
 
@@ -156,7 +156,13 @@ export default function DeliveryDetail() {
     }
     setBusy(true);
     try {
-      await RiderApi.submitProof(String(id), { delivery_code: pin.trim(), note: "Delivered by rider" });
+      const enteredPin = pin.trim();
+      await RiderApi.submitProof(String(id), {
+        delivery_code: enteredPin,
+        entered_pin: enteredPin,
+        pin: enteredPin,
+        note: "Delivered by rider",
+      });
       await RiderApi.updateOrderStatus(String(id), "delivered").catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       toast.show("Delivery completed!", "success");

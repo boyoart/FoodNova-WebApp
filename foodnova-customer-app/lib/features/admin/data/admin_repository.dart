@@ -54,11 +54,28 @@ class AdminRepository {
   }
 
   Future<void> updateOrderStatus(int orderId, String status) async {
-    await _dio.patch('/admin/orders/$orderId', data: {
+    final payload = <String, dynamic>{
       'status': status,
       'order_status': status,
       'fulfillment_status': status,
-    });
+    };
+    if (status == 'payment_confirmed') {
+      payload
+        ..['status'] = 'processing'
+        ..['order_status'] = 'processing'
+        ..['fulfillment_status'] = 'processing'
+        ..['payment_status'] = 'payment_confirmed'
+        ..['dispatch_status'] = 'READY_FOR_DISPATCH';
+    } else if (status == 'ready') {
+      payload['dispatch_status'] = 'READY_FOR_PICKUP';
+    } else if (status == 'out_for_delivery') {
+      payload['dispatch_status'] = 'OUT_FOR_DELIVERY';
+    } else if (status == 'delivered') {
+      payload['dispatch_status'] = 'DELIVERED';
+    } else if (status == 'cancelled') {
+      payload['dispatch_status'] = 'CANCELLED';
+    }
+    await _dio.patch('/admin/orders/$orderId', data: payload);
   }
 
   Future<void> assignRider(int orderId, int riderId) async {

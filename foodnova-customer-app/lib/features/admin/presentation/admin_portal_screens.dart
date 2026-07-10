@@ -893,6 +893,14 @@ Future<void> _showOrderDetails(
             spacing: 8,
             runSpacing: 8,
             children: [
+              _MiniAction('Confirm Payment', Icons.payments_rounded, () async {
+                await ref
+                    .read(adminRepositoryProvider)
+                    .updateOrderStatus(_id(order), 'payment_confirmed');
+                ref.invalidate(adminOrdersProvider);
+                ref.invalidate(adminDispatchProvider);
+                if (context.mounted) Navigator.pop(context);
+              }),
               for (final status in const [
                 'processing',
                 'ready',
@@ -1423,7 +1431,10 @@ List<Map<String, dynamic>> _list(dynamic value) {
 }
 
 int _id(Map<String, dynamic> item) =>
-    int.tryParse('${item['id'] ?? item['rider_id'] ?? 0}') ?? 0;
+    int.tryParse(
+      '${item['id'] ?? item['order_id'] ?? item['orderId'] ?? item['rider_id'] ?? item['delivery_worker_id'] ?? item['worker_id'] ?? 0}',
+    ) ??
+    0;
 num _num(dynamic value) => num.tryParse('$value') ?? 0;
 String _money(num value) =>
     NumberFormat.currency(locale: 'en_NG', symbol: 'NGN ', decimalDigits: 0)

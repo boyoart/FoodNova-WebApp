@@ -9,6 +9,7 @@ import { useToast } from "@/src/context/ToastContext";
 import { EmptyState, Loader } from "@/src/components/ui";
 import { asList, pick } from "@/src/lib/normalize";
 import { timeAgo } from "@/src/lib/format";
+import { deliveryOrderId } from "@/src/lib/order";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 function iconFor(type: string): keyof typeof Ionicons.glyphMap {
@@ -55,7 +56,7 @@ export default function Notifications() {
   async function openItem(item: any) {
     const id = pick(item, ["id", "_id", "notification_id"], "");
     if (id) NotifApi.markRead(String(id)).catch(() => {});
-    const orderId = pick(item, ["order_id", "orderId", "delivery_order_id", "data.order_id", "data.orderId", "data.delivery_order_id", "metadata.order_id", "metadata.orderId", "metadata.delivery_order_id"], null);
+    const orderId = deliveryOrderId(item);
     if (orderId) router.push(`/delivery/${orderId}`);
   }
 

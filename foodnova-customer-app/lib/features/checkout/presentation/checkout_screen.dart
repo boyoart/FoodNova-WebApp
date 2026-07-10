@@ -65,7 +65,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       cartController.clear();
       await _showSuccess(order);
       if (!mounted) return;
-      context.pushReplacement('/tracking/${order['id']}');
+      final orderId =
+          order['id'] ?? order['order_id'] ?? order['orderId'] ?? order['_id'];
+      if (orderId == null || '$orderId'.trim().isEmpty) {
+        throw Exception('Order created, but tracking reference was missing.');
+      }
+      context.pushReplacement('/tracking/$orderId');
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (!mounted) return;
