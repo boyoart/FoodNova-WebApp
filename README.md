@@ -50,7 +50,8 @@ npm run start     # Metro on :3000
 - FCM requires `google-services.json` at build time (Firebase).
 
 See **API_INTEGRATION.md**, **PRODUCTION_CHECKLIST.md**, **DEPLOYMENT_HANDOFF.md**, and
-**FOODNOVA_RIDER_INTEGRATION.md** for full details.
+**FOODNOVA_RIDER_INTEGRATION.md** for full details. The dispatch lifecycle contract and
+single-source architecture are documented in **DISPATCH_LIFECYCLE_AUDIT.md**.
 
 ## Build
 Build from the standardized dispatch app directory:
