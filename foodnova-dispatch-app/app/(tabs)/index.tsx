@@ -22,6 +22,7 @@ import { Logo } from "@/src/components/Logo";
 import { OfferModal, Offer, offerId } from "@/src/components/OfferModal";
 import { asList, asObject, pick } from "@/src/lib/normalize";
 import { formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
+import { formatPercent, normalizeRiderStats } from "@/src/lib/stats";
 import { addForegroundNotificationListener } from "@/src/lib/push";
 import {
   getForegroundPermission,
@@ -217,28 +218,7 @@ export default function Dashboard() {
     setRefreshing(false);
   }
 
-  const earningsToday = pick(
-    stats,
-    ["today_earnings", "earnings_today", "today.earnings", "todayEarnings", "today_payout", "total_earnings_today", "earnings.today"],
-    0
-  );
-  const deliveriesToday = pick(
-    stats,
-    [
-      "today_deliveries",
-      "deliveries_today",
-      "completed_today",
-      "today_completed",
-      "orders_completed_today",
-      "deliveries_completed_today",
-      "today.deliveries",
-      "today.completed",
-      "completed_deliveries",
-      "completed",
-    ],
-    0
-  );
-  const rating = pick(stats, ["rating", "average_rating", "avg_rating", "ratings.average", "performance.rating"], null);
+  const normalizedStats = normalizeRiderStats(stats);
   const riderName = pick(rider, ["full_name", "name", "first_name"], "Rider");
 
   return (
@@ -288,9 +268,14 @@ export default function Dashboard() {
 
         {/* Stats */}
         <View style={styles.statRow}>
-          <StatCard testID="stat-earnings" icon="wallet-outline" label="Today" value={formatMoney(earningsToday)} />
-          <StatCard testID="stat-deliveries" icon="cube-outline" label="Deliveries" value={String(deliveriesToday)} />
-          <StatCard testID="stat-rating" icon="star-outline" label="Rating" value={rating ? String(rating) : "--"} />
+          <StatCard testID="stat-earnings" icon="wallet-outline" label="Today" value={formatMoney(normalizedStats.dailyEarnings)} />
+          <StatCard testID="stat-weekly-earnings" icon="calendar-outline" label="Week" value={formatMoney(normalizedStats.weeklyEarnings)} />
+          <StatCard testID="stat-deliveries" icon="cube-outline" label="Delivered" value={String(normalizedStats.completedDeliveries)} />
+        </View>
+        <View style={styles.statRow}>
+          <StatCard testID="stat-rating" icon="star-outline" label="Rating" value={normalizedStats.rating ? normalizedStats.rating.toFixed(1) : "--"} />
+          <StatCard testID="stat-acceptance" icon="checkmark-circle-outline" label="Acceptance" value={formatPercent(normalizedStats.acceptanceRate)} />
+          <StatCard testID="stat-completion" icon="trophy-outline" label="Completion" value={formatPercent(normalizedStats.completionRate)} />
         </View>
 
         {/* Active delivery */}

@@ -8,6 +8,7 @@ import { RiderApi } from "@/src/api/endpoints";
 import { Card } from "@/src/components/ui";
 import { asObject, asList, pick } from "@/src/lib/normalize";
 import { formatMoney, timeAgo, orderBucket, orderStatus } from "@/src/lib/format";
+import { formatPercent, normalizeRiderStats } from "@/src/lib/stats";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 export default function Earnings() {
@@ -37,12 +38,7 @@ export default function Earnings() {
     setRefreshing(false);
   }
 
-  const total = pick(stats, ["total_earnings", "lifetime_earnings", "earnings", "total"], 0);
-  const today = pick(stats, ["today_earnings", "earnings_today", "todayEarnings"], 0);
-  const week = pick(stats, ["week_earnings", "weekly_earnings", "this_week"], 0);
-  const totalDeliveries = pick(stats, ["total_deliveries", "completed_deliveries", "deliveries"], completed.length);
-  const rating = pick(stats, ["rating", "average_rating", "avg_rating"], null);
-  const acceptance = pick(stats, ["acceptance_rate", "accept_rate"], null);
+  const normalizedStats = normalizeRiderStats(stats, completed);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -57,16 +53,21 @@ export default function Earnings() {
         {/* Hero total */}
         <Card inverse style={styles.hero}>
           <Text style={styles.heroLabel}>TOTAL EARNINGS</Text>
-          <Text style={styles.heroValue}>{formatMoney(total)}</Text>
+          <Text style={styles.heroValue}>{formatMoney(normalizedStats.totalEarnings)}</Text>
           <View style={styles.heroRow}>
             <View style={styles.heroCol}>
-              <Text style={styles.heroColValue}>{formatMoney(today)}</Text>
+              <Text style={styles.heroColValue}>{formatMoney(normalizedStats.dailyEarnings)}</Text>
               <Text style={styles.heroColLabel}>Today</Text>
             </View>
             <View style={styles.heroDivider} />
             <View style={styles.heroCol}>
-              <Text style={styles.heroColValue}>{formatMoney(week)}</Text>
+              <Text style={styles.heroColValue}>{formatMoney(normalizedStats.weeklyEarnings)}</Text>
               <Text style={styles.heroColLabel}>This week</Text>
+            </View>
+            <View style={styles.heroDivider} />
+            <View style={styles.heroCol}>
+              <Text style={styles.heroColValue}>{formatMoney(normalizedStats.monthlyEarnings)}</Text>
+              <Text style={styles.heroColLabel}>This month</Text>
             </View>
           </View>
         </Card>
@@ -74,9 +75,14 @@ export default function Earnings() {
         {/* Performance */}
         <Text style={styles.section}>Performance</Text>
         <View style={styles.metricRow}>
-          <Metric icon="cube" label="Deliveries" value={String(totalDeliveries)} />
-          <Metric icon="star" label="Rating" value={rating ? String(rating) : "—"} />
-          <Metric icon="checkmark-done" label="Acceptance" value={acceptance ? `${acceptance}%` : "—"} />
+          <Metric icon="cube" label="Delivered" value={String(normalizedStats.completedDeliveries)} />
+          <Metric icon="star" label="Rating" value={normalizedStats.rating ? normalizedStats.rating.toFixed(1) : "--"} />
+          <Metric icon="checkmark-done" label="Acceptance" value={formatPercent(normalizedStats.acceptanceRate)} />
+        </View>
+        <View style={styles.metricRow}>
+          <Metric icon="today" label="Today" value={String(normalizedStats.deliveriesToday)} />
+          <Metric icon="trophy" label="Completion" value={formatPercent(normalizedStats.completionRate)} />
+          <Metric icon="calendar" label="Month" value={formatMoney(normalizedStats.monthlyEarnings)} />
         </View>
 
         {/* Recent payouts */}
