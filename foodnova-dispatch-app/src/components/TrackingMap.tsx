@@ -115,7 +115,7 @@ async function fetchRoute(origin: LatLng, destination: LatLng): Promise<LatLng[]
     "https://maps.googleapis.com/maps/api/directions/json" +
     `?origin=${origin.latitude},${origin.longitude}` +
     `&destination=${destination.latitude},${destination.longitude}` +
-    `&mode=driving&key=${encodeURIComponent(key)}`;
+    `&mode=driving&departure_time=now&key=${encodeURIComponent(key)}`;
   const response = await fetch(url);
   const json = await response.json();
   const encoded = json?.routes?.[0]?.overview_polyline?.points;
@@ -239,6 +239,10 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
   }, [routeKey, endpoints]);
 
   useEffect(() => {
+    fittedOnce.current = false;
+  }, [routeKey]);
+
+  useEffect(() => {
     if (ref.current && fitPoints.length >= 2 && !fittedOnce.current) {
       fittedOnce.current = true;
       ref.current.fitToCoordinates(fitPoints, {
@@ -261,19 +265,28 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
           latitudeDelta: 0.05,
           longitudeDelta: 0.05,
         }}
+        onMapReady={() => console.log("TRACKING_MAP_READY")}
       >
         {rider && (
           <Marker.Animated coordinate={riderRegion as any} title="You" testID="marker-rider" anchor={{ x: 0.5, y: 0.5 }}>
             <View style={[styles.vehicleMarker, { transform: [{ rotate: `${heading}deg` }] }]}>
-              <Ionicons name="bicycle" size={18} color={colors.onBrandPrimary} />
+              <Ionicons name="navigate" size={20} color={colors.onBrandPrimary} />
             </View>
           </Marker.Animated>
         )}
         {pickup && (
-          <Marker coordinate={pickup} title="Pickup" testID="marker-pickup" pinColor="#F59E0B" />
+          <Marker coordinate={pickup} title="Pickup" testID="marker-pickup" anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={[styles.placeMarker, styles.pickupMarker]}>
+              <Ionicons name="storefront" size={18} color={colors.onWarning} />
+            </View>
+          </Marker>
         )}
         {customer && (
-          <Marker coordinate={customer} title="Customer" testID="marker-customer" pinColor="#111827" />
+          <Marker coordinate={customer} title="Customer" testID="marker-customer" anchor={{ x: 0.5, y: 0.5 }}>
+            <View style={[styles.placeMarker, styles.customerMarker]}>
+              <Ionicons name="home" size={18} color={colors.onBrandPrimary} />
+            </View>
+          </Marker>
         )}
         {displayPath.length >= 2 && (
           <Polyline coordinates={displayPath} strokeWidth={5} strokeColor={colors.brandPrimary} lineCap="round" lineJoin="round" />
@@ -300,9 +313,9 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
 const styles = StyleSheet.create({
   wrap: { flex: 1, overflow: "hidden", backgroundColor: colors.surfaceTertiary },
   vehicleMarker: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.brandPrimary,
     borderWidth: 3,
     borderColor: colors.surface,
@@ -313,6 +326,21 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
   },
+  placeMarker: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 3,
+    borderColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  pickupMarker: { backgroundColor: colors.warning },
+  customerMarker: { backgroundColor: colors.brandSecondary },
   metricsCard: {
     position: "absolute",
     left: spacing.lg,

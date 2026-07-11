@@ -129,6 +129,11 @@ export default function DeliveryDetail() {
       "longitude",
     ]
   );
+  const customerName = pick(order, ["customer_name", "delivery_address_snapshot.recipient_name", "recipient_name"], "Customer");
+  const customerPhone = pick(order, ["customer_phone", "delivery_address_snapshot.phone", "recipient_phone", "phone"], null);
+  const dropoff = pick(order, ["dropoff_address", "customer_address", "delivery_address"], "Delivery address");
+  const pickupAddr = pick(order, ["pickup_address", "restaurant_address", "vendor_address"], "Pickup location");
+  const isDelivered = String(currentStatus).toLowerCase() === "delivered";
 
   async function advance() {
     if (!nextStep || !order) return;
@@ -183,6 +188,51 @@ export default function DeliveryDetail() {
     }
   }
 
+  function navigationTarget() {
+    const s = String(currentStatus).toLowerCase();
+    if (["picked_up", "picked", "collected", "en_route", "enroute", "in_transit", "out_for_delivery", "arrived"].includes(s)) {
+      return customer || String(pick(order, ["dropoff_address", "customer_address", "delivery_address"], ""));
+    }
+    return pickup || String(pick(order, ["pickup_address", "restaurant_address", "vendor_address"], ""));
+  }
+
+  function openNavigation() {
+    const target = navigationTarget();
+    if (!target) {
+      toast.show("Route destination is unavailable", "warning");
+      return;
+    }
+    const destination =
+      typeof target === "string"
+        ? encodeURIComponent(target)
+        : `${target.latitude},${target.longitude}`;
+    Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`).catch(() => {
+      toast.show("Could not open navigation", "error");
+    });
+  }
+
+  function callCustomer() {
+    if (!customerPhone) {
+      toast.show("Customer phone number is unavailable", "warning");
+      return;
+    }
+    Linking.openURL(`tel:${customerPhone}`).catch(() => toast.show("Could not start call", "error"));
+  }
+
+  function chatCustomer() {
+    if (!customerPhone) {
+      toast.show("Customer phone number is unavailable", "warning");
+      return;
+    }
+    const digits = String(customerPhone).replace(/[^\d+]/g, "");
+    const text = encodeURIComponent(`Hi ${String(customerName)}, I am your FoodNova rider.`);
+    Linking.openURL(`whatsapp://send?phone=${digits}&text=${text}`).catch(() => {
+      Linking.openURL(`https://wa.me/${digits.replace("+", "")}?text=${text}`).catch(() => {
+        toast.show("Could not open chat", "error");
+      });
+    });
+  }
+
   if (loading) return <View style={styles.root}><Loader label="Loading delivery..." /></View>;
 
   if (!order) {
@@ -194,12 +244,6 @@ export default function DeliveryDetail() {
       </View>
     );
   }
-
-  const customerName = pick(order, ["customer_name", "delivery_address_snapshot.recipient_name", "recipient_name"], "Customer");
-  const customerPhone = pick(order, ["customer_phone", "delivery_address_snapshot.phone", "recipient_phone", "phone"], null);
-  const dropoff = pick(order, ["dropoff_address", "customer_address", "delivery_address"], "Delivery address");
-  const pickupAddr = pick(order, ["pickup_address", "restaurant_address", "vendor_address"], "Pickup location");
-  const isDelivered = String(currentStatus).toLowerCase() === "delivered";
 
   return (
     <View style={styles.root}>
@@ -239,6 +283,14 @@ export default function DeliveryDetail() {
               })}
             </View>
 
+            {/* Field actions */}
+            <View style={styles.actionGrid}>
+              <QuickAction testID="navigate-action" icon="navigate" label="Navigate" onPress={openNavigation} />
+              <QuickAction testID="call-customer" icon="call" label="Call" onPress={callCustomer} />
+              <QuickAction testID="chat-customer" icon="chatbubble-ellipses" label="Chat" onPress={chatCustomer} />
+              <QuickAction testID="sos-action" icon="warning" label="SOS" danger onPress={panic} />
+            </View>
+
             {/* Route info */}
             <View style={styles.routeCard}>
               <View style={styles.routeRow}>
@@ -257,15 +309,6 @@ export default function DeliveryDetail() {
                 </View>
               </View>
             </View>
-
-            {/* Customer contact */}
-            {customerPhone && (
-              <TouchableOpacity testID="call-customer" style={styles.callRow} onPress={() => Linking.openURL(`tel:${customerPhone}`)}>
-                <Ionicons name="call" size={18} color={colors.brandPrimary} />
-                <Text style={styles.callText}>Call {String(customerName)}</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-              </TouchableOpacity>
-            )}
 
             {/* PIN entry or action */}
             {pinMode ? (
@@ -298,6 +341,27 @@ export default function DeliveryDetail() {
         </View>
       </KeyboardAvoidingView>
     </View>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  onPress,
+  testID,
+  danger,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  testID: string;
+  danger?: boolean;
+}) {
+  return (
+    <TouchableOpacity testID={testID} style={[styles.quickAction, danger && styles.quickActionDanger]} onPress={onPress} activeOpacity={0.85}>
+      <Ionicons name={icon} size={20} color={danger ? colors.onError : colors.brandPrimary} />
+      <Text style={[styles.quickActionText, danger && styles.quickActionTextDanger]} numberOfLines={1}>{label}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -335,6 +399,11 @@ const styles = StyleSheet.create({
   pin: { width: 12, height: 12, borderRadius: 6, marginTop: 3 },
   routeLabel: { fontFamily: fonts.text, fontSize: 10, fontWeight: "700", color: colors.muted, letterSpacing: 1 },
   routeValue: { fontFamily: fonts.text, fontSize: type.base, fontWeight: "600", color: colors.onSurface, lineHeight: 21, flexShrink: 1 },
+  actionGrid: { flexDirection: "row", gap: spacing.sm },
+  quickAction: { flex: 1, minHeight: 68, borderRadius: radius.lg, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 6, paddingHorizontal: 4 },
+  quickActionDanger: { backgroundColor: "#FEF2F2", borderColor: "#FECACA" },
+  quickActionText: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "800", color: colors.onSurface },
+  quickActionTextDanger: { color: colors.error },
   callRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.brandTertiary, borderRadius: radius.md, padding: spacing.md },
   callText: { flex: 1, fontFamily: fonts.text, fontSize: type.base, fontWeight: "700", color: colors.onBrandTertiary },
   pinLabel: { fontFamily: fonts.text, fontSize: type.base, color: colors.onSurfaceTertiary, textAlign: "center" },

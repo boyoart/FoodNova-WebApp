@@ -53,12 +53,13 @@ export const radius = {
 // Font families registered in use-app-fonts.ts. Keep operational UI on a
 // clean professional stack; avoid decorative/handwritten fonts in workflows.
 export const fonts = {
-  display: "Poppins",
-  displayBold: "Poppins",
+  display: "Inter",
+  displayBold: "Inter",
   text: "Inter",
 };
 
 export const type = {
+  xs: 11,
   sm: 12,
   base: 14,
   lg: 16,

@@ -21,7 +21,7 @@ import { Card, StatusPill } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
 import { OfferModal, Offer, offerId } from "@/src/components/OfferModal";
 import { asList, asObject, pick } from "@/src/lib/normalize";
-import { formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
+import { formatDistanceKm, formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
 import { deliveryOrderId } from "@/src/lib/order";
 import { formatPercent, normalizeRiderStats } from "@/src/lib/stats";
 import { addForegroundNotificationListener } from "@/src/lib/push";
@@ -242,7 +242,11 @@ export default function Dashboard() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brandPrimary} />}
       >
-        <Text style={styles.greeting}>Hi, {String(riderName).split(" ")[0]} 👋</Text>
+        <View style={styles.heroIntro}>
+          <Text style={styles.eyebrow}>Dispatch Dashboard</Text>
+          <Text style={styles.greeting}>Hi, {String(riderName).split(" ")[0]}</Text>
+          <Text style={styles.heroSub}>Stay ready for verified FoodNova deliveries.</Text>
+        </View>
 
         {/* Online toggle */}
         <Pressable
@@ -268,15 +272,30 @@ export default function Dashboard() {
         </Pressable>
 
         {/* Stats */}
-        <View style={styles.statRow}>
-          <StatCard testID="stat-earnings" icon="wallet-outline" label="Today" value={formatMoney(normalizedStats.dailyEarnings)} />
-          <StatCard testID="stat-weekly-earnings" icon="calendar-outline" label="Week" value={formatMoney(normalizedStats.weeklyEarnings)} />
-          <StatCard testID="stat-deliveries" icon="cube-outline" label="Delivered" value={String(normalizedStats.completedDeliveries)} />
+        <View style={styles.earningsCard}>
+          <View style={styles.earningsHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.earningsLabel}>Today earnings</Text>
+              <Text testID="stat-earnings" style={styles.earningsValue} numberOfLines={1}>
+                {formatMoney(normalizedStats.dailyEarnings)}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.detailsPill} onPress={() => router.push("/(tabs)/earnings")}>
+              <Text style={styles.detailsPillText}>View Details</Text>
+              <Ionicons name="arrow-forward" size={15} color={colors.onBrandPrimary} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.earningsGrid}>
+            <MiniMetric testID="stat-weekly-earnings" label="Week" value={formatMoney(normalizedStats.weeklyEarnings)} />
+            <MiniMetric testID="stat-monthly-earnings" label="Month" value={formatMoney(normalizedStats.monthlyEarnings)} />
+            <MiniMetric testID="stat-lifetime-earnings" label="Lifetime" value={formatMoney(normalizedStats.totalEarnings)} />
+          </View>
         </View>
+
         <View style={styles.statRow}>
+          <StatCard testID="stat-deliveries" icon="cube-outline" label="Delivered" value={String(normalizedStats.completedDeliveries)} />
           <StatCard testID="stat-rating" icon="star-outline" label="Rating" value={normalizedStats.rating ? normalizedStats.rating.toFixed(1) : "--"} />
           <StatCard testID="stat-acceptance" icon="checkmark-circle-outline" label="Acceptance" value={formatPercent(normalizedStats.acceptanceRate)} />
-          <StatCard testID="stat-completion" icon="trophy-outline" label="Completion" value={formatPercent(normalizedStats.completionRate)} />
         </View>
 
         {/* Active delivery */}
@@ -296,12 +315,12 @@ export default function Dashboard() {
               </View>
               <View style={styles.activeAddr}>
                 <Ionicons name="location" size={18} color={colors.brandPrimary} />
-                <Text style={styles.activeAddrText}>
+                <Text style={styles.activeAddrText} numberOfLines={2}>
                   {pick(activeOrder, ["dropoff_address", "customer_address", "delivery_address"], "Delivery in progress")}
                 </Text>
               </View>
               <View style={styles.activeCta}>
-                <Text style={styles.activeCtaText}>Continue delivery</Text>
+                <Text style={styles.activeCtaText}>View Details</Text>
                 <Ionicons name="arrow-forward" size={18} color={colors.onBrandPrimary} />
               </View>
             </Card>
@@ -331,12 +350,18 @@ export default function Dashboard() {
                     <Ionicons name="flash" size={18} color={colors.brandPrimary} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.offerPay}>
-                      {formatMoney(pick(o, ["payout", "fee", "delivery_fee", "amount"], 0))}
-                    </Text>
-                    <Text style={styles.offerAddr}>
+                    <View style={styles.offerMetaLine}>
+                      <Text style={styles.offerPay}>
+                        {formatMoney(pick(o, ["payout", "fee", "delivery_fee", "amount"], 0))}
+                      </Text>
+                      <Text style={styles.offerDistance}>
+                        {formatDistanceKm(parseFloat(String(pick(o, ["distance_km", "distance", "total_distance_km"], 0))))}
+                      </Text>
+                    </View>
+                    <Text style={styles.offerAddr} numberOfLines={1}>
                       {pick(o, ["dropoff_address", "customer_address", "delivery_address"], "Tap to view")}
                     </Text>
+                    <Text style={styles.offerAction}>View Details</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.muted} />
                 </Card>
@@ -377,6 +402,15 @@ function StatCard({
   );
 }
 
+function MiniMetric({ label, value, testID }: { label: string; value: string; testID?: string }) {
+  return (
+    <View testID={testID} style={styles.miniMetric}>
+      <Text style={styles.miniMetricValue} numberOfLines={1}>{value}</Text>
+      <Text style={styles.miniMetricLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surfaceSecondary },
   header: {
@@ -393,7 +427,10 @@ const styles = StyleSheet.create({
   badge: { position: "absolute", top: 6, right: 6, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.error, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   badgeCount: { color: "#fff", fontFamily: fonts.text, fontSize: 10, fontWeight: "700" },
   body: { padding: spacing.lg, paddingBottom: spacing["3xl"], gap: spacing.lg },
-  greeting: { fontFamily: fonts.display, fontSize: type["2xl"], fontWeight: "700", color: colors.onSurface },
+  heroIntro: { gap: 4 },
+  eyebrow: { fontFamily: fonts.text, fontSize: type.xs, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: colors.brandPrimary },
+  greeting: { fontFamily: fonts.display, fontSize: type["3xl"], fontWeight: "800", color: colors.onSurface },
+  heroSub: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted },
   toggle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1 },
   toggleOff: { backgroundColor: colors.surface, borderColor: colors.border },
   toggleOn: { backgroundColor: colors.surfaceInverse, borderColor: colors.surfaceInverse },
@@ -404,8 +441,18 @@ const styles = StyleSheet.create({
   toggleKnob: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   knobOn: { backgroundColor: colors.brandPrimary },
   knobOff: { backgroundColor: colors.surfaceSecondary },
+  earningsCard: { backgroundColor: colors.surfaceInverse, borderRadius: 22, padding: spacing.lg, gap: spacing.lg, shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 14, elevation: 5 },
+  earningsHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.md },
+  earningsLabel: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "800", color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1 },
+  earningsValue: { fontFamily: fonts.display, fontSize: type["4xl"], fontWeight: "800", color: colors.onSurfaceInverse, marginTop: 4 },
+  detailsPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill },
+  detailsPillText: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "800", color: colors.onBrandPrimary },
+  earningsGrid: { flexDirection: "row", gap: spacing.sm },
+  miniMetric: { flex: 1, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: radius.lg, padding: spacing.md },
+  miniMetricValue: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "800", color: colors.onSurfaceInverse },
+  miniMetricLabel: { fontFamily: fonts.text, fontSize: type.xs, fontWeight: "700", color: "#9CA3AF", marginTop: 2 },
   statRow: { flexDirection: "row", gap: spacing.md },
-  statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 4, alignItems: "flex-start" },
+  statCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.md, gap: 4, alignItems: "flex-start", minHeight: 92 },
   statValue: { fontFamily: fonts.text, fontSize: type.xl, fontWeight: "700", color: colors.onSurface },
   statLabel: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted },
   sectionTitle: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onSurface, marginTop: spacing.xs },
@@ -419,6 +466,9 @@ const styles = StyleSheet.create({
   emptyActiveText: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted, textAlign: "center" },
   offerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
   offerFlash: { width: 40, height: 40, borderRadius: radius.md, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
-  offerPay: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "700", color: colors.onSurface },
+  offerMetaLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  offerPay: { flex: 1, fontFamily: fonts.text, fontSize: type.lg, fontWeight: "800", color: colors.onSurface },
+  offerDistance: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "700", color: colors.muted },
   offerAddr: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, lineHeight: 18 },
+  offerAction: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "800", color: colors.brandPrimary, marginTop: 4 },
 });

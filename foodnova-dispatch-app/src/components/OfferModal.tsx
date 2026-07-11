@@ -38,15 +38,19 @@ export function OfferModal({
 }) {
   const expiresAt = offer ? field(offer, ["expires_at", "expiry", "offer_expires_at"]) : null;
   const [remaining, setRemaining] = useState(30);
+  const [initialRemaining, setInitialRemaining] = useState(30);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const expiredRef = useRef(false);
 
   useEffect(() => {
     if (!visible) return;
+    expiredRef.current = false;
     let total = 30;
     if (expiresAt) {
       const diff = Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000);
       if (!isNaN(diff) && diff > 0) total = Math.min(diff, 120);
     }
+    setInitialRemaining(total);
     setRemaining(total);
     timer.current = setInterval(() => {
       setRemaining((r) => {
@@ -63,7 +67,10 @@ export function OfferModal({
   }, [visible, expiresAt]);
 
   useEffect(() => {
-    if (visible && remaining === 0) onDecline();
+    if (visible && remaining === 0 && !expiredRef.current) {
+      expiredRef.current = true;
+      onDecline();
+    }
   }, [onDecline, remaining, visible]);
 
   if (!offer) return null;
@@ -73,12 +80,13 @@ export function OfferModal({
   const pickup = field(offer, ["pickup_address", "pickup.address", "restaurant_address", "vendor_address"], "Pickup location");
   const dropoff = field(offer, ["dropoff_address", "customer_address", "delivery_address", "destination"], "Customer location");
   const orderNo = field(offer, ["order_number", "order_no", "reference", "code"], "");
+  const eta = field(offer, ["eta_minutes", "eta", "estimated_minutes", "estimated_duration_minutes"], null);
+  const progress = initialRemaining > 0 ? Math.max(0, Math.min(1, remaining / initialRemaining)) : 0;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDecline}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDecline}>
       <View style={styles.backdrop}>
         <View style={styles.sheet} testID="offer-modal">
-          <View style={styles.grabber} />
           <View style={styles.headerRow}>
             <View style={styles.badge}>
               <Ionicons name="flash" size={18} color={colors.onBrandPrimary} />
@@ -91,12 +99,24 @@ export function OfferModal({
 
           <View style={styles.payoutRow}>
             <Text style={styles.payout}>{formatMoney(payout)}</Text>
-            <View style={styles.metaChip}>
-              <Ionicons name="navigate-outline" size={14} color={colors.onSurfaceTertiary} />
-              <Text style={styles.metaText}>{formatDistanceKm(typeof distance === "number" ? distance : parseFloat(distance))}</Text>
-            </View>
+            <Text style={styles.payoutLabel}>estimated earnings</Text>
           </View>
           {orderNo ? <Text style={styles.orderNo}>Order #{orderNo}</Text> : null}
+
+          <View style={styles.countdownTrack}>
+            <View style={[styles.countdownFill, { width: `${Math.round(progress * 100)}%` }]} />
+          </View>
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaChip}>
+              <Ionicons name="navigate-outline" size={15} color={colors.brandPrimary} />
+              <Text style={styles.metaText}>{formatDistanceKm(typeof distance === "number" ? distance : parseFloat(distance))}</Text>
+            </View>
+            <View style={styles.metaChip}>
+              <Ionicons name="time-outline" size={15} color={colors.brandPrimary} />
+              <Text style={styles.metaText}>{eta ? `${eta} min` : "ETA pending"}</Text>
+            </View>
+          </View>
 
           <View style={styles.route}>
             <View style={styles.routeRow}>
@@ -127,16 +147,19 @@ export function OfferModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(17,24,39,0.6)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, paddingBottom: spacing["2xl"], gap: spacing.lg },
-  grabber: { alignSelf: "center", width: 44, height: 5, borderRadius: 3, backgroundColor: colors.surfaceTertiary },
+  backdrop: { flex: 1, backgroundColor: "rgba(17,24,39,0.72)", justifyContent: "center", padding: spacing.lg },
+  sheet: { backgroundColor: colors.surface, borderRadius: 28, padding: spacing.xl, gap: spacing.lg, shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 22, elevation: 12 },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   badge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
   badgeText: { color: colors.onBrandPrimary, fontFamily: fonts.text, fontSize: type.sm, fontWeight: "700" },
   countdown: { width: 48, height: 48, borderRadius: 24, borderWidth: 3, borderColor: colors.brandPrimary, alignItems: "center", justifyContent: "center" },
   countdownText: { fontFamily: fonts.display, fontSize: type.base, fontWeight: "700", color: colors.onSurface },
-  payoutRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  payout: { fontFamily: fonts.display, fontSize: type["4xl"], fontWeight: "700", color: colors.onSurface },
+  payoutRow: { alignItems: "flex-start", gap: 2 },
+  payout: { fontFamily: fonts.display, fontSize: 46, fontWeight: "800", color: colors.onSurface },
+  payoutLabel: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
+  countdownTrack: { height: 6, backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, overflow: "hidden" },
+  countdownFill: { height: 6, backgroundColor: colors.brandPrimary, borderRadius: radius.pill },
+  metaRow: { flexDirection: "row", gap: spacing.sm },
   metaChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceSecondary, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
   metaText: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "600", color: colors.onSurfaceTertiary },
   orderNo: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, marginTop: -spacing.sm },
