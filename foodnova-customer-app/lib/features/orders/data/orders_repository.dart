@@ -96,18 +96,7 @@ class RiderLocation {
     final location = json['location'] is Map
         ? Map<String, dynamic>.from(json['location'])
         : <String, dynamic>{};
-    final route = json['route_polyline'] is List
-        ? (json['route_polyline'] as List)
-              .whereType<Map>()
-              .map((point) {
-                final lat = double.tryParse('${point['latitude']}');
-                final lng = double.tryParse('${point['longitude']}');
-                if (lat == null || lng == null) return null;
-                return {'latitude': lat, 'longitude': lng};
-              })
-              .whereType<Map<String, double>>()
-              .toList()
-        : <Map<String, double>>[];
+    final route = _routePointsFrom(json);
     double? numberFrom(List<dynamic> values) {
       for (final value in values) {
         if (value == null) continue;
@@ -248,6 +237,70 @@ class RiderLocation {
       routePolyline: route,
     );
   }
+
+  static List<Map<String, double>> _routePointsFrom(
+    Map<String, dynamic> json,
+  ) {
+    final raw = json['route_polyline'] ??
+        json['routePolyline'] ??
+        json['polyline'] ??
+        json['encoded_polyline'];
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((point) {
+            final lat = double.tryParse('${point['latitude'] ?? point['lat']}');
+            final lng = double.tryParse(
+              '${point['longitude'] ?? point['lng'] ?? point['lon']}',
+            );
+            if (lat == null || lng == null) return null;
+            return {'latitude': lat, 'longitude': lng};
+          })
+          .whereType<Map<String, double>>()
+          .toList();
+    }
+    if (raw is String && raw.trim().isNotEmpty) {
+      return _decodePolyline(raw.trim());
+    }
+    return <Map<String, double>>[];
+  }
+
+  static List<Map<String, double>> _decodePolyline(String encoded) {
+    final points = <Map<String, double>>[];
+    var index = 0;
+    var lat = 0;
+    var lng = 0;
+
+    try {
+      while (index < encoded.length) {
+        var shift = 0;
+        var result = 0;
+        int byte;
+        do {
+          if (index >= encoded.length) return points;
+          byte = encoded.codeUnitAt(index++) - 63;
+          result |= (byte & 0x1f) << shift;
+          shift += 5;
+        } while (byte >= 0x20);
+        lat += (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+
+        shift = 0;
+        result = 0;
+        do {
+          if (index >= encoded.length) return points;
+          byte = encoded.codeUnitAt(index++) - 63;
+          result |= (byte & 0x1f) << shift;
+          shift += 5;
+        } while (byte >= 0x20);
+        lng += (result & 1) != 0 ? ~(result >> 1) : result >> 1;
+
+        points.add({'latitude': lat / 1e5, 'longitude': lng / 1e5});
+      }
+    } catch (error) {
+      developer.log('TRACKING_POLYLINE_DECODE_FAILED error=$error');
+    }
+    return points;
+  }
 }
 
 class OrdersRepository {
@@ -357,6 +410,7 @@ class OrdersRepository {
         ? Map<String, dynamic>.from(body['data'])
         : body;
     if (data.isEmpty) return null;
+    developer.log('TRACKING_PAYLOAD_PATH order=$orderId data=$data');
     return RiderLocation.fromJson(data);
   }
 

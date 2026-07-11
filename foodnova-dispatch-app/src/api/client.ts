@@ -46,6 +46,10 @@ type Options = {
 export async function api<T = any>(path: string, opts: Options = {}): Promise<T> {
   const { method = "GET", body, auth = true, isForm = false, signal } = opts;
   const headers: Record<string, string> = { Accept: "application/json" };
+  const shouldTrace =
+    path.includes("/delivery/offers") ||
+    path.includes("/delivery-workers/register-fcm-token") ||
+    path.includes("/delivery/location-ping");
 
   if (auth) {
     const token = await loadToken();
@@ -64,8 +68,14 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
 
   let res: Response;
   try {
+    if (shouldTrace) {
+      console.log("DISPATCH_API_REQUEST", { method, path, auth });
+    }
     res = await fetch(`${BASE_URL}${path}`, { method, headers, body: payload, signal });
   } catch (e: any) {
+    if (shouldTrace) {
+      console.log("DISPATCH_API_NETWORK_ERROR", { method, path, error: String(e?.message || e) });
+    }
     throw new ApiError(e?.message || "Network error. Check your connection.", 0, null);
   }
 
@@ -78,12 +88,18 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
   }
 
   if (!res.ok) {
+    if (shouldTrace) {
+      console.log("DISPATCH_API_ERROR_RESPONSE", { method, path, status: res.status, body: data });
+    }
     const msg =
       (data && (data.detail || data.message || data.error)) ||
       `Request failed (${res.status})`;
     throw new ApiError(typeof msg === "string" ? msg : "Request failed", res.status, data);
   }
 
+  if (shouldTrace) {
+    console.log("DISPATCH_API_RESPONSE", { method, path, status: res.status, body: data });
+  }
   return data as T;
 }
 

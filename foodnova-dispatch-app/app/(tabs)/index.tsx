@@ -24,7 +24,7 @@ import { asList, asObject, pick } from "@/src/lib/normalize";
 import { formatDistanceKm, formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
 import { deliveryOrderId } from "@/src/lib/order";
 import { formatPercent, normalizeRiderStats } from "@/src/lib/stats";
-import { addForegroundNotificationListener } from "@/src/lib/push";
+import { addForegroundNotificationListener, showLocalOfferNotification } from "@/src/lib/push";
 import {
   getForegroundPermission,
   requestForegroundPermission,
@@ -33,6 +33,20 @@ import {
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 const POLL_MS = 12000;
+
+function riderLooksOnline(rider: any) {
+  const values = [
+    rider?.status,
+    rider?.availability,
+    rider?.operational_status,
+    rider?.online_status,
+    rider?.delivery_status,
+    rider?.worker_status,
+  ]
+    .filter((value) => value !== undefined && value !== null)
+    .map((value) => String(value).toLowerCase());
+  return rider?.is_online === true || rider?.isOnline === true || values.some((value) => ["online", "available"].includes(value));
+}
 
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
@@ -59,8 +73,16 @@ export default function Dashboard() {
   }, [currentOffer]);
 
   const initOnline = useCallback(() => {
-    const s = (rider?.status || rider?.availability || "").toString().toLowerCase();
-    if (s === "online") setOnline(true);
+    const nextOnline = riderLooksOnline(rider);
+    console.log("DASHBOARD_RIDER_ONLINE_STATE", {
+      status: rider?.status,
+      availability: rider?.availability,
+      operational_status: rider?.operational_status,
+      online_status: rider?.online_status,
+      is_online: rider?.is_online,
+      nextOnline,
+    });
+    if (nextOnline) setOnline(true);
   }, [rider]);
 
   useEffect(() => {
@@ -94,17 +116,26 @@ export default function Dashboard() {
 
   const pollOffers = useCallback(async () => {
     try {
+      console.log("OFFER_FEED_REQUEST");
       const data = await RiderApi.offers();
       const list = asList(data) as Offer[];
+      console.log("OFFER_FEED_RESPONSE", { count: list.length });
       setOffers(list);
       // Surface the first genuinely new offer
       const fresh = list.find((o) => !seenOffers.current.has(offerId(o)));
       if (fresh && !currentOfferRef.current) {
         seenOffers.current.add(offerId(fresh));
+        console.log("DASHBOARD_OFFER_RENDERED", { offerId: offerId(fresh), orderId: deliveryOrderId(fresh) });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        showLocalOfferNotification(
+          "New FoodNova delivery offer",
+          "Review payout, pickup, drop-off, and accept before it expires."
+        ).catch(() => {});
         setCurrentOffer(fresh);
       }
-    } catch {}
+    } catch (error: any) {
+      console.log("OFFER_FEED_FAILED", { error: String(error?.message || error) });
+    }
   }, []);
 
   const sendPing = useCallback(async () => {
@@ -112,18 +143,17 @@ export default function Dashboard() {
     if (coords) RiderApi.locationPing(coords).catch(() => {});
   }, []);
 
-  // Polling lifecycle tied to online state
+  // Offer polling is intentionally always active while the dashboard is mounted:
+  // push can fail, but an existing backend offer must still appear in-app.
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
-    if (online) {
+    pollOffers();
+    if (online) sendPing();
+    pollRef.current = setInterval(() => {
       pollOffers();
-      sendPing();
-      pollRef.current = setInterval(() => {
-        pollOffers();
-        sendPing();
-        loadActive();
-      }, POLL_MS);
-    }
+      if (online) sendPing();
+      loadActive();
+    }, POLL_MS);
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
@@ -133,6 +163,7 @@ export default function Dashboard() {
     return addForegroundNotificationListener((data) => {
       const type = String(data?.type || data?.notification_type || data?.category || "").toLowerCase();
       if (type.includes("offer") || type.includes("delivery")) {
+        console.log("SOCKET_DELIVERY_OFFER_RECEIVED", data);
         console.log("OFFER_AUTO_REFRESH_TRIGGERED", data);
         pollOffers();
         loadActive();
@@ -146,7 +177,8 @@ export default function Dashboard() {
       loadStats();
       loadActive();
       loadUnread();
-    }, [loadStats, loadActive, loadUnread])
+      pollOffers();
+    }, [loadStats, loadActive, loadUnread, pollOffers])
   );
 
   async function toggleOnline() {
@@ -215,7 +247,7 @@ export default function Dashboard() {
   async function onRefresh() {
     setRefreshing(true);
     await Promise.all([loadStats(), loadActive(), loadUnread(), refreshRider()]);
-    if (online) await pollOffers();
+    await pollOffers();
     setRefreshing(false);
   }
 

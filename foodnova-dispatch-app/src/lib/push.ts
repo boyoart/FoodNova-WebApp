@@ -24,6 +24,25 @@ export function addForegroundNotificationListener(cb: (data: any) => void) {
   };
 }
 
+export async function showLocalOfferNotification(title = "New delivery offer", body = "Open FoodNova Dispatch to accept or decline.") {
+  if (!isNative) return;
+  try {
+    await ensureAndroidChannel();
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: { type: "delivery_offer", source: "local_offer_poll" },
+        sound: "default",
+      },
+      trigger: null,
+    });
+    console.log("ORDER_OFFER_LOCAL_NOTIFICATION_SHOWN");
+  } catch (error: any) {
+    console.log("ORDER_OFFER_LOCAL_NOTIFICATION_FAILED", { error: String(error?.message || error) });
+  }
+}
+
 async function ensureAndroidChannel() {
   if (Platform.OS !== "android") return;
   await Notifications.setNotificationChannelAsync("dispatch", {
@@ -38,7 +57,10 @@ async function ensureAndroidChannel() {
 // Register the native FCM device token with the existing backend.
 // Works only on a real Android/iOS build (needs google-services.json + FCM creds).
 export async function registerPushToken(): Promise<string | null> {
-  if (!isNative || !Device.isDevice) return null;
+  if (!isNative || !Device.isDevice) {
+    console.log("DISPATCH_FCM_TOKEN_SKIPPED", { isNative, isDevice: Device.isDevice });
+    return null;
+  }
   try {
     await ensureAndroidChannel();
 
@@ -48,15 +70,22 @@ export async function registerPushToken(): Promise<string | null> {
       const req = await Notifications.requestPermissionsAsync();
       status = req.status;
     }
-    if (status !== "granted") return null;
+    if (status !== "granted") {
+      console.log("DISPATCH_FCM_PERMISSION_DENIED", { status });
+      return null;
+    }
 
     const tokenResp = await Notifications.getDevicePushTokenAsync();
     const token = (tokenResp as any)?.data ?? "";
     if (token) {
-      await NotifApi.registerFcmToken(String(token), Platform.OS).catch(() => {});
+      console.log("DISPATCH_FCM_TOKEN_GENERATED", { platform: Platform.OS });
+      await NotifApi.registerFcmToken(String(token), Platform.OS)
+        .then(() => console.log("DISPATCH_FCM_TOKEN_REGISTERED", { platform: Platform.OS }))
+        .catch((error: any) => console.log("DISPATCH_FCM_TOKEN_REGISTER_FAILED", { error: String(error?.message || error) }));
     }
     return token ? String(token) : null;
-  } catch {
+  } catch (error: any) {
+    console.log("DISPATCH_FCM_TOKEN_FAILED", { error: String(error?.message || error) });
     return null;
   }
 }
@@ -66,7 +95,10 @@ export function addTokenRefreshListener(cb: (token: string) => void) {
   if (!isNative) return () => {};
   const sub = Notifications.addPushTokenListener((t) => {
     const token = (t as any)?.data ?? "";
-    if (token) cb(String(token));
+    if (token) {
+      console.log("DISPATCH_FCM_TOKEN_REFRESHED");
+      cb(String(token));
+    }
   });
   return () => sub.remove();
 }

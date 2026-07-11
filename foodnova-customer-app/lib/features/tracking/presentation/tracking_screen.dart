@@ -1063,9 +1063,14 @@ class _RiderTrackingCard extends StatelessWidget {
           ],
         ),
         data: (data) {
-          if (data == null || !data.trackingVisible) {
+          if (data == null) {
             return const _MutedText(
               'Tracking will appear when your rider picks up the order.',
+            );
+          }
+          if (!data.trackingVisible && !data.hasRiderCoordinates) {
+            return const _MutedText(
+              'Tracking will appear as soon as your rider location is available.',
             );
           }
           if (!data.hasRiderCoordinates) {
@@ -1111,6 +1116,8 @@ class _RiderTrackingCard extends StatelessWidget {
             'TRACKING_MAP_DATA '
             'trackingVisible=${data.trackingVisible} '
             'trackingAvailable=${data.trackingAvailable} '
+            'hasRider=${data.hasRiderCoordinates} '
+            'hasCustomer=${data.hasCustomerCoordinates} '
             'routePoints=${routePoints.length}',
           );
           debugPrint(
