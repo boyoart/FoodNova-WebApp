@@ -108,9 +108,11 @@ export function addNotificationListeners(onTap: (data: any) => void) {
   if (!isNative) return () => {};
   const received = Notifications.addNotificationReceivedListener((notification) => {
     const data = notification.request.content.data;
+    console.log("DISPATCH_NOTIFICATION_RECEIVED", data);
     foregroundListeners.forEach((listener) => listener(data));
   });
   const response = Notifications.addNotificationResponseReceivedListener((resp) => {
+    console.log("DISPATCH_NOTIFICATION_ACTION_EXECUTED", resp.notification.request.content.data);
     onTap(resp.notification.request.content.data);
   });
   return () => {

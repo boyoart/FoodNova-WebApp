@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { Modal, StyleSheet, Text, View } from "react-native";
+import { Modal, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Button } from "@/src/components/ui";
+import { TrackingMap } from "@/src/components/TrackingMap";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 import { formatMoney, formatDistanceKm } from "@/src/lib/format";
 import { deliveryOfferId } from "@/src/lib/order";
+import type { LatLng } from "@/src/components/TrackingMap.types";
 
 export type Offer = Record<string, any>;
 
@@ -17,6 +19,23 @@ function field(o: Offer, keys: string[], fallback: any = null) {
     if (v !== undefined && v !== null && v !== "") return v;
   }
   return fallback;
+}
+
+function numberField(o: Offer, keys: string[]): number | null {
+  const value = field(o, keys, null);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function coordFromOffer(o: Offer, latKeys: string[], lngKeys: string[]): LatLng | null {
+  const latitude = numberField(o, latKeys);
+  const longitude = numberField(o, lngKeys);
+  if (latitude === null || longitude === null) return null;
+  return { latitude, longitude };
 }
 
 export function offerId(o: Offer): string {
@@ -82,64 +101,85 @@ export function OfferModal({
   const orderNo = field(offer, ["order_number", "order_no", "reference", "code"], "");
   const eta = field(offer, ["eta_minutes", "eta", "estimated_minutes", "estimated_duration_minutes"], null);
   const progress = initialRemaining > 0 ? Math.max(0, Math.min(1, remaining / initialRemaining)) : 0;
+  const pickupPoint = coordFromOffer(
+    offer,
+    ["pickup_lat", "pickup_latitude", "pickup.latitude", "pickup.lat", "store_lat", "store.latitude"],
+    ["pickup_lng", "pickup_longitude", "pickup.longitude", "pickup.lng", "store_lng", "store.longitude"]
+  );
+  const dropoffPoint = coordFromOffer(
+    offer,
+    ["dropoff_lat", "dropoff_latitude", "customer_lat", "customer.latitude", "destination_lat", "destination.latitude"],
+    ["dropoff_lng", "dropoff_longitude", "customer_lng", "customer.longitude", "destination_lng", "destination.longitude"]
+  );
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDecline}>
       <View style={styles.backdrop}>
         <View style={styles.sheet} testID="offer-modal">
-          <View style={styles.headerRow}>
-            <View style={styles.badge}>
-              <Ionicons name="flash" size={18} color={colors.onBrandPrimary} />
-              <Text style={styles.badgeText}>New Delivery Offer</Text>
-            </View>
-            <View style={styles.countdown}>
-              <Text testID="offer-countdown" style={styles.countdownText}>{remaining}s</Text>
-            </View>
-          </View>
-
-          <View style={styles.payoutRow}>
-            <Text style={styles.payout}>{formatMoney(payout)}</Text>
-            <Text style={styles.payoutLabel}>estimated earnings</Text>
-          </View>
-          {orderNo ? <Text style={styles.orderNo}>Order #{orderNo}</Text> : null}
-
-          <View style={styles.countdownTrack}>
-            <View style={[styles.countdownFill, { width: `${Math.round(progress * 100)}%` }]} />
-          </View>
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaChip}>
-              <Ionicons name="navigate-outline" size={15} color={colors.brandPrimary} />
-              <Text style={styles.metaText}>{formatDistanceKm(typeof distance === "number" ? distance : parseFloat(distance))}</Text>
-            </View>
-            <View style={styles.metaChip}>
-              <Ionicons name="time-outline" size={15} color={colors.brandPrimary} />
-              <Text style={styles.metaText}>{eta ? `${eta} min` : "ETA pending"}</Text>
-            </View>
-          </View>
-
-          <View style={styles.route}>
-            <View style={styles.routeRow}>
-              <View style={[styles.pin, { backgroundColor: colors.warning }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.routeLabel}>PICKUP</Text>
-                <Text style={styles.routeValue} numberOfLines={2}>{String(pickup)}</Text>
+          <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.headerRow}>
+              <View style={styles.badge}>
+                <Ionicons name="flash" size={18} color={colors.onBrandPrimary} />
+                <Text style={styles.badgeText}>New Delivery Offer</Text>
+              </View>
+              <View style={styles.countdown}>
+                <Text testID="offer-countdown" style={styles.countdownText}>{remaining}s</Text>
               </View>
             </View>
-            <View style={styles.routeConnector} />
-            <View style={styles.routeRow}>
-              <View style={[styles.pin, { backgroundColor: colors.brandSecondary }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.routeLabel}>DROP-OFF</Text>
-                <Text style={styles.routeValue} numberOfLines={2}>{String(dropoff)}</Text>
+
+            <View style={styles.payoutRow}>
+              <Text style={styles.payout}>{formatMoney(payout)}</Text>
+              <Text style={styles.payoutLabel}>estimated earnings</Text>
+            </View>
+            {orderNo ? <Text style={styles.orderNo}>Order #{orderNo}</Text> : null}
+
+            <View style={styles.countdownTrack}>
+              <View style={[styles.countdownFill, { width: `${Math.round(progress * 100)}%` }]} />
+            </View>
+
+            <View style={styles.metaRow}>
+              <View style={styles.metaChip}>
+                <Ionicons name="navigate-outline" size={15} color={colors.brandPrimary} />
+                <Text style={styles.metaText}>{formatDistanceKm(typeof distance === "number" ? distance : parseFloat(distance))}</Text>
+              </View>
+              <View style={styles.metaChip}>
+                <Ionicons name="time-outline" size={15} color={colors.brandPrimary} />
+                <Text style={styles.metaText}>{eta ? `${eta} min` : "ETA pending"}</Text>
               </View>
             </View>
-          </View>
 
-          <View style={styles.actions}>
-            <Button testID="offer-decline" label="Decline" variant="outline" onPress={onDecline} style={{ flex: 1 }} disabled={busy} />
-            <Button testID="offer-accept" label="Accept" onPress={onAccept} loading={busy} style={{ flex: 1.4 }} />
-          </View>
+            {(pickupPoint || dropoffPoint) && (
+              <View style={styles.mapPreview}>
+                <TrackingMap pickup={pickupPoint} customer={dropoffPoint} status="accepted" style={{ flex: 1 }} />
+                <View style={styles.mapOverlay} pointerEvents="none">
+                  <Text style={styles.mapOverlayText}>Route preview</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={styles.route}>
+              <View style={styles.routeRow}>
+                <View style={[styles.pin, { backgroundColor: colors.warning }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.routeLabel}>PICKUP</Text>
+                  <Text style={styles.routeValue} numberOfLines={2}>{String(pickup)}</Text>
+                </View>
+              </View>
+              <View style={styles.routeConnector} />
+              <View style={styles.routeRow}>
+                <View style={[styles.pin, { backgroundColor: colors.brandSecondary }]} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.routeLabel}>DROP-OFF</Text>
+                  <Text style={styles.routeValue} numberOfLines={2}>{String(dropoff)}</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.actions}>
+              <Button testID="offer-decline" label="Decline" variant="outline" onPress={onDecline} style={{ flex: 1 }} disabled={busy} />
+              <Button testID="offer-accept" label="Accept" onPress={onAccept} loading={busy} style={{ flex: 1.4 }} />
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -147,8 +187,9 @@ export function OfferModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(17,24,39,0.72)", justifyContent: "center", padding: spacing.lg },
-  sheet: { backgroundColor: colors.surface, borderRadius: 28, padding: spacing.xl, gap: spacing.lg, shadowColor: "#000", shadowOpacity: 0.24, shadowRadius: 22, elevation: 12 },
+  backdrop: { flex: 1, backgroundColor: colors.surfaceInverse },
+  sheet: { flex: 1, backgroundColor: colors.surface },
+  sheetContent: { padding: spacing.xl, paddingTop: spacing["3xl"], paddingBottom: spacing["3xl"], gap: spacing.lg },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   badge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
   badgeText: { color: colors.onBrandPrimary, fontFamily: fonts.text, fontSize: type.sm, fontWeight: "700" },
@@ -162,6 +203,9 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", gap: spacing.sm },
   metaChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surfaceSecondary, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
   metaText: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "600", color: colors.onSurfaceTertiary },
+  mapPreview: { height: 180, borderRadius: 22, overflow: "hidden", backgroundColor: colors.surfaceTertiary },
+  mapOverlay: { position: "absolute", left: spacing.md, top: spacing.md, backgroundColor: "rgba(255,255,255,0.94)", borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 7 },
+  mapOverlayText: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "800", color: colors.onSurface },
   orderNo: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, marginTop: -spacing.sm },
   route: { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg },
   routeRow: { flexDirection: "row", gap: spacing.md, alignItems: "flex-start" },

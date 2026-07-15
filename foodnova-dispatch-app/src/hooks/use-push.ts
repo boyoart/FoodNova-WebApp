@@ -41,16 +41,23 @@ export function usePushNotifications() {
     registerPushToken();
 
     const stopRefresh = addTokenRefreshListener((token) => {
+      console.log("DISPATCH_NOTIFICATION_TOKEN_REFRESH_ACTION");
       NotifApi.registerFcmToken(token, Platform.OS).catch(() => {});
     });
 
     const stopTap = addNotificationListeners((data) => {
-      router.push(notificationTarget(data) as any);
+      const target = notificationTarget(data);
+      console.log("DISPATCH_NOTIFICATION_TAPPED", { data, target });
+      router.push(target as any);
     });
 
     // Cold-start tap (app opened from a killed state via a notification)
     getInitialNotificationData().then((data) => {
-      if (data) router.push(notificationTarget(data) as any);
+      if (data) {
+        const target = notificationTarget(data);
+        console.log("DISPATCH_NOTIFICATION_COLD_START", { data, target });
+        router.push(target as any);
+      }
     });
 
     return () => {

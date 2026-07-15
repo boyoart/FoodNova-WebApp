@@ -6,7 +6,7 @@ import 'spacing.dart';
 
 class AppTheme {
   static ThemeData get light {
-    final textTheme = GoogleFonts.manropeTextTheme();
+    final textTheme = GoogleFonts.interTextTheme();
     return _base(
       brightness: Brightness.light,
       textTheme: textTheme,
@@ -20,7 +20,7 @@ class AppTheme {
   }
 
   static ThemeData get dark {
-    final textTheme = GoogleFonts.manropeTextTheme();
+    final textTheme = GoogleFonts.interTextTheme();
     return _base(
       brightness: Brightness.dark,
       textTheme: textTheme,
@@ -123,7 +123,7 @@ class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: FoodNovaColors.primary,
           foregroundColor: const Color(0xFFFFFFFF),
-          textStyle: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w700),
+          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w700),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           minimumSize: const Size.fromHeight(52),
@@ -132,7 +132,7 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: FoodNovaColors.primary,
-          textStyle: GoogleFonts.hankenGrotesk(fontWeight: FontWeight.w800),
+          textStyle: GoogleFonts.inter(fontWeight: FontWeight.w800),
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(

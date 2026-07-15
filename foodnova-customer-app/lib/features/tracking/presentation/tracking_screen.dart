@@ -1134,92 +1134,90 @@ class _RiderTrackingCard extends StatelessWidget {
             'last=${routePoints.isEmpty ? '' : routePoints.last}',
           );
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (order.riderArrived) ...[
-                Text(
-                  'Rider has arrived',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 8),
-                const _MutedText(
-                  'Meet your rider and use the delivery PIN card below to confirm delivery.',
-                ),
-                const SizedBox(height: 12),
-              ],
-              _RiderProfileTile(
-                name: data.riderName.isEmpty ? order.riderName : data.riderName,
-                phone: data.riderPhone.isEmpty
-                    ? order.riderPhone
-                    : data.riderPhone,
-                photoUrl: data.riderPhotoUrl.isEmpty
-                    ? order.riderPhotoUrl
-                    : data.riderPhotoUrl,
-                vehicleType: data.vehicleType.isEmpty
-                    ? order.riderVehicleType
-                    : data.vehicleType,
-                riderId: order.riderDisplayId,
-                rating: order.riderRatingText,
-                onCallRider: null,
-                onMessageRider: null,
-              ),
-              const SizedBox(height: 12),
-              _TrackingStageTimeline(status: data.deliveryStatus),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: SizedBox(
-                  height: 240,
-                  child: Stack(
-                    children: [
-                      _TrackingMap(
-                        riderPoint: riderPoint,
-                        pickupPoint: pickupPoint,
-                        customerPoint: customerPoint,
-                        routeDestinationPoint: routeDestinationPoint,
-                        routePoints: routePoints,
-                        riderName: data.riderName,
-                      ),
-                      Positioned(
-                        left: 12,
-                        top: 12,
-                        child: _LiveTrackingBadge(
+          final riderName =
+              data.riderName.isEmpty ? order.riderName : data.riderName;
+          final riderPhone =
+              data.riderPhone.isEmpty ? order.riderPhone : data.riderPhone;
+          final riderPhoto =
+              data.riderPhotoUrl.isEmpty ? order.riderPhotoUrl : data.riderPhotoUrl;
+          final vehicleType = data.vehicleType.isEmpty
+              ? order.riderVehicleType
+              : data.vehicleType;
+          final eta = data.etaMinutes == null &&
+                  order.estimatedDeliveryTime.trim().isNotEmpty
+              ? order.estimatedDeliveryTime
+              : _formatEta(data.etaMinutes);
+          final trackingHeight =
+              math.max(520.0, MediaQuery.sizeOf(context).height * .72);
+
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: SizedBox(
+              height: trackingHeight,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: _TrackingMap(
+                      riderPoint: riderPoint,
+                      pickupPoint: pickupPoint,
+                      customerPoint: customerPoint,
+                      routeDestinationPoint: routeDestinationPoint,
+                      routePoints: routePoints,
+                      riderName: riderName,
+                    ),
+                  ),
+                  Positioned(
+                    left: 14,
+                    right: 14,
+                    top: 14,
+                    child: Row(
+                      children: [
+                        _LiveTrackingBadge(
                           label: _trackingStageLabel(data.deliveryStatus),
                         ),
-                      ),
-                    ],
+                        const Spacer(),
+                        _MapMetricChip(
+                          icon: Icons.timer_rounded,
+                          label: eta,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  Positioned(
+                    left: 14,
+                    right: 14,
+                    top: 64,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _MapMetricChip(
+                        icon: Icons.route_rounded,
+                        label: _formatDistance(data.distanceMeters),
+                      ),
+                    ),
+                  ),
+                  DraggableScrollableSheet(
+                    initialChildSize: .38,
+                    minChildSize: .25,
+                    maxChildSize: .84,
+                    builder: (context, controller) {
+                      return _TrackingBottomSheet(
+                        controller: controller,
+                        order: order,
+                        deliveryStatus: data.deliveryStatus,
+                        riderName: riderName,
+                        riderPhone: riderPhone,
+                        riderPhotoUrl: riderPhoto,
+                        vehicleType: vehicleType,
+                        eta: eta,
+                        distance: _formatDistance(data.distanceMeters),
+                        lastUpdated: _formatRelativeTime(data.lastUpdatedAt),
+                        hasDestination: customerPoint != null,
+                      );
+                    },
+                  ),
+                ],
               ),
-              if (customerPoint == null) ...[
-                const SizedBox(height: 10),
-                const _MutedText(
-                  'Rider location is live. Destination coordinates are not available yet, so route distance may be delayed.',
-                ),
-              ],
-              const SizedBox(height: 12),
-              _InfoRow(
-                label: 'Distance remaining',
-                value: _formatDistance(data.distanceMeters),
-              ),
-              const SizedBox(height: 8),
-              _InfoRow(
-                label: 'ETA',
-                value: data.etaMinutes == null &&
-                        order.estimatedDeliveryTime.trim().isNotEmpty
-                    ? order.estimatedDeliveryTime
-                    : _formatEta(data.etaMinutes),
-              ),
-              const SizedBox(height: 8),
-              _InfoRow(
-                label: 'Last updated',
-                value: _formatRelativeTime(data.lastUpdatedAt),
-              ),
-            ],
+            ),
           );
         },
       ),
@@ -1487,6 +1485,215 @@ class _LiveTrackingBadge extends StatelessWidget {
               color: scheme.onSurface,
               fontWeight: FontWeight.w900,
               fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapMetricChip extends StatelessWidget {
+  const _MapMetricChip({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: scheme.surface.withValues(alpha: .95),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: scheme.outlineVariant.withValues(alpha: .45)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .12),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: scheme.primary),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackingBottomSheet extends StatelessWidget {
+  const _TrackingBottomSheet({
+    required this.controller,
+    required this.order,
+    required this.deliveryStatus,
+    required this.riderName,
+    required this.riderPhone,
+    required this.riderPhotoUrl,
+    required this.vehicleType,
+    required this.eta,
+    required this.distance,
+    required this.lastUpdated,
+    required this.hasDestination,
+  });
+
+  final ScrollController controller;
+  final OrderSummary order;
+  final String deliveryStatus;
+  final String riderName;
+  final String riderPhone;
+  final String riderPhotoUrl;
+  final String vehicleType;
+  final String eta;
+  final String distance;
+  final String lastUpdated;
+  final bool hasDestination;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .18),
+            blurRadius: 24,
+            offset: const Offset(0, -10),
+          ),
+        ],
+      ),
+      child: ListView(
+        controller: controller,
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+        children: [
+          Center(
+            child: Container(
+              width: 44,
+              height: 5,
+              decoration: BoxDecoration(
+                color: scheme.outlineVariant,
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _TrackingMetricBlock(label: 'ETA', value: eta),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TrackingMetricBlock(label: 'Distance', value: distance),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TrackingMetricBlock(
+                  label: 'Status',
+                  value: _trackingStageLabel(deliveryStatus),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (order.riderArrived) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: .1),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Text(
+                'Rider has arrived. Meet your rider and only share your delivery PIN after receiving your items.',
+                style: TextStyle(
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w800,
+                  height: 1.35,
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+          ],
+          _RiderProfileTile(
+            name: riderName,
+            phone: riderPhone,
+            photoUrl: riderPhotoUrl,
+            vehicleType: vehicleType,
+            riderId: order.riderDisplayId,
+            rating: order.riderRatingText,
+            onCallRider: null,
+            onMessageRider: null,
+          ),
+          const SizedBox(height: 14),
+          _TrackingStageTimeline(status: deliveryStatus),
+          if (!hasDestination) ...[
+            const SizedBox(height: 12),
+            const _MutedText(
+              'Rider location is live. Destination coordinates are not available yet, so route distance may be delayed.',
+            ),
+          ],
+          const SizedBox(height: 14),
+          _InfoRow(label: 'Order', value: '#${order.orderCode}'),
+          const SizedBox(height: 8),
+          _InfoRow(label: 'Last updated', value: lastUpdated),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrackingMetricBlock extends StatelessWidget {
+  const _TrackingMetricBlock({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: scheme.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
