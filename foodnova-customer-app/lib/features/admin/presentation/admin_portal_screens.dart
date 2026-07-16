@@ -882,6 +882,38 @@ Future<void> _showOrderDetails(
           _InfoLine(
               'Amount', _money(_num(order['total_amount'] ?? order['total']))),
           const SizedBox(height: 12),
+          _SectionTitle('Payment Approval History'),
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: ref.read(adminRepositoryProvider).paymentAudit(_id(order)),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(minHeight: 2),
+                );
+              }
+              if (snapshot.hasError) {
+                return _InfoNotice(
+                  title: 'Payment history unavailable',
+                  message: apiMessage(snapshot.error!),
+                );
+              }
+              final logs = snapshot.data ?? const <Map<String, dynamic>>[];
+              if (logs.isEmpty) {
+                return const _InfoNotice(
+                  title: 'No approval records yet',
+                  message:
+                      'A payment approval record should appear here after payment is confirmed or rejected.',
+                );
+              }
+              return Column(
+                children: [
+                  for (final log in logs) _PaymentAuditTile(log: log),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
           _SectionTitle('Items'),
           for (final item in items)
             _InfoLine(
@@ -1312,6 +1344,81 @@ class _InfoLine extends StatelessWidget {
               child: Text(label,
                   style: const TextStyle(fontWeight: FontWeight.w800))),
           Expanded(child: Text(value.isEmpty ? 'N/A' : value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentAuditTile extends StatelessWidget {
+  const _PaymentAuditTile({required this.log});
+
+  final Map<String, dynamic> log;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final action = '${log['action'] ?? log['status'] ?? ''}';
+    final admin =
+        '${log['admin_name'] ?? log['admin_email'] ?? log['approved_by'] ?? 'Admin'}';
+    final oldStatus = '${log['old_payment_status'] ?? log['old_status'] ?? ''}';
+    final newStatus = '${log['new_payment_status'] ?? log['new_status'] ?? ''}';
+    final note = '${log['note'] ?? log['rejection_reason'] ?? ''}'.trim();
+    final createdAt = _date(log['created_at'] ?? log['approved_at']);
+    final dateLabel = createdAt == null
+        ? ''
+        : DateFormat('MMM d, y • h:mm a').format(createdAt.toLocal());
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: .5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.verified_rounded,
+                  color: FoodNovaColors.primary, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _label(action.isEmpty ? 'payment_update' : action),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              if (dateLabel.isNotEmpty)
+                Text(
+                  dateLabel,
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            [oldStatus, newStatus]
+                .where((s) => s.trim().isNotEmpty)
+                .join(' → '),
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text('By $admin',
+              style: const TextStyle(fontWeight: FontWeight.w700)),
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(note),
+          ],
         ],
       ),
     );

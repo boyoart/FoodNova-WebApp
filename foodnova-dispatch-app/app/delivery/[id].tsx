@@ -28,7 +28,7 @@ import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 // Linear delivery workflow
 const FLOW = [
   { key: "picked_up", action: "Confirm Pickup", icon: "bag-check" },
-  { key: "en_route", action: "Start Delivery", icon: "navigate" },
+  { key: "out_for_delivery", action: "Start Delivery", icon: "navigate" },
   { key: "arrived", action: "I've Arrived", icon: "location" },
   { key: "delivered", action: "Complete Delivery", icon: "checkmark-done" },
 ] as const;

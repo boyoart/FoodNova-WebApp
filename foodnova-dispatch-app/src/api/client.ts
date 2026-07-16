@@ -49,7 +49,8 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
   const shouldTrace =
     path.includes("/delivery/offers") ||
     path.includes("/delivery-workers/register-fcm-token") ||
-    path.includes("/delivery/location-ping");
+    path.includes("/delivery/location-ping") ||
+    path.includes("/delivery/orders/");
 
   if (auth) {
     const token = await loadToken();

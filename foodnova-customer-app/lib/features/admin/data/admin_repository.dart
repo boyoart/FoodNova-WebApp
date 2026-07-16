@@ -53,6 +53,23 @@ class AdminRepository {
     return _list(response.data, 'orders');
   }
 
+  Future<List<Map<String, dynamic>>> paymentAudit(int orderId) async {
+    final response = await _dio.get('/admin/orders/$orderId/payment-audit');
+    final body = _map(response.data);
+    for (final key in const [
+      'logs',
+      'payment_audit',
+      'paymentAudit',
+      'payment_approval_logs',
+      'audit',
+      'history',
+    ]) {
+      final items = _list(body, key);
+      if (items.isNotEmpty) return items;
+    }
+    return _list(response.data, 'data');
+  }
+
   Future<void> updateOrderStatus(int orderId, String status) async {
     final payload = <String, dynamic>{
       'status': status,

@@ -78,10 +78,30 @@ export async function registerPushToken(): Promise<string | null> {
     const tokenResp = await Notifications.getDevicePushTokenAsync();
     const token = (tokenResp as any)?.data ?? "";
     if (token) {
-      console.log("DISPATCH_FCM_TOKEN_GENERATED", { platform: Platform.OS });
+      console.log("DISPATCH_FCM_TOKEN_GENERATED", {
+        platform: Platform.OS,
+        tokenType: (tokenResp as any)?.type ?? "unknown",
+        tokenSuffix: String(token).slice(-8),
+      });
       await NotifApi.registerFcmToken(String(token), Platform.OS)
-        .then(() => console.log("DISPATCH_FCM_TOKEN_REGISTERED", { platform: Platform.OS }))
-        .catch((error: any) => console.log("DISPATCH_FCM_TOKEN_REGISTER_FAILED", { error: String(error?.message || error) }));
+        .then((response: any) =>
+          console.log("DISPATCH_FCM_TOKEN_REGISTERED", {
+            platform: Platform.OS,
+            tokenSuffix: String(token).slice(-8),
+            response,
+          })
+        )
+        .catch((error: any) =>
+          console.log("DISPATCH_FCM_TOKEN_REGISTER_FAILED", {
+            platform: Platform.OS,
+            tokenSuffix: String(token).slice(-8),
+            status: error?.status,
+            body: error?.data,
+            error: String(error?.message || error),
+          })
+        );
+    } else {
+      console.log("DISPATCH_FCM_TOKEN_MISSING", { platform: Platform.OS, tokenType: (tokenResp as any)?.type ?? "unknown" });
     }
     return token ? String(token) : null;
   } catch (error: any) {
