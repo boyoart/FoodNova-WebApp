@@ -25,6 +25,7 @@ Set these manually in Render. Never commit real values.
 
 Recommended:
 
+- `FOODNOVA_BUILD_COMMIT` set to the deployed Git SHA during staging/release validation.
 - `FRONTEND_URL`
 - `FRONTEND_ORIGIN`
 - `CORS_ORIGINS`
@@ -79,6 +80,7 @@ Before any production deployment:
 Run after deployment:
 
 - `GET /health`
+- On staging, confirm `/health` returns the expected `build_commit`.
 - `GET /api/health`
 - `GET /openapi.json`
 - Confirm logs include `FOODNOVA_CONFIG_REPORT`.

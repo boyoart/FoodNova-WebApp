@@ -12,6 +12,7 @@ import math
 import os
 import random
 import re
+import subprocess
 import traceback
 import urllib.error
 import urllib.parse
@@ -187,6 +188,22 @@ def csv_env_values(name: str) -> List[str]:
 
 def _env_present(name: str) -> bool:
     return bool(str(os.environ.get(name) or "").strip())
+
+
+def foodnova_build_commit() -> str:
+    env_sha = str(os.environ.get("FOODNOVA_BUILD_COMMIT") or os.environ.get("RENDER_GIT_COMMIT") or "").strip()
+    if env_sha:
+        return env_sha
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=BASE_DIR,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=2,
+        ).strip()
+    except Exception:
+        return "unknown"
 
 
 def rider_earnings_enabled() -> bool:
@@ -7624,6 +7641,10 @@ def refresh_nin_provider_health(reason: str = "startup") -> dict:
 def on_startup():
     validate_startup_configuration()
     seed_database()
+    print("FOODNOVA_BUILD_COMMIT", json_dump({
+        "commit": foodnova_build_commit(),
+        "environment": ENVIRONMENT,
+    }))
     print("DISPATCH_TEST_MODE_STATUS", json_dump({
         "enabled": dispatch_test_mode_enabled(),
         "raw_value_present": bool(os.getenv("DISPATCH_TEST_MODE")),
@@ -7654,7 +7675,10 @@ def root_head():
 
 @app.get("/health")
 def health():
-    return {"success": True, "status": "ok"}
+    payload = {"success": True, "status": "ok"}
+    if ENVIRONMENT == "staging":
+        payload["build_commit"] = foodnova_build_commit()
+    return payload
 
 
 @app.get("/admin/debug")
