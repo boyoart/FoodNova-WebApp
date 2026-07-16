@@ -7391,10 +7391,24 @@ def root_head():
 
 @app.get("/health")
 def health():
-    payload = {"success": True, "status": "ok"}
-    if ENVIRONMENT == "staging":
-        payload["build_commit"] = foodnova_build_commit()
-    return payload
+    config = startup_configuration_report()
+    return {
+        "success": True,
+        "status": "ok",
+        "build_commit": foodnova_build_commit(),
+        "environment": ENVIRONMENT,
+        "database": config["CONFIG_DATABASE"],
+        "config": {
+            "database_url": config["CONFIG_DATABASE_URL"],
+            "jwt": config["CONFIG_JWT"],
+            "firebase": config["CONFIG_FIREBASE"],
+            "cloudinary": config["CONFIG_CLOUDINARY"],
+            "nin": config["CONFIG_NIN"],
+            "dispatch_test_mode": config["CONFIG_DISPATCH_TEST_MODE"],
+            "rider_earnings": config["CONFIG_RIDER_EARNINGS"],
+            "startup_schema_mutations": config["CONFIG_STARTUP_SCHEMA_MUTATIONS"],
+        },
+    }
 
 
 @app.get("/admin/debug")
