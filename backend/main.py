@@ -21,6 +21,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -456,6 +457,29 @@ async def foodnova_http_exception_handler(request: Request, exc: HTTPException):
         status_code=exc.status_code,
         content={"success": False, "detail": exc.detail},
         headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def foodnova_validation_exception_handler(request: Request, exc: RequestValidationError):
+    body_text = ""
+    if ENVIRONMENT == "staging" and request.url.path == "/internal/staging/e2e/bootstrap":
+        try:
+            body_bytes = await request.body()
+            body_text = body_bytes.decode("utf-8", errors="replace")
+        except Exception as body_error:
+            body_text = f"<failed to read body: {type(body_error).__name__}: {body_error}>"
+        print("STAGING_E2E_BOOTSTRAP_VALIDATION_ERROR", json_dump({
+            "path": request.url.path,
+            "method": request.method,
+            "received_request_body": body_text,
+            "validation_errors": exc.errors(),
+            "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            "timestamp": iso(datetime.utcnow()),
+        }))
+    return JSONResponse(
+        status_code=422,
+        content={"success": False, "detail": exc.errors(), "body": body_text if ENVIRONMENT == "staging" and request.url.path == "/internal/staging/e2e/bootstrap" else None},
     )
 
 
@@ -6689,6 +6713,21 @@ def _e2e_prepare_approved_rider(db, *, user: DBUser, email: str, phone: str) -> 
     return worker
 
 
+@app.get("/internal/staging/e2e/schema")
+def internal_staging_e2e_schema():
+    if ENVIRONMENT != "staging":
+        raise HTTPException(status_code=404, detail="Not found")
+    schema = StagingE2EBootstrapPayload.model_json_schema()
+    properties = schema.get("properties") or {}
+    return {
+        "success": True,
+        "schema": schema,
+        "field_names": list(properties.keys()),
+        "required_fields": schema.get("required") or [],
+        "build_commit": foodnova_build_commit(),
+    }
+
+
 @app.post("/internal/staging/e2e/bootstrap")
 def internal_staging_e2e_bootstrap(payload: StagingE2EBootstrapPayload, request: Request):
     if ENVIRONMENT != "staging":
@@ -6698,6 +6737,18 @@ def internal_staging_e2e_bootstrap(payload: StagingE2EBootstrapPayload, request:
     if not configured_secret or not hmac.compare_digest(configured_secret, provided_secret):
         raise HTTPException(status_code=403, detail="Forbidden")
     run_id = str(payload.run_id or int(datetime.utcnow().timestamp()))
+    payload_dict = payload.model_dump()
+    print("STAGING_E2E_BOOTSTRAP_PAYLOAD_PARSED", json_dump({
+        "run_id": run_id,
+        "parsed_payload": {
+            **payload_dict,
+            "customer_password": "***" if payload_dict.get("customer_password") else "",
+            "admin_password": "***" if payload_dict.get("admin_password") else "",
+            "rider_password": "***" if payload_dict.get("rider_password") else "",
+        },
+        "build_commit": foodnova_build_commit(),
+        "timestamp": iso(datetime.utcnow()),
+    }))
     customer_email = normalize_email(str(payload.customer_email or _e2e_email("customer", run_id)))
     admin_email = normalize_email(str(payload.admin_email or _e2e_email("admin", run_id)))
     rider_email = normalize_email(str(payload.rider_email or _e2e_email("rider", run_id)))
@@ -6766,7 +6817,12 @@ def internal_staging_e2e_bootstrap(payload: StagingE2EBootstrapPayload, request:
         }
     except Exception as error:
         db.rollback()
-        log_backend_exception("STAGING_E2E_BOOTSTRAP_FAILED", error, run_id=run_id)
+        log_backend_exception("STAGING_E2E_BOOTSTRAP_FAILED", error, run_id=run_id, parsed_payload={
+            **payload_dict,
+            "customer_password": "***" if payload_dict.get("customer_password") else "",
+            "admin_password": "***" if payload_dict.get("admin_password") else "",
+            "rider_password": "***" if payload_dict.get("rider_password") else "",
+        })
         raise
     finally:
         db.close()
