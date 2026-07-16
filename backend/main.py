@@ -21,7 +21,6 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
-from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -211,10 +210,6 @@ def rider_earnings_enabled() -> bool:
     return str(os.environ.get("RIDER_EARNINGS_ENABLED") or "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def staging_e2e_enabled() -> bool:
-    return ENVIRONMENT == "staging" and _env_present("FOODNOVA_E2E_SECRET")
-
-
 def _database_config_label() -> str:
     try:
         backend_name = engine.url.get_backend_name()
@@ -247,7 +242,6 @@ def startup_configuration_report() -> dict:
         "CONFIG_EMAIL": "enabled" if (email_enabled and _env_present("RESEND_API_KEY")) else ("disabled" if not email_enabled else "missing_resend_key"),
         "CONFIG_DISPATCH_TEST_MODE": dispatch_test_mode_enabled(),
         "CONFIG_RIDER_EARNINGS": "enabled" if rider_earnings_enabled() else "disabled",
-        "CONFIG_STAGING_E2E_BOOTSTRAP": "enabled" if staging_e2e_enabled() else "disabled",
         "CONFIG_STARTUP_SCHEMA_MUTATIONS": startup_schema_mutations_allowed(),
     }
 
@@ -457,29 +451,6 @@ async def foodnova_http_exception_handler(request: Request, exc: HTTPException):
         status_code=exc.status_code,
         content={"success": False, "detail": exc.detail},
         headers=exc.headers,
-    )
-
-
-@app.exception_handler(RequestValidationError)
-async def foodnova_validation_exception_handler(request: Request, exc: RequestValidationError):
-    body_text = ""
-    if ENVIRONMENT == "staging" and request.url.path == "/internal/staging/e2e/bootstrap":
-        try:
-            body_bytes = await request.body()
-            body_text = body_bytes.decode("utf-8", errors="replace")
-        except Exception as body_error:
-            body_text = f"<failed to read body: {type(body_error).__name__}: {body_error}>"
-        print("STAGING_E2E_BOOTSTRAP_VALIDATION_ERROR", json_dump({
-            "path": request.url.path,
-            "method": request.method,
-            "received_request_body": body_text,
-            "validation_errors": exc.errors(),
-            "traceback": "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
-            "timestamp": iso(datetime.utcnow()),
-        }))
-    return JSONResponse(
-        status_code=422,
-        content={"success": False, "detail": exc.errors(), "body": body_text if ENVIRONMENT == "staging" and request.url.path == "/internal/staging/e2e/bootstrap" else None},
     )
 
 
@@ -1086,18 +1057,6 @@ class OnboardingTrainingPayload(BaseModel):
 
 class OnboardingSubmitPayload(BaseModel):
     submit: bool = True
-
-
-class StagingE2EBootstrapPayload(BaseModel):
-    run_id: Optional[str] = ""
-    customer_email: Optional[EmailStr] = None
-    customer_password: Optional[str] = "StagingPass123!"
-    customer_phone: Optional[str] = "+15550010001"
-    admin_email: Optional[EmailStr] = None
-    admin_password: Optional[str] = "Admin123!"
-    rider_email: Optional[EmailStr] = None
-    rider_phone: Optional[str] = "+2348001000000"
-    rider_password: Optional[str] = "StagingRider123!"
 
 
 class CancellationRequestPayload(BaseModel):
@@ -6527,305 +6486,6 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
 
 def _nin_hash(nin: str) -> str:
     return hashlib.sha256(str(nin or "").encode("utf-8")).hexdigest()
-
-
-def _e2e_email(local: str, run_id: str) -> str:
-    clean = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(run_id or "default")).strip("-") or "default"
-    return f"codex.e2e.{local}+{clean}@e2e.foodnova.com.ng".lower()
-
-
-def _e2e_upsert_user(db, *, email: str, password: str, full_name: str, phone: str, role: str, admin_role: str = "") -> DBUser:
-    user = get_db_user_by_email(db, email)
-    if not user:
-        user = DBUser(
-            full_name=full_name,
-            email=email,
-            phone=phone,
-            password=_hash_new_password(password),
-            role=role,
-            admin_role=admin_role,
-            permissions_json=json_dump(ADMIN_ROLE_PERMISSIONS["super_admin"]) if role == "admin" else None,
-            is_active=True,
-        )
-        db.add(user)
-        db.flush()
-    else:
-        user.full_name = full_name
-        user.phone = phone
-        user.password = _hash_new_password(password)
-        user.role = role
-        user.admin_role = admin_role if role == "admin" else ""
-        if role == "admin":
-            user.permissions_json = json_dump(ADMIN_ROLE_PERMISSIONS["super_admin"])
-        user.is_active = True
-        user.updated_at = datetime.utcnow()
-    ensure_profile(db, user)
-    return user
-
-
-def _e2e_expire_old_records(db) -> dict:
-    cutoff = datetime.utcnow() - timedelta(days=2)
-    stale_users = db.query(DBUser).filter(
-        or_(
-            DBUser.email.like("codex.e2e.%@e2e.foodnova.com.ng"),
-            DBUser.email.like("codex.e2e.%@foodnova.test"),
-        ),
-        DBUser.created_at < cutoff,
-    ).all()
-    stale_emails = [user.email for user in stale_users]
-    stale_workers = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.email.in_(stale_emails)).all() if stale_emails else []
-    stale_worker_ids = [worker.id for worker in stale_workers]
-    stale_orders = db.query(DBOrder).filter(DBOrder.customer_email.in_(stale_emails)).all() if stale_emails else []
-    stale_order_ids = [order.id for order in stale_orders]
-    offers_updated = 0
-    if stale_order_ids or stale_worker_ids:
-        offers_updated = db.query(DBDeliveryOffer).filter(
-            or_(DBDeliveryOffer.order_id.in_(stale_order_ids or [-1]), DBDeliveryOffer.worker_id.in_(stale_worker_ids or [-1])),
-            DBDeliveryOffer.status.in_(["PENDING", "OFFERED"]),
-        ).update({"status": "EXPIRED", "assignment_status": "EXPIRED", "updated_at": datetime.utcnow()}, synchronize_session=False)
-    for worker in stale_workers:
-        worker.operational_status = "OFFLINE"
-        worker.updated_at = datetime.utcnow()
-    for order in stale_orders:
-        if (order.delivery_status or "").upper() not in DISPATCH_HISTORY_DELIVERY_STATUSES:
-            order.delivery_status = "CANCELLED"
-            order.status = "cancelled"
-            order.order_status = "cancelled"
-            order.fulfillment_status = "cancelled"
-            order.updated_at = datetime.utcnow()
-    return {
-        "stale_users": len(stale_users),
-        "stale_workers": len(stale_workers),
-        "stale_orders": len(stale_orders),
-        "expired_offers": offers_updated or 0,
-    }
-
-
-def _e2e_prepare_approved_rider(db, *, user: DBUser, email: str, phone: str) -> DBDeliveryWorker:
-    worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
-    if not worker:
-        worker = DBDeliveryWorker(
-            user_id=user.id,
-            worker_type="rider",
-            full_name="Codex E2E Approved Rider",
-            phone=normalize_delivery_phone(phone) or phone,
-            email=email,
-        )
-        db.add(worker)
-        db.flush()
-    now = datetime.utcnow()
-    worker.worker_type = "rider"
-    worker.full_name = "Codex E2E Approved Rider"
-    worker.phone = normalize_delivery_phone(phone) or phone
-    worker.email = email
-    worker.home_address = "123 Staging Validation Street, Toronto, Ontario, Canada"
-    worker.emergency_contact_name = "Codex Emergency Contact"
-    worker.emergency_contact_phone = "+2348001000001"
-    worker.id_type = "Drivers License"
-    worker.id_number = "E2E-STAGING-ID"
-    worker.nin_verified = True
-    worker.nin_report_id = "E2E-STAGING-NIN"
-    worker.nin_last4 = "0000"
-    worker.verified_first_name = "Codex"
-    worker.verified_surname = "Rider"
-    worker.verified_phone = worker.phone
-    worker.verified_gender = "Not specified"
-    worker.verified_birthdate = "1990-01-01"
-    worker.selfie_url = "/uploads/workforce/e2e-selfie.jpg"
-    worker.profile_photo_url = "/uploads/workforce/e2e-profile.jpg"
-    worker.id_document_url = "/uploads/workforce/e2e-government-id.jpg"
-    worker.vehicle_type = "Motorcycle"
-    worker.plate_number = "E2E-123"
-    worker.kyc_status = "ACTIVE"
-    worker.operational_status = "OFFLINE"
-    worker.latest_latitude = 43.6532
-    worker.latest_longitude = -79.3832
-    worker.latest_accuracy = 10
-    worker.latest_heading = 90
-    worker.latest_speed = 0
-    worker.last_seen_at = now
-    worker.inside_zone = True
-    worker.approved_at = worker.approved_at or now
-    worker.approved_by_admin_name = "FoodNova Staging Bootstrap"
-    worker.deleted_at = None
-    worker.updated_at = now
-    set_delivery_worker_review_meta(worker, "identity_verification", {
-        "status": "verified",
-        "full_name": worker.full_name,
-        "nin_last4": worker.nin_last4,
-        "provider": "staging_e2e",
-        "provider_message": "Staging E2E bootstrap verification",
-        "submitted_at": iso(now),
-    })
-    set_delivery_worker_review_meta(worker, "address_verification", {
-        "status": "verified",
-        "address": worker.home_address,
-        "submitted_at": iso(now),
-    })
-    set_delivery_worker_review_meta(worker, "emergency_contact", {
-        "status": "completed",
-        "full_name": worker.emergency_contact_name,
-        "phone_number": worker.emergency_contact_phone,
-        "relationship": "Sibling",
-        "submitted_at": iso(now),
-    })
-    set_delivery_worker_review_meta(worker, "profile_data", {
-        "completed": True,
-        "full_name": worker.full_name,
-        "phone": worker.phone,
-        "vehicle_type": worker.vehicle_type,
-        "plate_number": worker.plate_number,
-    })
-    set_delivery_worker_review_meta(worker, "documents", {
-        "government_id": {"status": "verified", "url": worker.id_document_url},
-        "selfie": {"status": "verified", "url": worker.selfie_url},
-    })
-    rider_document_upsert(db, worker, "government_id", worker.id_document_url, {"source": "staging_e2e", "content_type": "image/jpeg"})
-    rider_document_upsert(db, worker, "selfie", worker.selfie_url, {"source": "staging_e2e", "content_type": "image/jpeg"})
-    rider, kyc = ensure_rider_records(db, worker)
-    if kyc:
-        kyc.identity_status = "verified"
-        kyc.address_status = "verified"
-        kyc.emergency_status = "completed"
-        kyc.selfie_status = "verified"
-        kyc.admin_review_status = "approved"
-        kyc.nin_verified = True
-        kyc.nin_last4 = worker.nin_last4
-        kyc.nin_provider = "staging_e2e"
-        kyc.nin_provider_status = "verified"
-        kyc.nin_provider_message = "Staging E2E bootstrap verification"
-        kyc.verified_full_name = worker.full_name
-        kyc.verified_phone = worker.phone
-        kyc.verified_gender = worker.verified_gender
-        kyc.verified_dob = worker.verified_birthdate
-        kyc.verified_address = worker.home_address
-        kyc.consent_accepted = True
-        kyc.consent_timestamp = now
-        kyc.submitted_at = kyc.submitted_at or now
-        kyc.identity_verified_at = kyc.identity_verified_at or now
-        kyc.address_uploaded_at = kyc.address_uploaded_at or now
-        kyc.emergency_contact_added_at = kyc.emergency_contact_added_at or now
-        kyc.selfie_verified_at = kyc.selfie_verified_at or now
-        kyc.admin_reviewed_at = kyc.admin_reviewed_at or now
-    sync_rider_onboarding_state(db, worker, {"id": None, "full_name": "FoodNova Staging Bootstrap"}, "Staging E2E rider approved")
-    if rider:
-        rider.wallet_enabled = bool(rider_earnings_enabled())
-    return worker
-
-
-@app.get("/internal/staging/e2e/schema")
-def internal_staging_e2e_schema():
-    if ENVIRONMENT != "staging":
-        raise HTTPException(status_code=404, detail="Not found")
-    schema = StagingE2EBootstrapPayload.model_json_schema()
-    properties = schema.get("properties") or {}
-    return {
-        "success": True,
-        "schema": schema,
-        "field_names": list(properties.keys()),
-        "required_fields": schema.get("required") or [],
-        "build_commit": foodnova_build_commit(),
-    }
-
-
-@app.post("/internal/staging/e2e/bootstrap")
-def internal_staging_e2e_bootstrap(payload: StagingE2EBootstrapPayload, request: Request):
-    if ENVIRONMENT != "staging":
-        raise HTTPException(status_code=404, detail="Not found")
-    configured_secret = os.environ.get("FOODNOVA_E2E_SECRET") or ""
-    provided_secret = request.headers.get("x-foodnova-e2e-secret", "")
-    if not configured_secret or not hmac.compare_digest(configured_secret, provided_secret):
-        raise HTTPException(status_code=403, detail="Forbidden")
-    run_id = str(payload.run_id or int(datetime.utcnow().timestamp()))
-    payload_dict = payload.model_dump()
-    print("STAGING_E2E_BOOTSTRAP_PAYLOAD_PARSED", json_dump({
-        "run_id": run_id,
-        "parsed_payload": {
-            **payload_dict,
-            "customer_password": "***" if payload_dict.get("customer_password") else "",
-            "admin_password": "***" if payload_dict.get("admin_password") else "",
-            "rider_password": "***" if payload_dict.get("rider_password") else "",
-        },
-        "build_commit": foodnova_build_commit(),
-        "timestamp": iso(datetime.utcnow()),
-    }))
-    customer_email = normalize_email(str(payload.customer_email or _e2e_email("customer", run_id)))
-    admin_email = normalize_email(str(payload.admin_email or _e2e_email("admin", run_id)))
-    rider_email = normalize_email(str(payload.rider_email or _e2e_email("rider", run_id)))
-    customer_password = payload.customer_password or "StagingPass123!"
-    admin_password = payload.admin_password or "Admin123!"
-    rider_password = payload.rider_password or "StagingRider123!"
-    rider_phone = normalize_delivery_phone(payload.rider_phone or "+2348001000000") or "+2348001000000"
-    db = SessionLocal()
-    try:
-        cleanup = _e2e_expire_old_records(db)
-        customer = _e2e_upsert_user(
-            db,
-            email=customer_email,
-            password=customer_password,
-            full_name="Codex E2E Customer",
-            phone=payload.customer_phone or "+15550010001",
-            role="customer",
-        )
-        admin = _e2e_upsert_user(
-            db,
-            email=admin_email,
-            password=admin_password,
-            full_name="Codex E2E Admin",
-            phone="+15550019999",
-            role="admin",
-            admin_role="super_admin",
-        )
-        rider_user = _e2e_upsert_user(
-            db,
-            email=rider_email,
-            password=rider_password,
-            full_name="Codex E2E Approved Rider",
-            phone=rider_phone,
-            role="rider",
-        )
-        worker = _e2e_prepare_approved_rider(db, user=rider_user, email=rider_email, phone=rider_phone)
-        zone = ensure_default_operational_zone(db)
-        db.commit()
-        db.refresh(customer)
-        db.refresh(admin)
-        db.refresh(rider_user)
-        db.refresh(worker)
-        print("STAGING_E2E_BOOTSTRAP_SUCCESS", json_dump({
-            "run_id": run_id,
-            "customer_id": customer.id,
-            "admin_id": admin.id,
-            "worker_id": worker.id,
-            "cleanup": cleanup,
-            "earnings_enabled": rider_earnings_enabled(),
-        }))
-        return {
-            "success": True,
-            "environment": ENVIRONMENT,
-            "run_id": run_id,
-            "cleanup": cleanup,
-            "accounts": {
-                "customer": {"id": customer.id, "email": customer.email, "password": customer_password},
-                "admin": {"id": admin.id, "email": admin.email, "password": admin_password},
-                "rider": {"id": rider_user.id, "worker_id": worker.id, "email": rider_user.email, "phone": worker.phone, "password": rider_password},
-            },
-            "operational_zone": operational_zone_to_dict(zone),
-            "earnings": {
-                "rider_earnings_enabled": rider_earnings_enabled(),
-                "wallet_enabled": bool(rider_earnings_enabled()),
-            },
-        }
-    except Exception as error:
-        db.rollback()
-        log_backend_exception("STAGING_E2E_BOOTSTRAP_FAILED", error, run_id=run_id, parsed_payload={
-            **payload_dict,
-            "customer_password": "***" if payload_dict.get("customer_password") else "",
-            "admin_password": "***" if payload_dict.get("admin_password") else "",
-            "rider_password": "***" if payload_dict.get("rider_password") else "",
-        })
-        raise
-    finally:
-        db.close()
 
 
 def _identity_key(value: str) -> str:
