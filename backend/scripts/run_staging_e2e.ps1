@@ -20,8 +20,8 @@ $ErrorActionPreference = "Stop"
 
 $BaseUrl = $BaseUrl.TrimEnd("/")
 $RunId = [int][double]::Parse((Get-Date -UFormat %s))
-if (-not $CustomerEmail) { $CustomerEmail = "codex.customer+staging$RunId@foodnova.test" }
-if (-not $RiderEmail) { $RiderEmail = "codex.rider+staging$RunId@foodnova.test" }
+if (-not $CustomerEmail) { $CustomerEmail = "codex.customer+staging$RunId@e2e.foodnova.com.ng" }
+if (-not $RiderEmail) { $RiderEmail = "codex.rider+staging$RunId@e2e.foodnova.com.ng" }
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 $ReportPath = Join-Path $OutDir "foodnova-staging-e2e-$RunId.json"
@@ -110,6 +110,10 @@ function Add-Step($Name, $Method, $Path, $Status, $Ok, $Body, $RequestBody = $nu
         timestamp = (Get-Date).ToString("o")
     }
     Write-Host ("{0,-34} {1,4} {2}" -f $Name, $Status, $(if ($Ok) { "OK" } else { "FAIL" }))
+    if (-not $Ok) {
+        $bodyText = Sanitize-Value $Body | ConvertTo-Json -Depth 20 -Compress
+        Write-Host "FAILED_RESPONSE_BODY[$Name]: $bodyText"
+    }
 }
 
 function Invoke-FoodNovaJson {
@@ -347,7 +351,7 @@ if ($E2ESecret) {
         rider_email = $RiderEmail
         rider_phone = $(if ($RiderPhone) { $RiderPhone } else { "+2348001000000" })
         rider_password = $(if ($RiderPassword) { $RiderPassword } else { "StagingRider123!" })
-        admin_email = $(if ($AdminEmail) { $AdminEmail } else { "codex.admin+staging$RunId@foodnova.test" })
+        admin_email = $(if ($AdminEmail) { $AdminEmail } else { "codex.admin+staging$RunId@e2e.foodnova.com.ng" })
         admin_password = $(if ($AdminPassword) { $AdminPassword } else { "Admin123!" })
     }
     $bootstrap = Invoke-FoodNovaJson -Name "staging_e2e_bootstrap" -Method "POST" -Path "/internal/staging/e2e/bootstrap" -Body $bootstrapBody -Headers @{ "x-foodnova-e2e-secret" = $E2ESecret }

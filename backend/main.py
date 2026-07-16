@@ -6490,7 +6490,7 @@ def _nin_hash(nin: str) -> str:
 
 def _e2e_email(local: str, run_id: str) -> str:
     clean = re.sub(r"[^a-zA-Z0-9._-]+", "-", str(run_id or "default")).strip("-") or "default"
-    return f"codex.e2e.{local}+{clean}@foodnova.test".lower()
+    return f"codex.e2e.{local}+{clean}@e2e.foodnova.com.ng".lower()
 
 
 def _e2e_upsert_user(db, *, email: str, password: str, full_name: str, phone: str, role: str, admin_role: str = "") -> DBUser:
@@ -6525,7 +6525,10 @@ def _e2e_upsert_user(db, *, email: str, password: str, full_name: str, phone: st
 def _e2e_expire_old_records(db) -> dict:
     cutoff = datetime.utcnow() - timedelta(days=2)
     stale_users = db.query(DBUser).filter(
-        DBUser.email.like("codex.e2e.%@foodnova.test"),
+        or_(
+            DBUser.email.like("codex.e2e.%@e2e.foodnova.com.ng"),
+            DBUser.email.like("codex.e2e.%@foodnova.test"),
+        ),
         DBUser.created_at < cutoff,
     ).all()
     stale_emails = [user.email for user in stale_users]
