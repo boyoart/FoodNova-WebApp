@@ -10,6 +10,7 @@ param(
     [string]$RiderPassword = $env:FOODNOVA_STAGING_RIDER_PASSWORD,
     [string]$RiderEmail = "",
     [switch]$SkipRiderCreation,
+    [switch]$WakeOnly,
     [int]$WakeTimeoutSeconds = 300,
     [int]$KeepAliveSeconds = 180,
     [string]$OutDir = ".\test_reports\staging-e2e"
@@ -51,6 +52,9 @@ function Protect-Secret([string]$Value) {
 
 function Sanitize-Value($Value) {
     if ($null -eq $Value) { return $null }
+    if ($Value -is [string] -or $Value -is [bool] -or $Value -is [int] -or $Value -is [long] -or $Value -is [double] -or $Value -is [decimal] -or $Value -is [datetime]) {
+        return $Value
+    }
     if ($Value -is [System.Collections.IDictionary]) {
         $copy = [ordered]@{}
         foreach ($key in $Value.Keys) {
@@ -68,7 +72,7 @@ function Sanitize-Value($Value) {
     }
     if ($Value.PSObject -and $Value.PSObject.Properties.Count -gt 0 -and -not ($Value -is [string])) {
         $copy = [ordered]@{}
-        foreach ($property in $Value.PSObject.Properties) {
+        foreach ($property in ($Value.PSObject.Properties | Where-Object { $_.MemberType -eq "NoteProperty" -or $_.MemberType -eq "AliasProperty" })) {
             if ($property.Name -match "(?i)password|token|jwt|secret|authorization") {
                 $copy[$property.Name] = Protect-Secret ([string]$property.Value)
             } else {
@@ -139,7 +143,11 @@ function Invoke-FoodNovaJson {
         $args += @("-H", "Content-Type: application/json", "--data-binary", $json)
     }
 
-    $statusText = & curl.exe @args 2>&1
+    try {
+        $statusText = & curl.exe @args 2>&1
+    } catch {
+        $statusText = @($_.Exception.Message)
+    }
     $status = 0
     [int]::TryParse(($statusText | Select-Object -Last 1), [ref]$status) | Out-Null
     $raw = Get-Content -Raw $out.FullName -ErrorAction SilentlyContinue
@@ -219,6 +227,9 @@ function Get-Token($Response) {
 
 function Get-ObjectField($Object, [string[]]$Names) {
     foreach ($name in $Names) {
+        if ($Object -is [System.Collections.IDictionary] -and $Object.Contains($name)) {
+            return $Object[$name]
+        }
         if ($Object -and $Object.PSObject.Properties.Name -contains $name -and $null -ne $Object.$name) {
             return $Object.$name
         }
@@ -252,38 +263,61 @@ function Record-State($Milestone, $CustomerOrder, $AdminOrder, $RiderOrders) {
 
 function Wait-For-StagingHealth {
     $deadline = (Get-Date).AddSeconds($WakeTimeoutSeconds)
-    $consecutive = 0
+    $consecutiveHealthy = 0
     $attempt = 0
-    while ((Get-Date) -lt $deadline -and $consecutive -lt 3) {
+    while ((Get-Date) -lt $deadline) {
         $attempt++
-        Write-Host "Health check attempt $attempt; consecutive healthy responses: $consecutive/3"
-        $result = Invoke-FoodNovaJson -Name "wake_health_$attempt" -Method "GET" -Path "/health" -TimeoutSeconds 30
-        $jsonOk = $false
-        if ($result.body -and $result.body.success -eq $true -and $result.body.status -eq "ok") {
-            $jsonOk = $true
+        $result = @(Invoke-FoodNovaJson -Name "wake_health_$attempt" -Method "GET" -Path "/health" -TimeoutSeconds 30)[-1]
+        $healthBody = $result.body
+        if ($result.raw) {
+            try {
+                $healthBody = $result.raw | ConvertFrom-Json -Depth 10
+            } catch {
+                $healthBody = $result.body
+            }
         }
-        if ($result.status -eq 200 -and $jsonOk) {
-            $consecutive++
+        if ($healthBody -is [System.Collections.IDictionary]) {
+            $bodySuccess = $healthBody["success"]
+            $bodyStatus = $healthBody["status"]
+        } elseif ($healthBody -and $healthBody.PSObject.Properties.Name -contains "success") {
+            $bodySuccess = $healthBody.success
+            $bodyStatus = $healthBody.status
         } else {
-            $consecutive = 0
+            $bodySuccess = $null
+            $bodyStatus = $null
         }
+        $jsonOk = (($bodySuccess -eq $true -or ([string]$bodySuccess).ToLowerInvariant() -eq "true") -and ([string]$bodyStatus).ToLowerInvariant() -eq "ok")
+        if (-not $jsonOk -and $result.raw) {
+            $jsonOk = ($result.raw -match '"success"\s*:\s*true' -and $result.raw -match '"status"\s*:\s*"ok"')
+            if ($jsonOk) {
+                $bodySuccess = $true
+                $bodyStatus = "ok"
+            }
+        }
+        if ([int]$result.status -eq 200 -and $jsonOk) {
+            $consecutiveHealthy++
+        } else {
+            $consecutiveHealthy = 0
+        }
+        $bodyForLog = if ($result.raw) { $result.raw } else { ($healthBody | ConvertTo-Json -Depth 3 -Compress) }
+        Write-Host "Health check attempt ${attempt}: HTTP status=$($result.status); parsed JSON body=$bodyForLog; success=$bodySuccess; status=$bodyStatus; json_ok=$jsonOk; consecutive healthy responses: $consecutiveHealthy/3"
         $Report.availability += [ordered]@{
             attempt = $attempt
             status = $result.status
             json_ok = $jsonOk
-            consecutive = $consecutive
+            parsed_body = Sanitize-Value $result.body
+            consecutive = $consecutiveHealthy
             timestamp = (Get-Date).ToString("o")
         }
-        if ($consecutive -lt 3) {
-            Start-Sleep -Seconds 10
+        if ($consecutiveHealthy -ge 3) {
+            Write-Host "Staging health gate passed with 3 consecutive healthy responses."
+            return
         }
+        Start-Sleep -Seconds 10
     }
-    if ($consecutive -lt 3) {
-        Add-Failure "STAGING_UNREACHABLE" "Staging did not return three consecutive /health 200 JSON responses within the wake window."
-        Save-Report
-        throw "Staging wake-up gate failed. See $ReportPath"
-    }
-    Write-Host "Staging health gate passed with 3 consecutive healthy responses."
+    Add-Failure "STAGING_UNREACHABLE" "Staging did not return three consecutive /health 200 JSON responses within the wake window."
+    Save-Report
+    throw "Staging wake-up gate failed. See $ReportPath"
 }
 
 function Assert-Step($Response, [string]$Code, [string]$Message) {
@@ -295,6 +329,10 @@ function Assert-Step($Response, [string]$Code, [string]$Message) {
 }
 
 Wait-For-StagingHealth
+if ($WakeOnly) {
+    Write-Host "Wake-only validation completed."
+    exit 0
+}
 
 $openapi = Invoke-FoodNovaJson "openapi" "GET" "/openapi.json"
 Assert-Step $openapi "OPENAPI_FAILED" "OpenAPI must be reachable"
