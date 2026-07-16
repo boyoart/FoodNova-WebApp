@@ -45,6 +45,8 @@ Recommended:
 Optional:
 
 - `DISPATCH_TEST_MODE=false`
+- `RIDER_EARNINGS_ENABLED=false`
+- `FOODNOVA_E2E_SECRET` for staging only; do not configure in production.
 - `ALLOW_STARTUP_SCHEMA_MUTATIONS=false`
 - `NINBVNPORTAL_BASE_URL=https://ninbvnportal.com.ng/api`
 - `NINBVNPORTAL_TIMEOUT_SECONDS=25`
@@ -66,9 +68,11 @@ Before any production deployment:
 1. Create a staging Render service or staging environment group.
 2. Use a staging PostgreSQL database, not production.
 3. Set `ENVIRONMENT=staging`.
-4. Keep `ALLOW_STARTUP_SCHEMA_MUTATIONS=false`.
-5. Deploy branch `recovery/restore-foodnova-backend`.
-6. If startup reports schema drift, run `python scripts/check_schema.py`, review output, then decide whether to enable startup mutations only for staging.
+4. Set a strong `FOODNOVA_E2E_SECRET` so the automated lifecycle runner can create isolated staging accounts.
+5. Keep `RIDER_EARNINGS_ENABLED=false`.
+6. Keep `ALLOW_STARTUP_SCHEMA_MUTATIONS=false`.
+7. Deploy branch `recovery/restore-foodnova-backend`.
+8. If startup reports schema drift, run `python scripts/check_schema.py`, review output, then decide whether to enable startup mutations only for staging.
 
 ## Health Checks
 
@@ -98,6 +102,7 @@ Verify these routes exist in OpenAPI:
 - `GET /delivery/stats`
 - `GET /orders/{order_id}/rider-location`
 - `GET /admin/dispatch-board`
+- `POST /internal/staging/e2e/bootstrap` only when `ENVIRONMENT=staging` and `FOODNOVA_E2E_SECRET` is configured.
 
 ## Socket.IO Check
 
@@ -133,3 +138,5 @@ Do not promote to production until:
 - Rider accept/status/PIN completion are verified.
 - Customer/admin/rider state remains synchronized.
 - Schema drift has a reviewed migration path.
+- `RIDER_EARNINGS_ENABLED=false` unless FoodNova explicitly enables platform-managed rider earnings.
+- `FOODNOVA_E2E_SECRET` is not configured on production.

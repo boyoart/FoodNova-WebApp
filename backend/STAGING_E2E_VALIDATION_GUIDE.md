@@ -4,7 +4,7 @@ Run this from a Windows machine that can reach:
 
 `https://foodnova-backend-staging.onrender.com`
 
-The Codex execution environment could not consistently reach the staging hostname, so this runner is designed for owner/local execution.
+The runner can create its own isolated staging customer, admin, and approved rider when `FOODNOVA_E2E_SECRET` is configured on staging.
 
 ## Scope
 
@@ -14,23 +14,30 @@ Customer -> order -> admin payment approval -> payment audit -> rider approval/l
 
 It does not require Firebase push success, live NIN verification, Cloudinary, Google Maps, or email configuration. Missing integrations are reported as configuration gaps unless they block the core lifecycle.
 
-## Required Credentials
+## Required Staging Secret
 
-Set these in PowerShell before running:
+Set a strong secret in the staging Render service:
 
-```powershell
-$env:FOODNOVA_STAGING_ADMIN_EMAIL="admin email for staging"
-$env:FOODNOVA_STAGING_ADMIN_PASSWORD="admin password for staging"
+```text
+FOODNOVA_E2E_SECRET=<strong random staging-only secret>
 ```
 
-For the complete rider lifecycle, also provide a staging rider account that is already onboarded/approved or can be approved in staging:
+Do not configure this variable in production. The bootstrap endpoint returns 404 outside staging and 403 without the correct secret.
+
+Set the same secret locally before running:
 
 ```powershell
-$env:FOODNOVA_STAGING_RIDER_PHONE="+15550020002"
-$env:FOODNOVA_STAGING_RIDER_PASSWORD="StagingPass123!"
+$env:FOODNOVA_E2E_SECRET="<same staging-only secret>"
 ```
 
-If staging email and NIN are not configured, create/approve a rider manually in the Admin panel first, then run with `-SkipRiderCreation`.
+The runner will call `POST /internal/staging/e2e/bootstrap` to create/reset:
+
+- one E2E customer
+- one E2E super-admin
+- one approved, KYC-complete rider
+- default operational zone data if missing
+
+Manual rider creation or manual approval is no longer required when the secret is configured.
 
 ## Basic Command
 
@@ -38,8 +45,7 @@ From the repository root:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\backend\scripts\run_staging_e2e.ps1 `
-  -BaseUrl "https://foodnova-backend-staging.onrender.com" `
-  -SkipRiderCreation
+  -BaseUrl "https://foodnova-backend-staging.onrender.com"
 ```
 
 The script writes a timestamped JSON report to:
@@ -53,14 +59,11 @@ test_reports/staging-e2e/foodnova-staging-e2e-<run_id>.json
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\backend\scripts\run_staging_e2e.ps1 `
   -BaseUrl "https://foodnova-backend-staging.onrender.com" `
-  -AdminEmail "admin@example.com" `
-  -AdminPassword "admin-password" `
   -CustomerEmail "codex.customer+staging@example.com" `
   -CustomerPassword "StagingPass123!" `
   -CustomerPhone "+15550010001" `
-  -RiderPhone "+15550020002" `
-  -RiderPassword "StagingPass123!" `
-  -SkipRiderCreation
+  -RiderPhone "+2348001000000" `
+  -RiderPassword "StagingRider123!"
 ```
 
 ## Expected Output
@@ -71,6 +74,7 @@ Successful phases print lines like:
 wake_health_1                      200 OK
 wake_health_2                      200 OK
 wake_health_3                      200 OK
+staging_e2e_bootstrap              200 OK
 customer_register                  200 OK
 customer_profile                   200 OK
 customer_address_create            200 OK
@@ -116,6 +120,8 @@ The report records:
 - status values after lifecycle milestones
 - tracking payloads
 - failures and evidence
+
+Sensitive values such as passwords, JWTs, tokens, and secrets are masked in the report.
 
 ## Wake-Up Behavior
 

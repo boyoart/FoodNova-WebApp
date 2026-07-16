@@ -2,6 +2,7 @@ param(
     [string]$BaseUrl = "https://foodnova-backend-staging.onrender.com",
     [string]$AdminEmail = $env:FOODNOVA_STAGING_ADMIN_EMAIL,
     [string]$AdminPassword = $env:FOODNOVA_STAGING_ADMIN_PASSWORD,
+    [string]$E2ESecret = $env:FOODNOVA_E2E_SECRET,
     [string]$CustomerEmail = "",
     [string]$CustomerPassword = "StagingPass123!",
     [string]$CustomerPhone = "+15550010001",
@@ -15,10 +16,6 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-
-if (-not $AdminEmail -or -not $AdminPassword) {
-    throw "Set FOODNOVA_STAGING_ADMIN_EMAIL and FOODNOVA_STAGING_ADMIN_PASSWORD, or pass -AdminEmail and -AdminPassword."
-}
 
 $BaseUrl = $BaseUrl.TrimEnd("/")
 $RunId = [int][double]::Parse((Get-Date -UFormat %s))
@@ -46,6 +43,43 @@ $Report = [ordered]@{
     failures = @()
 }
 
+function Protect-Secret([string]$Value) {
+    if (-not $Value) { return "" }
+    if ($Value.Length -le 8) { return "***" }
+    return ("{0}...{1}" -f $Value.Substring(0, 4), $Value.Substring($Value.Length - 4))
+}
+
+function Sanitize-Value($Value) {
+    if ($null -eq $Value) { return $null }
+    if ($Value -is [System.Collections.IDictionary]) {
+        $copy = [ordered]@{}
+        foreach ($key in $Value.Keys) {
+            $keyText = [string]$key
+            if ($keyText -match "(?i)password|token|jwt|secret|authorization") {
+                $copy[$keyText] = Protect-Secret ([string]$Value[$key])
+            } else {
+                $copy[$keyText] = Sanitize-Value $Value[$key]
+            }
+        }
+        return $copy
+    }
+    if ($Value -is [System.Array]) {
+        return @($Value | ForEach-Object { Sanitize-Value $_ })
+    }
+    if ($Value.PSObject -and $Value.PSObject.Properties.Count -gt 0 -and -not ($Value -is [string])) {
+        $copy = [ordered]@{}
+        foreach ($property in $Value.PSObject.Properties) {
+            if ($property.Name -match "(?i)password|token|jwt|secret|authorization") {
+                $copy[$property.Name] = Protect-Secret ([string]$property.Value)
+            } else {
+                $copy[$property.Name] = Sanitize-Value $property.Value
+            }
+        }
+        return $copy
+    }
+    return $Value
+}
+
 function Save-Report {
     $Report.finished_at = (Get-Date).ToString("o")
     $Report | ConvertTo-Json -Depth 80 | Set-Content -Path $ReportPath -Encoding UTF8
@@ -67,8 +101,8 @@ function Add-Step($Name, $Method, $Path, $Status, $Ok, $Body, $RequestBody = $nu
         path = $Path
         status = $Status
         ok = $Ok
-        request = $RequestBody
-        response = $Body
+        request = Sanitize-Value $RequestBody
+        response = Sanitize-Value $Body
         timestamp = (Get-Date).ToString("o")
     }
     Write-Host ("{0,-34} {1,4} {2}" -f $Name, $Status, $(if ($Ok) { "OK" } else { "FAIL" }))
@@ -81,6 +115,7 @@ function Invoke-FoodNovaJson {
         [string]$Path,
         $Body = $null,
         [string]$Token = "",
+        [hashtable]$Headers = @{},
         [int]$TimeoutSeconds = 90
     )
     $url = "$BaseUrl$Path"
@@ -95,6 +130,9 @@ function Invoke-FoodNovaJson {
     )
     if ($Token) {
         $args += @("-H", "Authorization: Bearer $Token")
+    }
+    foreach ($headerName in $Headers.Keys) {
+        $args += @("-H", "${headerName}: $($Headers[$headerName])")
     }
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 30 -Compress
@@ -218,7 +256,8 @@ function Wait-For-StagingHealth {
     $attempt = 0
     while ((Get-Date) -lt $deadline -and $consecutive -lt 3) {
         $attempt++
-        $result = Invoke-FoodNovaJson "wake_health_$attempt" "GET" "/health" $null "" 30
+        Write-Host "Health check attempt $attempt; consecutive healthy responses: $consecutive/3"
+        $result = Invoke-FoodNovaJson -Name "wake_health_$attempt" -Method "GET" -Path "/health" -TimeoutSeconds 30
         $jsonOk = $false
         if ($result.body -and $result.body.success -eq $true -and $result.body.status -eq "ok") {
             $jsonOk = $true
@@ -244,6 +283,7 @@ function Wait-For-StagingHealth {
         Save-Report
         throw "Staging wake-up gate failed. See $ReportPath"
     }
+    Write-Host "Staging health gate passed with 3 consecutive healthy responses."
 }
 
 function Assert-Step($Response, [string]$Code, [string]$Message) {
@@ -259,6 +299,32 @@ Wait-For-StagingHealth
 $openapi = Invoke-FoodNovaJson "openapi" "GET" "/openapi.json"
 Assert-Step $openapi "OPENAPI_FAILED" "OpenAPI must be reachable"
 $Report.ids.openapi_paths = ($openapi.body.paths.PSObject.Properties | Measure-Object).Count
+
+if ($E2ESecret) {
+    $bootstrapBody = @{
+        run_id = "$RunId"
+        customer_email = $CustomerEmail
+        customer_password = $CustomerPassword
+        customer_phone = $CustomerPhone
+        rider_email = $RiderEmail
+        rider_phone = $(if ($RiderPhone) { $RiderPhone } else { "+2348001000000" })
+        rider_password = $(if ($RiderPassword) { $RiderPassword } else { "StagingRider123!" })
+        admin_email = $(if ($AdminEmail) { $AdminEmail } else { "codex.admin+staging$RunId@foodnova.test" })
+        admin_password = $(if ($AdminPassword) { $AdminPassword } else { "Admin123!" })
+    }
+    $bootstrap = Invoke-FoodNovaJson -Name "staging_e2e_bootstrap" -Method "POST" -Path "/internal/staging/e2e/bootstrap" -Body $bootstrapBody -Headers @{ "x-foodnova-e2e-secret" = $E2ESecret }
+    Assert-Step $bootstrap "STAGING_BOOTSTRAP_FAILED" "Staging E2E bootstrap failed"
+    $Report.ids.bootstrap = Sanitize-Value $bootstrap.body
+    $AdminEmail = $bootstrap.body.accounts.admin.email
+    $AdminPassword = $bootstrap.body.accounts.admin.password
+    $CustomerEmail = $bootstrap.body.accounts.customer.email
+    $CustomerPassword = $bootstrap.body.accounts.customer.password
+    $RiderPhone = $bootstrap.body.accounts.rider.phone
+    $RiderPassword = $bootstrap.body.accounts.rider.password
+    $SkipRiderCreation = $true
+} elseif (-not $AdminEmail -or -not $AdminPassword) {
+    throw "Set FOODNOVA_E2E_SECRET for automated staging bootstrap, or set FOODNOVA_STAGING_ADMIN_EMAIL and FOODNOVA_STAGING_ADMIN_PASSWORD."
+}
 
 $customerRegister = Invoke-FoodNovaJson "customer_register" "POST" "/api/auth/register" @{
     full_name = "Codex Staging Customer"
