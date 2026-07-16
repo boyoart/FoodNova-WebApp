@@ -211,6 +211,18 @@ def send_customer_order_email(order, event_type, extra=None):
             f"<p style='margin:4px 0;'>Phone: <strong>{escape(str(rider_phone))}</strong></p>"
             "</div>"
         )
+    elif event_type == "cancellation_submitted":
+        subject = f"Cancellation Request Submitted - {order_code}"
+        message = "Your cancellation/refund request has been submitted and will be reviewed by FoodNova."
+    elif event_type == "cancellation_approved":
+        subject = f"Cancellation Request Approved - {order_code}"
+        message = "Your cancellation/refund request has been approved."
+    elif event_type == "cancellation_rejected":
+        subject = f"Cancellation Request Rejected - {order_code}"
+        reason = extra.get("reason") or extra.get("admin_note") or ""
+        message = "Your cancellation/refund request was rejected."
+        if reason:
+            message += f" Reason: {reason}."
     elif event_type == "delivered":
         subject = f"FoodNova Order Delivered - {order_code}"
         message = "Your order has been marked as delivered. Thank you for shopping with FoodNova."
@@ -265,6 +277,10 @@ def send_admin_order_email(order, event_type, extra=None):
         receipt_link = f"<p><strong>Receipt URL:</strong> <a href='{escape(receipt_url)}'>{escape(receipt_url)}</a></p>" if receipt_url else ""
         message = "A customer uploaded a payment receipt."
         extra_html = f"{receipt_link}<p><strong>Payment Status:</strong> {escape(str(order.get('payment_status') or 'receipt_submitted'))}</p>"
+    elif event_type == "cancellation_request":
+        subject = f"New Cancellation Request - {order_code}"
+        message = "A customer submitted a cancellation/refund request."
+        extra_html = f"<p><strong>Reason:</strong> {escape(str(extra.get('reason') or 'N/A'))}</p><p><strong>Request Type:</strong> {escape(str(extra.get('request_type') or 'cancellation'))}</p>"
     else:
         return {"status": "skipped", "reason": "unknown_event"}
 

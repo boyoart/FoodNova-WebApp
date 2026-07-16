@@ -36,6 +36,11 @@ class ProductCreate(BaseModel):
     category: Optional[str] = None
     stock: int = 0
     image: Optional[str] = None
+    contents: Optional[List[str]] = None
+    pack_info: Optional[str] = None
+    serving_estimate: Optional[str] = None
+    freshness_note: Optional[str] = None
+    delivery_note: Optional[str] = None
 
 class ProductUpdate(BaseModel):
     name: Optional[str] = None
@@ -44,6 +49,11 @@ class ProductUpdate(BaseModel):
     category: Optional[str] = None
     stock: Optional[int] = None
     image: Optional[str] = None
+    contents: Optional[List[str]] = None
+    pack_info: Optional[str] = None
+    serving_estimate: Optional[str] = None
+    freshness_note: Optional[str] = None
+    delivery_note: Optional[str] = None
 
 class ProductResponse(BaseModel):
     id: int
@@ -53,6 +63,11 @@ class ProductResponse(BaseModel):
     category: Optional[str]
     stock: int
     image: Optional[str]
+    contents: Optional[List[str]] = None
+    pack_info: Optional[str] = None
+    serving_estimate: Optional[str] = None
+    freshness_note: Optional[str] = None
+    delivery_note: Optional[str] = None
     created_at: datetime
     
     class Config:
