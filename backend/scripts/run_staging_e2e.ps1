@@ -11,6 +11,7 @@ param(
     [string]$RiderEmail = "",
     [switch]$SkipRiderCreation,
     [switch]$WakeOnly,
+    [switch]$BootstrapOnly,
     [int]$WakeTimeoutSeconds = 300,
     [int]$KeepAliveSeconds = 180,
     [string]$OutDir = ".\test_reports\staging-e2e"
@@ -98,7 +99,7 @@ function Add-Failure([string]$Code, [string]$Message, $Data = $null) {
     }
 }
 
-function Add-Step($Name, $Method, $Path, $Status, $Ok, $Body, $RequestBody = $null) {
+function Add-Step($Name, $Method, $Path, $Status, $Ok, $Body, $RequestBody = $null, $ResponseHeaders = "", $RequestHeaders = $null) {
     $Report.steps += [ordered]@{
         name = $Name
         method = $Method
@@ -106,13 +107,26 @@ function Add-Step($Name, $Method, $Path, $Status, $Ok, $Body, $RequestBody = $nu
         status = $Status
         ok = $Ok
         request = Sanitize-Value $RequestBody
+        request_headers = Sanitize-Value $RequestHeaders
+        response_headers = $ResponseHeaders
         response = Sanitize-Value $Body
         timestamp = (Get-Date).ToString("o")
     }
     Write-Host ("{0,-34} {1,4} {2}" -f $Name, $Status, $(if ($Ok) { "OK" } else { "FAIL" }))
     if (-not $Ok) {
         $bodyText = Sanitize-Value $Body | ConvertTo-Json -Depth 20 -Compress
+        $requestText = Sanitize-Value $RequestBody | ConvertTo-Json -Depth 20 -Compress
+        $requestHeaderText = Sanitize-Value $RequestHeaders | ConvertTo-Json -Depth 20 -Compress
+        Write-Host "FAILED_STATUS[$Name]: $Status"
+        Write-Host "FAILED_REQUEST_HEADERS[$Name]: $requestHeaderText"
+        Write-Host "FAILED_REQUEST_BODY[$Name]: $requestText"
+        Write-Host "FAILED_RESPONSE_HEADERS[$Name]: $ResponseHeaders"
         Write-Host "FAILED_RESPONSE_BODY[$Name]: $bodyText"
+        $detail = Get-ObjectField $Body @("detail")
+        if ($detail) {
+            $detailText = Sanitize-Value $detail | ConvertTo-Json -Depth 30 -Compress
+            Write-Host "FAILED_FASTAPI_VALIDATION_DETAIL[$Name]: $detailText"
+        }
     }
 }
 
@@ -128,23 +142,31 @@ function Invoke-FoodNovaJson {
     )
     $url = "$BaseUrl$Path"
     $out = New-TemporaryFile
+    $headersOut = New-TemporaryFile
+    $requestHeadersForReport = [ordered]@{
+        "User-Agent" = "FoodNovaStagingE2E/1.0"
+    }
     $args = @(
         "-sS", "-L", "--max-time", "$TimeoutSeconds",
         "-X", $Method,
         $url,
+        "-D", $headersOut.FullName,
         "-w", "%{http_code}",
         "-o", $out.FullName,
         "-H", "User-Agent: FoodNovaStagingE2E/1.0"
     )
     if ($Token) {
         $args += @("-H", "Authorization: Bearer $Token")
+        $requestHeadersForReport["Authorization"] = "Bearer $Token"
     }
     foreach ($headerName in $Headers.Keys) {
         $args += @("-H", "${headerName}: $($Headers[$headerName])")
+        $requestHeadersForReport[$headerName] = $Headers[$headerName]
     }
     if ($null -ne $Body) {
         $json = $Body | ConvertTo-Json -Depth 30 -Compress
         $args += @("-H", "Content-Type: application/json", "--data-binary", $json)
+        $requestHeadersForReport["Content-Type"] = "application/json"
     }
 
     try {
@@ -155,7 +177,9 @@ function Invoke-FoodNovaJson {
     $status = 0
     [int]::TryParse(($statusText | Select-Object -Last 1), [ref]$status) | Out-Null
     $raw = Get-Content -Raw $out.FullName -ErrorAction SilentlyContinue
+    $responseHeaders = Get-Content -Raw $headersOut.FullName -ErrorAction SilentlyContinue
     Remove-Item $out.FullName -Force -ErrorAction SilentlyContinue
+    Remove-Item $headersOut.FullName -Force -ErrorAction SilentlyContinue
 
     try {
         $parsed = $raw | ConvertFrom-Json -Depth 60
@@ -167,12 +191,14 @@ function Invoke-FoodNovaJson {
     }
 
     $ok = ($status -ge 200 -and $status -lt 300)
-    Add-Step $Name $Method $Path $status $ok $parsed $Body
+    Add-Step $Name $Method $Path $status $ok $parsed $Body $responseHeaders $requestHeadersForReport
     return [ordered]@{
         ok = $ok
         status = $status
         body = $parsed
         raw = $raw
+        response_headers = $responseHeaders
+        request_headers = $requestHeadersForReport
     }
 }
 
@@ -332,17 +358,10 @@ function Assert-Step($Response, [string]$Code, [string]$Message) {
     }
 }
 
-Wait-For-StagingHealth
-if ($WakeOnly) {
-    Write-Host "Wake-only validation completed."
-    exit 0
-}
-
-$openapi = Invoke-FoodNovaJson "openapi" "GET" "/openapi.json"
-Assert-Step $openapi "OPENAPI_FAILED" "OpenAPI must be reachable"
-$Report.ids.openapi_paths = ($openapi.body.paths.PSObject.Properties | Measure-Object).Count
-
-if ($E2ESecret) {
+function Invoke-StagingBootstrap {
+    if (-not $E2ESecret) {
+        throw "Set FOODNOVA_E2E_SECRET before running staging bootstrap."
+    }
     $bootstrapBody = @{
         run_id = "$RunId"
         customer_email = $CustomerEmail
@@ -354,7 +373,36 @@ if ($E2ESecret) {
         admin_email = $(if ($AdminEmail) { $AdminEmail } else { "codex.admin+staging$RunId@e2e.foodnova.com.ng" })
         admin_password = $(if ($AdminPassword) { $AdminPassword } else { "Admin123!" })
     }
-    $bootstrap = Invoke-FoodNovaJson -Name "staging_e2e_bootstrap" -Method "POST" -Path "/internal/staging/e2e/bootstrap" -Body $bootstrapBody -Headers @{ "x-foodnova-e2e-secret" = $E2ESecret }
+    Write-Host "BOOTSTRAP_REQUEST_HEADERS: $((Sanitize-Value @{ 'x-foodnova-e2e-secret' = $E2ESecret; 'Content-Type' = 'application/json'; 'User-Agent' = 'FoodNovaStagingE2E/1.0' }) | ConvertTo-Json -Compress)"
+    Write-Host "BOOTSTRAP_REQUEST_BODY: $((Sanitize-Value $bootstrapBody) | ConvertTo-Json -Depth 20 -Compress)"
+    return Invoke-FoodNovaJson -Name "staging_e2e_bootstrap" -Method "POST" -Path "/internal/staging/e2e/bootstrap" -Body $bootstrapBody -Headers @{ "x-foodnova-e2e-secret" = $E2ESecret }
+}
+
+if ($BootstrapOnly) {
+    $bootstrap = Invoke-StagingBootstrap
+    if (-not $bootstrap.ok) {
+        Add-Failure "STAGING_BOOTSTRAP_FAILED" "Staging E2E bootstrap failed" $bootstrap.body
+        Save-Report
+        exit 2
+    }
+    $Report.ids.bootstrap = Sanitize-Value $bootstrap.body
+    Save-Report
+    Write-Host "Bootstrap-only validation completed. Report: $ReportPath"
+    exit 0
+}
+
+Wait-For-StagingHealth
+if ($WakeOnly) {
+    Write-Host "Wake-only validation completed."
+    exit 0
+}
+
+$openapi = Invoke-FoodNovaJson "openapi" "GET" "/openapi.json"
+Assert-Step $openapi "OPENAPI_FAILED" "OpenAPI must be reachable"
+$Report.ids.openapi_paths = ($openapi.body.paths.PSObject.Properties | Measure-Object).Count
+
+if ($E2ESecret) {
+    $bootstrap = Invoke-StagingBootstrap
     Assert-Step $bootstrap "STAGING_BOOTSTRAP_FAILED" "Staging E2E bootstrap failed"
     $Report.ids.bootstrap = Sanitize-Value $bootstrap.body
     $AdminEmail = $bootstrap.body.accounts.admin.email
