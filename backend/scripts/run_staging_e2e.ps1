@@ -164,7 +164,8 @@ function Invoke-FoodNovaJson {
         $requestHeadersForReport[$headerName] = $Headers[$headerName]
     }
     if ($null -ne $Body) {
-        $json = $Body | ConvertTo-Json -Depth 30 -Compress
+        $json = if ($Body -is [string]) { $Body } else { $Body | ConvertTo-Json -Depth 30 -Compress }
+        $null = $json | ConvertFrom-Json
         $args += @("-H", "Content-Type: application/json", "--data-binary", $json)
         $requestHeadersForReport["Content-Type"] = "application/json"
     }
@@ -362,7 +363,7 @@ function Invoke-StagingBootstrap {
     if (-not $E2ESecret) {
         throw "Set FOODNOVA_E2E_SECRET before running staging bootstrap."
     }
-    $bootstrapBody = @{
+    $bootstrapPayload = [ordered]@{
         run_id = "$RunId"
         customer_email = $CustomerEmail
         customer_password = $CustomerPassword
@@ -373,9 +374,13 @@ function Invoke-StagingBootstrap {
         admin_email = $(if ($AdminEmail) { $AdminEmail } else { "codex.admin+staging$RunId@e2e.foodnova.com.ng" })
         admin_password = $(if ($AdminPassword) { $AdminPassword } else { "Admin123!" })
     }
+    $jsonBody = $bootstrapPayload | ConvertTo-Json -Depth 10 -Compress
+    $null = $jsonBody | ConvertFrom-Json
+    $maskedBootstrapPayload = Sanitize-Value $bootstrapPayload
+    $maskedJsonBody = $maskedBootstrapPayload | ConvertTo-Json -Depth 10 -Compress
     Write-Host "BOOTSTRAP_REQUEST_HEADERS: $((Sanitize-Value @{ 'x-foodnova-e2e-secret' = $E2ESecret; 'Content-Type' = 'application/json'; 'User-Agent' = 'FoodNovaStagingE2E/1.0' }) | ConvertTo-Json -Compress)"
-    Write-Host "BOOTSTRAP_REQUEST_BODY: $((Sanitize-Value $bootstrapBody) | ConvertTo-Json -Depth 20 -Compress)"
-    return Invoke-FoodNovaJson -Name "staging_e2e_bootstrap" -Method "POST" -Path "/internal/staging/e2e/bootstrap" -Body $bootstrapBody -Headers @{ "x-foodnova-e2e-secret" = $E2ESecret }
+    Write-Host "BOOTSTRAP_SERIALIZED_BODY=$maskedJsonBody"
+    return Invoke-FoodNovaJson -Name "staging_e2e_bootstrap" -Method "POST" -Path "/internal/staging/e2e/bootstrap" -Body $jsonBody -Headers @{ "x-foodnova-e2e-secret" = $E2ESecret }
 }
 
 if ($BootstrapOnly) {
