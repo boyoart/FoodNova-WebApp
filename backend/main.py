@@ -100,6 +100,27 @@ except Exception:
 
 load_dotenv()
 
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development").strip().lower() or "development"
+PRODUCTION_ENVIRONMENTS = {"production", "prod"}
+STAGING_ENVIRONMENTS = {"staging", "stage"}
+NON_DEVELOPMENT_ENVIRONMENTS = PRODUCTION_ENVIRONMENTS.union(STAGING_ENVIRONMENTS)
+
+
+def is_production_environment() -> bool:
+    return ENVIRONMENT in PRODUCTION_ENVIRONMENTS
+
+
+def is_staging_environment() -> bool:
+    return ENVIRONMENT in STAGING_ENVIRONMENTS
+
+
+def env_flag(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 app = FastAPI(title="FoodNova API")
 fastapi_app = app
 sio = socketio.AsyncServer(
@@ -161,6 +182,81 @@ elif any([CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET]):
 
 def csv_env_values(name: str) -> List[str]:
     return [value.strip().rstrip("/") for value in os.environ.get(name, "").split(",") if value.strip()]
+
+
+def _env_present(name: str) -> bool:
+    return bool(str(os.environ.get(name) or "").strip())
+
+
+def _database_config_label() -> str:
+    try:
+        backend_name = engine.url.get_backend_name()
+    except Exception:
+        backend_name = ""
+    if backend_name.startswith("postgres"):
+        return "postgresql"
+    if backend_name:
+        return backend_name
+    return "missing"
+
+
+def startup_configuration_report() -> dict:
+    firebase_present = _env_present("FIREBASE_SERVICE_ACCOUNT_JSON") or _env_present("FIREBASE_SERVICE_ACCOUNT_PATH")
+    maps_present = (
+        _env_present("GOOGLE_DIRECTIONS_API_KEY")
+        or _env_present("GOOGLE_MAPS_API_KEY")
+        or _env_present("GOOGLE_PLACES_API_KEY")
+    )
+    email_enabled = str(os.environ.get("EMAIL_ENABLED") or "").strip().lower() in {"1", "true", "yes", "on"}
+    return {
+        "CONFIG_ENVIRONMENT": ENVIRONMENT,
+        "CONFIG_DATABASE": _database_config_label(),
+        "CONFIG_DATABASE_URL": "present" if _env_present("DATABASE_URL") else "missing",
+        "CONFIG_JWT": "present" if _env_present("JWT_SECRET") else "missing",
+        "CONFIG_FIREBASE": "present" if firebase_present else "missing",
+        "CONFIG_NIN": "present" if _env_present("NINBVNPORTAL_API_KEY") else "missing",
+        "CONFIG_CLOUDINARY": "present" if CLOUDINARY_ENABLED else "missing",
+        "CONFIG_MAPS": "present" if maps_present else "missing",
+        "CONFIG_EMAIL": "enabled" if (email_enabled and _env_present("RESEND_API_KEY")) else ("disabled" if not email_enabled else "missing_resend_key"),
+        "CONFIG_DISPATCH_TEST_MODE": dispatch_test_mode_enabled(),
+        "CONFIG_STARTUP_SCHEMA_MUTATIONS": startup_schema_mutations_allowed(),
+    }
+
+
+def validate_startup_configuration() -> dict:
+    report = startup_configuration_report()
+    print("FOODNOVA_CONFIG_REPORT", json_dump(report))
+    if is_production_environment():
+        missing = []
+        if not _env_present("DATABASE_URL"):
+            missing.append("DATABASE_URL")
+        if not _env_present("JWT_SECRET"):
+            missing.append("JWT_SECRET")
+        if missing:
+            raise RuntimeError(
+                "Production configuration error: missing required environment variables "
+                + ", ".join(missing)
+            )
+    warning_checks = {
+        "Firebase push notifications": report["CONFIG_FIREBASE"] == "missing",
+        "NIN verification": report["CONFIG_NIN"] == "missing",
+        "Cloudinary uploads": report["CONFIG_CLOUDINARY"] == "missing",
+        "Google route generation": report["CONFIG_MAPS"] == "missing",
+        "Email notifications": report["CONFIG_EMAIL"] != "enabled",
+    }
+    for label, missing in warning_checks.items():
+        if missing:
+            print("FOODNOVA_CONFIG_WARNING", json_dump({
+                "environment": ENVIRONMENT,
+                "service": label,
+                "message": f"{label} is not fully configured.",
+            }))
+    return report
+
+
+def require_non_production_diagnostic() -> None:
+    if is_production_environment():
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 allowed_origins = [
@@ -7020,10 +7116,58 @@ def backfill_coming_soon_subscribers(db) -> int:
     return inserted
 
 
+def startup_schema_mutations_allowed() -> bool:
+    if is_production_environment():
+        return env_flag("ALLOW_STARTUP_SCHEMA_MUTATIONS", False)
+    if is_staging_environment():
+        return env_flag("ALLOW_STARTUP_SCHEMA_MUTATIONS", False)
+    return env_flag("ALLOW_STARTUP_SCHEMA_MUTATIONS", True)
+
+
+def inspect_database_schema_drift() -> dict:
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    missing_tables = []
+    missing_columns = {}
+    missing_indexes = {}
+
+    for table_name, table in sorted(Base.metadata.tables.items()):
+        if table_name not in existing_tables:
+            missing_tables.append(table_name)
+            continue
+        existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        expected_columns = {column.name for column in table.columns}
+        table_missing_columns = sorted(expected_columns - existing_columns)
+        if table_missing_columns:
+            missing_columns[table_name] = table_missing_columns
+
+        existing_index_names = {index["name"] for index in inspector.get_indexes(table_name) if index.get("name")}
+        expected_index_names = {index.name for index in table.indexes if index.name}
+        table_missing_indexes = sorted(expected_index_names - existing_index_names)
+        if table_missing_indexes:
+            missing_indexes[table_name] = table_missing_indexes
+
+    return {
+        "database": _database_config_label(),
+        "missing_tables": missing_tables,
+        "missing_columns": missing_columns,
+        "missing_indexes": missing_indexes,
+        "has_drift": bool(missing_tables or missing_columns or missing_indexes),
+    }
+
+
 def seed_database():
     try:
-        Base.metadata.create_all(bind=engine)
-        ensure_database_compatibility()
+        schema_report = inspect_database_schema_drift()
+        print("SCHEMA_DRIFT_REPORT", json_dump(schema_report))
+        if startup_schema_mutations_allowed():
+            Base.metadata.create_all(bind=engine)
+            ensure_database_compatibility()
+        elif schema_report.get("has_drift"):
+            raise RuntimeError(
+                "Startup schema mutations are disabled and database schema drift was detected. "
+                "Run scripts/check_schema.py and apply a reviewed migration before deployment."
+            )
         db = SessionLocal()
         backfilled_subscribers = backfill_coming_soon_subscribers(db)
         if backfilled_subscribers:
@@ -7095,6 +7239,8 @@ def seed_database():
         db.close()
     except Exception as error:
         print("DATABASE SEED ERROR:", repr(error))
+        if isinstance(error, RuntimeError) and "Startup schema mutations are disabled" in str(error):
+            raise
 
 
 def refresh_nin_provider_health(reason: str = "startup") -> dict:
@@ -7184,6 +7330,7 @@ def refresh_nin_provider_health(reason: str = "startup") -> dict:
 
 @app.on_event("startup")
 def on_startup():
+    validate_startup_configuration()
     seed_database()
     print("DISPATCH_TEST_MODE_STATUS", json_dump({
         "enabled": dispatch_test_mode_enabled(),
@@ -7285,6 +7432,7 @@ def admin_login_diagnostics():
 
 @app.get("/debug/db")
 def debug_db():
+    require_non_production_diagnostic()
     db = SessionLocal()
     try:
         return {
@@ -14524,6 +14672,7 @@ def nin_provider_health_payload(db=None) -> dict:
 
 @app.get("/api/debug/nin-health")
 def get_public_nin_health():
+    require_non_production_diagnostic()
     db = SessionLocal()
     try:
         health = nin_provider_health_payload(db)
@@ -14543,6 +14692,7 @@ def get_public_nin_health():
 
 @app.get("/debug/nin-provider")
 def debug_nin_provider_config():
+    require_non_production_diagnostic()
     config = ninbvnportal_config()
     api_key = config.get("api_key") or ""
     return {
@@ -14560,6 +14710,7 @@ def debug_nin_provider_config():
 
 @app.get("/debug/nin-config")
 def debug_nin_config():
+    require_non_production_diagnostic()
     config = ninbvnportal_config()
     api_key = config.get("api_key") or ""
     endpoint = f"{config.get('base_url')}/nin-verification"
