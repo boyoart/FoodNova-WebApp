@@ -41,6 +41,7 @@ class _FoodNovaBootstrap extends ConsumerStatefulWidget {
 
 class _FoodNovaBootstrapState extends ConsumerState<_FoodNovaBootstrap> {
   StreamSubscription<void>? _notificationRefreshSubscription;
+  StreamSubscription<int>? _notificationReadSubscription;
   late final _NotificationLifecycleObserver _notificationLifecycleObserver;
 
   @override
@@ -54,6 +55,9 @@ class _FoodNovaBootstrapState extends ConsumerState<_FoodNovaBootstrap> {
         NotificationService.refreshStream.listen((_) {
       _refreshNotificationsIfAuthenticated();
     });
+    _notificationReadSubscription = NotificationService.readStream.listen(
+      _markNotificationRead,
+    );
     Future.microtask(() {
       ref.read(appSecurityServiceProvider).deleteLegacyPinStorage();
       _refreshStartupProductData();
@@ -64,6 +68,7 @@ class _FoodNovaBootstrapState extends ConsumerState<_FoodNovaBootstrap> {
   @override
   void dispose() {
     _notificationRefreshSubscription?.cancel();
+    _notificationReadSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(_notificationLifecycleObserver);
     super.dispose();
   }
@@ -97,8 +102,29 @@ class _FoodNovaBootstrapState extends ConsumerState<_FoodNovaBootstrap> {
     ref.invalidate(unreadNotificationsProvider);
   }
 
+  Future<void> _markNotificationRead(int id) async {
+    final authenticated =
+        ref.read(sessionControllerProvider).valueOrNull == true;
+    if (!authenticated) return;
+    NotificationService.acknowledgePendingReadNotification(id);
+    try {
+      await ref.read(notificationsRepositoryProvider).markRead(id);
+    } catch (error) {
+      debugPrint('[FoodNova Push] mark-read deferred: $error');
+    } finally {
+      _refreshNotificationsIfAuthenticated();
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => const FoodNovaApp();
+  Widget build(BuildContext context) {
+    ref.listen(sessionControllerProvider, (_, next) {
+      if (next.valueOrNull != true) return;
+      final pending = NotificationService.consumePendingReadNotificationId();
+      if (pending != null) unawaited(_markNotificationRead(pending));
+    });
+    return const FoodNovaApp();
+  }
 }
 
 class _NotificationLifecycleObserver extends WidgetsBindingObserver {

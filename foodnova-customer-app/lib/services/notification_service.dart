@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -34,9 +35,12 @@ class NotificationService {
   static bool _pendingNotificationNavigation = false;
   static String? _pendingNavigationTarget;
   static String? _pendingLocalPayload;
+  static int? _pendingReadNotificationId;
   static GoRouter? _router;
   static final StreamController<void> _refreshController =
       StreamController<void>.broadcast();
+  static final StreamController<int> _readController =
+      StreamController<int>.broadcast();
   static final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   static const AndroidNotificationChannel _androidChannel =
@@ -128,6 +132,17 @@ class NotificationService {
   }
 
   static Stream<void> get refreshStream => _refreshController.stream;
+  static Stream<int> get readStream => _readController.stream;
+
+  static int? consumePendingReadNotificationId() {
+    final id = _pendingReadNotificationId;
+    _pendingReadNotificationId = null;
+    return id;
+  }
+
+  static void acknowledgePendingReadNotification(int id) {
+    if (_pendingReadNotificationId == id) _pendingReadNotificationId = null;
+  }
 
   static bool consumePendingNotificationNavigation() {
     final pending = _pendingNotificationNavigation;
@@ -171,9 +186,9 @@ class NotificationService {
     if (_routerAttached) return;
     _routerAttached = true;
     if (_pendingLocalPayload != null) {
-      _rememberTarget(_pendingLocalPayload);
-      _emitRefresh();
+      final payload = _pendingLocalPayload;
       _pendingLocalPayload = null;
+      _routeFromPayload(router, payload);
     }
     if (!_firebaseReady || Firebase.apps.isEmpty) return;
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
@@ -183,7 +198,7 @@ class NotificationService {
     FirebaseMessaging.instance.getInitialMessage().then((message) {
       if (message != null) {
         _emitRefresh();
-        _rememberTarget(_targetFromData(message.data));
+        _rememberDestination(resolveCustomerNotification(message.data));
       }
     }).catchError((_) {});
   }
@@ -217,17 +232,32 @@ class NotificationService {
           presentBadge: true,
         ),
       ),
-      payload: _targetFromData(message.data),
+      payload: jsonEncode(message.data),
     );
     debugPrint('NOTIFICATION DISPLAYED ${message.data}');
   }
 
   static void _routeFromMessage(GoRouter router, RemoteMessage message) {
-    _routeToTarget(router, _targetFromData(message.data));
+    _routeToDestination(router, resolveCustomerNotification(message.data));
   }
 
   static void _routeFromPayload(GoRouter router, String? payload) {
+    try {
+      final decoded = jsonDecode(payload ?? '');
+      if (decoded is Map) {
+        _routeToDestination(router,
+            resolveCustomerNotification(Map<String, dynamic>.from(decoded)));
+        return;
+      }
+    } catch (_) {}
     _routeToTarget(router, payload);
+  }
+
+  static void _routeToDestination(
+      GoRouter router, NotificationDestination destination) {
+    _rememberDestination(destination);
+    _emitRefresh();
+    Future<void>.microtask(() => router.go(destination.route));
   }
 
   static void _routeToTarget(GoRouter router, String? target) {
@@ -242,8 +272,13 @@ class NotificationService {
     _pendingNavigationTarget = _normalizeTarget(target);
   }
 
-  static String _targetFromData(Map<String, dynamic> data) {
-    return resolveCustomerNotification(data).route;
+  static void _rememberDestination(NotificationDestination destination) {
+    _rememberTarget(destination.route);
+    final id = destination.notificationId;
+    if (id != null && !_readController.isClosed) {
+      _pendingReadNotificationId = id;
+      _readController.add(id);
+    }
   }
 
   static String _normalizeTarget(String? target) {
