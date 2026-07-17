@@ -985,6 +985,8 @@ class DeliveryOrderStatusPayload(BaseModel):
 
 class DeliveryProofPayload(BaseModel):
     delivery_code: Optional[str] = ""
+    entered_pin: Optional[str] = ""
+    pin: Optional[str] = ""
     signature_present: Optional[bool] = False
     photo_url: Optional[str] = ""
     photo_path: Optional[str] = ""
@@ -1397,6 +1399,24 @@ def require_admin(request: Request):
     return user
 
 
+def require_order_access(request: Request, order: DBOrder, db) -> dict:
+    user = require_user(request)
+    role = str(user.get("role") or "").strip().lower()
+    if role == "admin":
+        return user
+    if role == "customer":
+        user_email = str(user.get("email") or "").strip().lower()
+        order_email = str(order.customer_email or "").strip().lower()
+        if user_email and user_email == order_email:
+            return user
+    if role in {"rider", "messenger"}:
+        worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
+        assigned_worker_id = order.delivery_worker_id or order.rider_id
+        if worker and assigned_worker_id == worker.id:
+            return user
+    raise HTTPException(status_code=403, detail="You do not have access to this order")
+
+
 def get_request_ip(request: Optional[Request]) -> str:
     if not request:
         return ""
@@ -1711,7 +1731,18 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         if user:
             is_dispatch_user = (getattr(user, "role", "") or "") in {"rider", "messenger"}
             tokens = user_push_tokens(user)
+            if is_dispatch_user:
+                worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
+                if worker:
+                    for token in [worker.fcm_token, *(json_load(worker.fcm_tokens_json, []) or [])]:
+                        if token and token not in tokens:
+                            tokens.append(token)
+            # Offer pushes carry offer_id and are sent by send_delivery_offer_push().
+            # Keep the persisted inbox record, but avoid a second generic push.
+            if notif_type == "delivery_offer":
+                tokens = []
             for token in tokens:
+                push_data = notification_to_dict(notif).get("data", {})
                 send_fcm_push_token(token, title, message, {
                     "type": notif_type,
                     "category": category,
@@ -1720,9 +1751,11 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
                     "title": title,
                     "body": message,
                     "sound": "delivery_alert" if is_dispatch_user else "default",
-                    "android_channel_id": "foodnova_dispatch_delivery" if is_dispatch_user else "foodnova_customer_updates",
+                    "android_channel_id": "dispatch" if is_dispatch_user else "foodnova_customer_updates",
                     "android_click_action": "OPEN_WORKER_DASHBOARD" if is_dispatch_user else "OPEN_FOODNOVA",
-                    "click_action": "/notifications",
+                    "screen": push_data.get("screen", "notifications"),
+                    "destination": push_data.get("destination", "/notifications"),
+                    "click_action": push_data.get("destination", "/notifications"),
                 })
         return data
     finally:
@@ -2227,7 +2260,7 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
                 "order_id": offer.order_id,
                 "worker_type": offer.worker_type,
                 "sound": "delivery_alert",
-                "android_channel_id": "foodnova_dispatch_delivery",
+                "android_channel_id": "dispatch",
                 "android_click_action": "OPEN_WORKER_DASHBOARD",
                 "click_action": "/rider/dashboard" if offer.worker_type == "rider" else "/messenger/dashboard",
             },
@@ -3413,8 +3446,8 @@ def order_to_dict(order: DBOrder) -> dict:
         "order_status": order.order_status or "order_placed",
         "fulfillment_status": order.fulfillment_status or "order_placed",
         "dispatch_status": canonical_dispatch_status(order),
-        "delivery_code": order.delivery_code,
-        "delivery_pin": order.delivery_code or "",
+        "delivery_code": "",
+        "delivery_pin": "",
         "delivery_code_created_at": iso(order.delivery_code_created_at),
         "delivery_confirmed_at": iso(order.delivery_confirmed_at),
         "rider_id": getattr(order, "rider_id", None),
@@ -3497,6 +3530,9 @@ def order_to_dict_for_context(order: DBOrder, db=None, context: str = "") -> dic
     data = order_to_dict(order)
     assignment = order_assignment_snapshot(order, db)
     data.update(assignment)
+    if context == "customer" and canonical_dispatch_status(order) == "ARRIVED":
+        data["delivery_code"] = order.delivery_code or ""
+        data["delivery_pin"] = order.delivery_code or ""
     if context == "admin":
         lookup_payload = {
             "order_id": getattr(order, "id", None),
@@ -3680,7 +3716,8 @@ def canonical_dispatch_status(order: DBOrder) -> str:
 def dispatch_order_to_dict(order: DBOrder) -> dict:
     data = order_to_dict(order)
     data["dispatch_status"] = canonical_dispatch_status(order)
-    data["delivery_pin"] = order.delivery_code or ""
+    data["delivery_code"] = ""
+    data["delivery_pin"] = ""
     return data
 
 
@@ -4074,8 +4111,8 @@ def delivery_offer_to_dict(offer: DBDeliveryOffer, worker: DBDeliveryWorker = No
         "delivery_address": order.delivery_address if order and offer.status == "ASSIGNED" else "",
         "delivery_notes": order.delivery_notes if order else "",
         "delivery_note": order.delivery_note if order else "",
-        "delivery_code": order.delivery_code if order else "",
-        "delivery_pin": order.delivery_code if order else "",
+        "delivery_code": "",
+        "delivery_pin": "",
         "accepted_at": iso(offer.accepted_at),
         "declined_at": iso(offer.declined_at),
         "expires_at": iso(offer.expires_at),
@@ -4658,6 +4695,7 @@ DELIVERY_STATUS_API_TO_DB = {
     "arrived_at_pickup": "ARRIVED_AT_PICKUP",
     "picked_up": "PICKED_UP",
     "in_transit": "IN_TRANSIT",
+    "out_for_delivery": "IN_TRANSIT",
     "en_route_to_customer": "IN_TRANSIT",
     "arrived": "ARRIVED",
     "cancelled": "CANCELLED",
@@ -4995,6 +5033,7 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
         items = []
 
     receipt = json_load(order.receipt, None)
+    visible_delivery_pin = (order.delivery_code or "") if canonical_dispatch_status(order) == "ARRIVED" else ""
     return {
         "id": order.id,
         "order_code": order.order_code,
@@ -5004,8 +5043,8 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
         "fulfillment_status": order.fulfillment_status or "order_placed",
         "dispatch_status": canonical_dispatch_status(order),
         "delivery_status": getattr(order, "delivery_status", "") or "",
-        "delivery_code": order.delivery_code or "",
-        "delivery_pin": order.delivery_code or "",
+        "delivery_code": visible_delivery_pin,
+        "delivery_pin": visible_delivery_pin,
         "delivery_method": order.delivery_method or "delivery",
         "total_amount": order.total_amount or 0,
         "created_at": iso(order.created_at),
@@ -5464,6 +5503,32 @@ def ensure_order_invoice_pdf(order: dict) -> Path:
 
 
 def notification_to_dict(notification: DBNotification) -> dict:
+    notification_type = notification.type or "service"
+    order_id = notification.order_id
+    if notification_type == "delivery_offer":
+        screen = "offers"
+        destination = "/(tabs)"
+    elif notification_type == "delivery_assigned":
+        screen = "active_delivery"
+        destination = f"/delivery/{order_id}" if order_id else "/(tabs)"
+    elif notification_type == "delivery_completed":
+        screen = "history"
+        destination = "/(tabs)/deliveries"
+    elif order_id:
+        screen = "tracking"
+        destination = f"/tracking/{order_id}"
+    else:
+        screen = "notifications"
+        destination = "/notifications"
+    data = {
+        "notification_id": str(notification.id),
+        "type": notification_type,
+        "category": notification.category or "service",
+        "order_id": str(order_id or ""),
+        "order_code": notification.order_code or "",
+        "screen": screen,
+        "destination": destination,
+    }
     return {
         "id": notification.id,
         "order_id": notification.order_id,
@@ -5472,8 +5537,11 @@ def notification_to_dict(notification: DBNotification) -> dict:
         "customer_email": notification.customer_email,
         "title": notification.title,
         "message": notification.message,
-        "type": notification.type,
+        "type": notification_type,
         "category": notification.category,
+        "screen": screen,
+        "destination": destination,
+        "data": data,
         "is_read": bool(notification.is_read),
         "created_at": iso(notification.created_at),
     }
@@ -8657,8 +8725,8 @@ def api_my_orders(request: Request):
 
 
 @app.get("/api/orders/{order_id}")
-def api_order_detail(order_id: int):
-    order = get_order(order_id)
+def api_order_detail(order_id: int, request: Request):
+    order = get_order(order_id, request)
     return api_success(order, order=order)
 
 
@@ -8669,8 +8737,7 @@ def api_order_invoice(order_id: int, request: Request):
 
 @app.post("/api/orders/{order_id}/receipt")
 async def api_upload_order_receipt(order_id: int, request: Request, file: UploadFile = File(...)):
-    require_user(request)
-    return await upload_receipt(order_id, file)
+    return await upload_receipt(order_id, request, file)
 
 
 @app.post("/api/orders/{order_id}/confirm-delivery")
@@ -8679,8 +8746,8 @@ def api_confirm_delivery(order_id: int, payload: dict):
 
 
 @app.get("/api/orders/{order_id}/rider-location")
-def api_get_order_rider_location(order_id: int):
-    return get_order_rider_location(order_id)
+def api_get_order_rider_location(order_id: int, request: Request):
+    return get_order_rider_location(order_id, request)
 
 
 @app.get("/api/notifications")
@@ -10793,15 +10860,13 @@ def track_order(payload: TrackOrderPayload):
 
 @app.post("/orders")
 def create_order(payload: OrderPayload, request: Request):
+    current_user = require_user(request)
     normalized_items = normalize_order_items(payload.items or [])
     order_data = {}
     inventory_deductions = []
-    # Attempt to enrich with user/profile data when available
-    auth = request.headers.get("authorization")
-    current_user = _get_user_from_token(auth)
-    customer_name = payload.customer_name or (current_user.get("full_name") if current_user else "FoodNova Customer")
-    customer_email = payload.customer_email or (current_user.get("email") if current_user else "")
-    customer_phone = payload.customer_phone or (current_user.get("phone") if current_user else "")
+    customer_name = current_user.get("full_name") or payload.customer_name or "FoodNova Customer"
+    customer_email = current_user.get("email") or ""
+    customer_phone = current_user.get("phone") or payload.customer_phone or payload.phone or ""
 
     db = SessionLocal()
     try:
@@ -10897,7 +10962,7 @@ def my_orders(request: Request):
     db = SessionLocal()
     try:
         orders = [
-            order_to_dict(order)
+            order_to_dict_for_context(order, db, "customer")
             for order in active_order_filter(db.query(DBOrder)).filter(DBOrder.customer_email == email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
         ]
         return {"success": True, "orders": orders, "data": orders}
@@ -10909,7 +10974,8 @@ def my_orders(request: Request):
 
 
 @app.get("/orders")
-def all_orders():
+def all_orders(request: Request):
+    require_permission(request, "orders:view")
     db = SessionLocal()
     try:
         orders = [order_to_dict(order) for order in active_order_filter(db.query(DBOrder)).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
@@ -10922,12 +10988,14 @@ def all_orders():
 
 
 @app.get("/orders/{order_id}")
-def get_order(order_id: int):
+def get_order(order_id: int, request: Request):
     db = SessionLocal()
     try:
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if order:
-            data = order_to_dict(order)
+            user = require_order_access(request, order, db)
+            context = "customer" if str(user.get("role") or "").lower() == "customer" else "admin"
+            data = order_to_dict_for_context(order, db, context)
             return {"success": True, "order": data, "data": data}
     finally:
         db.close()
@@ -10966,23 +11034,27 @@ def get_order_invoice(order_id: int, request: Request):
 
 
 @app.get("/orders/{order_id}/rider-location")
-def get_order_rider_location(order_id: int):
+def get_order_rider_location(order_id: int, request: Request):
     db = SessionLocal()
     try:
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
+        require_order_access(request, order, db)
         return order_rider_location_response(order, db)
     finally:
         db.close()
 
 
 @app.post("/orders/{order_id}/receipt")
-async def upload_receipt(order_id: int, file: UploadFile = File(...)):
+async def upload_receipt(order_id: int, request: Request, file: UploadFile = File(...)):
     db = SessionLocal()
     try:
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if order:
+            require_order_access(request, order, db)
+            if str(order.payment_status or "").lower() in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
+                raise HTTPException(status_code=409, detail="Payment is already confirmed for this order")
             receipt = await save_uploaded_receipt(file)
             receipt["status"] = "submitted"
             order.receipt = json_dump(receipt)
@@ -13122,7 +13194,7 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
             user,
             worker,
             order,
-            payload.delivery_code or "",
+            payload.delivery_code or payload.entered_pin or payload.pin or "",
             proof,
         )
         return {
