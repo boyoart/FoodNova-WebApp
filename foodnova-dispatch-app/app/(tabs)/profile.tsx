@@ -11,6 +11,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { Button, Card, InfoRow, StatusPill } from "@/src/components/ui";
 import { asObject, pick } from "@/src/lib/normalize";
 import { colors, fonts, spacing, type } from "@/src/theme/tokens";
+import { BUILD_IDENTITY } from "@/src/lib/build-identity";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -117,8 +118,18 @@ export default function Profile() {
           </TouchableOpacity>
         </Card>
 
+        <Text style={styles.section}>Build identity</Text>
+        <Card testID="build-identity-card">
+          <InfoRow label="Version" value={`${BUILD_IDENTITY.appVersion} (${BUILD_IDENTITY.buildNumber})`} icon="layers-outline" />
+          <InfoRow label="Commit" value={BUILD_IDENTITY.commit} icon="git-commit-outline" />
+          <InfoRow label="Built" value={BUILD_IDENTITY.buildDate} icon="calendar-outline" />
+          <InfoRow label="Environment" value={BUILD_IDENTITY.environment} icon="server-outline" />
+          <InfoRow label="API" value={BUILD_IDENTITY.apiBaseUrl} icon="cloud-outline" />
+          <InfoRow label="Application ID" value={BUILD_IDENTITY.applicationId} icon="phone-portrait-outline" />
+        </Card>
+
         <Button testID="signout-button" label="Log out" variant="outline" icon="log-out-outline" onPress={onSignOut} />
-        <Text style={styles.version}>FoodNova Dispatch · v1.0.0</Text>
+        <Text style={styles.version}>FoodNova Dispatch · v{BUILD_IDENTITY.appVersion}</Text>
       </ScrollView>
     </View>
   );

@@ -12,6 +12,7 @@ import { usePushNotifications } from "@/src/hooks/use-push";
 import { AuthProvider } from "@/src/context/AuthContext";
 import { ToastProvider } from "@/src/context/ToastContext";
 import { colors } from "@/src/theme/tokens";
+import { logBuildIdentity } from "@/src/lib/build-identity";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -27,6 +28,10 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useAppFonts();
 
   const ready = (iconsLoaded || iconError) && (fontsLoaded || fontError);
+
+  useEffect(() => {
+    logBuildIdentity();
+  }, []);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
