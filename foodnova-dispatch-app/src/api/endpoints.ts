@@ -123,6 +123,17 @@ export const RiderApi = {
   uploadDocument: (form: FormData) =>
     api("/delivery/upload-document", { method: "POST", body: form, isForm: true }),
 
+  verifyAddress: (form: FormData) =>
+    api("/delivery/address-verification", { method: "POST", body: form, isForm: true }),
+
+  completeTraining: () =>
+    api("/delivery/onboarding/training", { method: "POST", body: { completed: true } }),
+
+  uploadProfilePhoto: (form: FormData) =>
+    api("/delivery/profile-photo", { method: "POST", body: form, isForm: true }),
+
+  removeProfilePhoto: () => api("/delivery/profile-photo", { method: "DELETE" }),
+
   // ---------- DISPATCH ----------
   goOnline: (coords?: Coords | null) =>
     api("/delivery/go-online", { method: "POST", body: coords ?? null }),

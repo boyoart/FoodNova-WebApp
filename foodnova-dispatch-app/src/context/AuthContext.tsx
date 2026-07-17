@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { AuthApi, RiderApi } from "@/src/api/endpoints";
-import { loadToken, setToken } from "@/src/api/client";
+import { ApiError, loadToken, setToken } from "@/src/api/client";
+import { clearOnboardingDraft } from "@/src/lib/onboarding";
 
 type Rider = Record<string, any> | null;
 
@@ -11,7 +12,10 @@ type AuthState = {
   rider: Rider;
   // verification / approval state derived from backend
   approvalStatus: string | null;
+  onboardingProgress: Record<string, any>;
+  verificationStatus: Record<string, any>;
   refreshRider: () => Promise<Rider>;
+  refreshOnboarding: () => Promise<{ progress: Record<string, any>; verification: Record<string, any> }>;
   signInWithToken: (token: string) => Promise<void>;
   signOut: () => Promise<void>;
   setRider: (r: Rider) => void;
@@ -39,28 +43,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState(false);
   const [rider, setRiderState] = useState<Rider>(null);
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
+  const [onboardingProgress, setOnboardingProgress] = useState<Record<string, any>>({});
+  const [verificationStatus, setVerificationStatus] = useState<Record<string, any>>({});
 
   const setRider = useCallback((r: Rider) => {
     setRiderState(r);
     setApprovalStatus(deriveApproval(r));
   }, []);
 
+  const refreshOnboarding = useCallback(async () => {
+    const [progressResult, verificationResult] = await Promise.allSettled([
+      RiderApi.onboardingProgress(),
+      RiderApi.verificationStatus(),
+    ]);
+    const progress = progressResult.status === "fulfilled" ? progressResult.value || {} : {};
+    const verification = verificationResult.status === "fulfilled" ? verificationResult.value || {} : {};
+    setOnboardingProgress(progress);
+    setVerificationStatus(verification);
+    return { progress, verification };
+  }, []);
+
   const refreshRider = useCallback(async (): Promise<Rider> => {
     try {
-      const data = await RiderApi.me();
+      const [data, onboarding] = await Promise.all([RiderApi.me(), refreshOnboarding()]);
       // /delivery/me returns useful fields at the TOP level (approval_status,
       // full_name, phone_number) plus a nested `worker` with detail. Merge so
       // top-level wins but worker detail (email, vehicle, nin) is preserved.
       const r = data
-        ? ({ ...(data.worker || data.rider || {}), ...data } as Rider)
+        ? ({ ...(data.worker || data.rider || {}), ...data, _onboarding: onboarding } as Rider)
         : null;
       setRider(r);
       setAuthed(true);
       return r;
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        await setToken(null);
+        setAuthed(false);
+        setRider(null);
+      }
       return null;
     }
-  }, [setRider]);
+  }, [refreshOnboarding, setRider]);
 
   const signInWithToken = useCallback(
     async (token: string) => {
@@ -72,10 +95,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    await AuthApi.logout();
-    setAuthed(false);
-    setRiderState(null);
-    setApprovalStatus(null);
+    try {
+      await AuthApi.logout();
+    } finally {
+      await setToken(null);
+      setAuthed(false);
+      setRiderState(null);
+      setApprovalStatus(null);
+      setOnboardingProgress({});
+      setVerificationStatus({});
+      await clearOnboardingDraft();
+    }
   }, []);
 
   useEffect(() => {
@@ -96,7 +126,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authed,
         rider,
         approvalStatus,
+        onboardingProgress,
+        verificationStatus,
         refreshRider,
+        refreshOnboarding,
         signInWithToken,
         signOut,
         setRider,

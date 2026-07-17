@@ -2,8 +2,7 @@ import { useFonts } from "expo-font";
 
 export function useAppFonts() {
   const [loaded, error] = useFonts({
-    Poppins: require("../../assets/fonts/PlusJakartaSans.ttf"),
-    Inter: require("../../assets/fonts/PlusJakartaSans.ttf"),
+    PlusJakartaSans: require("../../assets/fonts/PlusJakartaSans.ttf"),
   });
   return [loaded, error] as const;
 }

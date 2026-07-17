@@ -17,6 +17,10 @@ Notifications.setNotificationHandler({
 const isNative = Platform.OS !== "web";
 const foregroundListeners = new Set<(data: any) => void>();
 
+export function dispatchNotificationData(data: any) {
+  foregroundListeners.forEach((listener) => listener(data));
+}
+
 export function addForegroundNotificationListener(cb: (data: any) => void) {
   foregroundListeners.add(cb);
   return () => {
@@ -129,7 +133,7 @@ export function addNotificationListeners(onTap: (data: any) => void) {
   const received = Notifications.addNotificationReceivedListener((notification) => {
     const data = notification.request.content.data;
     console.log("DISPATCH_NOTIFICATION_RECEIVED", data);
-    foregroundListeners.forEach((listener) => listener(data));
+    dispatchNotificationData(data);
   });
   const response = Notifications.addNotificationResponseReceivedListener((resp) => {
     console.log("DISPATCH_NOTIFICATION_ACTION_EXECUTED", resp.notification.request.content.data);

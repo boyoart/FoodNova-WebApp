@@ -8,6 +8,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { Button, StatusPill } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
+import { isApprovedRider, isRejectedRider } from "@/src/lib/rider-state";
 
 const CHECKS = [
   { icon: "finger-print", label: "Identity (NIN) verification" },
@@ -21,15 +22,13 @@ export default function Pending() {
   const router = useRouter();
   const { refreshRider, approvalStatus, signOut } = useAuth();
   const [checking, setChecking] = useState(false);
+  const rejected = isRejectedRider({ status: approvalStatus });
 
   const check = useCallback(async () => {
     setChecking(true);
     const rider = await refreshRider();
     setChecking(false);
-    const s = (rider?.approval_status || rider?.verification_status || rider?.status || "")
-      .toString()
-      .toLowerCase();
-    if (["approved", "active", "verified", "online", "offline"].includes(s)) {
+    if (isApprovedRider(rider)) {
       router.replace("/(tabs)");
     }
   }, [refreshRider, router]);
@@ -48,11 +47,12 @@ export default function Pending() {
           <View style={styles.clock}>
             <Ionicons name="hourglass-outline" size={44} color={colors.warning} />
           </View>
-          <Text style={styles.title}>Application under review</Text>
+          <Text style={styles.title}>{rejected ? "Application needs attention" : "Application under review"}</Text>
           <StatusPill status={approvalStatus || "pending"} testID="approval-status-pill" />
           <Text style={styles.subtitle}>
-            Thanks for applying to ride with FoodNova. Our team is reviewing your documents. This
-            usually takes a few hours. You will be notified once you are approved.
+            {rejected
+              ? "FoodNova could not approve the current application. Review your onboarding details or contact support for the exact remediation required."
+              : "Thanks for applying to ride with FoodNova. Our team is reviewing your documents. You will be notified once you are approved."}
           </Text>
         </View>
 
@@ -68,8 +68,9 @@ export default function Pending() {
           ))}
         </View>
 
+        {rejected && <Button label="Review onboarding" variant="outline" onPress={() => router.replace("/onboarding?remediate=1")} />}
         <Button testID="refresh-approval" label="Check approval status" icon="refresh" onPress={check} loading={checking} />
-        <Button testID="signout-pending" label="Sign out" variant="ghost" onPress={signOut} />
+        <Button testID="signout-pending" label="Sign out" variant="ghost" onPress={async () => { await signOut(); router.replace("/(auth)/login"); }} />
       </ScrollView>
     </View>
   );

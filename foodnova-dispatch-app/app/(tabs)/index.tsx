@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
+  BackHandler,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -13,18 +15,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 
-import { RiderApi, NotifApi } from "@/src/api/endpoints";
+import { RiderApi } from "@/src/api/endpoints";
 import { useAuth } from "@/src/context/AuthContext";
 import { useToast } from "@/src/context/ToastContext";
 import { ApiError } from "@/src/api/client";
 import { Card, StatusPill } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
-import { OfferModal, Offer, offerId } from "@/src/components/OfferModal";
+import { OfferModal, offerId } from "@/src/components/OfferModal";
+import { useOffers } from "@/src/context/OfferContext";
+import { useNotificationsState } from "@/src/context/NotificationContext";
+import { useLocationTracking } from "@/src/context/LocationTrackingContext";
 import { asList, asObject, pick } from "@/src/lib/normalize";
 import { formatDistanceKm, formatMoney, orderBucket, orderStatus } from "@/src/lib/format";
 import { deliveryOrderId } from "@/src/lib/order";
 import { formatPercent, normalizeRiderStats } from "@/src/lib/stats";
-import { addForegroundNotificationListener, showLocalOfferNotification } from "@/src/lib/push";
 import {
   getForegroundPermission,
   requestForegroundPermission,
@@ -32,45 +36,22 @@ import {
 } from "@/src/lib/location";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
-const POLL_MS = 12000;
-
-function riderLooksOnline(rider: any) {
-  const values = [
-    rider?.status,
-    rider?.availability,
-    rider?.operational_status,
-    rider?.online_status,
-    rider?.delivery_status,
-    rider?.worker_status,
-  ]
-    .filter((value) => value !== undefined && value !== null)
-    .map((value) => String(value).toLowerCase());
-  return rider?.is_online === true || rider?.isOnline === true || values.some((value) => ["online", "available"].includes(value));
-}
+import { riderLooksOnline } from "@/src/lib/rider-state";
 
 export default function Dashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
   const { rider, refreshRider } = useAuth();
+  const { offers, currentOffer, busy: offerBusy, refreshOffers, presentOffer, acceptCurrentOffer, declineCurrentOffer } = useOffers();
+  const { unread, refreshUnread } = useNotificationsState();
+  const { enableBackgroundTracking, stopTracking } = useLocationTracking();
 
   const [online, setOnline] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [stats, setStats] = useState<Record<string, any>>({});
   const [activeOrder, setActiveOrder] = useState<any | null>(null);
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [currentOffer, setCurrentOffer] = useState<Offer | null>(null);
-  const [offerBusy, setOfferBusy] = useState(false);
-  const [unread, setUnread] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const seenOffers = useRef<Set<string>>(new Set());
-  const currentOfferRef = useRef<Offer | null>(null);
-
-  useEffect(() => {
-    currentOfferRef.current = currentOffer;
-  }, [currentOffer]);
 
   const initOnline = useCallback(() => {
     const nextOnline = riderLooksOnline(rider);
@@ -82,12 +63,25 @@ export default function Dashboard() {
       is_online: rider?.is_online,
       nextOnline,
     });
-    if (nextOnline) setOnline(true);
+    setOnline(nextOnline);
   }, [rider]);
 
   useEffect(() => {
     initOnline();
   }, [initOnline]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+        Alert.alert("Exit FoodNova Dispatch?", "You can remain online while the app runs in the background.", [
+          { text: "Stay", style: "cancel" },
+          { text: "Exit", style: "destructive", onPress: () => BackHandler.exitApp() },
+        ]);
+        return true;
+      });
+      return () => subscription.remove();
+    }, [])
+  );
 
   const loadStats = useCallback(async () => {
     try {
@@ -106,79 +100,19 @@ export default function Dashboard() {
     } catch {}
   }, []);
 
-  const loadUnread = useCallback(async () => {
-    try {
-      const data = await NotifApi.unreadCount();
-      const n = pick(data, ["count", "unread", "unread_count"], 0);
-      setUnread(typeof n === "number" ? n : parseInt(n) || 0);
-    } catch {}
-  }, []);
-
-  const pollOffers = useCallback(async () => {
-    try {
-      console.log("OFFER_FEED_REQUEST");
-      const data = await RiderApi.offers();
-      const list = asList(data) as Offer[];
-      console.log("OFFER_FEED_RESPONSE", { count: list.length });
-      setOffers(list);
-      // Surface the first genuinely new offer
-      const fresh = list.find((o) => !seenOffers.current.has(offerId(o)));
-      if (fresh && !currentOfferRef.current) {
-        seenOffers.current.add(offerId(fresh));
-        console.log("DASHBOARD_OFFER_RENDERED", { offerId: offerId(fresh), orderId: deliveryOrderId(fresh) });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-        showLocalOfferNotification(
-          "New FoodNova delivery offer",
-          "Review payout, pickup, drop-off, and accept before it expires."
-        ).catch(() => {});
-        setCurrentOffer(fresh);
-      }
-    } catch (error: any) {
-      console.log("OFFER_FEED_FAILED", { error: String(error?.message || error) });
-    }
-  }, []);
-
-  const sendPing = useCallback(async () => {
-    const coords = await getCurrentCoords();
-    if (coords) RiderApi.locationPing(coords).catch(() => {});
-  }, []);
-
-  // Offer polling is intentionally always active while the dashboard is mounted:
-  // push can fail, but an existing backend offer must still appear in-app.
   useEffect(() => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollOffers();
-    if (online) sendPing();
-    pollRef.current = setInterval(() => {
-      pollOffers();
-      if (online) sendPing();
-      loadActive();
-    }, POLL_MS);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [online, pollOffers, sendPing, loadActive]);
-
-  useEffect(() => {
-    return addForegroundNotificationListener((data) => {
-      const type = String(data?.type || data?.notification_type || data?.category || "").toLowerCase();
-      if (type.includes("offer") || type.includes("delivery")) {
-        console.log("SOCKET_DELIVERY_OFFER_RECEIVED", data);
-        console.log("OFFER_AUTO_REFRESH_TRIGGERED", data);
-        pollOffers();
-        loadActive();
-        loadUnread();
-      }
-    });
-  }, [pollOffers, loadActive, loadUnread]);
+    if (!online) return;
+    const timer = setInterval(loadActive, 15000);
+    return () => clearInterval(timer);
+  }, [loadActive, online]);
 
   useFocusEffect(
     useCallback(() => {
       loadStats();
       loadActive();
-      loadUnread();
-      pollOffers();
-    }, [loadStats, loadActive, loadUnread, pollOffers])
+      refreshUnread();
+      refreshOffers();
+    }, [loadStats, loadActive, refreshOffers, refreshUnread])
   );
 
   async function toggleOnline() {
@@ -196,12 +130,14 @@ export default function Dashboard() {
         const coords = await getCurrentCoords();
         await RiderApi.goOnline(coords);
         setOnline(true);
+        const background = await enableBackgroundTracking();
+        if (background === "denied") toast.show("Online with foreground tracking. Allow background location for tracking while the app is minimized.", "warning");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         toast.show("You're online - offers will appear here", "success");
       } else {
         await RiderApi.goOffline();
+        await stopTracking();
         setOnline(false);
-        setOffers([]);
         toast.show("You're offline", "info");
       }
       refreshRider();
@@ -214,40 +150,34 @@ export default function Dashboard() {
 
   async function acceptOffer() {
     if (!currentOffer) return;
-    setOfferBusy(true);
     try {
-      await RiderApi.acceptOffer(offerId(currentOffer));
+      const accepted = await acceptCurrentOffer();
+      if (!accepted) return;
       toast.show("Delivery accepted!", "success");
-      const acceptedId = offerId(currentOffer);
-      setOffers((prev) => prev.filter((o) => offerId(o) !== acceptedId));
-      setCurrentOffer(null);
       await loadActive();
-      const id = deliveryOrderId(currentOffer);
+      const id = deliveryOrderId(accepted);
       if (id) router.push(`/delivery/${id}`);
     } catch (e) {
       toast.show(e instanceof ApiError ? e.message : "Could not accept offer", "error");
-    } finally {
-      setOfferBusy(false);
     }
   }
 
   async function declineOffer() {
     if (!currentOffer) {
-      setCurrentOffer(null);
+      presentOffer(null);
       return;
     }
-    const id = offerId(currentOffer);
-    setCurrentOffer(null);
     try {
-      await RiderApi.declineOffer(id, "Rider declined");
-      setOffers((prev) => prev.filter((o) => offerId(o) !== id));
-    } catch {}
+      await declineCurrentOffer("Rider declined");
+    } catch (e) {
+      toast.show(e instanceof ApiError ? e.message : "Could not decline offer", "error");
+    }
   }
 
   async function onRefresh() {
     setRefreshing(true);
-    await Promise.all([loadStats(), loadActive(), loadUnread(), refreshRider()]);
-    await pollOffers();
+    await Promise.all([loadStats(), loadActive(), refreshUnread(), refreshRider()]);
+    await refreshOffers();
     setRefreshing(false);
   }
 
@@ -375,7 +305,7 @@ export default function Dashboard() {
                 key={offerId(o)}
                 testID={`offer-row-${offerId(o)}`}
                 activeOpacity={0.85}
-                onPress={() => setCurrentOffer(o)}
+                onPress={() => presentOffer(o)}
               >
                 <Card style={styles.offerRow}>
                   <View style={styles.offerFlash}>

@@ -165,11 +165,15 @@ export function EmptyState({
   title,
   subtitle,
   testID,
+  actionLabel,
+  onAction,
 }: {
   icon?: keyof typeof Ionicons.glyphMap;
   title: string;
   subtitle?: string;
   testID?: string;
+  actionLabel?: string;
+  onAction?: () => void;
 }) {
   return (
     <View testID={testID} style={styles.center}>
@@ -178,6 +182,7 @@ export function EmptyState({
       </View>
       <Text style={styles.emptyTitle}>{title}</Text>
       {subtitle ? <Text style={styles.muted}>{subtitle}</Text> : null}
+      {actionLabel && onAction ? <Button label={actionLabel} variant="outline" onPress={onAction} /> : null}
     </View>
   );
 }

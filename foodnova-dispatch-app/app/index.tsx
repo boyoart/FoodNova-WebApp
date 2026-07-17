@@ -7,11 +7,12 @@ import { storage } from "@/src/utils/storage";
 import { INTRO_SEEN_KEY } from "@/src/lib/constants";
 import { Logo } from "@/src/components/Logo";
 import { colors, fonts, spacing, type } from "@/src/theme/tokens";
+import { isApprovedRider, isPendingRider, isRejectedRider } from "@/src/lib/rider-state";
 
 // Splash + router gate. Sends the rider to intro (first launch), auth,
 // onboarding, or the app depending on session + approval status.
 export default function Index() {
-  const { booting, authed, approvalStatus } = useAuth();
+  const { booting, authed, approvalStatus, rider } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -22,12 +23,12 @@ export default function Index() {
         router.replace(seen ? "/(auth)/login" : "/intro");
         return;
       }
-      const s = (approvalStatus || "").toLowerCase();
-      const approved = ["approved", "active", "verified", "online", "offline"].includes(s);
-      if (approved) router.replace("/(tabs)");
+      const state = { ...(rider || {}), approval_status: approvalStatus };
+      if (isApprovedRider(state)) router.replace("/(tabs)");
+      else if (isPendingRider(state) || isRejectedRider(state)) router.replace("/onboarding/pending");
       else router.replace("/onboarding");
     })();
-  }, [booting, authed, approvalStatus, router]);
+  }, [booting, authed, approvalStatus, rider, router]);
 
   return (
     <View style={styles.container} testID="splash-screen">

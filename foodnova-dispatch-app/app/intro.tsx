@@ -28,8 +28,8 @@ type Slide = {
 const SLIDES: Slide[] = [
   {
     icon: "flash",
-    title: "Accept deliveries instantly",
-    desc: "New delivery offers arrive in real time. Review the payout and route, then accept with a single tap.",
+    title: "Review deliveries quickly",
+    desc: "New delivery offers refresh automatically. Review the route, then accept with a single tap.",
   },
   {
     icon: "navigate",
@@ -38,8 +38,8 @@ const SLIDES: Slide[] = [
   },
   {
     icon: "wallet",
-    title: "Earn and track everything",
-    desc: "Watch your earnings grow, monitor your performance, and get paid for every completed delivery.",
+    title: "Track every delivery",
+    desc: "Review active and completed deliveries while keeping your status synchronized with FoodNova.",
   },
 ];
 

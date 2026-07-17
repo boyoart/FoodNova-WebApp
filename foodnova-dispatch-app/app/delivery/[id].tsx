@@ -23,10 +23,12 @@ import { TrackingMap } from "@/src/components/TrackingMap";
 import { asList, pick } from "@/src/lib/normalize";
 import { deliveryOrderId } from "@/src/lib/order";
 import { getCurrentCoords } from "@/src/lib/location";
+import { useLocationTracking } from "@/src/context/LocationTrackingContext";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 // Linear delivery workflow
 const FLOW = [
+  { key: "arrived_at_pickup", action: "Arrived at Pickup", icon: "storefront" },
   { key: "picked_up", action: "Confirm Pickup", icon: "bag-check" },
   { key: "out_for_delivery", action: "Start Delivery", icon: "navigate" },
   { key: "arrived", action: "I've Arrived", icon: "location" },
@@ -38,8 +40,9 @@ function statusIndex(status: string): number {
   const idx = FLOW.findIndex((f) => f.key === s);
   if (idx >= 0) return idx;
   if (["assigned", "accepted", "confirmed", "pending"].includes(s)) return -1;
-  if (["out_for_delivery", "enroute", "in_transit"].includes(s)) return 1;
-  if (["at_pickup", "picked", "collected"].includes(s)) return 0;
+  if (["out_for_delivery", "enroute", "in_transit"].includes(s)) return 2;
+  if (["picked_up", "picked", "collected"].includes(s)) return 1;
+  if (["arrived_at_pickup", "at_pickup"].includes(s)) return 0;
   return -1;
 }
 
@@ -48,6 +51,7 @@ export default function DeliveryDetail() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
+  const { latestCoords } = useLocationTracking();
 
   const [order, setOrder] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -61,7 +65,7 @@ export default function DeliveryDetail() {
       const data = await RiderApi.orders();
       const list = asList(data);
       const found = list.find((o) => deliveryOrderId(o) === String(id));
-      setOrder(found || list[0] || null);
+      setOrder(found || null);
     } catch {
       setOrder(null);
     } finally {
@@ -71,27 +75,15 @@ export default function DeliveryDetail() {
     if (c) setRiderCoords({ latitude: c.latitude, longitude: c.longitude, heading: c.heading, speed: c.speed });
   }, [id]);
 
-  const syncLocation = useCallback(async () => {
-    const c = await getCurrentCoords();
-    if (!c) return;
-    const coords = { latitude: c.latitude, longitude: c.longitude, heading: c.heading, speed: c.speed };
-    setRiderCoords(coords);
-    RiderApi.locationPing(coords).catch(() => {});
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       load();
-      syncLocation();
-    }, [load, syncLocation])
+    }, [load])
   );
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      syncLocation();
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [syncLocation]);
+    if (latestCoords) setRiderCoords({ latitude: latestCoords.latitude, longitude: latestCoords.longitude, heading: latestCoords.heading, speed: latestCoords.speed });
+  }, [latestCoords]);
 
   const currentStatus = pick(order, ["dispatch_status", "delivery_status", "deliveryStatus", "status", "order_status"], "assigned");
   const idx = useMemo(() => statusIndex(String(currentStatus)), [currentStatus]);
@@ -168,7 +160,6 @@ export default function DeliveryDetail() {
         pin: enteredPin,
         note: "Delivered by rider",
       });
-      await RiderApi.updateOrderStatus(String(id), "delivered").catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       toast.show("Delivery completed!", "success");
       setPinMode(false);

@@ -1,73 +1,35 @@
-import { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { AuthApi } from "@/src/api/endpoints";
+import { Button } from "@/src/components/ui";
 import { useToast } from "@/src/context/ToastContext";
-import { ApiError } from "@/src/api/client";
-import { Button, Field } from "@/src/components/ui";
-import { colors, fonts, spacing, type } from "@/src/theme/tokens";
+import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
-// Uses the email OTP channel to let a rider reset access.
 export default function Forgot() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [loading, setLoading] = useState(false);
 
-  async function send() {
-    if (!email.trim()) {
-      toast.show("Enter your account email", "warning");
-      return;
-    }
-    setLoading(true);
-    try {
-      await AuthApi.sendOtp(email.trim());
-      setSent(true);
-      toast.show("If the email exists, a reset code was sent", "success");
-    } catch (e) {
-      toast.show(e instanceof ApiError ? e.message : "Could not send code", "error");
-    } finally {
-      setLoading(false);
-    }
+  function contactSupport() {
+    Linking.openURL("mailto:support@foodnova.com.ng?subject=FoodNova%20Dispatch%20account%20recovery").catch(() => {
+      toast.show("Email support@foodnova.com.ng for account recovery", "info");
+    });
   }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.lg }]}>
-      <TouchableOpacity testID="forgot-back" onPress={() => router.back()} style={styles.back}>
+      <TouchableOpacity onPress={() => router.back()} style={styles.back}>
         <Ionicons name="arrow-back" size={24} color={colors.onSurface} />
       </TouchableOpacity>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Reset password</Text>
-        <Text style={styles.subtitle}>
-          Enter your email and we will send you a verification code to reset your access.
-        </Text>
-        <View style={{ gap: spacing.lg, marginTop: spacing.xl }}>
-          <Field
-            testID="forgot-email-input"
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholder="you@email.com"
-          />
-          <Button
-            testID="forgot-submit"
-            label={sent ? "Resend code" : "Send reset code"}
-            onPress={send}
-            loading={loading}
-          />
-          {sent && (
-            <Text style={styles.note}>
-              Check your inbox. Contact FoodNova support if you do not receive a code.
-            </Text>
-          )}
-        </View>
+      <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.icon}><Ionicons name="lock-closed" size={32} color={colors.brandPrimary} /></View>
+        <Text style={styles.title}>Account recovery</Text>
+        <Text style={styles.subtitle}>Secure self-service password reset is not available in the current Dispatch API. FoodNova Support must verify your rider account before restoring access.</Text>
+        <View style={styles.notice}><Ionicons name="shield-checkmark" size={22} color={colors.brandPrimary} /><Text style={styles.noticeText}>Support will never ask for your password, delivery PIN, or complete NIN.</Text></View>
+        <Button label="Contact FoodNova Support" icon="mail" onPress={contactSupport} />
+        <Button label="Return to sign in" variant="outline" onPress={() => router.replace("/(auth)/login")} />
       </ScrollView>
     </View>
   );
@@ -76,8 +38,10 @@ export default function Forgot() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surface, paddingHorizontal: spacing.xl },
   back: { width: 44, height: 44, justifyContent: "center" },
-  content: { paddingBottom: spacing["3xl"] },
-  title: { fontFamily: fonts.display, fontSize: type["2xl"], fontWeight: "700", color: colors.onSurface, marginTop: spacing.lg },
-  subtitle: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted, marginTop: 4 },
-  note: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, textAlign: "center" },
+  content: { paddingVertical: spacing["2xl"], gap: spacing.lg },
+  icon: { width: 60, height: 60, borderRadius: radius.lg, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center" },
+  title: { fontFamily: fonts.display, fontSize: type["2xl"], fontWeight: "700", color: colors.onSurface },
+  subtitle: { fontFamily: fonts.text, fontSize: type.base, lineHeight: 22, color: colors.muted },
+  notice: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
+  noticeText: { flex: 1, fontFamily: fonts.text, fontSize: type.base, lineHeight: 20, color: colors.onSurfaceTertiary },
 });

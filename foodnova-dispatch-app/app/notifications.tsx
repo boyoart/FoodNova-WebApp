@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,7 +9,9 @@ import { useToast } from "@/src/context/ToastContext";
 import { EmptyState, Loader } from "@/src/components/ui";
 import { asList, pick } from "@/src/lib/normalize";
 import { timeAgo } from "@/src/lib/format";
-import { deliveryOrderId } from "@/src/lib/order";
+import { addForegroundNotificationListener } from "@/src/lib/push";
+import { resolveNotificationDestination } from "@/src/lib/notification-routing";
+import { useNotificationsState } from "@/src/context/NotificationContext";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 function iconFor(type: string): keyof typeof Ionicons.glyphMap {
@@ -27,17 +29,23 @@ export default function Notifications() {
   const toast = useToast();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+  const { refreshUnread } = useNotificationsState();
 
   const load = useCallback(async () => {
     try {
       const data = await NotifApi.list();
       setItems(asList(data));
-    } catch {
-      setItems([]);
+      setError("");
+      await refreshUnread();
+    } catch (loadError: any) {
+      setError(String(loadError?.message || "Could not load notifications"));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [refreshUnread]);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,19 +53,26 @@ export default function Notifications() {
     }, [load])
   );
 
+  useFocusEffect(
+    useCallback(() => addForegroundNotificationListener(() => load()), [load])
+  );
+
   async function markAll() {
     try {
       await NotifApi.markAllRead();
       setItems((prev) => prev.map((n) => ({ ...n, read: true, is_read: true })));
+      await refreshUnread();
       toast.show("All marked as read", "success");
     } catch {}
   }
 
   async function openItem(item: any) {
     const id = pick(item, ["id", "_id", "notification_id"], "");
-    if (id) NotifApi.markRead(String(id)).catch(() => {});
-    const orderId = deliveryOrderId(item);
-    if (orderId) router.push(`/delivery/${orderId}`);
+    if (id) await NotifApi.markRead(String(id)).catch(() => {});
+    setItems((previous) => previous.map((entry) => entry === item ? { ...entry, read: true, is_read: true } : entry));
+    await refreshUnread();
+    const target = resolveNotificationDestination(item);
+    router.push(target.route as any);
   }
 
   return (
@@ -74,6 +89,8 @@ export default function Notifications() {
 
       {loading ? (
         <Loader label="Loading..." />
+      ) : error && items.length === 0 ? (
+        <EmptyState testID="notif-error" icon="cloud-offline-outline" title="Could not load notifications" subtitle={error} actionLabel="Retry" onAction={() => { setLoading(true); load(); }} />
       ) : items.length === 0 ? (
         <EmptyState testID="notif-empty" icon="notifications-outline" title="No notifications" subtitle="You're all caught up!" />
       ) : (
@@ -82,6 +99,7 @@ export default function Notifications() {
           keyExtractor={(item, i) => String(pick(item, ["id", "_id"], i))}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.brandPrimary} />}
           renderItem={({ item }) => {
             const unread = !pick(item, ["read", "is_read"], false);
             const ntype = pick(item, ["type", "category", "notification_type"], "");

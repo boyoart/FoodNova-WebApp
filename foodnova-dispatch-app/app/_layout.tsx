@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { LogBox, View } from "react-native";
@@ -9,8 +9,12 @@ import { StatusBar } from "expo-status-bar";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { useAppFonts } from "@/src/hooks/use-app-fonts";
 import { usePushNotifications } from "@/src/hooks/use-push";
-import { AuthProvider } from "@/src/context/AuthContext";
+import { AuthProvider, useAuth } from "@/src/context/AuthContext";
 import { ToastProvider } from "@/src/context/ToastContext";
+import { NotificationProvider } from "@/src/context/NotificationContext";
+import { OfferProvider } from "@/src/context/OfferContext";
+import { LocationTrackingProvider } from "@/src/context/LocationTrackingContext";
+import "@/src/lib/background-location";
 import { colors } from "@/src/theme/tokens";
 import { logBuildIdentity } from "@/src/lib/build-identity";
 
@@ -21,6 +25,23 @@ SplashScreen.preventAutoHideAsync();
 function PushBridge() {
   usePushNotifications();
   return null;
+}
+
+function SessionGate({ children }: { children: React.ReactNode }) {
+  const { booting, authed } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+  const first = String(segments[0] || "");
+  const protectedRoute = first === "(tabs)" || first === "delivery" || first === "notifications" || first === "onboarding";
+
+  useEffect(() => {
+    if (!booting && protectedRoute && !authed) router.replace("/(auth)/login");
+  }, [authed, booting, protectedRoute, router]);
+
+  if (booting || (protectedRoute && !authed)) {
+    return <View style={{ flex: 1, backgroundColor: colors.surface }} />;
+  }
+  return <>{children}</>;
 }
 
 export default function RootLayout() {
@@ -44,19 +65,27 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <AuthProvider>
           <ToastProvider>
-            <PushBridge />
-            <View style={{ flex: 1, backgroundColor: colors.surface }}>
-              <StatusBar style="dark" />
-              <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="intro" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="onboarding" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen name="delivery/[id]" options={{ presentation: "card" }} />
-                <Stack.Screen name="notifications" options={{ presentation: "card" }} />
-              </Stack>
-            </View>
+            <NotificationProvider>
+              <OfferProvider>
+                <LocationTrackingProvider>
+                  <PushBridge />
+                  <SessionGate>
+                    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+                      <StatusBar style="dark" />
+                      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.surface } }}>
+                        <Stack.Screen name="index" />
+                        <Stack.Screen name="intro" />
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="onboarding" />
+                        <Stack.Screen name="(tabs)" />
+                        <Stack.Screen name="delivery/[id]" options={{ presentation: "card" }} />
+                        <Stack.Screen name="notifications" options={{ presentation: "card" }} />
+                      </Stack>
+                    </View>
+                  </SessionGate>
+                </LocationTrackingProvider>
+              </OfferProvider>
+            </NotificationProvider>
           </ToastProvider>
         </AuthProvider>
       </SafeAreaProvider>

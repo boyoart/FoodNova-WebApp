@@ -10,15 +10,19 @@ import { RiderApi } from "@/src/api/endpoints";
 import { useAuth } from "@/src/context/AuthContext";
 import { Button, Card, InfoRow, StatusPill } from "@/src/components/ui";
 import { asObject, pick } from "@/src/lib/normalize";
-import { colors, fonts, spacing, type } from "@/src/theme/tokens";
+import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 import { BUILD_IDENTITY } from "@/src/lib/build-identity";
+import { pickImage, toFormData, validateImageUpload } from "@/src/lib/image";
+import { useToast } from "@/src/context/ToastContext";
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { rider, refreshRider, signOut, approvalStatus } = useAuth();
+  const toast = useToast();
   const [profile, setProfile] = useState<Record<string, any>>({});
   const [notifPref, setNotifPref] = useState(true);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -40,7 +44,7 @@ export default function Profile() {
   const name = pick(p, ["full_name", "name", "first_name"], "Rider");
   const phone = pick(p, ["phone", "phone_number"], "--");
   const email = pick(p, ["email"], "--");
-  const photo = pick(p, ["profile_photo", "photo_url", "avatar", "selfie_url"], null);
+  const photo = pick(p, ["profile_photo_url", "profile_photo", "photo_url", "avatar", "selfie_url"], null);
   const vehicleType = pick(p, ["vehicle_type", "rider_type"], "--");
   const plate = pick(p, ["plate_number", "plate"], "--");
   const make = pick(p, ["vehicle_make"], "");
@@ -49,6 +53,36 @@ export default function Profile() {
   function onSignOut() {
     signOut();
     router.replace("/(auth)/login");
+  }
+
+  async function changePhoto(camera: boolean) {
+    const image = await pickImage(camera);
+    if (!image) return;
+    const validation = validateImageUpload(image, "Profile photo");
+    if (validation) return toast.show(validation, "warning");
+    setPhotoBusy(true);
+    try {
+      await RiderApi.uploadProfilePhoto(toFormData(image, "file"));
+      await Promise.all([load(), refreshRider()]);
+      toast.show("Profile photo updated", "success");
+    } catch (error: any) {
+      toast.show(String(error?.message || "Could not update profile photo"), "error");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function removePhoto() {
+    setPhotoBusy(true);
+    try {
+      await RiderApi.removeProfilePhoto();
+      await Promise.all([load(), refreshRider()]);
+      toast.show("Profile photo removed", "success");
+    } catch (error: any) {
+      toast.show(String(error?.message || "Could not remove profile photo"), "error");
+    } finally {
+      setPhotoBusy(false);
+    }
   }
 
   return (
@@ -66,6 +100,12 @@ export default function Profile() {
               <Text style={styles.avatarInitial}>{String(name).charAt(0).toUpperCase()}</Text>
             )}
           </View>
+          <View style={styles.photoActions}>
+            <TouchableOpacity disabled={photoBusy} style={styles.photoAction} onPress={() => changePhoto(true)}><Ionicons name="camera" size={18} color={colors.brandPrimary} /><Text style={styles.photoActionText}>Take photo</Text></TouchableOpacity>
+            <TouchableOpacity disabled={photoBusy} style={styles.photoAction} onPress={() => changePhoto(false)}><Ionicons name="images" size={18} color={colors.brandPrimary} /><Text style={styles.photoActionText}>Gallery</Text></TouchableOpacity>
+            {photo && <TouchableOpacity disabled={photoBusy} style={styles.photoAction} onPress={removePhoto}><Ionicons name="trash-outline" size={18} color={colors.error} /><Text style={[styles.photoActionText, { color: colors.error }]}>Remove</Text></TouchableOpacity>}
+          </View>
+          {photoBusy && <Text style={styles.photoStatus}>Updating photo…</Text>}
           <Text style={styles.name}>{String(name)}</Text>
           <StatusPill status={approvalStatus || "active"} testID="profile-status" />
         </Card>
@@ -144,6 +184,10 @@ const styles = StyleSheet.create({
   avatar: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.brandTertiary, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
   avatarInitial: { fontFamily: fonts.display, fontSize: type["3xl"], fontWeight: "700", color: colors.onBrandTertiary },
+  photoActions: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: spacing.sm },
+  photoAction: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary },
+  photoActionText: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "700", color: colors.brandPrimary },
+  photoStatus: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted },
   name: { fontFamily: fonts.display, fontSize: type["2xl"], fontWeight: "700", color: colors.onSurface },
   section: { fontFamily: fonts.display, fontSize: type.base, fontWeight: "700", color: colors.muted, marginTop: spacing.sm, textTransform: "uppercase", letterSpacing: 0.5 },
   settingRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: spacing.md },

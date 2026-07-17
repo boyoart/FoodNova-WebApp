@@ -140,6 +140,8 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
   const headingRef = useRef(0);
   const previousRider = useRef<LatLng | null>(null);
   const fittedOnce = useRef(false);
+  const lastRouteRequest = useRef<{ origin: LatLng; destination: LatLng; at: number } | null>(null);
+  const routeTotalMeters = useRef<number | null>(null);
   const initial = rider || pickup || customer || LAGOS;
   const riderRegion = useRef(
     new AnimatedRegion({
@@ -158,12 +160,23 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
   const destination = endpoints.length >= 2 ? endpoints[endpoints.length - 1] : null;
   const remainingMeters = useMemo(() => {
     if (!rider || !destination) return null;
-    if (displayPath.length >= 2) return pathDistance([rider, ...displayPath.slice(1)]);
+    if (route.length >= 2) {
+      let nearestIndex = 0;
+      let nearestDistance = Number.POSITIVE_INFINITY;
+      route.forEach((point, index) => {
+        const distance = distanceMeters(rider, point);
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+      return nearestDistance + pathDistance(route.slice(nearestIndex));
+    }
     return distanceMeters(rider, destination);
-  }, [destination, displayPath, rider]);
+  }, [destination, rider, route]);
   const totalMeters = useMemo(() => {
-    if (!displayPath.length || !destination) return null;
-    return Math.max(remainingMeters ?? 0, pathDistance(displayPath));
+    if (!destination) return null;
+    return routeTotalMeters.current ?? Math.max(remainingMeters ?? 0, pathDistance(displayPath));
   }, [destination, displayPath, remainingMeters]);
   const progress = useMemo(() => {
     if (!remainingMeters || !totalMeters || totalMeters <= 0) return 0;
@@ -178,7 +191,7 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
     () => (displayPath.length >= 2 ? displayPath : ([rider, pickup, customer].filter(Boolean) as LatLng[])),
     [displayPath, rider, pickup, customer]
   );
-  const routeKey = endpoints.map((p) => `${p.latitude},${p.longitude}`).join("|");
+  const stageKey = `${String(status || "").toLowerCase()}|${destination?.latitude || ""},${destination?.longitude || ""}`;
 
   useEffect(() => {
     console.log("TRACKING_MAP_INIT", {
@@ -226,21 +239,36 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
         setRoute([]);
         return;
       }
-      const next = await fetchRoute(endpoints[0], endpoints[endpoints.length - 1]).catch((error) => {
+      const origin = endpoints[0];
+      const routeDestination = endpoints[endpoints.length - 1];
+      const previous = lastRouteRequest.current;
+      const destinationChanged = !previous || distanceMeters(previous.destination, routeDestination) > 25;
+      const deviated = !previous || distanceMeters(previous.origin, origin) > 500;
+      const stale = !previous || Date.now() - previous.at > 60000;
+      if (!destinationChanged && !deviated && !stale && route.length >= 2) return;
+      lastRouteRequest.current = { origin, destination: routeDestination, at: Date.now() };
+      const next = await fetchRoute(origin, routeDestination).catch((error) => {
         console.log("TRACKING_ROUTE_ERROR", { error: String(error?.message || error) });
         return [];
       });
-      if (!cancelled) setRoute(next.length >= 2 ? next : endpoints);
+      if (!cancelled) {
+        const nextRoute = next.length >= 2 ? next : endpoints;
+        setRoute(nextRoute);
+        const nextTotal = pathDistance(nextRoute);
+        routeTotalMeters.current = routeTotalMeters.current === null ? nextTotal : Math.max(routeTotalMeters.current, nextTotal);
+      }
     }
     loadRoute();
     return () => {
       cancelled = true;
     };
-  }, [routeKey, endpoints]);
+  }, [endpoints, route]);
 
   useEffect(() => {
     fittedOnce.current = false;
-  }, [routeKey]);
+    routeTotalMeters.current = null;
+    lastRouteRequest.current = null;
+  }, [stageKey]);
 
   useEffect(() => {
     if (ref.current && fitPoints.length >= 2 && !fittedOnce.current) {
