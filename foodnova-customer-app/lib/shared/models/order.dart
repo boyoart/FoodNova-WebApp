@@ -1,3 +1,5 @@
+import '../delivery_status.dart' as delivery;
+
 class OrderSummary {
   const OrderSummary({
     required this.id,
@@ -71,21 +73,9 @@ class OrderSummary {
       '${raw['dispatch_status'] ?? raw['deliveryStatus'] ?? ''}';
   String get canonicalDeliveryStatus {
     final value = dispatchStatus.trim();
-    if (value.isNotEmpty) return value.toUpperCase();
-    final delivery = deliveryStatus.trim().toLowerCase();
-    final orderValue = status.trim().toLowerCase();
-    if (orderValue == 'delivered' || delivery == 'delivered') {
-      return 'DELIVERED';
-    }
-    if (delivery.contains('arrived')) return 'ARRIVED';
-    if (delivery.contains('in_transit') ||
-        delivery.contains('out_for_delivery') ||
-        delivery.contains('en_route')) {
-      return 'IN_TRANSIT';
-    }
-    if (delivery.contains('picked')) return 'PICKED_UP';
-    if (delivery.contains('assigned')) return 'ASSIGNED';
-    return 'NEW';
+    if (value.isNotEmpty) return delivery.canonicalDeliveryStatus(value);
+    final fallback = deliveryStatus.trim().isNotEmpty ? deliveryStatus : status;
+    return delivery.canonicalDeliveryStatus(fallback);
   }
 
   String get deliveryPin =>
@@ -111,6 +101,7 @@ class OrderSummary {
     final riderId = raw['rider_id'] ?? raw['delivery_worker_id'];
     final acceptedOrLater = {
       'ACCEPTED',
+      'ARRIVED_AT_PICKUP',
       'PICKED_UP',
       'IN_TRANSIT',
       'ARRIVED',
@@ -125,7 +116,7 @@ class OrderSummary {
   bool get isDeliveryTrackingVisible {
     final value = canonicalDeliveryStatus;
     if (isDelivered) return false;
-    return {'ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'ARRIVED'}.contains(value);
+    return delivery.isCustomerTrackingStage(delivery.deliveryStageFrom(value));
   }
 
   bool get riderArrived {
@@ -155,8 +146,7 @@ class OrderSummary {
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
     return OrderSummary(
-      id:
-          int.tryParse(
+      id: int.tryParse(
             '${json['id'] ?? json['order_id'] ?? json['orderId'] ?? json['_id'] ?? 0}',
           ) ??
           0,

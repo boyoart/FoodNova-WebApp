@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../../../core/network/api_client.dart';
+import '../../../shared/delivery_status.dart';
 import '../../../shared/models/order.dart';
 
 final ordersRepositoryProvider = Provider(
@@ -119,22 +120,15 @@ class RiderLocation {
 
     return RiderLocation(
       deliveryStatus:
-          '${json['delivery_status'] ?? json['deliveryStatus'] ?? ''}',
-      trackingVisible:
-          json['tracking_visible'] == true ||
+          '${json['dispatch_status'] ?? json['delivery_status'] ?? json['deliveryStatus'] ?? ''}',
+      trackingVisible: json['tracking_visible'] == true ||
           json['trackingVisible'] == true ||
-          {
-            'ACCEPTED',
-            'PICKED_UP',
-            'IN_TRANSIT',
-            'OUT_FOR_DELIVERY',
-            'ARRIVED',
-          }.contains(
-            '${json['delivery_status'] ?? json['deliveryStatus'] ?? ''}'
-                .toUpperCase(),
-          ),
-      trackingAvailable:
-          json['tracking_available'] == true ||
+          isCustomerTrackingStage(deliveryStageFrom(
+            json['dispatch_status'] ??
+                json['delivery_status'] ??
+                json['deliveryStatus'],
+          )),
+      trackingAvailable: json['tracking_available'] == true ||
           json['trackingAvailable'] == true,
       riderName: '${rider['name'] ?? ''}',
       riderPhone: '${rider['phone'] ?? ''}',
@@ -233,7 +227,8 @@ class RiderLocation {
         json['estimated_minutes'],
         json['duration_minutes'],
       ]),
-      lastUpdatedAt: '${rider['last_updated_at'] ?? json['updatedAt'] ?? ''}',
+      lastUpdatedAt:
+          '${rider['last_updated_at'] ?? location['updated_at'] ?? json['last_updated_at'] ?? json['updated_at'] ?? json['updatedAt'] ?? ''}',
       routePolyline: route,
     );
   }
@@ -351,7 +346,7 @@ class OrdersRepository {
           headers: {'Accept': 'application/pdf'},
         ),
       );
-    } on DioException catch (error) {
+    } on DioException {
       if (await file.exists() && await file.length() > 0) {
         return InvoiceFile(
           path: file.path,
@@ -359,17 +354,7 @@ class OrdersRepository {
           fromCache: true,
         );
       }
-      if (error.response?.statusCode == 404) {
-        response = await _dio.get<List<int>>(
-          '/api/orders/${order.id}/invoice',
-          options: Options(
-            responseType: ResponseType.bytes,
-            headers: {'Accept': 'application/pdf'},
-          ),
-        );
-      } else {
-        rethrow;
-      }
+      rethrow;
     }
 
     final bytes = _invoiceBytes(response.data);
@@ -386,20 +371,7 @@ class OrdersRepository {
   }
 
   Future<RiderLocation?> riderLocation(int orderId) async {
-    Response<dynamic> response;
-    try {
-      response = await _dio.get('/orders/$orderId/rider-location');
-    } on DioException catch (error) {
-      if (error.response?.statusCode == 404) {
-        try {
-          response = await _dio.get('/api/orders/$orderId/rider-location');
-        } on DioException {
-          throw Exception('Rider tracking temporarily unavailable.');
-        }
-      } else {
-        throw Exception('Rider tracking temporarily unavailable.');
-      }
-    }
+    final response = await _dio.get('/orders/$orderId/rider-location');
     final body = response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};
@@ -407,8 +379,8 @@ class OrdersRepository {
     final data = body['tracking'] is Map
         ? Map<String, dynamic>.from(body['tracking'])
         : body['data'] is Map
-        ? Map<String, dynamic>.from(body['data'])
-        : body;
+            ? Map<String, dynamic>.from(body['data'])
+            : body;
     if (data.isEmpty) return null;
     developer.log('TRACKING_PAYLOAD_PATH order=$orderId data=$data');
     return RiderLocation.fromJson(data);
@@ -446,9 +418,8 @@ class OrdersRepository {
   Future<File> _invoiceFile(OrderSummary order) async {
     final root = await getApplicationDocumentsDirectory();
     final directory = Directory(p.join(root.path, 'invoices'));
-    final code = order.orderCode.trim().isEmpty
-        ? '${order.id}'
-        : order.orderCode;
+    final code =
+        order.orderCode.trim().isEmpty ? '${order.id}' : order.orderCode;
     final safeCode = code.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
     return File(p.join(directory.path, 'foodnova_invoice_$safeCode.pdf'));
   }

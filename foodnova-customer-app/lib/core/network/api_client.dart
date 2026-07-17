@@ -53,9 +53,10 @@ final dioProvider = Provider<Dio>((ref) {
         final detail = error.response?.data is Map
             ? '${error.response?.data['detail'] ?? error.response?.data['message'] ?? ''}'
             : '';
-        if ((status == 401 || status == 403) &&
-            RegExp('removed|deactivated|suspended', caseSensitive: false)
-                .hasMatch(detail)) {
+        if (status == 401 ||
+            (status == 403 &&
+                RegExp('removed|deactivated|suspended', caseSensitive: false)
+                    .hasMatch(detail))) {
           await ref.read(sessionControllerProvider.notifier).clear();
         }
         handler.next(error);

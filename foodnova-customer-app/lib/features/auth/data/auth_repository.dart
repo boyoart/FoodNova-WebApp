@@ -30,7 +30,10 @@ class AuthRepository {
           response.data['success'] == true;
       if (!ok) throw ApiFailure('FoodNova backend health check failed.');
     } catch (error) {
-      throw ApiFailure(apiMessage(error));
+      throw ApiFailure(
+        apiMessage(error),
+        statusCode: error is DioException ? error.response?.statusCode : null,
+      );
     }
   }
 
@@ -61,7 +64,10 @@ class AuthRepository {
       await _syncPushToken();
       return user;
     } catch (error) {
-      throw ApiFailure(apiMessage(error));
+      throw ApiFailure(
+        apiMessage(error),
+        statusCode: error is DioException ? error.response?.statusCode : null,
+      );
     }
   }
 
@@ -72,7 +78,10 @@ class AuthRepository {
       final user = body is Map ? (body['user'] ?? body['data'] ?? body) : body;
       return Map<String, dynamic>.from(user as Map);
     } catch (error) {
-      throw ApiFailure(apiMessage(error));
+      throw ApiFailure(
+        apiMessage(error),
+        statusCode: error is DioException ? error.response?.statusCode : null,
+      );
     }
   }
 
@@ -85,8 +94,18 @@ class AuthRepository {
       _logAuthenticatedUser(user);
       await _syncPushToken();
       return user;
-    } catch (_) {
-      await _ref.read(sessionControllerProvider.notifier).clear();
+    } catch (error) {
+      if (error is ApiFailure && error.statusCode == 401) {
+        await _ref.read(sessionControllerProvider.notifier).clear();
+        return null;
+      }
+      final cached =
+          await _ref.read(sessionControllerProvider.notifier).cachedUser();
+      if (cached != null && cached.isNotEmpty) {
+        try {
+          return Map<String, dynamic>.from(jsonDecode(cached) as Map);
+        } catch (_) {}
+      }
       return null;
     }
   }

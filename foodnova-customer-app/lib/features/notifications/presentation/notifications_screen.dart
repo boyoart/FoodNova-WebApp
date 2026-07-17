@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/theme/colors.dart';
@@ -7,6 +8,7 @@ import '../../../core/theme/shadows.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/fn_shell.dart';
 import '../../../widgets/skeleton_box.dart';
+import '../../../services/notification_destination.dart';
 import '../data/notifications_repository.dart';
 
 class NotificationsScreen extends ConsumerWidget {
@@ -59,6 +61,10 @@ class NotificationsScreen extends ConsumerWidget {
             onRefresh: () async {
               ref.invalidate(notificationsProvider);
               ref.invalidate(unreadNotificationsProvider);
+              await Future.wait([
+                ref.read(notificationsProvider.future),
+                ref.read(unreadNotificationsProvider.future),
+              ]);
             },
             child: ListView(
               children: [
@@ -68,7 +74,7 @@ class NotificationsScreen extends ConsumerWidget {
                   for (final item in unread) ...[
                     _NotificationCard(
                       item: item,
-                      onTap: () => _markRead(context, ref, item),
+                      onTap: () => _open(context, ref, item),
                       onDelete: () => _delete(context, ref, item),
                     ),
                     const SizedBox(height: 10),
@@ -81,7 +87,7 @@ class NotificationsScreen extends ConsumerWidget {
                   for (final item in read) ...[
                     _NotificationCard(
                       item: item,
-                      onTap: () {},
+                      onTap: () => _open(context, ref, item),
                       onDelete: () => _delete(context, ref, item),
                     ),
                     const SizedBox(height: 10),
@@ -122,6 +128,13 @@ class NotificationsScreen extends ConsumerWidget {
             .showSnackBar(SnackBar(content: Text(apiMessage(error))));
       }
     }
+  }
+
+  Future<void> _open(
+      BuildContext context, WidgetRef ref, Map<String, dynamic> item) async {
+    await _markRead(context, ref, item);
+    if (!context.mounted) return;
+    context.push(resolveCustomerNotification(item).route);
   }
 
   Future<void> _delete(

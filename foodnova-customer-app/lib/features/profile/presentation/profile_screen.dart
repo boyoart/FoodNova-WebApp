@@ -506,9 +506,17 @@ Future<void> _showAvatarPicker(
                 onTap: () async {
                   if (sheetContext.mounted) Navigator.pop(sheetContext);
                   try {
-                    await ref
+                    final path = await ref
                         .read(profileAvatarControllerProvider.notifier)
                         .pick(ImageSource.camera, userKey: userKey);
+                    if (path == null) return;
+                    await ref
+                        .read(profileRepositoryProvider)
+                        .uploadAvatar(path);
+                    ref.invalidate(profileProvider);
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Profile photo updated.')),
+                    );
                   } catch (error) {
                     messenger.showSnackBar(
                       SnackBar(content: Text(apiMessage(error))),
@@ -522,9 +530,17 @@ Future<void> _showAvatarPicker(
                 onTap: () async {
                   if (sheetContext.mounted) Navigator.pop(sheetContext);
                   try {
-                    await ref
+                    final path = await ref
                         .read(profileAvatarControllerProvider.notifier)
                         .pick(ImageSource.gallery, userKey: userKey);
+                    if (path == null) return;
+                    await ref
+                        .read(profileRepositoryProvider)
+                        .uploadAvatar(path);
+                    ref.invalidate(profileProvider);
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Profile photo updated.')),
+                    );
                   } catch (error) {
                     messenger.showSnackBar(
                       SnackBar(content: Text(apiMessage(error))),

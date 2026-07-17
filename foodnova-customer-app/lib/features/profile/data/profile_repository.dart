@@ -112,6 +112,24 @@ class ProfileRepository {
     });
   }
 
+  Future<String> uploadAvatar(String path) async {
+    final form = FormData.fromMap({
+      'file': await MultipartFile.fromFile(path),
+    });
+    final response = await _dio.post('/profile/avatar', data: form);
+    final body = response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+    final nested = body['data'] is Map
+        ? Map<String, dynamic>.from(body['data'])
+        : <String, dynamic>{};
+    final url = '${body['avatar_url'] ?? nested['avatar_url'] ?? ''}'.trim();
+    if (url.isEmpty) {
+      throw ApiFailure('FoodNova did not return the uploaded profile photo.');
+    }
+    return AppConfig.resolveMediaUrl(url);
+  }
+
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,

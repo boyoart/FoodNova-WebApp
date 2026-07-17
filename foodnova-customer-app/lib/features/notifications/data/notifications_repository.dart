@@ -38,7 +38,7 @@ class NotificationsRepository {
   Future<void> registerFcmToken(String token) async {
     if (token.trim().isEmpty) return;
     debugPrint('FCM_REGISTER_REQUEST: /notifications/register-fcm-token');
-    debugPrint('FCM_REGISTER_TOKEN: ${token.trim()}');
+    debugPrint('FCM_REGISTER_TOKEN: present');
     final response =
         await _dio.post('/notifications/register-fcm-token', data: {
       'token': token.trim(),

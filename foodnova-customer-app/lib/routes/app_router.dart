@@ -20,11 +20,12 @@ import '../features/tracking/presentation/tracking_screen.dart';
 import '../core/state/session_controller.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final session = ref.watch(sessionControllerProvider);
   return GoRouter(
     initialLocation: '/',
     redirect: (_, state) {
-      final authenticated =
-          ref.read(sessionControllerProvider).valueOrNull == true;
+      if (session.isLoading && _requiresSession(state.uri.path)) return null;
+      final authenticated = session.valueOrNull == true;
       final path = state.uri.path;
       final authRoute = path == '/login' ||
           path == '/signup' ||

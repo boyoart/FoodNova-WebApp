@@ -55,6 +55,14 @@ class RealtimeService {
     });
   }
 
+  void unsubscribeFromOrder(int orderId) {
+    final socket = _socket;
+    if (socket == null) return;
+    socket.off('order:update:$orderId');
+    socket.off('rider:location:$orderId');
+    socket.emit('order:unsubscribe', {'order_id': orderId});
+  }
+
   void disconnect() {
     debugPrint('SOCKET_DISCONNECTED requested_by_app');
     _socket?.dispose();

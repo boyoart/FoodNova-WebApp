@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../config/app_config.dart';
 import '../../../core/network/api_client.dart';
 import '../../../shared/models/order.dart';
+import '../../../shared/delivery_status.dart';
 import '../../../services/notification_service.dart';
 import '../../../services/realtime_service.dart';
 import '../../../widgets/empty_state.dart';
@@ -40,7 +41,8 @@ class TrackingScreen extends ConsumerStatefulWidget {
   ConsumerState<TrackingScreen> createState() => _TrackingScreenState();
 }
 
-class _TrackingScreenState extends ConsumerState<TrackingScreen> {
+class _TrackingScreenState extends ConsumerState<TrackingScreen>
+    with WidgetsBindingObserver {
   _ReceiptFile? _selectedReceipt;
   bool _uploading = false;
   double _progress = 0;
@@ -52,14 +54,33 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     Future<void>.microtask(_subscribeRealtime);
+    _startRefreshTimer();
+    _pushRefreshSubscription = NotificationService.refreshStream.listen((_) {
+      _refreshLiveOrder();
+    });
+  }
+
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) => _refreshLiveOrder(),
     );
-    _pushRefreshSubscription = NotificationService.refreshStream.listen((_) {
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startRefreshTimer();
       _refreshLiveOrder();
-    });
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _refreshTimer?.cancel();
+    }
   }
 
   Future<void> _subscribeRealtime() async {
@@ -89,8 +110,10 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
     _pushRefreshSubscription?.cancel();
+    ref.read(realtimeServiceProvider).unsubscribeFromOrder(widget.orderId);
     super.dispose();
   }
 
@@ -121,6 +144,11 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
   }
 
   Future<void> _uploadReceipt() async {
+    final current = ref.read(orderDetailProvider(widget.orderId)).valueOrNull;
+    if (current?.paymentConfirmed == true) {
+      _toast('Payment is already confirmed. Receipt upload is closed.');
+      return;
+    }
     final receipt = _selectedReceipt;
     if (receipt == null) {
       _toast('Choose a receipt image or PDF first.');
@@ -146,7 +174,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
       ref.invalidate(ordersProvider);
       _toast('Receipt uploaded. FoodNova will review your payment.');
     } catch (error) {
-      _toast('Receipt upload failed: $error');
+      _toast('Receipt upload failed: ${apiMessage(error)}');
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -202,7 +230,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen> {
           padding: const EdgeInsets.all(24),
           child: EmptyState(
             title: 'Order unavailable',
-            message: error.toString(),
+            message: apiMessage(error),
             icon: Icons.wifi_off_rounded,
           ),
         ),
@@ -1138,8 +1166,9 @@ class _RiderTrackingCard extends StatelessWidget {
               data.riderName.isEmpty ? order.riderName : data.riderName;
           final riderPhone =
               data.riderPhone.isEmpty ? order.riderPhone : data.riderPhone;
-          final riderPhoto =
-              data.riderPhotoUrl.isEmpty ? order.riderPhotoUrl : data.riderPhotoUrl;
+          final riderPhoto = data.riderPhotoUrl.isEmpty
+              ? order.riderPhotoUrl
+              : data.riderPhotoUrl;
           final vehicleType = data.vehicleType.isEmpty
               ? order.riderVehicleType
               : data.vehicleType;
@@ -1364,6 +1393,7 @@ class _TrackingStageTimeline extends StatelessWidget {
 
   static const _stages = [
     ('ACCEPTED', 'Accepted', Icons.assignment_turned_in_rounded),
+    ('ARRIVED_AT_PICKUP', 'At Pickup', Icons.storefront_rounded),
     ('PICKED_UP', 'Picked Up', Icons.shopping_bag_rounded),
     ('IN_TRANSIT', 'On Route', Icons.delivery_dining_rounded),
     ('ARRIVED', 'Arrived', Icons.location_on_rounded),
@@ -2870,11 +2900,7 @@ String _formatEta(int? minutes) {
 }
 
 String _normalizeTrackingStatus(String status) {
-  final value = status.trim().toUpperCase();
-  if (value == 'OUT_FOR_DELIVERY' || value == 'EN_ROUTE') return 'IN_TRANSIT';
-  if (value == 'PICKED' || value == 'COLLECTED') return 'PICKED_UP';
-  if (value.isEmpty || value == 'ASSIGNED') return 'ACCEPTED';
-  return value;
+  return canonicalDeliveryStatus(status);
 }
 
 String _trackingStageLabel(String status) {
@@ -2885,6 +2911,8 @@ String _trackingStageLabel(String status) {
       return 'Rider on route';
     case 'PICKED_UP':
       return 'Order picked up';
+    case 'ARRIVED_AT_PICKUP':
+      return 'Rider at pickup';
     default:
       return 'Live tracking';
   }

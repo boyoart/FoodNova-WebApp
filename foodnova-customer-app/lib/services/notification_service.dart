@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../firebase_options.dart';
+import 'notification_destination.dart';
 
 @pragma('vm:entry-point')
 Future<void> foodNovaFirebaseMessagingBackgroundHandler(
@@ -242,11 +243,7 @@ class NotificationService {
   }
 
   static String _targetFromData(Map<String, dynamic> data) {
-    final orderId = '${data['order_id'] ?? data['orderId'] ?? ''}'.trim();
-    if (orderId.isNotEmpty && orderId != 'null' && orderId != '0') {
-      return '/tracking/$orderId';
-    }
-    return _normalizeTarget('${data['click_action'] ?? ''}');
+    return resolveCustomerNotification(data).route;
   }
 
   static String _normalizeTarget(String? target) {
