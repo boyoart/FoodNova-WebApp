@@ -16,7 +16,7 @@ class FoodNovaLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final targetWidth = width ?? height * (tightCrop ? 2.34 : 4);
+    final targetWidth = width ?? height;
     final fallback = Icon(
       Icons.shopping_basket_rounded,
       size: height * .72,
@@ -24,8 +24,8 @@ class FoodNovaLogo extends StatelessWidget {
     );
     final logoImage = Image.asset(
       'assets/brand/foodnova-logo.png',
-      width: tightCrop ? 1024 : targetWidth,
-      height: tightCrop ? 1024 : height,
+      width: targetWidth,
+      height: height,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.high,
       errorBuilder: (_, __, ___) => fallback,
@@ -34,33 +34,7 @@ class FoodNovaLogo extends StatelessWidget {
     return SizedBox(
       width: targetWidth,
       height: height,
-      child: tightCrop
-          ? FittedBox(
-              fit: BoxFit.contain,
-              alignment: Alignment.centerLeft,
-              child: SizedBox(
-                width: 757,
-                height: 324,
-                child: Stack(
-                  clipBehavior: Clip.hardEdge,
-                  children: [
-                    Positioned(
-                      left: -128,
-                      top: -310,
-                      child: logoImage,
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : Image.asset(
-              'assets/brand/foodnova-logo.png',
-              width: targetWidth,
-              height: height,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (_, __, ___) => fallback,
-            ),
+      child: logoImage,
     );
   }
 }

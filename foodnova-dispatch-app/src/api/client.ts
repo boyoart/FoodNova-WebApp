@@ -43,6 +43,8 @@ type Options = {
   signal?: AbortSignal;
 };
 
+const REQUEST_TIMEOUT_MS = 15_000;
+
 export async function api<T = any>(path: string, opts: Options = {}): Promise<T> {
   const { method = "GET", body, auth = true, isForm = false, signal } = opts;
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -68,16 +70,32 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
   }
 
   let res: Response;
+  const timeoutController = signal ? null : new AbortController();
+  const timeout = timeoutController
+    ? setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
+    : null;
   try {
     if (shouldTrace) {
       console.log("DISPATCH_API_REQUEST", { method, path, auth });
     }
-    res = await fetch(`${BASE_URL}${path}`, { method, headers, body: payload, signal });
+    res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      body: payload,
+      signal: signal ?? timeoutController?.signal,
+    });
   } catch (e: any) {
     if (shouldTrace) {
       console.log("DISPATCH_API_NETWORK_ERROR", { method, path, error: String(e?.message || e) });
     }
-    throw new ApiError(e?.message || "Network error. Check your connection.", 0, null);
+    const timedOut = e?.name === "AbortError" && !signal;
+    throw new ApiError(
+      timedOut ? "Request timed out. Check your connection." : e?.message || "Network error. Check your connection.",
+      0,
+      null
+    );
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 
   const text = await res.text();

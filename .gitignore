@@ -86,6 +86,7 @@ android-sdk/
 **/.gradle/
 **/.idea/
 **/local.properties
+**/ios/Flutter/Maps.xcconfig
 **/build/
 **/build-debug.log
 **/analysis.txt

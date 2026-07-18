@@ -109,15 +109,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let active = true;
     (async () => {
-      const token = await loadToken();
-      if (token) {
-        setAuthed(true);
-        await refreshRider();
+      try {
+        const token = await loadToken();
+        if (token && active) {
+          setAuthed(true);
+          await refreshRider();
+        }
+      } catch (error) {
+        console.log("DISPATCH_SESSION_RESTORE_FAILED", String(error));
+        if (active) {
+          setAuthed(false);
+          setRider(null);
+        }
+      } finally {
+        if (active) setBooting(false);
       }
-      setBooting(false);
     })();
-  }, [refreshRider]);
+    return () => {
+      active = false;
+    };
+  }, [refreshRider, setRider]);
 
   return (
     <AuthContext.Provider

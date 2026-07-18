@@ -19,7 +19,7 @@ import { colors } from "@/src/theme/tokens";
 import { logBuildIdentity } from "@/src/lib/build-identity";
 
 LogBox.ignoreAllLogs(true);
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 // Runs inside AuthProvider so it can register the FCM token for the signed-in rider.
 function PushBridge() {
@@ -55,7 +55,7 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync();
+    if (ready) SplashScreen.hideAsync().catch(() => undefined);
   }, [ready]);
 
   if (!ready) return null;

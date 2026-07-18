@@ -11,9 +11,6 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.foodnova.dispatch",
-      "config": {
-        "googleMapsApiKey": "AIzaSyDgsBi_YK8BZeIbQsaClGXdqVaGr6Q9NQk"
-      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Share your live location for delivery tracking",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Track deliveries in the background while on the road",
@@ -43,11 +40,6 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.RECORD_AUDIO"
       ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyDgsBi_YK8BZeIbQsaClGXdqVaGr6Q9NQk"
-        }
-      }
     },
     "web": {
       "bundler": "metro",

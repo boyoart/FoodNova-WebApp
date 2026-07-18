@@ -1,0 +1,2 @@
+// Copy to Maps.xcconfig (git-ignored) or provide this build setting in CI.
+GOOGLE_MAPS_API_KEY=your_restricted_google_maps_ios_key
