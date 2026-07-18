@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
@@ -61,7 +62,7 @@ class AuthRepository {
       await _ref.read(appSecurityServiceProvider).rememberToken(token);
       final user = await _cacheCurrentUser(fallback: responseUser);
       _logAuthenticatedUser(user);
-      await _syncPushToken();
+      _startPushSync();
       return user;
     } catch (error) {
       throw ApiFailure(
@@ -90,9 +91,11 @@ class AuthRepository {
     final hasToken = _ref.read(sessionControllerProvider).valueOrNull ?? false;
     if (!hasToken) return null;
     try {
-      final user = await _cacheCurrentUser();
+      final user = await _cacheCurrentUser().timeout(
+        const Duration(seconds: 8),
+      );
       _logAuthenticatedUser(user);
-      await _syncPushToken();
+      _startPushSync();
       return user;
     } catch (error) {
       if (error is ApiFailure && error.statusCode == 401) {
@@ -130,7 +133,7 @@ class AuthRepository {
         await _ref.read(appSecurityServiceProvider).rememberToken(token);
         final user = await _cacheCurrentUser();
         _logAuthenticatedUser(user);
-        await _syncPushToken();
+        _startPushSync();
       }
     } catch (error) {
       throw ApiFailure(apiMessage(error));
@@ -155,7 +158,7 @@ class AuthRepository {
     try {
       final user = await _cacheCurrentUser();
       _logAuthenticatedUser(user);
-      await _syncPushToken();
+      _startPushSync();
       return user;
     } catch (_) {
       await _ref.read(sessionControllerProvider.notifier).clear();
@@ -219,5 +222,13 @@ class AuthRepository {
       debugPrint('FCM_REGISTER_FAILED: $error');
       // Push registration must never block login or signup.
     }
+  }
+
+  void _startPushSync() {
+    unawaited(
+      _syncPushToken().timeout(const Duration(seconds: 6)).catchError((error) {
+        debugPrint('[FoodNova Push] optional token sync skipped: $error');
+      }),
+    );
   }
 }

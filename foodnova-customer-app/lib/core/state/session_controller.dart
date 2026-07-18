@@ -5,7 +5,7 @@ final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 
 final sessionControllerProvider =
     StateNotifierProvider<SessionController, AsyncValue<bool>>((ref) {
-  return SessionController(ref.watch(secureStorageProvider))..restore();
+  return SessionController(ref.watch(secureStorageProvider));
 });
 
 class SessionController extends StateNotifier<AsyncValue<bool>> {

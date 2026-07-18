@@ -30,6 +30,7 @@ Future<void> foodNovaFirebaseMessagingBackgroundHandler(
 class NotificationService {
   static bool _bootstrapped = false;
   static bool _routerAttached = false;
+  static bool _firebaseNavigationAttached = false;
   static bool _firebaseReady = false;
   static bool _localNotificationsReady = false;
   static bool _pendingNotificationNavigation = false;
@@ -107,6 +108,7 @@ class NotificationService {
         _showForegroundNotification(message);
         _emitRefresh();
       });
+      _attachFirebaseNavigationListeners();
     } catch (error) {
       // Firebase options are environment-specific and will be wired during Android release setup.
       debugPrint('[FoodNova Push] bootstrap skipped: $error');
@@ -118,7 +120,7 @@ class NotificationService {
     try {
       final token = await FirebaseMessaging.instance.getToken();
       debugPrint(
-          'FCM_TOKEN: ${token == null || token.isEmpty ? 'missing' : token}');
+          'FCM_TOKEN: ${token == null || token.isEmpty ? 'missing' : 'present'}');
       return token;
     } catch (error) {
       debugPrint('[FoodNova Push] token unavailable: $error');
@@ -190,7 +192,18 @@ class NotificationService {
       _pendingLocalPayload = null;
       _routeFromPayload(router, payload);
     }
-    if (!_firebaseReady || Firebase.apps.isEmpty) return;
+    _attachFirebaseNavigationListeners();
+  }
+
+  static void _attachFirebaseNavigationListeners() {
+    final router = _router;
+    if (router == null ||
+        _firebaseNavigationAttached ||
+        !_firebaseReady ||
+        Firebase.apps.isEmpty) {
+      return;
+    }
+    _firebaseNavigationAttached = true;
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
       _emitRefresh();
       _routeFromMessage(router, message);

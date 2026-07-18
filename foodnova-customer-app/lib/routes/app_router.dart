@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -19,11 +20,20 @@ import '../features/profile/presentation/profile_screen.dart';
 import '../features/tracking/presentation/tracking_screen.dart';
 import '../core/state/session_controller.dart';
 
+final _routerRefreshProvider = Provider<_RouterRefresh>((ref) {
+  final refresh = _RouterRefresh();
+  ref.listen(sessionControllerProvider, (_, __) => refresh.notify());
+  ref.onDispose(refresh.dispose);
+  return refresh;
+});
+
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final session = ref.watch(sessionControllerProvider);
-  return GoRouter(
+  final refresh = ref.watch(_routerRefreshProvider);
+  final router = GoRouter(
     initialLocation: '/',
+    refreshListenable: refresh,
     redirect: (_, state) {
+      final session = ref.read(sessionControllerProvider);
       if (session.isLoading && _requiresSession(state.uri.path)) return null;
       final authenticated = session.valueOrNull == true;
       final path = state.uri.path;
@@ -99,7 +109,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           builder: (_, __) => const AdminGuard(child: AdminSettingsScreen())),
     ],
   );
+  ref.onDispose(router.dispose);
+  return router;
 });
+
+class _RouterRefresh extends ChangeNotifier {
+  void notify() => notifyListeners();
+}
 
 bool _requiresSession(String path) {
   return path == '/checkout' ||

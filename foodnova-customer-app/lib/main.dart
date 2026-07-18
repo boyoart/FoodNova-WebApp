@@ -20,16 +20,33 @@ Future<void> main() async {
     FlutterError.onError = (details) {
       FlutterError.presentError(details);
     };
-    final firebaseReady = await _initializeFirebase();
-    await NotificationService.bootstrap(firebaseReady: firebaseReady);
     runApp(ProviderScope(
       overrides: const [],
       child: const _FoodNovaBootstrap(),
     ));
+    unawaited(_initializeOptionalServices());
   }, (error, stack) {
     debugPrint('[FoodNova Uncaught] $error');
     debugPrintStack(stackTrace: stack);
   });
+}
+
+Future<void> _initializeOptionalServices() async {
+  var firebaseReady = false;
+  try {
+    firebaseReady = await _initializeFirebase().timeout(
+      const Duration(seconds: 5),
+    );
+  } catch (error) {
+    debugPrint('[FoodNova Startup] optional Firebase timed out: $error');
+  }
+  try {
+    await NotificationService.bootstrap(firebaseReady: firebaseReady).timeout(
+      const Duration(seconds: 6),
+    );
+  } catch (error) {
+    debugPrint('[FoodNova Startup] optional notifications skipped: $error');
+  }
 }
 
 class _FoodNovaBootstrap extends ConsumerStatefulWidget {
