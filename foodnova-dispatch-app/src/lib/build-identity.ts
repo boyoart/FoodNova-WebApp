@@ -23,5 +23,10 @@ export const BUILD_IDENTITY = Object.freeze({
 });
 
 export function logBuildIdentity() {
-  console.log("FOODNOVA_DISPATCH_BUILD_IDENTITY", BUILD_IDENTITY);
+  if (!__DEV__) return;
+  console.log("FOODNOVA_DISPATCH_BUILD_IDENTITY", {
+    appVersion: BUILD_IDENTITY.appVersion,
+    buildNumber: BUILD_IDENTITY.buildNumber,
+    commit: BUILD_IDENTITY.commit,
+  });
 }

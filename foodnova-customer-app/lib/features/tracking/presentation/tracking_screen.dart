@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,7 @@ import '../../../widgets/empty_state.dart';
 import '../../../widgets/primary_button.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../../orders/data/orders_repository.dart';
+import 'tracking_camera_policy.dart';
 
 final orderDetailProvider = FutureProvider.family<OrderSummary, int>((ref, id) {
   return ref.watch(ordersRepositoryProvider).order(id);
@@ -1881,6 +1883,7 @@ class _TrackingMap extends StatefulWidget {
 class _TrackingMapState extends State<_TrackingMap> {
   GoogleMapController? _controller;
   LatLng? _previousRiderPoint;
+  final _cameraPolicy = TrackingCameraPolicy();
 
   @override
   void initState() {
@@ -1900,11 +1903,14 @@ class _TrackingMapState extends State<_TrackingMap> {
   void didUpdateWidget(covariant _TrackingMap oldWidget) {
     super.didUpdateWidget(oldWidget);
     _previousRiderPoint = oldWidget.riderPoint;
-    if (oldWidget.riderPoint != widget.riderPoint ||
-        oldWidget.pickupPoint != widget.pickupPoint ||
+    final destinationChanged = oldWidget.pickupPoint != widget.pickupPoint ||
         oldWidget.customerPoint != widget.customerPoint ||
-        oldWidget.routeDestinationPoint != widget.routeDestinationPoint) {
+        oldWidget.routeDestinationPoint != widget.routeDestinationPoint;
+    if (destinationChanged) {
       _fitBounds();
+    } else if (_cameraPolicy.followingRider &&
+        oldWidget.riderPoint != widget.riderPoint) {
+      _followRider();
     }
   }
 
@@ -1932,6 +1938,7 @@ class _TrackingMapState extends State<_TrackingMap> {
       debugPrint(
         'TRACKING_CAMERA_MOVED target=${widget.riderPoint.latitude},${widget.riderPoint.longitude} zoom=15',
       );
+      _cameraPolicy.beginProgrammaticMove();
       await controller.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(target: widget.riderPoint, zoom: 15),
@@ -1953,6 +1960,7 @@ class _TrackingMapState extends State<_TrackingMap> {
         debugPrint(
           'TRACKING_CAMERA_MOVED target=${widget.riderPoint.latitude},${widget.riderPoint.longitude} zoom=16',
         );
+        _cameraPolicy.beginProgrammaticMove();
         await controller.animateCamera(
           CameraUpdate.newCameraPosition(
             CameraPosition(target: widget.riderPoint, zoom: 16),
@@ -1966,6 +1974,7 @@ class _TrackingMapState extends State<_TrackingMap> {
       debugPrint(
         'TRACKING_CAMERA_MOVED bounds=$south,$west,$north,$east padding=56',
       );
+      _cameraPolicy.beginProgrammaticMove();
       await controller.animateCamera(
         CameraUpdate.newLatLngBounds(
           LatLngBounds(
@@ -1978,6 +1987,18 @@ class _TrackingMapState extends State<_TrackingMap> {
     } catch (error) {
       debugPrint('TRACK_RIDER_MAP_FIT_ERROR $error');
     }
+  }
+
+  Future<void> _followRider() async {
+    final controller = _controller;
+    if (controller == null) return;
+    _cameraPolicy.beginProgrammaticMove();
+    await controller.animateCamera(CameraUpdate.newLatLng(widget.riderPoint));
+  }
+
+  Future<void> _recenter() async {
+    setState(_cameraPolicy.resumeFollowing);
+    await _fitBounds();
   }
 
   @override
@@ -2059,19 +2080,50 @@ class _TrackingMapState extends State<_TrackingMap> {
       'TRACKING_POLYLINE_CREATED count=${polylines.length} '
       'points=${widget.routePoints.length}',
     );
-    return GoogleMap(
-      initialCameraPosition:
-          CameraPosition(target: widget.riderPoint, zoom: 13),
-      markers: markers,
-      polylines: polylines,
-      zoomControlsEnabled: false,
-      myLocationButtonEnabled: false,
-      onMapCreated: (controller) {
-        debugPrint('TRACKING_MAP_CREATED');
-        debugPrint('TRACKING_MAP_READY');
-        _controller = controller;
-        _fitBounds();
-      },
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GoogleMap(
+            initialCameraPosition:
+                CameraPosition(target: widget.riderPoint, zoom: 13),
+            markers: markers,
+            polylines: polylines,
+            scrollGesturesEnabled: true,
+            zoomGesturesEnabled: true,
+            rotateGesturesEnabled: true,
+            tiltGesturesEnabled: true,
+            zoomControlsEnabled: false,
+            myLocationButtonEnabled: false,
+            gestureRecognizers: <Factory<OneSequenceGestureRecognizer>>{
+              Factory<EagerGestureRecognizer>(EagerGestureRecognizer.new),
+            },
+            onCameraMoveStarted: () {
+              final wasFollowing = _cameraPolicy.followingRider;
+              _cameraPolicy.cameraMoveStarted();
+              if (wasFollowing != _cameraPolicy.followingRider) setState(() {});
+            },
+            onCameraIdle: _cameraPolicy.cameraIdle,
+            onMapCreated: (controller) {
+              debugPrint('TRACKING_MAP_CREATED');
+              debugPrint('TRACKING_MAP_READY');
+              _controller = controller;
+              _fitBounds();
+            },
+          ),
+        ),
+        Positioned(
+          right: 14,
+          bottom: 14,
+          child: FloatingActionButton.small(
+            heroTag: null,
+            tooltip: 'Recenter map',
+            onPressed: _recenter,
+            child: Icon(_cameraPolicy.followingRider
+                ? Icons.gps_fixed_rounded
+                : Icons.gps_not_fixed_rounded),
+          ),
+        ),
+      ],
     );
   }
 }

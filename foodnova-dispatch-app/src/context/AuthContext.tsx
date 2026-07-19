@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshRider = useCallback(async (): Promise<Rider> => {
+    startupLog("profile_request_started");
     try {
       const [data, onboarding] = await Promise.all([RiderApi.me(), refreshOnboarding()]);
       // /delivery/me returns useful fields at the TOP level (approval_status,
@@ -80,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRider(r);
       setAuthed(true);
       setBootError(null);
+      startupLog("profile_request_completed");
       return r;
     } catch (error) {
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
@@ -94,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           reason: error instanceof ApiError && error.status === 0 ? "network" : "service_error",
         });
       }
+      startupLog("profile_request_failed");
       return null;
     }
   }, [refreshOnboarding, setRider]);
@@ -138,7 +141,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBootError(null);
     startupLog("restore_started");
     try {
+      startupLog("secure_store_read_started");
       const token = await withTimeout(loadToken(), 3_000, "FN-STARTUP-STORAGE-READ");
+      startupLog("secure_store_read_completed");
       if (!token) {
         setAuthed(false);
         setRider(null);
@@ -149,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const restored = await refreshRider();
       if (restored) startupLog("session_restored", { status: deriveApproval(restored) || "incomplete" });
     } catch (error) {
+      startupLog("secure_store_read_failed");
       setBootError("FoodNova could not restore the local session.");
       startupLog("restore_failed", { code: String(error).includes("FN-") ? String(error) : "FN-STARTUP-RESTORE" });
     } finally {
