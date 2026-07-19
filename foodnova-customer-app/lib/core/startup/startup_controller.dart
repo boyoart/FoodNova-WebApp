@@ -54,6 +54,38 @@ class StartupController extends StateNotifier<StartupState> {
 
   final Ref _ref;
   Future<void>? _activeResolution;
+  final Set<Timer> _timeoutTimers = {};
+  bool _disposed = false;
+
+  Future<T> _bounded<T>(
+    Future<T> operation,
+    Duration duration, {
+    T Function()? onTimeout,
+  }) {
+    final completer = Completer<T>();
+    late final Timer timer;
+    timer = Timer(duration, () {
+      _timeoutTimers.remove(timer);
+      if (completer.isCompleted) return;
+      if (onTimeout != null) {
+        completer.complete(onTimeout());
+      } else {
+        completer
+            .completeError(TimeoutException('Startup operation timed out'));
+      }
+    });
+    _timeoutTimers.add(timer);
+    operation.then((value) {
+      timer.cancel();
+      _timeoutTimers.remove(timer);
+      if (!completer.isCompleted) completer.complete(value);
+    }, onError: (Object error, StackTrace stack) {
+      timer.cancel();
+      _timeoutTimers.remove(timer);
+      if (!completer.isCompleted) completer.completeError(error, stack);
+    });
+    return completer.future;
+  }
 
   Future<void> resolve({bool retry = false}) {
     if (!retry && state.isTerminal) return Future.value();
@@ -65,32 +97,34 @@ class StartupController extends StateNotifier<StartupState> {
   }
 
   Future<void> _resolve() async {
+    if (_disposed) return;
     state = const StartupState(phase: StartupPhase.restoringSession);
     debugPrint('CUSTOMER_STARTUP_PHASE=restoring_session');
     try {
       final session = _ref.read(sessionControllerProvider.notifier);
-      final savedToken = await session.token().timeout(_storageTimeout);
+      final savedToken = await _bounded(session.token(), _storageTimeout);
       final hadSavedSession = savedToken != null && savedToken.isNotEmpty;
 
       Map<String, dynamic>? user;
       try {
-        user = await _ref
-            .read(authRepositoryProvider)
-            .restoreSession()
-            .timeout(_sessionTimeout);
+        user = await _bounded(
+          _ref.read(authRepositoryProvider).restoreSession(),
+          _sessionTimeout,
+        );
       } on TimeoutException {
         debugPrint('CUSTOMER_STARTUP_SESSION=timeout');
       }
 
       if (user == null && hadSavedSession) {
-        await session.clear().timeout(_storageTimeout);
+        await _bounded(session.clear(), _storageTimeout);
       }
       final guest = hadSavedSession
           ? false
-          : await session.isGuest().timeout(
-                _storageTimeout,
-                onTimeout: () => false,
-              );
+          : await _bounded(
+              session.isGuest(),
+              _storageTimeout,
+              onTimeout: () => false,
+            );
       final destination = startupDestination(
         authenticatedUser: user,
         hadSavedSession: hadSavedSession,
@@ -100,17 +134,31 @@ class StartupController extends StateNotifier<StartupState> {
         'CUSTOMER_STARTUP_SESSION=${user != null ? 'authenticated' : hadSavedSession ? 'invalid_or_unavailable' : guest ? 'guest' : 'none'}',
       );
       debugPrint('CUSTOMER_STARTUP_DESTINATION=$destination');
-      state = StartupState(
-        phase: StartupPhase.ready,
-        destination: destination,
-      );
+      if (!_disposed) {
+        state = StartupState(
+          phase: StartupPhase.ready,
+          destination: destination,
+        );
+      }
     } catch (error, stack) {
       debugPrint('CUSTOMER_STARTUP_FAILED=$error');
       debugPrintStack(stackTrace: stack);
-      state = const StartupState(
-        phase: StartupPhase.failed,
-        error: 'FoodNova could not restore this device session.',
-      );
+      if (!_disposed) {
+        state = const StartupState(
+          phase: StartupPhase.failed,
+          error: 'FoodNova could not restore this device session.',
+        );
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    for (final timer in _timeoutTimers) {
+      timer.cancel();
+    }
+    _timeoutTimers.clear();
+    super.dispose();
   }
 }

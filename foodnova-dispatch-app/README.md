@@ -10,6 +10,19 @@ Copy `.env.example` to `.env` and provide a platform-restricted Maps key:
 EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_restricted_maps_key
 ```
 
+The checked-in Android project reads the same variable directly, so a clean
+CMD build does not require another Expo prebuild. In CMD, set it for the current
+shell before invoking Gradle:
+
+```bat
+set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_restricted_maps_key
+```
+
+For store signing, create the git-ignored `android/key.properties` with
+`storeFile`, `storePassword`, `keyAlias`, and `keyPassword`. Without it, Gradle
+uses Android's standard debug signing so both debug and locally installable
+release APK commands still complete from a clean checkout.
+
 Expo injects this value into Android and iOS native Maps configuration during
 prebuild. A populated `.env` is ignored and must never be committed.
 

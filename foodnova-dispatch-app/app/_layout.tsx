@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { LogBox, View } from "react-native";
+import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -19,7 +19,6 @@ import { colors } from "@/src/theme/tokens";
 import { logBuildIdentity } from "@/src/lib/build-identity";
 import { STARTUP_WATCHDOG_MS, startupLog } from "@/src/lib/startup";
 
-LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 // Runs inside AuthProvider so it can register the FCM token for the signed-in rider.

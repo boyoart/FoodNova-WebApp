@@ -70,10 +70,11 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
   }
 
   let res: Response;
-  const timeoutController = signal ? null : new AbortController();
-  const timeout = timeoutController
-    ? setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT_MS)
-    : null;
+  const requestController = new AbortController();
+  const abortFromCaller = () => requestController.abort();
+  if (signal?.aborted) requestController.abort();
+  else signal?.addEventListener("abort", abortFromCaller, { once: true });
+  const timeout = setTimeout(() => requestController.abort(), REQUEST_TIMEOUT_MS);
   try {
     if (shouldTrace) {
       console.log("DISPATCH_API_REQUEST", { method, path, auth });
@@ -82,20 +83,21 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
       method,
       headers,
       body: payload,
-      signal: signal ?? timeoutController?.signal,
+      signal: requestController.signal,
     });
   } catch (e: any) {
     if (shouldTrace) {
       console.log("DISPATCH_API_NETWORK_ERROR", { method, path, error: String(e?.message || e) });
     }
-    const timedOut = e?.name === "AbortError" && !signal;
+    const timedOut = e?.name === "AbortError" && !signal?.aborted;
     throw new ApiError(
       timedOut ? "Request timed out. Check your connection." : e?.message || "Network error. Check your connection.",
       0,
       null
     );
   } finally {
-    if (timeout) clearTimeout(timeout);
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromCaller);
   }
 
   const text = await res.text();
@@ -108,7 +110,7 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
 
   if (!res.ok) {
     if (shouldTrace) {
-      console.log("DISPATCH_API_ERROR_RESPONSE", { method, path, status: res.status, body: data });
+      console.log("DISPATCH_API_ERROR_RESPONSE", { method, path, status: res.status });
     }
     const msg =
       (data && (data.detail || data.message || data.error)) ||
@@ -117,7 +119,7 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
   }
 
   if (shouldTrace) {
-    console.log("DISPATCH_API_RESPONSE", { method, path, status: res.status, body: data });
+    console.log("DISPATCH_API_RESPONSE", { method, path, status: res.status });
   }
   return data as T;
 }

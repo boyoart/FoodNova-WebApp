@@ -66,7 +66,6 @@ export const AuthApi = {
           body: { phone_number: identifier, password },
         });
     const token = extractToken(data);
-    if (token) await setToken(token);
     return { data, token, isEmail };
   },
 
@@ -76,7 +75,6 @@ export const AuthApi = {
     } catch {
       /* ignore */
     }
-    await setToken(null);
   },
 
   changePassword: (current_password: string, new_password: string) =>

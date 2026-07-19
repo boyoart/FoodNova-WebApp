@@ -50,9 +50,12 @@ export default function Profile() {
   const make = pick(p, ["vehicle_make"], "");
   const model = pick(p, ["vehicle_model"], "");
 
-  function onSignOut() {
-    signOut();
-    router.replace("/(auth)/login");
+  async function onSignOut() {
+    try {
+      await signOut();
+    } finally {
+      router.replace("/(auth)/login");
+    }
   }
 
   async function changePhoto(camera: boolean) {

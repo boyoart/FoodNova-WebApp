@@ -14,6 +14,7 @@ const adminToolRoles = {
 };
 
 String normalizeAccountRole(Object? value) {
+  if (value == null) return customerRole;
   final role = '$value'.trim().toLowerCase().replaceAll('-', '_');
   return role.isEmpty ? customerRole : role;
 }

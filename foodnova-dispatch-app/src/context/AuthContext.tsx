@@ -111,20 +111,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await AuthApi.logout();
     } finally {
-      await setToken(null);
+      await withTimeout(setToken(null), 3_000, "FN-STARTUP-STORAGE-LOGOUT").catch(() => undefined);
       setAuthed(false);
       setRiderState(null);
       setApprovalStatus(null);
       setOnboardingProgress({});
       setVerificationStatus({});
       setBootError(null);
-      await clearOnboardingDraft();
+      await withTimeout(clearOnboardingDraft(), 3_000, "FN-STARTUP-DRAFT-CLEAR").catch(() => undefined);
     }
   }, []);
 
   const resetSession = useCallback(async () => {
     await withTimeout(setToken(null), 3_000, "FN-STARTUP-STORAGE-RESET").catch(() => undefined);
-    await clearOnboardingDraft().catch(() => undefined);
+    await withTimeout(clearOnboardingDraft(), 3_000, "FN-STARTUP-DRAFT-RESET").catch(() => undefined);
     setAuthed(false);
     setRider(null);
     setOnboardingProgress({});

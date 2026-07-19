@@ -3,6 +3,28 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def googleMapsApiKey = findProperty('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY') ?: System.getenv('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY') ?: ''
+def googleServicesSource = file("${projectRoot}/google-services.json")
+def googleServicesTarget = file("${projectDir}/google-services.json")
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('key.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def releaseKeystoreFile = keystoreProperties['storeFile'] ? rootProject.file(keystoreProperties['storeFile']) : null
+def hasReleaseSigning = releaseKeystoreFile?.exists() && keystoreProperties['storePassword'] && keystoreProperties['keyAlias'] && keystoreProperties['keyPassword']
+
+tasks.register('syncGoogleServicesConfig') {
+    inputs.file(googleServicesSource)
+    outputs.file(googleServicesTarget)
+    onlyIf { googleServicesSource.exists() }
+    doLast {
+        copy {
+            from googleServicesSource
+            into projectDir
+        }
+    }
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -88,31 +110,37 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     namespace 'com.foodnova.dispatch'
+    externalNativeBuild {
+        cmake {
+            buildStagingDirectory file("${System.getProperty('java.io.tmpdir')}/foodnova-dispatch-cxx")
+        }
+    }
     defaultConfig {
         applicationId 'com.foodnova.dispatch'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 2
         versionName "1.0.0"
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: googleMapsApiKey]
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
     signingConfigs {
-        debug {
-            storeFile file('debug.keystore')
-            storePassword 'android'
-            keyAlias 'androiddebugkey'
-            keyPassword 'android'
+        if (hasReleaseSigning) {
+            release {
+                storeFile releaseKeystoreFile
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
         }
     }
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            signingConfig hasReleaseSigning ? signingConfigs.release : signingConfigs.debug
+            if (!hasReleaseSigning) {
+                logger.warn('FoodNova Dispatch release signing is not configured; using standard debug signing for a local installable APK.')
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
@@ -182,3 +210,7 @@ dependencies {
 }
 
 apply plugin: 'com.google.gms.google-services'
+
+tasks.matching { it.name.startsWith('process') && it.name.endsWith('GoogleServices') }.configureEach {
+    dependsOn tasks.named('syncGoogleServicesConfig')
+}
