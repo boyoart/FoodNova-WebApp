@@ -1,0 +1,206 @@
+.inbox-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+  color: var(--fn-text);
+}
+
+.inbox-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.inbox-header h1 {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0 0 0.4rem;
+  font-size: 2rem;
+  color: var(--fn-heading);
+}
+
+.inbox-header p {
+  margin: 0;
+  color: var(--fn-muted);
+}
+
+.inbox-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.btn-primary,
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 0;
+  border-radius: 0.7rem;
+  padding: 0.75rem 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--fn-primary);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: var(--fn-surface-2);
+  color: var(--fn-primary);
+  border: 1px solid var(--fn-border);
+}
+
+.inbox-filters {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.inbox-filters button {
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border-radius: 999px;
+  padding: 0.65rem 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.inbox-filters button.active {
+  background: var(--fn-primary);
+  color: #fff;
+  border-color: var(--fn-primary);
+}
+
+.inbox-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.inbox-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+.inbox-card.unread {
+  border-left: 5px solid var(--fn-primary);
+  background: var(--fn-surface-2);
+}
+
+.inbox-main {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+.inbox-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.inbox-card h3 {
+  margin: 0;
+  color: var(--fn-heading);
+  font-size: 1.1rem;
+}
+
+.inbox-card-top span {
+  background: color-mix(in srgb, var(--fn-primary) 12%, var(--fn-surface));
+  color: var(--fn-primary);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.inbox-card p {
+  margin: 0 0 0.75rem;
+  color: var(--fn-text);
+  line-height: 1.5;
+}
+
+.inbox-meta {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: var(--fn-muted);
+}
+
+.inbox-meta strong {
+  color: var(--fn-primary);
+}
+
+.inbox-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.inbox-card-actions button {
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border-radius: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inbox-card-actions .delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.25);
+  background: color-mix(in srgb, #b91c1c 12%, var(--fn-surface));
+}
+
+.inbox-empty {
+  background: var(--fn-surface);
+  border: 1px solid var(--fn-border);
+  border-radius: 1rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--fn-muted);
+}
+
+@media (max-width: 720px) {
+  .inbox-header,
+  .inbox-card {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .inbox-actions,
+  .inbox-card-actions {
+    width: 100%;
+  }
+
+  .inbox-card-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

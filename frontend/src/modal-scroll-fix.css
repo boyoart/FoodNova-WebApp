@@ -1,0 +1,70 @@
+/* Hard override for customer order details modal scroll.
+   This file loads last from App.jsx so it beats page-level/global modal styles. */
+
+.order-detail-modal {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 99999 !important;
+  display: block !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.order-detail-modal .modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+  background: rgba(0, 0, 0, 0.55) !important;
+  pointer-events: auto !important;
+}
+
+.order-detail-modal .modal-content {
+  position: fixed !important;
+  z-index: 2 !important;
+  top: 24px !important;
+  bottom: 24px !important;
+  left: 50% !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  width: min(94vw, 760px) !important;
+  max-width: 760px !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  background: var(--fn-surface) !important;
+  color: var(--fn-text) !important;
+  border: 1px solid var(--fn-border) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.32) !important;
+  margin: 0 !important;
+  overscroll-behavior: contain !important;
+}
+
+.order-detail-modal .modal-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 5 !important;
+  background: var(--fn-surface-2) !important;
+  color: var(--fn-heading) !important;
+  border-bottom: 1px solid var(--fn-border) !important;
+}
+
+.order-detail-modal .order-detail-content {
+  padding-bottom: 96px !important;
+  min-height: 125vh !important;
+}
+
+@media (max-width: 768px) {
+  .order-detail-modal .modal-content {
+    top: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100vw !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+  }
+}

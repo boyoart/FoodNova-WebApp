@@ -1,0 +1,417 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root,
+.theme-light,
+:root.theme-light,
+:root[data-theme="light"] {
+  --fn-bg: #F8FAF7;
+  --fn-surface: #ffffff;
+  --fn-surface-2: #F2FAF3;
+  --fn-text: #103820;
+  --fn-heading: #103820;
+  --fn-muted: #64748b;
+  --fn-border: #DDE8DD;
+  --fn-input-bg: #ffffff;
+  --fn-input-text: #111827;
+  --fn-input-placeholder: #94a3b8;
+  --fn-primary: #087A34;
+  --fn-primary-dark: #065F2A;
+  --fn-accent: #FFD23F;
+  --fn-accent-green: #A7D948;
+  --fn-brand-text: #103820;
+  --fn-footer-bg: #151515;
+  --fn-footer-text: #f9fafb;
+  --fn-shadow: 0 12px 30px rgba(16, 56, 32, 0.09);
+  --primary: var(--fn-primary);
+  --primary-dark: var(--fn-primary-dark);
+  --secondary: #004E89;
+  --success: #06A77D;
+  --danger: #D62839;
+  --warning: #F77F00;
+  --light: var(--fn-surface-2);
+  --dark: var(--fn-text);
+  --border: var(--fn-border);
+  --text: var(--fn-text);
+  --text-light: var(--fn-muted);
+  color-scheme: light;
+}
+
+:root.theme-dark,
+.theme-dark,
+:root[data-theme="dark"] {
+  --fn-bg: #07120B;
+  --fn-surface: #101A14;
+  --fn-surface-2: #17291E;
+  --fn-text: #f8fafc;
+  --fn-heading: #ffffff;
+  --fn-muted: #cbd5e1;
+  --fn-border: #284434;
+  --fn-input-bg: #111827;
+  --fn-input-text: #f8fafc;
+  --fn-input-placeholder: #94a3b8;
+  --fn-primary: #2BBE63;
+  --fn-primary-dark: #22A652;
+  --fn-accent: #FFD23F;
+  --fn-accent-green: #A7D948;
+  --fn-brand-text: #F8FAFC;
+  --fn-footer-bg: #05070a;
+  --fn-footer-text: #f8fafc;
+  --fn-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+html, body {
+  height: 100%;
+}
+
+html,
+body,
+#root {
+  background: var(--fn-bg);
+  color: var(--fn-text);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--fn-bg);
+  color: var(--fn-text);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+#root {
+  height: 100%;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--fn-heading);
+}
+
+h1 {
+  font-size: 2rem;
+}
+
+h2 {
+  font-size: 1.75rem;
+}
+
+h3 {
+  font-size: 1.5rem;
+}
+
+p {
+  line-height: 1.6;
+  color: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: var(--primary-dark);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: all 0.2s;
+  color: inherit;
+}
+
+p,
+span,
+label,
+small,
+li,
+td,
+th,
+div {
+  color: inherit;
+}
+
+/* Forms */
+input, textarea, select {
+  font-family: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--fn-border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  width: 100%;
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--fn-input-placeholder);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+option {
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--fn-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fn-primary) 18%, transparent);
+}
+
+table,
+thead,
+tbody,
+tr,
+td,
+th {
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+thead,
+th {
+  background: var(--fn-surface-2);
+  color: var(--fn-heading);
+}
+
+tbody tr {
+  background: var(--fn-surface);
+}
+
+tbody tr:hover {
+  background: color-mix(in srgb, var(--fn-surface-2) 75%, transparent);
+}
+
+.theme-dark .card,
+.theme-dark .stat-card,
+.theme-dark .dashboard-card,
+.theme-dark .product-card,
+.theme-dark .order-card,
+.theme-dark .cart-item,
+.theme-dark .cart-summary,
+.theme-dark .checkout-summary,
+.theme-dark .checkout-form,
+.theme-dark .profile-panel,
+.theme-dark .profile-card,
+.theme-dark .address-card,
+.theme-dark .inbox-card,
+.theme-dark .broadcast-card,
+.theme-dark .customer-details-card,
+.theme-dark .modal-content,
+.theme-dark .modal,
+.theme-dark .admin-card,
+.theme-dark .admin-page,
+.theme-dark .table-container,
+.theme-dark .saved-address-card,
+.theme-dark .payment-info,
+.theme-dark .form-notice,
+.theme-dark .auth-card,
+.theme-dark .contact-card,
+.theme-dark .info-card,
+.theme-dark .feature-card,
+.theme-dark .value-card,
+.theme-dark .product-filters,
+.theme-dark .order-details,
+.theme-dark .receipt-upload-section,
+.theme-dark .delivery-code-section {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark .navbar,
+.theme-dark .nav-menu,
+.theme-dark .notif-dropdown,
+.theme-dark .dropdown-menu,
+.theme-dark .mobile-menu {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark .nav-link,
+.theme-dark .logout-btn,
+.theme-dark .theme-toggle,
+.theme-dark .menu-toggle {
+  color: var(--fn-text);
+}
+
+.theme-dark .nav-link:hover,
+.theme-dark .nav-link.active,
+.theme-dark .theme-toggle:hover,
+.theme-dark .logout-btn:hover {
+  color: var(--fn-primary);
+  background: var(--fn-surface-2);
+}
+
+.theme-dark .notif-item,
+.theme-dark .notif-button {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark .notif-item.unread,
+.theme-dark .inbox-card.unread {
+  background: var(--fn-surface-2);
+  border-left: 4px solid var(--fn-primary);
+}
+
+.theme-dark .notif-item strong,
+.theme-dark .inbox-card h3,
+.theme-dark .product-card h3,
+.theme-dark .order-card h3,
+.theme-dark .stat-value,
+.theme-dark .stat-label {
+  color: var(--fn-heading);
+}
+
+.theme-dark .notif-item p,
+.theme-dark .inbox-card p,
+.theme-dark .product-card p,
+.theme-dark .order-card p,
+.theme-dark .broadcast-message {
+  color: var(--fn-text);
+}
+
+.theme-dark .notif-empty,
+.theme-dark .inbox-meta,
+.theme-dark .text-muted,
+.theme-dark .muted,
+.theme-dark .empty-state,
+.theme-dark .empty-message {
+  color: var(--fn-muted);
+}
+
+.theme-dark input,
+.theme-dark textarea,
+.theme-dark select,
+.theme-dark .form-input {
+  background: var(--fn-input-bg);
+  color: var(--fn-input-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark input::placeholder,
+.theme-dark textarea::placeholder {
+  color: var(--fn-input-placeholder);
+}
+
+.theme-dark table,
+.theme-dark thead,
+.theme-dark tbody,
+.theme-dark tr,
+.theme-dark td,
+.theme-dark th {
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark th,
+.theme-dark thead {
+  background: var(--fn-surface-2);
+  color: var(--fn-heading);
+}
+
+.theme-dark .checkout-summary,
+.theme-dark .summary-row,
+.theme-dark .payment-info,
+.theme-dark fieldset,
+.theme-dark .form-notice,
+.theme-dark .saved-address-card {
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border-color: var(--fn-border);
+}
+
+.theme-dark .footer,
+.theme-dark footer {
+  background: var(--fn-footer-bg);
+  color: var(--fn-footer-text);
+}
+
+.theme-dark .footer h3,
+.theme-dark .footer h4,
+.theme-dark .footer h5,
+.theme-dark footer h3,
+.theme-dark footer h4,
+.theme-dark footer h5,
+.theme-dark .footer-title {
+  color: var(--fn-primary);
+}
+
+.theme-dark .footer a,
+.theme-dark footer a,
+.theme-dark .footer p,
+.theme-dark footer p {
+  color: var(--fn-footer-text);
+}
+
+.theme-dark .btn,
+.theme-dark .btn-secondary {
+  border-color: var(--fn-border);
+}
+
+.theme-dark .btn-primary {
+  background: var(--fn-primary);
+  color: #ffffff;
+}
+
+.theme-dark .btn-danger {
+  color: #fecaca;
+  background: rgba(185, 28, 28, 0.18);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+/* Mobile-First Responsive */
+@media (max-width: 640px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+  h2 {
+    font-size: 1.25rem;
+  }
+  h3 {
+    font-size: 1.1rem;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--light);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-light);
+}

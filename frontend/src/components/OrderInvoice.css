@@ -1,0 +1,213 @@
+.invoice-card {
+  width: min(940px, 100%);
+  margin: 0 auto;
+  background: var(--fn-surface);
+  color: var(--fn-text);
+  border: 1px solid var(--fn-border);
+  border-radius: 18px;
+  box-shadow: var(--fn-shadow);
+  overflow: hidden;
+}
+
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--fn-primary) 12%, transparent), color-mix(in srgb, var(--fn-accent) 14%, transparent));
+  border-bottom: 1px solid var(--fn-border);
+}
+
+.invoice-brand,
+.invoice-info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+}
+
+.invoice-logo {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: var(--fn-primary);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+}
+
+.invoice-brand h1,
+.invoice-title-block h2,
+.invoice-info-grid h3 {
+  margin: 0;
+  color: var(--fn-heading);
+}
+
+.invoice-brand p,
+.invoice-title-block p,
+.invoice-business-details p,
+.invoice-info-grid p,
+.invoice-footer p {
+  margin: 0.25rem 0;
+}
+
+.invoice-title-block {
+  text-align: right;
+}
+
+.invoice-business-details,
+.invoice-info-grid,
+.invoice-items-section,
+.invoice-totals,
+.invoice-payment-details,
+.invoice-footer {
+  padding: 1.5rem 2rem;
+}
+
+.invoice-business-details {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: var(--fn-muted);
+  border-bottom: 1px solid var(--fn-border);
+}
+
+.invoice-info-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-bottom: 1px solid var(--fn-border);
+}
+
+.invoice-info-grid > div {
+  min-width: 0;
+}
+
+.invoice-info-grid p {
+  color: var(--fn-text);
+  overflow-wrap: anywhere;
+}
+
+.invoice-info-grid span {
+  display: inline-block;
+  min-width: 118px;
+  color: var(--fn-muted);
+}
+
+.invoice-items-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.invoice-items-table th,
+.invoice-items-table td {
+  padding: 0.85rem;
+  border-bottom: 1px solid var(--fn-border);
+  color: var(--fn-text);
+  text-align: left;
+}
+
+.invoice-items-table th {
+  background: var(--fn-surface-2);
+  color: var(--fn-heading);
+}
+
+.invoice-totals {
+  max-width: 420px;
+  margin-left: auto;
+}
+
+.invoice-totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--fn-border);
+}
+
+.invoice-grand-total {
+  color: var(--fn-heading);
+  font-size: 1.12rem;
+}
+
+.invoice-payment-details {
+  max-width: 420px;
+  margin-left: auto;
+  border-top: 1px solid var(--fn-border);
+}
+
+.invoice-payment-details h3 {
+  margin: 0 0 0.6rem;
+  color: var(--fn-heading);
+}
+
+.invoice-payment-details p {
+  margin: 0.3rem 0;
+  color: var(--fn-text);
+}
+
+.invoice-footer {
+  background: var(--fn-surface-2);
+  border-top: 1px solid var(--fn-border);
+  text-align: center;
+}
+
+@media (max-width: 700px) {
+  .invoice-header,
+  .invoice-info-grid {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .invoice-title-block {
+    text-align: left;
+  }
+
+  .invoice-business-details,
+  .invoice-info-grid,
+  .invoice-items-section,
+  .invoice-totals,
+  .invoice-payment-details,
+  .invoice-footer,
+  .invoice-header {
+    padding: 1rem;
+  }
+}
+
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .navbar,
+  .footer,
+  footer,
+  .floating-cart-button,
+  .floating-cart-btn,
+  .invoice-actions,
+  .no-print {
+    display: none !important;
+  }
+
+  .invoice-page,
+  .invoice-card {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .invoice-card * {
+    color: #000 !important;
+    background: transparent !important;
+  }
+
+  .invoice-items-table th,
+  .invoice-items-table td,
+  .invoice-totals div {
+    border-color: #bbb !important;
+  }
+}
