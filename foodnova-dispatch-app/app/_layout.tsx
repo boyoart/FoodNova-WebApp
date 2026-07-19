@@ -1,6 +1,6 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { LogBox, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -17,6 +17,7 @@ import { LocationTrackingProvider } from "@/src/context/LocationTrackingContext"
 import "@/src/lib/background-location";
 import { colors } from "@/src/theme/tokens";
 import { logBuildIdentity } from "@/src/lib/build-identity";
+import { STARTUP_WATCHDOG_MS, startupLog } from "@/src/lib/startup";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -47,18 +48,32 @@ function SessionGate({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   const [iconsLoaded, iconError] = useIconFonts();
   const [fontsLoaded, fontError] = useAppFonts();
+  const [fontWatchdogExpired, setFontWatchdogExpired] = useState(false);
 
   const ready = (iconsLoaded || iconError) && (fontsLoaded || fontError);
+  const canRender = ready || fontWatchdogExpired;
 
   useEffect(() => {
     logBuildIdentity();
   }, []);
 
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => undefined);
-  }, [ready]);
+    const timer = setTimeout(() => {
+      setFontWatchdogExpired(true);
+      startupLog("font_watchdog_expired", { code: "FN-STARTUP-FONTS" });
+    }, STARTUP_WATCHDOG_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
-  if (!ready) return null;
+  useEffect(() => {
+    if (canRender) {
+      SplashScreen.hideAsync()
+        .then(() => startupLog("native_splash_hidden", { fonts: ready ? "ready" : "fallback" }))
+        .catch(() => startupLog("native_splash_hide_failed"));
+    }
+  }, [canRender, ready]);
+
+  if (!canRender) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import { AuthApi, RiderApi } from "@/src/api/endpoints";
 import { ApiError, loadToken, setToken } from "@/src/api/client";
 import { clearOnboardingDraft } from "@/src/lib/onboarding";
+import { startupLog, withTimeout } from "@/src/lib/startup";
 
 type Rider = Record<string, any> | null;
 
@@ -14,10 +15,13 @@ type AuthState = {
   approvalStatus: string | null;
   onboardingProgress: Record<string, any>;
   verificationStatus: Record<string, any>;
+  bootError: string | null;
   refreshRider: () => Promise<Rider>;
   refreshOnboarding: () => Promise<{ progress: Record<string, any>; verification: Record<string, any> }>;
-  signInWithToken: (token: string) => Promise<void>;
+  signInWithToken: (token: string) => Promise<Rider>;
   signOut: () => Promise<void>;
+  retryBootstrap: () => Promise<void>;
+  resetSession: () => Promise<void>;
   setRider: (r: Rider) => void;
 };
 
@@ -45,6 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null);
   const [onboardingProgress, setOnboardingProgress] = useState<Record<string, any>>({});
   const [verificationStatus, setVerificationStatus] = useState<Record<string, any>>({});
+  const [bootError, setBootError] = useState<string | null>(null);
 
   const setRider = useCallback((r: Rider) => {
     setRiderState(r);
@@ -74,12 +79,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         : null;
       setRider(r);
       setAuthed(true);
+      setBootError(null);
       return r;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         await setToken(null);
         setAuthed(false);
         setRider(null);
+        setBootError(null);
+        startupLog("session_rejected", { reason: "unauthorized" });
+      } else {
+        setBootError("FoodNova could not reach the rider service.");
+        startupLog("profile_restore_failed", {
+          reason: error instanceof ApiError && error.status === 0 ? "network" : "service_error",
+        });
       }
       return null;
     }
@@ -87,9 +100,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithToken = useCallback(
     async (token: string) => {
-      await setToken(token);
+      await withTimeout(setToken(token), 3_000, "FN-STARTUP-STORAGE-WRITE");
       setAuthed(true);
-      await refreshRider();
+      return refreshRider();
     },
     [refreshRider]
   );
@@ -104,33 +117,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setApprovalStatus(null);
       setOnboardingProgress({});
       setVerificationStatus({});
+      setBootError(null);
       await clearOnboardingDraft();
     }
   }, []);
+
+  const resetSession = useCallback(async () => {
+    await withTimeout(setToken(null), 3_000, "FN-STARTUP-STORAGE-RESET").catch(() => undefined);
+    await clearOnboardingDraft().catch(() => undefined);
+    setAuthed(false);
+    setRider(null);
+    setOnboardingProgress({});
+    setVerificationStatus({});
+    setBootError(null);
+    startupLog("session_reset");
+  }, [setRider]);
+
+  const retryBootstrap = useCallback(async () => {
+    setBooting(true);
+    setBootError(null);
+    startupLog("restore_started");
+    try {
+      const token = await withTimeout(loadToken(), 3_000, "FN-STARTUP-STORAGE-READ");
+      if (!token) {
+        setAuthed(false);
+        setRider(null);
+        startupLog("terminal_route_ready", { route: "login" });
+        return;
+      }
+      setAuthed(true);
+      const restored = await refreshRider();
+      if (restored) startupLog("session_restored", { status: deriveApproval(restored) || "incomplete" });
+    } catch (error) {
+      setBootError("FoodNova could not restore the local session.");
+      startupLog("restore_failed", { code: String(error).includes("FN-") ? String(error) : "FN-STARTUP-RESTORE" });
+    } finally {
+      setBooting(false);
+      startupLog("restore_finished");
+    }
+  }, [refreshRider, setRider]);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const token = await loadToken();
-        if (token && active) {
-          setAuthed(true);
-          await refreshRider();
-        }
-      } catch (error) {
-        console.log("DISPATCH_SESSION_RESTORE_FAILED", String(error));
-        if (active) {
-          setAuthed(false);
-          setRider(null);
-        }
-      } finally {
-        if (active) setBooting(false);
+        if (active) await retryBootstrap();
+      } catch {
+        // retryBootstrap always settles state; this guard protects unmount races.
       }
     })();
     return () => {
       active = false;
     };
-  }, [refreshRider, setRider]);
+  }, [retryBootstrap]);
 
   return (
     <AuthContext.Provider
@@ -141,10 +180,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         approvalStatus,
         onboardingProgress,
         verificationStatus,
+        bootError,
         refreshRider,
         refreshOnboarding,
         signInWithToken,
         signOut,
+        retryBootstrap,
+        resetSession,
         setRider,
       }}
     >

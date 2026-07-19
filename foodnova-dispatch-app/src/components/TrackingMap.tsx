@@ -134,6 +134,7 @@ async function fetchRoute(origin: LatLng, destination: LatLng): Promise<LatLng[]
 
 // Native map. Google Maps requires a real dev build + API key in app.json.
 export function TrackingMap({ rider, pickup, customer, status, style }: TrackingMapProps) {
+  const configuredMapsKey = mapsKey();
   const ref = useRef<MapView | null>(null);
   const [route, setRoute] = useState<LatLng[]>([]);
   const [heading, setHeading] = useState(0);
@@ -281,6 +282,16 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
     }
   }, [fitPoints]);
 
+  if (__DEV__ && !configuredMapsKey) {
+    return (
+      <View style={[styles.wrap, styles.configError, style]} testID="tracking-map-config-error">
+        <Ionicons name="map-outline" size={30} color={colors.error} />
+        <Text style={styles.configErrorTitle}>Google Maps is not configured</Text>
+        <Text style={styles.configErrorBody}>Set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY and rebuild the native app.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.wrap, style]}>
       <MapView
@@ -340,6 +351,9 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, overflow: "hidden", backgroundColor: colors.surfaceTertiary },
+  configError: { alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.sm },
+  configErrorTitle: { fontFamily: fonts.display, fontSize: type.lg, fontWeight: "700", color: colors.onSurface, textAlign: "center" },
+  configErrorBody: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted, textAlign: "center" },
   vehicleMarker: {
     width: 42,
     height: 42,

@@ -85,22 +85,18 @@ export async function registerPushToken(): Promise<string | null> {
       console.log("DISPATCH_FCM_TOKEN_GENERATED", {
         platform: Platform.OS,
         tokenType: (tokenResp as any)?.type ?? "unknown",
-        tokenSuffix: String(token).slice(-8),
       });
       await NotifApi.registerFcmToken(String(token), Platform.OS)
         .then((response: any) =>
           console.log("DISPATCH_FCM_TOKEN_REGISTERED", {
             platform: Platform.OS,
-            tokenSuffix: String(token).slice(-8),
-            response,
+            accepted: Boolean(response),
           })
         )
         .catch((error: any) =>
           console.log("DISPATCH_FCM_TOKEN_REGISTER_FAILED", {
             platform: Platform.OS,
-            tokenSuffix: String(token).slice(-8),
             status: error?.status,
-            body: error?.data,
             error: String(error?.message || error),
           })
         );
@@ -132,11 +128,11 @@ export function addNotificationListeners(onTap: (data: any) => void) {
   if (!isNative) return () => {};
   const received = Notifications.addNotificationReceivedListener((notification) => {
     const data = notification.request.content.data;
-    console.log("DISPATCH_NOTIFICATION_RECEIVED", data);
+    console.log("DISPATCH_NOTIFICATION_RECEIVED", { hasData: Boolean(data) });
     dispatchNotificationData(data);
   });
   const response = Notifications.addNotificationResponseReceivedListener((resp) => {
-    console.log("DISPATCH_NOTIFICATION_ACTION_EXECUTED", resp.notification.request.content.data);
+    console.log("DISPATCH_NOTIFICATION_ACTION_EXECUTED");
     onTap(resp.notification.request.content.data);
   });
   return () => {

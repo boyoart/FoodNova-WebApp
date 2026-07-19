@@ -18,12 +18,25 @@ Pass the backend URL with:
 flutter run --dart-define=FOODNOVA_API_BASE_URL=https://foodnova-webapp.onrender.com
 ```
 
-Build an Android APK with:
+Google Maps uses the exact variable `GOOGLE_MAPS_API_KEY`. The Android Gradle
+build accepts a Gradle property, environment variable, or Dart define. The
+recommended local commands are:
 
 ```bash
-flutter build apk --release --dart-define=FOODNOVA_API_BASE_URL=https://foodnova-webapp.onrender.com
+flutter run --dart-define=GOOGLE_MAPS_API_KEY=your_restricted_android_key
+flutter build apk --release --dart-define=GOOGLE_MAPS_API_KEY=your_restricted_android_key
 ```
 
-The app rejects non-HTTPS API base URLs. On Render, keep backend environment variables current and redeploy after updates. Optional backend CORS additions can be supplied as a comma-separated `CORS_ORIGINS` value.
+Combine the API and Maps values for a production Android APK with:
 
-Flutter is not installed in this workspace, so this scaffold has not been compiled locally.
+```bash
+flutter build apk --release \
+  --dart-define=FOODNOVA_API_BASE_URL=https://foodnova-webapp.onrender.com \
+  --dart-define=GOOGLE_MAPS_API_KEY=your_restricted_android_key
+```
+
+For iOS, copy `ios/Flutter/Maps.xcconfig.example` to the git-ignored
+`ios/Flutter/Maps.xcconfig`, set a restricted iOS key, and rebuild. Never commit
+the populated file.
+
+The app rejects non-HTTPS API base URLs. On Render, keep backend environment variables current and redeploy after updates. Optional backend CORS additions can be supplied as a comma-separated `CORS_ORIGINS` value.

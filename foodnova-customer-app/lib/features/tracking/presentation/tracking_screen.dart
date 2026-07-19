@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1982,6 +1983,22 @@ class _TrackingMapState extends State<_TrackingMap> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    const configuredMapsKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+    if (kDebugMode && configuredMapsKey.isEmpty) {
+      return ColoredBox(
+        color: scheme.surfaceContainerHighest,
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              'Google Maps is not configured. Rebuild with '
+              '--dart-define=GOOGLE_MAPS_API_KEY=your_restricted_key.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
     final destinationLog = widget.routeDestinationPoint == null
         ? 'none'
         : '${widget.routeDestinationPoint!.latitude},${widget.routeDestinationPoint!.longitude}';

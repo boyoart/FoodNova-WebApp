@@ -1,6 +1,17 @@
 # Welcome to your Expo app 👋
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+FoodNova's Expo / React Native rider application.
+
+## Environment
+
+Copy `.env.example` to `.env` and provide a platform-restricted Maps key:
+
+```text
+EXPO_PUBLIC_GOOGLE_MAPS_API_KEY=your_restricted_maps_key
+```
+
+Expo injects this value into Android and iOS native Maps configuration during
+prebuild. A populated `.env` is ignored and must never be committed.
 
 ## Get started
 

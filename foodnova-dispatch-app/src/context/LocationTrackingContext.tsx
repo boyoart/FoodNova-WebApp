@@ -50,7 +50,11 @@ export function LocationTrackingProvider({ children }: { children: React.ReactNo
           RiderApi.locationPing(coords).catch(() => {});
         }
       );
-    })();
+    })().catch((error) => {
+      console.log("DISPATCH_LOCATION_WATCH_FAILED", {
+        error: String(error instanceof Error ? error.message : error),
+      });
+    });
     return () => {
       cancelled = true;
       subscription?.remove();

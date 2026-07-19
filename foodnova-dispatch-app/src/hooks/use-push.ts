@@ -36,7 +36,7 @@ export function usePushNotifications() {
       const target = resolveNotificationDestination(data);
       if (target.notificationId) NotifApi.markRead(target.notificationId).catch(() => {});
       dispatchNotificationData(data);
-      console.log("DISPATCH_NOTIFICATION_TAPPED", { data, target: target.route });
+      console.log("DISPATCH_NOTIFICATION_TAPPED", { target: target.route });
       router.push(target.route as any);
     });
 
@@ -46,7 +46,7 @@ export function usePushNotifications() {
         const target = resolveNotificationDestination(data);
         if (target.notificationId) NotifApi.markRead(target.notificationId).catch(() => {});
         dispatchNotificationData(data);
-        console.log("DISPATCH_NOTIFICATION_COLD_START", { data, target: target.route });
+        console.log("DISPATCH_NOTIFICATION_COLD_START", { target: target.route });
         router.push(target.route as any);
       }
     });

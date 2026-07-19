@@ -43,7 +43,7 @@ type Options = {
   signal?: AbortSignal;
 };
 
-const REQUEST_TIMEOUT_MS = 15_000;
+const REQUEST_TIMEOUT_MS = 8_000;
 
 export async function api<T = any>(path: string, opts: Options = {}): Promise<T> {
   const { method = "GET", body, auth = true, isForm = false, signal } = opts;

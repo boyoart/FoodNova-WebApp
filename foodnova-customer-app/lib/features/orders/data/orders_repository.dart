@@ -76,10 +76,20 @@ class RiderLocation {
   final List<Map<String, double>> routePolyline;
 
   bool get hasRiderCoordinates =>
-      riderLatitude != null && riderLongitude != null;
+      _validCoordinates(riderLatitude, riderLongitude);
 
   bool get hasCustomerCoordinates =>
-      customerLatitude != null && customerLongitude != null;
+      _validCoordinates(customerLatitude, customerLongitude);
+
+  static bool _validCoordinates(double? latitude, double? longitude) =>
+      latitude != null &&
+      longitude != null &&
+      latitude.isFinite &&
+      longitude.isFinite &&
+      latitude >= -90 &&
+      latitude <= 90 &&
+      longitude >= -180 &&
+      longitude <= 180;
 
   factory RiderLocation.fromJson(Map<String, dynamic> json) {
     final rider = json['rider'] is Map
@@ -248,7 +258,7 @@ class RiderLocation {
             final lng = double.tryParse(
               '${point['longitude'] ?? point['lng'] ?? point['lon']}',
             );
-            if (lat == null || lng == null) return null;
+            if (!_validCoordinates(lat, lng)) return null;
             return {'latitude': lat, 'longitude': lng};
           })
           .whereType<Map<String, double>>()

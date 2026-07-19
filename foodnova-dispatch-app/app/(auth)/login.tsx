@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthApi } from "@/src/api/endpoints";
 import { useAuth } from "@/src/context/AuthContext";
 import { useToast } from "@/src/context/ToastContext";
-import { ApiError, setToken } from "@/src/api/client";
+import { ApiError } from "@/src/api/client";
 import { Button, Field } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
 import { colors, fonts, spacing, type } from "@/src/theme/tokens";
@@ -28,7 +28,7 @@ export default function Login() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
-  const { refreshRider } = useAuth();
+  const { signInWithToken, resetSession } = useAuth();
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -47,10 +47,10 @@ export default function Login() {
         toast.show("Login failed - no session token returned", "error");
         return;
       }
-      const rider = await refreshRider();
+      const rider = await signInWithToken(token);
       if (!rider) {
         // token isn't valid for the rider (/delivery) session
-        await setToken(null);
+        await resetSession();
         toast.show(
           isEmail
             ? "This email isn't linked to a rider account yet. Please sign in with your phone number."

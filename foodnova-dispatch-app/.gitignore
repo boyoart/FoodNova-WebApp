@@ -12,6 +12,7 @@ expo-env.d.ts
 
 # Native
 .kotlin/
+.gradle-local-repo/
 *.orig.*
 *.jks
 *.p8
@@ -32,6 +33,9 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
+!.env.example
 .env*.local
 
 # typescript

@@ -4,10 +4,36 @@ param(
 )
 
 Add-Type -AssemblyName System.Drawing
+Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+
+public static class FoodNovaBackgroundRemover {
+    public static void RemoveConnectedLightBackground(Bitmap bitmap) {
+        var visited = new bool[bitmap.Width, bitmap.Height];
+        var queue = new Queue<Point>();
+        for (var x = 0; x < bitmap.Width; x++) { queue.Enqueue(new Point(x, 0)); queue.Enqueue(new Point(x, bitmap.Height - 1)); }
+        for (var y = 0; y < bitmap.Height; y++) { queue.Enqueue(new Point(0, y)); queue.Enqueue(new Point(bitmap.Width - 1, y)); }
+        while (queue.Count > 0) {
+            var point = queue.Dequeue();
+            if (point.X < 0 || point.Y < 0 || point.X >= bitmap.Width || point.Y >= bitmap.Height || visited[point.X, point.Y]) continue;
+            visited[point.X, point.Y] = true;
+            var pixel = bitmap.GetPixel(point.X, point.Y);
+            var min = Math.Min(pixel.R, Math.Min(pixel.G, pixel.B));
+            var max = Math.Max(pixel.R, Math.Max(pixel.G, pixel.B));
+            var brightness = (pixel.R + pixel.G + pixel.B) / 3;
+            if (max - min >= 45 || brightness <= 205) continue;
+            bitmap.SetPixel(point.X, point.Y, Color.Transparent);
+            queue.Enqueue(new Point(point.X - 1, point.Y)); queue.Enqueue(new Point(point.X + 1, point.Y));
+            queue.Enqueue(new Point(point.X, point.Y - 1)); queue.Enqueue(new Point(point.X, point.Y + 1));
+        }
+    }
+}
+'@ -ReferencedAssemblies System.Drawing
 
 $root = Split-Path -Parent $PSScriptRoot
 $dispatch = Join-Path $root 'foodnova-dispatch-app\assets\images'
-$customer = Join-Path $root 'foodnova-customer-app\assets\brand'
 
 function Crop-Image([System.Drawing.Bitmap]$source, [System.Drawing.Rectangle]$rect) {
     $result = New-Object System.Drawing.Bitmap $rect.Width, $rect.Height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -18,17 +44,7 @@ function Crop-Image([System.Drawing.Bitmap]$source, [System.Drawing.Rectangle]$r
 }
 
 function Make-White-Transparent([System.Drawing.Bitmap]$source) {
-    for ($y = 0; $y -lt $source.Height; $y++) {
-        for ($x = 0; $x -lt $source.Width; $x++) {
-            $pixel = $source.GetPixel($x, $y)
-            $minimum = [Math]::Min($pixel.R, [Math]::Min($pixel.G, $pixel.B))
-            $maximum = [Math]::Max($pixel.R, [Math]::Max($pixel.G, $pixel.B))
-            $brightness = ($pixel.R + $pixel.G + $pixel.B) / 3
-            if (($maximum - $minimum) -lt 80 -and $brightness -gt 120) {
-                $source.SetPixel($x, $y, [System.Drawing.Color]::Transparent)
-            }
-        }
-    }
+    [FoodNovaBackgroundRemover]::RemoveConnectedLightBackground($source)
 }
 
 function Resize-Save([System.Drawing.Bitmap]$source, [int]$width, [int]$height, [string]$path) {
@@ -47,6 +63,23 @@ function Resize-Save([System.Drawing.Bitmap]$source, [int]$width, [int]$height, 
     $graphics.Dispose()
     $result.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     $result.Dispose()
+}
+
+function Resize-SavePadded([System.Drawing.Bitmap]$source, [int]$width, [int]$height, [double]$fill, [string]$path) {
+    $canvas = New-Object System.Drawing.Bitmap $width, $height, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $graphics = [System.Drawing.Graphics]::FromImage($canvas)
+    $graphics.Clear([System.Drawing.Color]::Transparent)
+    $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $targetWidth = [int]($width * $fill)
+    $targetHeight = [int]($height * $fill)
+    $scale = [Math]::Min($targetWidth / $source.Width, $targetHeight / $source.Height)
+    $drawWidth = [int]($source.Width * $scale)
+    $drawHeight = [int]($source.Height * $scale)
+    $graphics.DrawImage($source, [int](($width - $drawWidth) / 2), [int](($height - $drawHeight) / 2), $drawWidth, $drawHeight)
+    $graphics.Dispose()
+    $canvas.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+    $canvas.Dispose()
 }
 
 function Save-Monochrome([System.Drawing.Bitmap]$source, [int]$size, [string]$path) {
@@ -75,49 +108,13 @@ Make-White-Transparent $horizontal
 Make-White-Transparent $mark
 
 Resize-Save $horizontal 1600 520 (Join-Path $dispatch 'foodnova-dispatch-logo.png')
-Resize-Save $mark 1024 1024 (Join-Path $dispatch 'adaptive-icon.png')
-Resize-Save $mark 1024 1024 (Join-Path $dispatch 'icon.png')
+Resize-SavePadded $mark 1024 1024 0.66 (Join-Path $dispatch 'adaptive-icon.png')
+Resize-SavePadded $mark 1024 1024 0.82 (Join-Path $dispatch 'icon.png')
 Resize-Save $mark 512 512 (Join-Path $dispatch 'splash-image.png')
 Resize-Save $mark 512 512 (Join-Path $dispatch 'launch-screen-branding.png')
 Resize-Save $mark 96 96 (Join-Path $dispatch 'favicon.png')
 Save-Monochrome $mark 432 (Join-Path $dispatch 'monochrome-icon.png')
 Save-Monochrome $mark 96 (Join-Path $dispatch 'notification-icon.png')
-Resize-Save $mark 1024 1024 (Join-Path $customer 'foodnova-logo.png')
-
-# Customer launcher and web assets use the same unmodified brand mark.
-Resize-Save $mark 48 48 (Join-Path $root 'foodnova-customer-app\android\app\src\main\res\mipmap-mdpi\ic_launcher.png')
-Resize-Save $mark 72 72 (Join-Path $root 'foodnova-customer-app\android\app\src\main\res\mipmap-hdpi\ic_launcher.png')
-Resize-Save $mark 96 96 (Join-Path $root 'foodnova-customer-app\android\app\src\main\res\mipmap-xhdpi\ic_launcher.png')
-Resize-Save $mark 144 144 (Join-Path $root 'foodnova-customer-app\android\app\src\main\res\mipmap-xxhdpi\ic_launcher.png')
-Resize-Save $mark 192 192 (Join-Path $root 'foodnova-customer-app\android\app\src\main\res\mipmap-xxxhdpi\ic_launcher.png')
-Resize-Save $mark 16 16 (Join-Path $root 'foodnova-customer-app\macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_16.png')
-Resize-Save $mark 32 32 (Join-Path $root 'foodnova-customer-app\macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_32.png')
-Resize-Save $mark 64 64 (Join-Path $root 'foodnova-customer-app\macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_64.png')
-Resize-Save $mark 128 128 (Join-Path $root 'foodnova-customer-app\macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_128.png')
-Resize-Save $mark 256 256 (Join-Path $root 'foodnova-customer-app\macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_256.png')
-Resize-Save $mark 512 512 (Join-Path $root 'foodnova-customer-app\macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_512.png')
-Resize-Save $mark 1024 1024 (Join-Path $root 'foodnova-customer-app\macos\Runner\Assets.xcassets\AppIcon.appiconset\app_icon_1024.png')
-Resize-Save $mark 1024 1024 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-1024x1024@1x.png')
-Resize-Save $mark 20 20 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-20x20@1x.png')
-Resize-Save $mark 40 40 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-20x20@2x.png')
-Resize-Save $mark 60 60 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-20x20@3x.png')
-Resize-Save $mark 29 29 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-29x29@1x.png')
-Resize-Save $mark 58 58 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-29x29@2x.png')
-Resize-Save $mark 87 87 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-29x29@3x.png')
-Resize-Save $mark 40 40 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-40x40@1x.png')
-Resize-Save $mark 80 80 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-40x40@2x.png')
-Resize-Save $mark 120 120 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-40x40@3x.png')
-Resize-Save $mark 120 120 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-60x60@2x.png')
-Resize-Save $mark 180 180 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-60x60@3x.png')
-Resize-Save $mark 76 76 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-76x76@1x.png')
-Resize-Save $mark 152 152 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-76x76@2x.png')
-Resize-Save $mark 167 167 (Join-Path $root 'foodnova-customer-app\ios\Runner\Assets.xcassets\AppIcon.appiconset\Icon-App-83.5x83.5@2x.png')
-Resize-Save $mark 192 192 (Join-Path $root 'foodnova-customer-app\web\icons\Icon-192.png')
-Resize-Save $mark 512 512 (Join-Path $root 'foodnova-customer-app\web\icons\Icon-512.png')
-Resize-Save $mark 192 192 (Join-Path $root 'foodnova-customer-app\web\icons\Icon-maskable-192.png')
-Resize-Save $mark 512 512 (Join-Path $root 'foodnova-customer-app\web\icons\Icon-maskable-512.png')
-Resize-Save $mark 96 96 (Join-Path $root 'foodnova-customer-app\web\favicon.png')
-
 $board.Save((Join-Path $dispatch 'branding-preview.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 
 $horizontal.Dispose()
