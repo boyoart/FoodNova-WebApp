@@ -1700,8 +1700,25 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
     email = str(email).strip().lower()
     db = SessionLocal()
     try:
+        order_id = order.get("id") if order else None
+        existing = None
+        if order_id is not None:
+            existing = db.query(DBNotification).filter(
+                func.lower(DBNotification.user_email) == email,
+                DBNotification.order_id == order_id,
+                DBNotification.type == notif_type,
+                DBNotification.title == title,
+            ).order_by(DBNotification.id.desc()).first()
+        if existing:
+            print("NOTIFICATION_DUPLICATE_SUPPRESSED", json_dump({
+                "notification_id": existing.id,
+                "order_id": order_id,
+                "type": notif_type,
+                "recipient": email,
+            }))
+            return notification_to_dict(existing)
         notif = DBNotification(
-            order_id=order.get("id") if order else None,
+            order_id=order_id,
             order_code=order.get("order_code") if order else None,
             user_email=email,
             customer_email=email,
@@ -3760,6 +3777,10 @@ def decode_google_polyline(encoded: str) -> List[dict]:
 
 
 def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: float, customer_lng: float) -> dict:
+    print("DIRECTIONS_REQUEST", json_dump({
+        "origin": {"latitude": rider_lat, "longitude": rider_lng},
+        "destination": {"latitude": customer_lat, "longitude": customer_lng},
+    }))
     google_key = (
         os.getenv("GOOGLE_DIRECTIONS_API_KEY")
         or os.getenv("GOOGLE_MAPS_API_KEY")
@@ -3795,6 +3816,7 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
                     "distance_meters": distance_meters_value,
                     "eta_minutes": max(1, math.ceil(float(duration_seconds) / 60)),
                 }))
+                print("DIRECTIONS_SUCCESS", json_dump({"provider": "google_directions", "status": body.get("status") or "OK"}))
                 return {
                     "distance_meters": float(distance_meters_value),
                     "eta_minutes": max(1, math.ceil(float(duration_seconds) / 60)),
@@ -3814,11 +3836,13 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
                 "status": body.get("status") or "NO_ROUTE",
                 "error_message": body.get("error_message", ""),
             }))
+            print("DIRECTIONS_FAILED", json_dump({"provider": "google_directions", "status": body.get("status") or "NO_ROUTE"}))
             return {"route_provider": "google_directions", "route_status": body.get("status") or "NO_ROUTE"}
         except Exception as error:
-            print("TRACKING_ROUTE_FAILED", json_dump({"provider": "google_directions", "error": repr(error)}))
-            print("TRACKING_ROUTE_ERROR", json_dump({"provider": "google_directions", "error": repr(error)}))
-            print("TRACK_RIDER_ROUTE_ERROR", json_dump({"provider": "google_directions", "error": repr(error)}))
+            print("TRACKING_ROUTE_FAILED", json_dump({"provider": "google_directions", "error_type": type(error).__name__}))
+            print("TRACKING_ROUTE_ERROR", json_dump({"provider": "google_directions", "error_type": type(error).__name__}))
+            print("TRACK_RIDER_ROUTE_ERROR", json_dump({"provider": "google_directions", "error_type": type(error).__name__}))
+            print("DIRECTIONS_FAILED", json_dump({"provider": "google_directions", "error_type": type(error).__name__}))
 
     osrm_url = (
         "https://router.project-osrm.org/route/v1/driving/"
@@ -3843,6 +3867,7 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
                 "distance_meters": route.get("distance"),
                 "eta_minutes": max(1, math.ceil(float(route.get("duration")) / 60)),
             }))
+            print("DIRECTIONS_SUCCESS", json_dump({"provider": "osrm", "status": body.get("code") or "Ok"}))
             return {
                 "distance_meters": float(route.get("distance")),
                 "eta_minutes": max(1, math.ceil(float(route.get("duration")) / 60)),
@@ -3865,6 +3890,8 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
         print("TRACKING_ROUTE_FAILED", json_dump({"provider": "osrm", "error": repr(error)}))
         print("TRACKING_ROUTE_ERROR", json_dump({"provider": "osrm", "error": repr(error)}))
         print("TRACK_RIDER_ROUTE_ERROR", json_dump({"provider": "osrm", "error": repr(error)}))
+        print("DIRECTIONS_FAILED", json_dump({"provider": "osrm", "error_type": type(error).__name__}))
+    print("DIRECTIONS_FALLBACK_USED", json_dump({"fallback": "markers_only", "status": "UNAVAILABLE"}))
     return {"route_provider": "none", "route_status": "UNAVAILABLE"}
 
 
@@ -3919,13 +3946,14 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
         }))
 
     tracking_visible = dispatch_status in {"ASSIGNED", "ACCEPTED", "ARRIVED_AT_PICKUP", "PICKED_UP", "IN_TRANSIT", "ARRIVED"}
-    if origin_valid and destination_valid and not route_polyline:
-        route_polyline = [
-            {"latitude": float(origin_lat), "longitude": float(origin_lng)},
-            {"latitude": float(destination_lat), "longitude": float(destination_lng)},
-        ]
-        route_provider = route_provider if route_provider != "none" else "fallback"
-        route_status = route_status if route_status != "WAITING_FOR_COORDINATES" else "STRAIGHT_LINE"
+    route_fallback_used = bool(origin_valid and destination_valid and not route_polyline)
+    if route_fallback_used:
+        print("DIRECTIONS_FALLBACK_USED", json_dump({
+            "order_id": order.id,
+            "fallback": "markers_only",
+            "provider": route_provider,
+            "status": route_status,
+        }))
     tracking_available = tracking_visible and origin_valid and destination_valid and bool(route_polyline)
     if getattr(order, "delivery_confirmed_at", None):
         tracking_visible = False
@@ -4591,8 +4619,15 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
             DBDeliveryOffer.status.in_(["DECLINED", "EXPIRED"]),
         ).all()
     }
-    worker = find_available_delivery_worker(db, order.delivery_type, excluded)
-    if not worker:
+    created_offers = []
+    while len(created_offers) < 25:
+        worker = find_available_delivery_worker(db, order.delivery_type, excluded)
+        if not worker:
+            break
+        offer = create_delivery_offer_for_order(db, order, worker)
+        created_offers.append((offer, worker))
+        excluded.add(worker.id)
+    if not created_offers:
         print("ORDER_MATCHING_BLOCKED", json_dump({
             "order_id": order.id,
             "reason": "no_available_worker",
@@ -4610,7 +4645,7 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
             "excluded_worker_ids": sorted(excluded),
         }))
         return None
-    offer = create_delivery_offer_for_order(db, order, worker)
+    offer, worker = created_offers[0]
     print("ORDER_MATCHING_SUCCESS", json_dump({
         "order_id": order.id,
         "offer_id": offer.id,
@@ -4618,6 +4653,7 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
         "worker_type": worker.worker_type,
         "delivery_type": order.delivery_type,
         "result": "offer_created",
+        "offer_count": len(created_offers),
     }))
     print("DISPATCH_MATCHING_OFFER_CREATED", json_dump({
         "order_id": order.id,
@@ -4701,6 +4737,14 @@ DELIVERY_STATUS_API_TO_DB = {
     "cancelled": "CANCELLED",
     "canceled": "CANCELLED",
 }
+DELIVERY_STATUS_TRANSITIONS = {
+    "ASSIGNED": {"ACCEPTED", "CANCELLED"},
+    "ACCEPTED": {"ARRIVED_AT_PICKUP", "PICKED_UP", "CANCELLED"},
+    "ARRIVED_AT_PICKUP": {"PICKED_UP", "CANCELLED"},
+    "PICKED_UP": {"IN_TRANSIT", "CANCELLED"},
+    "IN_TRANSIT": {"ARRIVED", "CANCELLED"},
+    "ARRIVED": {"CANCELLED"},
+}
 
 
 def normalize_delivery_status_transition(raw_status: str) -> tuple[str, str]:
@@ -4710,6 +4754,15 @@ def normalize_delivery_status_transition(raw_status: str) -> tuple[str, str]:
     if normalized not in DELIVERY_STATUS_API_TO_DB:
         raise HTTPException(status_code=400, detail="Invalid delivery status")
     return normalized, DELIVERY_STATUS_API_TO_DB[normalized]
+
+
+def validate_delivery_status_transition(current_status: str, next_status: str) -> None:
+    current = str(current_status or "ASSIGNED").strip().upper()
+    target = str(next_status or "").strip().upper()
+    if current == target:
+        return
+    if target not in DELIVERY_STATUS_TRANSITIONS.get(current, set()):
+        raise HTTPException(status_code=409, detail=f"Invalid delivery transition from {current} to {target}")
 
 
 def ensure_dispatch_eligible_admin_status(order: DBOrder) -> bool:
@@ -4925,6 +4978,19 @@ def assign_delivery_offer_to_order(db, offer: DBDeliveryOffer, worker: DBDeliver
     offer.assignment_status = "ASSIGNED"
     offer.accepted_at = offer.accepted_at or datetime.utcnow()
     offer.updated_at = datetime.utcnow()
+    competing_offers = db.query(DBDeliveryOffer).filter(
+        DBDeliveryOffer.order_id == order.id,
+        DBDeliveryOffer.id != offer.id,
+        DBDeliveryOffer.status == "PENDING",
+    ).all()
+    for competing in competing_offers:
+        competing.status = "WITHDRAWN"
+        competing.assignment_status = "WITHDRAWN"
+        competing.updated_at = datetime.utcnow()
+        competing_worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == competing.worker_id).first()
+        if competing_worker and not worker_has_active_assignment(db, competing_worker, competing.id):
+            competing_worker.operational_status = "ONLINE"
+            competing_worker.updated_at = datetime.utcnow()
     apply_dispatch_assignment_to_order(db, order, worker, delivery_status="ACCEPTED")
     assignment_snapshot = order_assignment_snapshot(order, db)
     print("ORDER_ASSIGNMENT_SUCCESS", json_dump({
@@ -9894,20 +9960,29 @@ def delivery_stats(request: Request):
             order for order in today_orders
             if str(getattr(order, "delivery_status", "") or "").upper() in DISPATCH_ACTIVE_DELIVERY_STATUSES
         ]
-        accepted_orders = [
+        completed_orders = [
             order for order in orders
-            if str(getattr(order, "delivery_status", "") or "").upper() not in {"ASSIGNED", "DECLINED", "CANCELLED"}
+            if str(getattr(order, "delivery_status", "") or "").upper() == "DELIVERED"
+            or str(getattr(order, "status", "") or "").lower() in {"delivered", "completed"}
         ]
-        acceptance_rate = (len(accepted_orders) / len(orders) * 100) if orders else 0
+        offers = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.worker_id == worker.id).all()
+        accepted_offers = [offer for offer in offers if offer.status in {"ACCEPTED", "ASSIGNED", "COMPLETED"}]
+        acceptance_rate = (len(accepted_offers) / len(offers) * 100) if offers else 0
+        earnings_enabled = rider_earnings_enabled()
         data = {
             "today_deliveries": len(today_orders),
             "completed": len(completed_today),
             "pending": len(pending_today),
             "assigned": len([order for order in orders if str(getattr(order, "delivery_status", "") or "").upper() == "ASSIGNED"]),
             "active": len([order for order in orders if str(getattr(order, "delivery_status", "") or "").upper() in DISPATCH_ACTIVE_DELIVERY_STATUSES]),
-            "lifetime_completed": worker.completed_deliveries or 0,
+            "completed_deliveries": len(completed_orders),
+            "lifetime_completed": len(completed_orders),
+            "total_offers": len(offers),
+            "accepted_offers": len(accepted_offers),
             "acceptance_rate": round(acceptance_rate, 1),
             "average_rating": float(getattr(worker, "rating", 0) or 0),
+            "earnings_enabled": earnings_enabled,
+            "earnings_unavailable_reason": "" if earnings_enabled else "Earnings are not enabled for rider accounts.",
         }
         return {"success": True, "stats": data, "data": data}
     finally:
@@ -10310,7 +10385,7 @@ def accept_delivery_offer(offer_id: int, request: Request):
             order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
             if order:
                 start_delivery_matching(db, order, request)
-        offer = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.id == offer_id, DBDeliveryOffer.worker_id == worker.id).first()
+        offer = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.id == offer_id, DBDeliveryOffer.worker_id == worker.id).with_for_update().first()
         if not offer:
             raise HTTPException(status_code=404, detail="Delivery offer not found")
         if offer.status != "PENDING":
@@ -10321,9 +10396,12 @@ def accept_delivery_offer(offer_id: int, request: Request):
         offer.updated_at = datetime.utcnow()
         worker.operational_status = "BUSY"
         worker.updated_at = datetime.utcnow()
-        order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).first()
+        order = db.query(DBOrder).filter(DBOrder.id == offer.order_id).with_for_update().first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
+        assigned_worker_id = getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None)
+        if assigned_worker_id and assigned_worker_id != worker.id:
+            raise HTTPException(status_code=409, detail="This delivery was already accepted by another rider")
         worker_type_label = "Rider" if (worker.worker_type or "") == "rider" else "Messenger"
         order_data = assign_delivery_offer_to_order(
             db,
@@ -12333,6 +12411,31 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
             rider_status = (linked_rider.status if linked_rider else "") or ""
             raw_worker_status = data.get("kyc_status") or "ONBOARDING"
             lifecycle_status = "DELETED" if data.get("deleted_at") else "ACTIVE" if requested_status in ["active", "approved"] and (worker.kyc_status or "").upper() == "ACTIVE" else rider_lifecycle_status(worker, rider_status)
+            approved = lifecycle_status == "ACTIVE"
+            online = str(worker.operational_status or "").upper() == "ONLINE"
+            location_present = valid_tracking_coordinate(worker.latest_latitude, worker.latest_longitude)
+            has_active_assignment = worker_has_active_assignment(db, worker)
+            exclusion_reason = ""
+            if not approved:
+                exclusion_reason = "not_approved"
+            elif not online:
+                exclusion_reason = "offline"
+            elif has_active_assignment:
+                exclusion_reason = "active_delivery"
+            assignment_eligible = not exclusion_reason
+            diagnostic = {
+                "rider_id": worker.id,
+                "email": worker.email,
+                "approved": approved,
+                "online": online,
+                "worker_type": worker.worker_type,
+                "availability": "BUSY" if has_active_assignment else (worker.operational_status or "OFFLINE"),
+                "location_present": location_present,
+                "last_seen_at": iso(worker.last_seen_at),
+                "exclusion_reason": exclusion_reason or None,
+            }
+            print("RIDER_ASSIGNMENT_CANDIDATE", json_dump(diagnostic))
+            print("RIDER_ASSIGNMENT_INCLUDED" if assignment_eligible else "RIDER_ASSIGNMENT_EXCLUDED", json_dump(diagnostic))
             data.update({
                 "raw_kyc_status": raw_worker_status,
                 "kyc_status": lifecycle_status,
@@ -12344,6 +12447,13 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
                 "rider_table_status": rider_status,
                 "vehicle_number": data.get("plate_number") or "",
                 "source": "delivery_workers",
+                "approved": approved,
+                "online": online,
+                "availability": "BUSY" if has_active_assignment else (worker.operational_status or "OFFLINE"),
+                "location_present": location_present,
+                "last_seen_at": iso(worker.last_seen_at),
+                "assignment_eligible": assignment_eligible,
+                "exclusion_reason": exclusion_reason or None,
             })
             riders.append(data)
         if changed_statuses:
@@ -13112,6 +13222,7 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
         old_delivery_status = order.delivery_status or ""
         old_status = order.status or ""
         raw_status, next_delivery_status = normalize_delivery_status_transition(raw_status)
+        validate_delivery_status_transition(old_delivery_status, next_delivery_status)
         order.delivery_status = next_delivery_status
         if raw_status in {"picked_up", "en_route_to_customer", "in_transit", "arrived"}:
             order.status = "out_for_delivery"

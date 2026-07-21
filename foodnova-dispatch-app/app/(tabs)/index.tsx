@@ -238,8 +238,8 @@ export default function Dashboard() {
           <View style={styles.earningsHeader}>
             <View style={{ flex: 1 }}>
               <Text style={styles.earningsLabel}>Today earnings</Text>
-              <Text testID="stat-earnings" style={styles.earningsValue} numberOfLines={1}>
-                {formatMoney(normalizedStats.dailyEarnings)}
+              <Text testID="stat-earnings" style={styles.earningsValue} numberOfLines={2}>
+                {normalizedStats.earningsEnabled ? formatMoney(normalizedStats.dailyEarnings) : "Unavailable"}
               </Text>
             </View>
             <TouchableOpacity style={styles.detailsPill} onPress={() => router.push("/(tabs)/earnings")}>
@@ -247,11 +247,11 @@ export default function Dashboard() {
               <Ionicons name="arrow-forward" size={15} color={colors.onBrandPrimary} />
             </TouchableOpacity>
           </View>
-          <View style={styles.earningsGrid}>
+          {normalizedStats.earningsEnabled ? <View style={styles.earningsGrid}>
             <MiniMetric testID="stat-weekly-earnings" label="Week" value={formatMoney(normalizedStats.weeklyEarnings)} />
             <MiniMetric testID="stat-monthly-earnings" label="Month" value={formatMoney(normalizedStats.monthlyEarnings)} />
             <MiniMetric testID="stat-lifetime-earnings" label="Lifetime" value={formatMoney(normalizedStats.totalEarnings)} />
-          </View>
+          </View> : <Text style={styles.earningsUnavailable}>{normalizedStats.earningsUnavailableReason}</Text>}
         </View>
 
         <View style={styles.statRow}>
@@ -410,6 +410,7 @@ const styles = StyleSheet.create({
   detailsPill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.brandPrimary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radius.pill },
   detailsPillText: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "800", color: colors.onBrandPrimary },
   earningsGrid: { flexDirection: "row", gap: spacing.sm },
+  earningsUnavailable: { fontFamily: fonts.text, fontSize: type.sm, color: "#D1D5DB", lineHeight: 20 },
   miniMetric: { flex: 1, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: radius.lg, padding: spacing.md },
   miniMetricValue: { fontFamily: fonts.text, fontSize: type.lg, fontWeight: "800", color: colors.onSurfaceInverse },
   miniMetricLabel: { fontFamily: fonts.text, fontSize: type.xs, fontWeight: "700", color: "#9CA3AF", marginTop: 2 },

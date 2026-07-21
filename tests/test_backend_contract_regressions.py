@@ -12,6 +12,7 @@ sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{ROOT / 'test_foodnova_contracts.db'}")
 
 import main  # noqa: E402
+from fastapi import HTTPException  # noqa: E402
 
 
 def tracking_order(status: str, pin: str = "1604") -> SimpleNamespace:
@@ -67,6 +68,20 @@ class BackendContractRegressionTests(unittest.TestCase):
     def test_delivery_proof_accepts_mobile_pin_key(self):
         payload = main.DeliveryProofPayload(entered_pin="1604")
         self.assertEqual(payload.entered_pin, "1604")
+
+    def test_delivery_state_machine_accepts_forward_transition(self):
+        main.validate_delivery_status_transition("PICKED_UP", "IN_TRANSIT")
+
+    def test_delivery_state_machine_rejects_backward_transition(self):
+        with self.assertRaises(HTTPException) as context:
+            main.validate_delivery_status_transition("IN_TRANSIT", "PICKED_UP")
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_google_directions_polyline_is_decoded(self):
+        points = main.decode_google_polyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@")
+        self.assertEqual(len(points), 3)
+        self.assertAlmostEqual(points[0]["latitude"], 38.5)
+        self.assertAlmostEqual(points[0]["longitude"], -120.2)
 
     def test_customer_tracking_hides_pin_until_arrival(self):
         for status in ("ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"):

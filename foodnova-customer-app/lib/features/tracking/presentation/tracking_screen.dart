@@ -1132,12 +1132,6 @@ class _RiderTrackingCard extends StatelessWidget {
           final routePoints = data.routePolyline
               .map((point) => LatLng(point['latitude']!, point['longitude']!))
               .toList();
-          if (routeDestinationPoint != null && routePoints.length < 2) {
-            routePoints
-              ..clear()
-              ..add(riderPoint)
-              ..add(routeDestinationPoint);
-          }
           debugPrint(
             'TRACK_RIDER_RENDER rider=${data.riderLatitude},${data.riderLongitude} '
             'customer=${data.customerLatitude},${data.customerLongitude} '

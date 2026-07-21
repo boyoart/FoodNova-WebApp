@@ -53,8 +53,8 @@ export default function Earnings() {
         {/* Hero total */}
         <Card inverse style={styles.hero}>
           <Text style={styles.heroLabel}>TOTAL EARNINGS</Text>
-          <Text style={styles.heroValue}>{formatMoney(normalizedStats.totalEarnings)}</Text>
-          <View style={styles.heroRow}>
+          <Text style={styles.heroValue}>{normalizedStats.earningsEnabled ? formatMoney(normalizedStats.totalEarnings) : "Unavailable"}</Text>
+          {normalizedStats.earningsEnabled ? <View style={styles.heroRow}>
             <View style={styles.heroCol}>
               <Text style={styles.heroColValue}>{formatMoney(normalizedStats.dailyEarnings)}</Text>
               <Text style={styles.heroColLabel}>Today</Text>
@@ -69,7 +69,7 @@ export default function Earnings() {
               <Text style={styles.heroColValue}>{formatMoney(normalizedStats.monthlyEarnings)}</Text>
               <Text style={styles.heroColLabel}>This month</Text>
             </View>
-          </View>
+          </View> : <Text style={styles.unavailable}>{normalizedStats.earningsUnavailableReason}</Text>}
         </Card>
 
         {/* Performance */}
@@ -82,7 +82,7 @@ export default function Earnings() {
         <View style={styles.metricRow}>
           <Metric icon="today" label="Today" value={String(normalizedStats.deliveriesToday)} />
           <Metric icon="trophy" label="Completion" value={formatPercent(normalizedStats.completionRate)} />
-          <Metric icon="calendar" label="Month" value={formatMoney(normalizedStats.monthlyEarnings)} />
+          <Metric icon="calendar" label="Month" value={normalizedStats.earningsEnabled ? formatMoney(normalizedStats.monthlyEarnings) : "--"} />
         </View>
 
         {/* Recent payouts */}
@@ -106,9 +106,9 @@ export default function Earnings() {
                   {timeAgo(pick(item, ["completed_at", "updated_at", "created_at"], null))}
                 </Text>
               </View>
-              <Text style={styles.payoutAmount}>
+              {normalizedStats.earningsEnabled && <Text style={styles.payoutAmount}>
                 +{formatMoney(pick(item, ["payout", "fee", "delivery_fee", "amount"], 0))}
-              </Text>
+              </Text>}
             </View>
           ))
         )}
@@ -135,6 +135,7 @@ const styles = StyleSheet.create({
   hero: { gap: spacing.sm },
   heroLabel: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "700", letterSpacing: 1, color: "#9CA3AF" },
   heroValue: { fontFamily: fonts.display, fontSize: type["4xl"], fontWeight: "700", color: colors.onSurfaceInverse },
+  unavailable: { fontFamily: fonts.text, fontSize: type.sm, color: "#D1D5DB", lineHeight: 20 },
   heroRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.md },
   heroCol: { flex: 1, gap: 2 },
   heroColValue: { fontFamily: fonts.display, fontSize: type.xl, fontWeight: "700", color: colors.brandPrimary },

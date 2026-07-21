@@ -1,6 +1,8 @@
 import { pick } from "@/src/lib/normalize";
 
 export type RiderStats = {
+  earningsEnabled: boolean;
+  earningsUnavailableReason: string;
   totalEarnings: number;
   dailyEarnings: number;
   weeklyEarnings: number;
@@ -55,7 +57,7 @@ export function normalizeRiderStats(raw: Record<string, any>, completedFallback:
         "total_completed_deliveries",
         "deliveries_completed",
         "orders_completed",
-        "completed",
+        "lifetime_completed",
         "lifetime.completed",
         "lifetime.deliveries",
         "deliveries.total_completed",
@@ -69,6 +71,8 @@ export function normalizeRiderStats(raw: Record<string, any>, completedFallback:
   );
 
   return {
+    earningsEnabled: raw.earnings_enabled === true,
+    earningsUnavailableReason: String(raw.earnings_unavailable_reason || "Earnings are not enabled for rider accounts."),
     totalEarnings: numberFrom(
       pick(raw, ["total_earnings", "lifetime_earnings", "earnings.total", "earnings", "total"], 0)
     ),

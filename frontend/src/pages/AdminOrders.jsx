@@ -183,7 +183,10 @@ export default function AdminOrders() {
   const loadRiders = async () => {
     try {
       const response = await adminAPI.getRiders()
-      setRiders((response.data || []).filter((rider) => rider.status === 'active'))
+      setRiders((response.data || []).filter((rider) => {
+        const status = String(rider.status || rider.approval_status || rider.kyc_status || '').toUpperCase()
+        return status === 'ACTIVE' && rider.assignment_eligible !== false
+      }))
     } catch (error) {
       if (![401, 403].includes(error?.response?.status)) console.error(error)
       setRiders([])
@@ -643,7 +646,7 @@ export default function AdminOrders() {
                       <option value="">Select rider</option>
                       {riders.map((rider) => (
                         <option key={rider.id} value={rider.id}>
-                          {rider.full_name || rider.name} - {rider.phone}{rider.vehicle_type ? ` (${rider.vehicle_type})` : ''}
+                          {rider.full_name || rider.name} - {rider.worker_type || 'rider'} - {rider.online ? 'Online' : 'Offline'} - {rider.location_present ? rider.availability : 'location unavailable'}
                         </option>
                       ))}
                     </select>
