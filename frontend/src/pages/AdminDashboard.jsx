@@ -10,7 +10,7 @@ import './AdminDashboard.css'
 const adminTools = [
   { group: 'Operations', path: '/admin/orders', title: 'Manage Orders', description: 'View and update customer orders.', icon: ClipboardList, permission: 'orders:view' },
   { group: 'Operations', path: '/admin/payments', title: 'Payment Approvals', description: 'Review customer payment receipts.', icon: CreditCard, permission: 'payments:view' },
-  { group: 'Operations', path: '/admin/riders', title: 'Delivery Riders', description: 'Manage riders and assign deliveries.', icon: Truck, permissions: ['orders:delivery', 'delivery:manage'] },
+  { group: 'Operations', path: '/admin/riders', title: 'Delivery Riders', description: 'Review KYC, approve riders, and manage deliveries.', icon: Truck, permissions: ['rider_kyc:view', 'rider_kyc:review', 'orders:delivery', 'delivery:manage', 'riders:manage', 'workforce:view', 'workforce:manage'] },
   { group: 'Operations', path: '/admin/customers', title: 'Customers', description: 'View customer data and order history.', icon: Users, permission: 'customers:view' },
   { group: 'Catalog', path: '/admin/stock', title: 'Stock Management', description: 'Add, edit, and manage products and food packs.', icon: Package, permission: 'stock:view' },
   { group: 'Catalog', path: '/admin/categories', title: 'Categories', description: 'Organize the public product catalog.', icon: Tags, permissions: ['categories:view', 'stock:view'] },

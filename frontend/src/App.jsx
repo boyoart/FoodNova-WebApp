@@ -21,6 +21,7 @@ import AdminCustomers from './pages/AdminCustomers'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminUsers from './pages/AdminUsers'
 import AdminRiders from './pages/AdminRiders'
+import AdminRiderKycDetail from './pages/AdminRiderKycDetail'
 import { AdminAnnouncements, AdminBanners, AdminCategories, AdminComingSoonSubscribers, AdminDeliveryZones, AdminReports, AdminWebsiteSettings } from './pages/AdminExpansion'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
@@ -56,6 +57,7 @@ function App() {
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
               <Route path="/admin/riders" element={<AdminRiders />} />
+              <Route path="/admin/riders/:riderId" element={<AdminRiderKycDetail />} />
               <Route path="/admin/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/admin/stock" element={<AdminStock />} />
               <Route path="/admin/payments" element={<AdminPayments />} />

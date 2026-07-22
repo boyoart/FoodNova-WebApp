@@ -440,6 +440,9 @@ export const adminAPI = {
     const body = new FormData(); body.append('file', file);
     return (await api.post('/admin/uploads/announcement-image', body, multipartConfig)).data;
   },
+  getRiderVerificationQueue: async (params = {}) => (await api.get('/admin/rider-verification-queue', { params })).data,
+  getRiderVerificationDetail: async (id) => (await api.get(`/admin/rider-verification-queue/${id}`)).data,
+  reviewRiderVerification: async (id, action, payload = {}) => (await api.post(`/admin/rider-verification-queue/${id}/${action}`, payload)).data,
   getDeliveryZone: async () => (await api.get('/admin/delivery-zone')).data,
   updateDeliveryZone: async (payload) => (await api.patch('/admin/delivery-zone', payload)).data,
   getWebsiteSettings: async () => (await api.get('/admin/website-settings')).data,

@@ -943,11 +943,12 @@ def rider_lifecycle_status(worker: DBDeliveryWorker, rider_status: str = "") -> 
         return "SUSPENDED"
     if raw_status in {"INACTIVE", "DEACTIVATED"}:
         return "INACTIVE"
-    if raw_status == "ACTIVE" and bool(getattr(worker, "nin_verified", False)):
+    identity_approved = bool(getattr(worker, "nin_verified", False)) or rider_manual_approval_active(worker)
+    if raw_status == "ACTIVE" and identity_approved:
         return "ACTIVE"
-    if raw_status == "APPROVED" and bool(getattr(worker, "nin_verified", False)):
+    if raw_status == "APPROVED" and identity_approved:
         return "ACTIVE"
-    if linked_status in {"ACTIVE", "APPROVED"} and bool(getattr(worker, "nin_verified", False)):
+    if linked_status in {"ACTIVE", "APPROVED"} and identity_approved:
         return "ACTIVE"
     return "ONBOARDING"
 
@@ -973,13 +974,20 @@ def rider_status_input_to_lifecycle(value: str, default: str = "ONBOARDING") -> 
 def promote_verified_approved_rider(worker: DBDeliveryWorker) -> bool:
     if (
         (getattr(worker, "kyc_status", "") or "").upper() == "APPROVED"
-        and bool(getattr(worker, "nin_verified", False))
+        and (bool(getattr(worker, "nin_verified", False)) or rider_manual_approval_active(worker))
         and not getattr(worker, "deleted_at", None)
     ):
         worker.kyc_status = "ACTIVE"
         worker.approved_at = worker.approved_at or datetime.utcnow()
         return True
     return False
+
+
+def rider_manual_approval_active(worker: DBDeliveryWorker) -> bool:
+    """Return an explicit FoodNova approval override without changing provider NIN state."""
+    meta = json_load(getattr(worker, "review_note", "") or "{}", {})
+    approval = meta.get("manual_approval") if isinstance(meta, dict) else None
+    return bool(isinstance(approval, dict) and approval.get("active") is True)
 
 
 class DeliveryOfferActionPayload(BaseModel):
@@ -1105,8 +1113,9 @@ ADMIN_ROLE_PERMISSIONS = {
         "reports:view", "orders:delete", "riders:manage", "workforce:view", "workforce:manage",
         "categories:view", "categories:manage", "website_settings:view", "website_settings:manage",
         "subscribers:view", "subscribers:manage", "delivery_zones:view", "delivery_zones:manage",
+        "rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete",
     ],
-    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "delivery_zones:view", "delivery_zones:manage", "cancellations:view", "cancellations:manage", "customers:view"],
+    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete", "delivery_zones:view", "delivery_zones:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage", "categories:view", "categories:manage"],
     "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "cancellations:view", "cancellations:manage", "customers:view"],
     "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage", "website_settings:view", "website_settings:manage", "subscribers:view", "subscribers:manage"],
@@ -3342,6 +3351,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
     emergency_meta = review_meta.get("emergency_contact") or {}
     profile_meta = review_meta.get("profile_data") or {}
     admin_override = review_meta.get("admin_override") or {}
+    identity_approved = bool(getattr(worker, "nin_verified", False)) or rider_manual_approval_active(worker)
     rejection_reason = admin_override.get("note") or identity_meta.get("rejection_reason") or review_meta.get("rejection_reason") or ""
     submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
     promote_verified_approved_rider(worker)
@@ -3401,7 +3411,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "profile_completed": profile_completed,
         "dashboard_access_allowed": bool(
             lifecycle_status == "ACTIVE"
-            and getattr(worker, "nin_verified", False)
+            and identity_approved
             and documents_complete
             and profile_completed
         ),
@@ -3448,7 +3458,7 @@ def worker_to_dict(worker: DBDeliveryWorker) -> dict:
         "can_accept_delivery_requests": assignment_policy["can_accept_delivery_requests"],
         "can_go_online": bool(
             lifecycle_status == "ACTIVE"
-            and getattr(worker, "nin_verified", False)
+            and identity_approved
             and documents_complete
             and profile_completed
         ),
@@ -3488,7 +3498,7 @@ def worker_dashboard_access_allowed(worker: DBDeliveryWorker) -> bool:
     )
     return bool(
         rider_lifecycle_status(worker) == "ACTIVE"
-        and getattr(worker, "nin_verified", False)
+        and (getattr(worker, "nin_verified", False) or rider_manual_approval_active(worker))
         and documents_complete
         and profile_completed
     )
@@ -6665,11 +6675,11 @@ def sync_rider_onboarding_state(db, worker: DBDeliveryWorker, actor: dict = None
     return stage
 
 
-def rider_approval_blockers(db, worker: DBDeliveryWorker) -> List[str]:
+def rider_approval_blockers(db, worker: DBDeliveryWorker, allow_manual_nin: bool = False) -> List[str]:
     sync_rider_onboarding_state(db, worker)
     kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
     blockers = []
-    if not kyc or not kyc.nin_verified or kyc.identity_status not in {"verified", "approved"}:
+    if not allow_manual_nin and (not kyc or not kyc.nin_verified or kyc.identity_status not in {"verified", "approved"}):
         blockers.append("NIN must be verified by the provider before approval.")
     if kyc and kyc.duplicate_nin:
         blockers.append("Duplicate NIN usage must be cleared before approval.")
@@ -6721,6 +6731,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
             "emergency_status": kyc.emergency_status if kyc else "not_started",
             "selfie_status": kyc.selfie_status if kyc else "not_started",
             "admin_review_status": kyc.admin_review_status if kyc else "pending",
+            "admin_approval_status": "manually_approved" if rider_manual_approval_active(worker) else (kyc.admin_review_status if kyc else "pending"),
             "submitted_nin": kyc.submitted_nin if kyc else "",
             "nin_last4": kyc.nin_last4 if kyc else "",
             "nin_verified": bool(kyc.nin_verified) if kyc else False,
@@ -11593,11 +11604,11 @@ def admin_get_order(order_id: int, request: Request):
 
 
 def require_workforce_view(request: Request):
-    return require_any_permission(request, ["workforce:view", "workforce:manage", "delivery:manage", "riders:manage"])
+    return require_any_permission(request, ["rider_kyc:view", "rider_kyc:review", "workforce:view", "workforce:manage", "delivery:manage", "riders:manage"])
 
 
 def require_workforce_manage(request: Request):
-    return require_any_permission(request, ["workforce:manage", "delivery:manage", "riders:manage"])
+    return require_any_permission(request, ["rider_kyc:review", "workforce:manage", "delivery:manage", "riders:manage"])
 
 
 @app.get("/admin/workforce")
@@ -12015,7 +12026,7 @@ def get_rider_verification_queue(
         counts = {
             "pending": sum(1 for worker in all_count_workers if rider_lifecycle_status(worker) == "ONBOARDING" and not worker.deleted_at),
             "approved": sum(1 for worker in all_count_workers if rider_lifecycle_status(worker) == "ACTIVE" and not worker.deleted_at),
-            "rejected": 0,
+            "rejected": sum(1 for worker in all_count_workers if (worker.kyc_status or "") in {"REJECTED", "SUSPENDED"} and not worker.deleted_at),
             "suspended": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "SUSPENDED" and not worker.deleted_at),
             "deleted": sum(1 for worker in all_count_workers if (worker.kyc_status or "") == "DELETED" or bool(worker.deleted_at)),
         }
@@ -12068,6 +12079,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
     action = (action or "").strip().lower().replace("-", "_")
     action_map = {
         "approve": "ACTIVE",
+        "manual_approve": "ACTIVE",
         "reject": "SUSPENDED",
         "request_resubmission": "ONBOARDING",
         "reactivate": "ONBOARDING",
@@ -12078,7 +12090,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         "force_logout": "FORCE_LOGOUT",
     }
     if action not in action_map:
-        raise HTTPException(status_code=400, detail="Action must be approve, reject, request_resubmission, reactivate, suspend, deactivate, delete, reset_onboarding, or force_logout.")
+        raise HTTPException(status_code=400, detail="Action must be approve, manual_approve, reject, request_resubmission, reactivate, suspend, deactivate, delete, reset_onboarding, or force_logout.")
     db = SessionLocal()
     try:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id, DBDeliveryWorker.worker_type.in_(["rider", "messenger"])).first()
@@ -12086,7 +12098,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             raise HTTPException(status_code=404, detail="Rider verification profile not found")
         new_status = action_map[action]
         if new_status == "ACTIVE":
-            blockers = rider_approval_blockers(db, worker)
+            blockers = rider_approval_blockers(db, worker, allow_manual_nin=action == "manual_approve")
             if blockers:
                 raise HTTPException(status_code=422, detail="Rider cannot be approved yet: " + " ".join(blockers))
         old_data = rider_detail_payload(db, worker)
@@ -12191,6 +12203,12 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             worker.operational_status = "OFFLINE"
         meta = delivery_worker_review_meta(worker)
         meta["admin_override"] = {"status": new_status, "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}
+        if action == "manual_approve":
+            meta["manual_approval"] = {"active": True, "note": review_note, "admin_id": admin.get("id"), "admin_name": admin.get("full_name") or admin.get("email") or "Admin", "updated_at": iso(datetime.utcnow())}
+        elif action == "approve":
+            meta["manual_approval"] = {"active": False, "reason": "provider_verified", "updated_at": iso(datetime.utcnow())}
+        elif new_status != "ACTIVE":
+            meta["manual_approval"] = {"active": False, "updated_at": iso(datetime.utcnow())}
         if action == "reject":
             meta["rejection_reason"] = review_note
         worker.review_note = json_dump(meta)
@@ -12203,6 +12221,8 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
             if new_status == "DELETED":
                 rider_kyc.onboarding_stage = "deleted"
                 rider_kyc.admin_review_status = "deleted"
+            elif action == "manual_approve":
+                rider_kyc.admin_review_status = "manually_approved"
         db.add(DBAdminReview(
             delivery_worker_id=worker.id,
             admin_id=admin.get("id"),
@@ -12215,6 +12235,11 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
         db.commit()
         db.refresh(worker)
         data = rider_detail_payload(db, worker)
+        if action in {"approve", "manual_approve", "reject"}:
+            title = "Rider application approved" if new_status == "ACTIVE" else "Rider application update"
+            message = "Your FoodNova rider application has been approved." if new_status == "ACTIVE" else f"Your FoodNova rider application was not approved. {review_note}".strip()
+            rider_user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+            _create_user_notification(worker.email or (rider_user.email if rider_user else ""), title, message, f"rider_kyc_{action}", "rider")
         create_admin_audit_log(request, admin, f"rider_verification_{action}", "delivery_worker", worker.id, f"Admin {action.replace('_', ' ')} for rider {worker.full_name}", {"before": old_data, "after": data})
         audit_event = {
             "approve": "RIDER_APPROVED",
@@ -12942,7 +12967,7 @@ def create_rider(payload: RiderPayload, request: Request):
 
 @app.patch("/admin/riders/{rider_id}")
 def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
-    admin = require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
+    admin = require_any_permission(request, ["riders:worker_type", "delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
     updates = payload.dict(exclude_unset=True)
     db = SessionLocal()
     try:
@@ -12998,7 +13023,7 @@ def update_rider(rider_id: int, payload: RiderUpdatePayload, request: Request):
 
 @app.delete("/admin/riders/{rider_id}")
 def deactivate_rider(rider_id: int, request: Request):
-    admin = require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
+    admin = require_any_permission(request, ["riders:delete", "delivery:manage", "orders:delivery", "riders:manage", "workforce:manage"])
     db = SessionLocal()
     try:
         print("ADMIN_DELETE_RIDER_REQUEST", json_dump({
@@ -14236,7 +14261,8 @@ def get_payment_audit_logs(
 
 @app.get("/admin/reports/summary")
 def admin_reports_summary(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None):
-    require_permission(request, "reports:view")
+    admin = require_permission(request, "reports:view")
+    print("ADMIN_REPORTS_REQUEST_STARTED", json_dump({"admin_id": admin.get("id"), "start_date": start_date or "default", "end_date": end_date or "default"}))
     now = datetime.utcnow()
     start_dt = parse_report_date(start_date, now - timedelta(days=30))
     end_dt = parse_report_date(end_date, now)
@@ -14346,7 +14372,11 @@ def admin_reports_summary(request: Request, start_date: Optional[str] = None, en
             "recent_orders": recent_orders,
         }
         payload["data"] = summary
+        print("ADMIN_REPORTS_REQUEST_SUCCEEDED", json_dump({"admin_id": admin.get("id"), "order_count": len(orders), "product_count": len(products)}))
         return payload
+    except Exception as error:
+        print("ADMIN_REPORTS_REQUEST_FAILED", json_dump({"admin_id": admin.get("id"), "error_type": type(error).__name__}))
+        raise
     finally:
         db.close()
 

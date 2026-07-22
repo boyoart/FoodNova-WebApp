@@ -1,214 +1,65 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Plus, Search, X } from 'lucide-react'
 import { adminAPI } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import './AdminRiders.css'
 
-const emptyForm = {
-  full_name: '',
-  phone: '',
-  email: '',
-  vehicle_type: '',
-  vehicle_number: '',
-  status: 'active',
-  notes: '',
-}
+const tabs = [
+  ['all', 'All Riders'],
+  ['pending', 'Pending KYC Review'],
+  ['active', 'Approved Riders'],
+  ['rejected', 'Rejected Riders'],
+]
+
+const normalizeRole = (value) => String(value || '').toLowerCase().replaceAll('-', '_').replaceAll(' ', '_')
+const emptyForm = { full_name: '', phone: '', email: '', worker_type: 'rider', vehicle_type: '', vehicle_number: '', status: 'onboarding', notes: '' }
 
 export default function AdminRiders() {
   const { isAdmin, admin } = useAuthStore()
   const [riders, setRiders] = useState([])
+  const [counts, setCounts] = useState({})
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
   const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [selectedRider, setSelectedRider] = useState(null)
-  const [form, setForm] = useState(emptyForm)
-
+  const [tab, setTab] = useState('all')
+  const [modalOpen, setModalOpen] = useState(false); const [selectedRider, setSelectedRider] = useState(null); const [form, setForm] = useState(emptyForm); const [saving, setSaving] = useState(false)
   const permissions = Array.isArray(admin?.permissions) ? admin.permissions : []
-  const isSuperAdmin = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || permissions.length === 0))
-  const canManageDelivery = isSuperAdmin || permissions.includes('delivery:manage') || permissions.includes('orders:delivery')
+  const superAdmin = normalizeRole(admin?.admin_role) === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || !permissions.length))
+  const canView = superAdmin || ['rider_kyc:view', 'rider_kyc:review', 'workforce:view', 'workforce:manage', 'delivery:manage', 'riders:manage'].some((item) => permissions.includes(item))
+  const canEdit = superAdmin || ['riders:worker_type', 'rider_kyc:review', 'workforce:manage', 'delivery:manage', 'riders:manage'].some((item) => permissions.includes(item))
 
-  const loadRiders = async () => {
+  const load = async () => {
+    if (!isAdmin || !canView) { setLoading(false); return }
     try {
-      setLoading(true)
-      const response = await adminAPI.getRiders()
-      setRiders(response.data || [])
-    } catch (error) {
-      toast.error([401, 403].includes(error?.response?.status) ? 'Access denied for rider management.' : 'Failed to load riders')
-      console.error(error)
-    } finally {
-      setLoading(false)
-    }
+      setLoading(true); setError('')
+      const params = { ...(tab !== 'all' ? { status: tab } : {}), ...(search.trim() ? { search: search.trim() } : {}) }
+      const body = await adminAPI.getRiderVerificationQueue(params)
+      setRiders(Array.isArray(body?.riders) ? body.riders : Array.isArray(body?.data) ? body.data : [])
+      setCounts(body?.counts || {})
+    } catch (requestError) {
+      setError(requestError?.response?.data?.detail || 'Unable to load rider KYC records.')
+    } finally { setLoading(false) }
   }
 
-  useEffect(() => {
-    if (isAdmin && canManageDelivery) loadRiders()
-    else setLoading(false)
-  }, [isAdmin, canManageDelivery])
+  useEffect(() => { load() }, [isAdmin, canView, tab])
+  const pendingCount = Number(counts.pending || 0)
+  const rows = useMemo(() => riders.map((item) => ({ ...item, worker: item.worker || item })), [riders])
+  const openForm = (worker = null) => { setSelectedRider(worker); setForm(worker ? { full_name: worker.full_name || '', phone: worker.phone || '', email: worker.email || '', worker_type: worker.worker_type || 'rider', vehicle_type: worker.vehicle_type || '', vehicle_number: worker.plate_number || '', status: worker.status || 'onboarding', notes: '' } : emptyForm); setModalOpen(true) }
+  const saveRider = async (event) => { event.preventDefault(); try { setSaving(true); if (selectedRider) await adminAPI.updateRider(selectedRider.id, form); else await adminAPI.createRider(form); toast.success(selectedRider ? 'Rider updated.' : 'Rider created.'); setModalOpen(false); await load() } catch (requestError) { toast.error(requestError?.response?.data?.detail || 'Unable to save rider.') } finally { setSaving(false) } }
 
-  const filteredRiders = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    return riders.filter((rider) => {
-      const matchesStatus = statusFilter === 'all' || rider.status === statusFilter
-      const matchesSearch = !term || [rider.full_name, rider.name, rider.phone, rider.email, rider.vehicle_type, rider.vehicle_number]
-        .some((value) => String(value || '').toLowerCase().includes(term))
-      return matchesStatus && matchesSearch
-    })
-  }, [riders, search, statusFilter])
+  if (!isAdmin) return <div className="admin-page"><div className="rider-state">Admin login is required.</div></div>
+  if (!canView) return <div className="admin-page"><div className="rider-state error">You do not have permission to view rider KYC records.</div></div>
 
-  const openCreate = () => {
-    setSelectedRider(null)
-    setForm(emptyForm)
-    setModalOpen(true)
-  }
-
-  const openEdit = (rider) => {
-    setSelectedRider(rider)
-    setForm({
-      full_name: rider.full_name || rider.name || '',
-      phone: rider.phone || '',
-      email: rider.email || '',
-      vehicle_type: rider.vehicle_type || '',
-      vehicle_number: rider.vehicle_number || '',
-      status: rider.status || 'active',
-      notes: rider.notes || '',
-    })
-    setModalOpen(true)
-  }
-
-  const closeModal = () => {
-    setModalOpen(false)
-    setSelectedRider(null)
-    setForm(emptyForm)
-  }
-
-  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }))
-
-  const submitForm = async (event) => {
-    event.preventDefault()
-    if (!form.full_name.trim() || !form.phone.trim()) {
-      toast.error('Rider name and phone are required')
-      return
-    }
-    try {
-      setSaving(true)
-      if (selectedRider?.id) {
-        await adminAPI.updateRider(selectedRider.id, form)
-        toast.success('Rider updated')
-      } else {
-        await adminAPI.createRider(form)
-        toast.success('Rider created')
-      }
-      closeModal()
-      await loadRiders()
-    } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to save rider')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const deactivateRider = async (rider) => {
-    if (!window.confirm(`Deactivate ${rider.full_name || rider.name}?`)) return
-    try {
-      await adminAPI.deactivateRider(rider.id)
-      toast.success('Rider deactivated')
-      await loadRiders()
-    } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to deactivate rider')
-    }
-  }
-
-  if (!isAdmin) return <div className="admin-page"><p>Access denied.</p></div>
-  if (!canManageDelivery) return <div className="admin-page"><p>You do not have permission to manage delivery riders.</p></div>
-
-  return (
-    <div className="admin-page admin-riders-page">
-      <div className="admin-riders-header">
-        <div>
-          <h1>Delivery Riders</h1>
-          <p>Manage riders and assign deliveries across FoodNova orders.</p>
-        </div>
-        <button type="button" className="btn-primary" onClick={openCreate}><Plus size={18} /> Add Rider</button>
-      </div>
-
-      <div className="rider-toolbar">
-        <label className="rider-search"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, phone, vehicle" /></label>
-        <div className="rider-status-tabs">
-          {['all', 'active', 'inactive'].map((status) => (
-            <button key={status} type="button" className={statusFilter === status ? 'active' : ''} onClick={() => setStatusFilter(status)}>
-              {status}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="loading">Loading riders...</div>
-      ) : filteredRiders.length ? (
-        <div className="rider-table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Phone</th>
-                <th>Vehicle</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRiders.map((rider) => (
-                <tr key={rider.id}>
-                  <td><strong>{rider.full_name || rider.name}</strong><small>{rider.email || 'No email'}</small></td>
-                  <td>{rider.phone}</td>
-                  <td>{[rider.vehicle_type, rider.vehicle_number].filter(Boolean).join(' - ') || 'N/A'}</td>
-                  <td><span className={`rider-status ${rider.status}`}>{rider.status}</span></td>
-                  <td>
-                    <div className="rider-actions">
-                      <button type="button" className="btn-view" onClick={() => openEdit(rider)}>Edit</button>
-                      {rider.status !== 'inactive' && <button type="button" className="btn-delete" onClick={() => deactivateRider(rider)}>Deactivate</button>}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="empty-state">No riders found.</div>
-      )}
-
-      {modalOpen && (
-        <div className="rider-modal-overlay">
-          <div className="rider-modal">
-            <div className="rider-modal-header">
-              <div>
-                <h2>{selectedRider ? 'Edit Rider' : 'Add Rider'}</h2>
-                <p>Keep delivery rider details accurate for order assignments.</p>
-              </div>
-              <button type="button" onClick={closeModal} aria-label="Close"><X size={20} /></button>
-            </div>
-            <form className="rider-modal-form" onSubmit={submitForm}>
-              <div className="rider-form-grid">
-                <label>Full Name<input value={form.full_name} onChange={(event) => updateForm('full_name', event.target.value)} required /></label>
-                <label>Phone<input value={form.phone} onChange={(event) => updateForm('phone', event.target.value)} required /></label>
-                <label>Email<input type="email" value={form.email} onChange={(event) => updateForm('email', event.target.value)} /></label>
-                <label>Vehicle Type<input placeholder="Bike, Van, Car" value={form.vehicle_type} onChange={(event) => updateForm('vehicle_type', event.target.value)} /></label>
-                <label>Vehicle Number<input value={form.vehicle_number} onChange={(event) => updateForm('vehicle_number', event.target.value)} /></label>
-                <label>Status<select value={form.status} onChange={(event) => updateForm('status', event.target.value)}><option value="active">Active</option><option value="inactive">Inactive</option></select></label>
-                <label className="rider-form-wide">Notes<textarea rows="3" value={form.notes} onChange={(event) => updateForm('notes', event.target.value)} /></label>
-              </div>
-              <div className="rider-modal-footer">
-                <button type="button" className="btn-cancel" onClick={closeModal}>Cancel</button>
-                <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving...' : selectedRider ? 'Update Rider' : 'Create Rider'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  return <div className="admin-page admin-riders-page">
+    <div className="admin-riders-header"><div><h1>Delivery Riders</h1><p>Review KYC, approve riders, and manage deliveries.</p></div><div className="rider-actions">{pendingCount > 0 && <span className="rider-pending-badge">Pending KYC: {pendingCount}</span>}{canEdit && <button className="btn-primary" onClick={() => openForm()}><Plus size={18} /> Add Rider</button>}</div></div>
+    <form className="rider-toolbar" onSubmit={(event) => { event.preventDefault(); load() }}>
+      <label className="rider-search"><Search size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, email, phone, or vehicle" /></label>
+      <button type="submit" className="btn-primary">Search</button>
+    </form>
+    <div className="rider-status-tabs" role="tablist">{tabs.map(([value, label]) => <button key={value} type="button" className={tab === value ? 'active' : ''} onClick={() => setTab(value)}>{label}{value !== 'all' && counts[value] !== undefined ? ` (${counts[value]})` : ''}</button>)}</div>
+    {loading ? <div className="rider-state">Loading rider KYC records…</div> : error ? <div className="rider-state error"><p>{error}</p><button className="btn-primary" onClick={load}>Retry</button></div> : !rows.length ? <div className="rider-state">No riders match this view.</div> : <div className="rider-table-wrap"><table><thead><tr><th>Rider</th><th>Worker Type</th><th>KYC Status</th><th>Progress</th><th>NIN</th><th>Operational</th><th>Action</th></tr></thead><tbody>{rows.map(({ worker, kyc }) => <tr key={worker.id}><td><strong>{worker.full_name || 'Unnamed rider'}</strong><small>{worker.email || worker.phone || 'No contact details'}</small></td><td>{worker.worker_type || 'rider'}</td><td><span className={`rider-status ${String(worker.status || worker.kyc_status || '').toLowerCase()}`}>{worker.kyc_status || worker.status || 'Pending'}</span></td><td>{kyc?.progress_percent ?? worker.onboarding_progress_percent ?? 0}%</td><td>{worker.nin_verified || kyc?.nin_verified ? 'Provider verified' : kyc?.admin_approval_status === 'manually_approved' ? 'Manual approval' : 'Not verified'}</td><td>{worker.operational_status || 'OFFLINE'}</td><td><div className="rider-actions"><Link className="btn-view rider-review-link" to={`/admin/riders/${worker.id}`}>Review KYC</Link>{canEdit && <button className="btn-view" onClick={() => openForm(worker)}>Edit</button>}</div></td></tr>)}</tbody></table></div>}
+    {modalOpen && <div className="rider-modal-overlay"><div className="rider-modal"><div className="rider-modal-header"><div><h2>{selectedRider ? 'Edit Rider' : 'Add Rider'}</h2><p>Maintain the existing rider profile without bypassing KYC review.</p></div><button onClick={() => setModalOpen(false)} aria-label="Close"><X size={20} /></button></div><form className="rider-modal-form" onSubmit={saveRider}><div className="rider-form-grid"><label>Full name<input required value={form.full_name} onChange={(event) => setForm({ ...form, full_name: event.target.value })} /></label><label>Phone<input required value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label><label>Email<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label>Worker type<select value={form.worker_type} onChange={(event) => setForm({ ...form, worker_type: event.target.value })}><option value="rider">Rider</option><option value="messenger">Messenger</option></select></label><label>Vehicle type<input value={form.vehicle_type} onChange={(event) => setForm({ ...form, vehicle_type: event.target.value })} /></label><label>Vehicle number<input value={form.vehicle_number} onChange={(event) => setForm({ ...form, vehicle_number: event.target.value })} /></label><label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option value="onboarding">Onboarding</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="suspended">Suspended</option></select></label><label className="rider-form-wide">Notes<textarea rows="3" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label></div><div className="rider-modal-footer"><button type="button" className="btn-cancel" onClick={() => setModalOpen(false)}>Cancel</button><button className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save Rider'}</button></div></form></div></div>}
+  </div>
 }

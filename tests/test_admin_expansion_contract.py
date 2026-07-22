@@ -65,6 +65,40 @@ class AdminExpansionContractTests(unittest.TestCase):
         self.assertIn("hero_banner", web)
         self.assertIn("hero_banner", mobile)
 
+    def test_reports_page_normalizes_backend_status_arrays_and_has_recovery_state(self):
+        source = (ROOT / "frontend/src/pages/AdminExpansion.jsx").read_text(encoding="utf-8")
+        self.assertIn("Array.isArray(value)", source)
+        self.assertIn("ADMIN_REPORTS_RESPONSE_INVALID", source)
+        self.assertIn("Unable to load reports", source)
+        self.assertIn("Retry", source)
+
+    def test_rider_kyc_browser_routes_and_api_contracts_are_reachable(self):
+        app_source = (ROOT / "frontend/src/App.jsx").read_text(encoding="utf-8")
+        rider_source = (ROOT / "frontend/src/pages/AdminRiders.jsx").read_text(encoding="utf-8")
+        detail_source = (ROOT / "frontend/src/pages/AdminRiderKycDetail.jsx").read_text(encoding="utf-8")
+        api_source = (ROOT / "frontend/src/services/api.js").read_text(encoding="utf-8")
+        self.assertIn('/admin/riders/:riderId', app_source)
+        self.assertIn('Pending KYC Review', rider_source)
+        self.assertIn('/admin/rider-verification-queue', api_source)
+        self.assertIn("You do not have permission to view rider KYC records", detail_source)
+        self.assertIn("Manual approval does not change", detail_source)
+
+    def test_manual_approval_is_separate_from_provider_nin_verification(self):
+        class Worker:
+            review_note = main.json_dump({"manual_approval": {"active": True}})
+            nin_verified = False
+            kyc_status = "ACTIVE"
+            deleted_at = None
+
+        worker = Worker()
+        self.assertTrue(main.rider_manual_approval_active(worker))
+        self.assertFalse(worker.nin_verified)
+        self.assertEqual(main.rider_lifecycle_status(worker), "ACTIVE")
+
+    def test_super_admin_has_granular_rider_kyc_permissions(self):
+        required = {"rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete"}
+        self.assertTrue(required.issubset(set(main.ADMIN_ROLE_PERMISSIONS["super_admin"])))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,17 +44,35 @@ export function AdminReports() {
   const now = new Date(); const monthAgo = new Date(now); monthAgo.setDate(now.getDate() - 30)
   const [range, setRange] = useState({ start_date: monthAgo.toISOString().slice(0, 10), end_date: now.toISOString().slice(0, 10) })
   const [report, setReport] = useState(null); const [loading, setLoading] = useState(true); const [error, setError] = useState('')
-  const load = async () => { try { setLoading(true); setError(''); setReport(await adminAPI.getReports(range)) } catch (e) { setError(errorText(e, 'Unable to load reports')) } finally { setLoading(false) } }
+  const load = async () => {
+    console.info('ADMIN_REPORTS_REQUEST_STARTED', { range })
+    try {
+      setLoading(true); setError('')
+      const body = await adminAPI.getReports(range)
+      if (!body || typeof body !== 'object' || Array.isArray(body)) {
+        console.warn('ADMIN_REPORTS_RESPONSE_INVALID', { response_type: typeof body })
+        throw new Error('The reports service returned an invalid response. Please retry.')
+      }
+      setReport(body)
+      console.info('ADMIN_REPORTS_REQUEST_SUCCEEDED', { has_summary: !!body.summary })
+    } catch (e) {
+      console.warn('ADMIN_REPORTS_REQUEST_FAILED', { status: e?.response?.status || 0, reason: errorText(e) })
+      setReport(null); setError(errorText(e, 'Unable to load reports'))
+    } finally { setLoading(false) }
+  }
   useEffect(() => { load() }, [])
   const download = async (type) => { try { const blob = await adminAPI.exportReport(type); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `foodnova-${type}.csv`; link.click(); URL.revokeObjectURL(url) } catch (e) { toast.error(errorText(e, 'Export failed')) } }
   const summary = report?.summary || report?.data || {}
+  const breakdown = (value) => Array.isArray(value)
+    ? value.map((item) => [item?.status || 'unknown', Number(item?.count || 0)])
+    : Object.entries(value || {}).map(([status, count]) => [status, Number(count || 0)])
   return <AdminGate permissions={['reports:view']}><div className="admin-page"><PageHeader title="Reports" description="Operational reporting from authoritative order, payment, inventory, and customer data." />
     <form className="cms-toolbar" onSubmit={(e) => { e.preventDefault(); load() }}><label>From<input type="date" value={range.start_date} onChange={(e) => setRange({ ...range, start_date: e.target.value })} /></label><label>To<input type="date" value={range.end_date} onChange={(e) => setRange({ ...range, end_date: e.target.value })} /></label><button className="btn-primary">Apply</button></form>
     <State loading={loading} error={error} retry={load} />{!loading && !error && <><div className="cms-metrics">{[
       ['Orders', summary.total_orders || 0], ['Confirmed Revenue', formatPrice(summary.confirmed_revenue || 0)], ['Pending Payments', summary.pending_payments || 0], ['Delivered', summary.delivered_orders || 0], ['Active Customers', summary.active_customers || 0], ['Assigned Deliveries', summary.assigned_deliveries || 0]
     ].map(([label, value]) => <div className="cms-metric" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
-    <div className="cms-grid two"><section className="cms-panel"><h2>Order Status</h2>{Object.entries(report?.orders_by_status || {}).map(([key, value]) => <div className="cms-breakdown" key={key}><span>{key.replaceAll('_', ' ')}</span><strong>{value}</strong></div>)}</section><section className="cms-panel"><h2>Payment Status</h2>{Object.entries(report?.payments_by_status || {}).map(([key, value]) => <div className="cms-breakdown" key={key}><span>{key.replaceAll('_', ' ')}</span><strong>{value}</strong></div>)}</section></div>
-    <section className="cms-panel"><div className="cms-panel-title"><h2>Top Products</h2><div className="cms-actions"><button onClick={() => download('orders')}>Export Orders</button><button onClick={() => download('products')}>Export Products</button><button onClick={() => download('customers')}>Export Customers</button></div></div><div className="cms-table"><table><thead><tr><th>Product</th><th>Quantity</th><th>Revenue</th></tr></thead><tbody>{(report?.top_products || []).map((item) => <tr key={`${item.product_id}-${item.name}`}><td>{item.name}</td><td>{item.quantity_sold}</td><td>{formatPrice(item.revenue)}</td></tr>)}</tbody></table></div></section></>}</div></AdminGate>
+    <div className="cms-grid two"><section className="cms-panel"><h2>Order Status</h2>{breakdown(report?.orders_by_status).map(([key, value]) => <div className="cms-breakdown" key={key}><span>{key.replaceAll('_', ' ')}</span><strong>{value}</strong></div>)}</section><section className="cms-panel"><h2>Payment Status</h2>{breakdown(report?.payments_by_status).map(([key, value]) => <div className="cms-breakdown" key={key}><span>{key.replaceAll('_', ' ')}</span><strong>{value}</strong></div>)}</section></div>
+    <section className="cms-panel"><div className="cms-panel-title"><h2>Top Products</h2><div className="cms-actions"><button type="button" onClick={() => download('orders')}>Export Orders</button><button type="button" onClick={() => download('products')}>Export Products</button><button type="button" onClick={() => download('customers')}>Export Customers</button></div></div>{(report?.top_products || []).length ? <div className="cms-table"><table><thead><tr><th>Product</th><th>Quantity</th><th>Revenue</th></tr></thead><tbody>{report.top_products.map((item) => <tr key={`${item.product_id}-${item.name}`}><td>{item.name}</td><td>{item.quantity_sold}</td><td>{formatPrice(item.revenue)}</td></tr>)}</tbody></table></div> : <div className="cms-state">No product sales were recorded for this date range.</div>}</section></>}</div></AdminGate>
 }
 
 const emptyAnnouncement = { title: '', message: '', display_type: 'top_bar', button_text: '', button_link: '', image_url: '', theme: 'green', priority: 0, is_active: true, start_date: '', end_date: '' }

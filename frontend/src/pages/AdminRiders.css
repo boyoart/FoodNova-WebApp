@@ -169,6 +169,28 @@
   flex-wrap: wrap;
 }
 
+.rider-pending-badge { padding:.55rem .85rem; border-radius:999px; background:#fff3cd; color:#7a5200; font-weight:900; }
+.rider-state { padding:2rem; margin-top:1rem; text-align:center; border:1px dashed var(--fn-border); border-radius:1rem; color:var(--fn-muted); }
+.rider-state.error { color:#b91c1c; }
+.rider-review-link { display:inline-flex; text-decoration:none; align-items:center; }
+.kyc-back { color:var(--fn-primary); font-weight:800; text-decoration:none; }
+.kyc-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.kyc-section { padding:1.15rem; border:1px solid var(--fn-border); border-radius:1rem; background:var(--fn-surface); overflow:hidden; }
+.kyc-section h2 { margin:0 0 1rem; color:var(--fn-heading); }
+.kyc-section dl { display:grid; grid-template-columns:minmax(120px,.7fr) 1.3fr; gap:.65rem 1rem; margin:0; }
+.kyc-section dt { color:var(--fn-muted); font-weight:800; }
+.kyc-section dd { margin:0; overflow-wrap:anywhere; }
+.kyc-section select,.kyc-section textarea { width:100%; padding:.7rem; border:1px solid var(--fn-border); border-radius:.6rem; background:var(--fn-input-bg); color:var(--fn-input-text); }
+.kyc-image { display:block; width:min(100%,320px); max-height:240px; margin:.65rem 0 1rem; object-fit:contain; border:1px solid var(--fn-border); border-radius:.75rem; background:var(--fn-surface-2); }
+.kyc-wide,.kyc-decision { grid-column:1/-1; }
+.kyc-history { padding-left:1.2rem; }
+.kyc-history li { margin-bottom:.8rem; }
+.kyc-decision { margin-top:1rem; }
+.kyc-decision label { display:grid; gap:.5rem; font-weight:800; margin-bottom:1rem; }
+.kyc-decision small { display:block; margin-top:1rem; color:var(--fn-muted); }
+.kyc-decision .btn-approve { background:var(--fn-primary); color:#fff; border:0; border-radius:.65rem; padding:.65rem .9rem; font-weight:900; cursor:pointer; }
+.kyc-decision button:disabled { opacity:.55; cursor:not-allowed; }
+
 .rider-modal-overlay {
   position: fixed;
   inset: 0;
@@ -285,4 +307,7 @@
   .rider-modal-footer button {
     width: 100%;
   }
+  .kyc-grid { grid-template-columns:1fr; }
+  .kyc-section dl { grid-template-columns:1fr; gap:.25rem; }
+  .kyc-section dd { margin-bottom:.65rem; }
 }
