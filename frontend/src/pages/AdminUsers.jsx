@@ -28,7 +28,7 @@ const ROLE_OPTIONS = [
 ]
 
 const ROLE_PERMISSIONS = {
-  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
+  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'announcements:view', 'announcements:manage', 'categories:view', 'categories:manage', 'website_settings:view', 'website_settings:manage', 'subscribers:view', 'subscribers:manage', 'delivery_zones:view', 'delivery_zones:manage', 'reports:view', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
   orders_manager: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'customers:view'],
   stock_manager: ['dashboard:view', 'stock:view', 'stock:manage'],
   payment_manager: ['dashboard:view', 'orders:view', 'payments:view', 'payments:approve', 'customers:view'],
@@ -53,6 +53,17 @@ const PERMISSION_OPTIONS = [
   ['audit:view', 'Audit Logs View'],
   ['admins:view', 'Admin Users View'],
   ['admins:manage', 'Admin Users Manage'],
+  ['announcements:view', 'Announcements View'],
+  ['announcements:manage', 'Announcements Manage'],
+  ['categories:view', 'Categories View'],
+  ['categories:manage', 'Categories Manage'],
+  ['website_settings:view', 'Website Settings View'],
+  ['website_settings:manage', 'Website Settings Manage'],
+  ['subscribers:view', 'Subscribers View'],
+  ['subscribers:manage', 'Subscribers Manage'],
+  ['delivery_zones:view', 'Delivery Zones View'],
+  ['delivery_zones:manage', 'Delivery Zones Manage'],
+  ['reports:view', 'Reports View'],
 ]
 
 const PERMISSION_GROUPS = [
@@ -64,6 +75,10 @@ const PERMISSION_GROUPS = [
   { title: 'Customers', items: [['customers:view', 'View customers']] },
   { title: 'Admins', items: [['admins:view', 'View admin users'], ['admins:manage', 'Manage admin users']] },
   { title: 'Audit Logs', items: [['audit:view', 'View audit logs']] },
+  { title: 'CMS', items: [['announcements:view', 'View announcements and banners'], ['announcements:manage', 'Manage announcements and banners'], ['website_settings:view', 'View website settings'], ['website_settings:manage', 'Manage website settings'], ['subscribers:view', 'View subscribers'], ['subscribers:manage', 'Manage subscribers']] },
+  { title: 'Catalog Categories', items: [['categories:view', 'View categories'], ['categories:manage', 'Manage categories']] },
+  { title: 'Delivery Zones', items: [['delivery_zones:view', 'View delivery zones'], ['delivery_zones:manage', 'Manage delivery zones']] },
+  { title: 'Reports', items: [['reports:view', 'View and export reports']] },
 ]
 
 const ALL_PERMISSIONS = PERMISSION_OPTIONS.map(([value]) => value)

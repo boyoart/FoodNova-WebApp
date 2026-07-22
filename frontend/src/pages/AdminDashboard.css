@@ -29,6 +29,9 @@
   margin-top: 1.2rem;
 }
 
+.admin-tool-group { margin-top: 1.5rem; }
+.admin-tool-group > h3 { margin: 0 0 .75rem; color: var(--fn-heading); font-size: 1.05rem; }
+
 .admin-tool-card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

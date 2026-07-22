@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck } from 'lucide-react'
+import api, { resolveMediaUrl } from '../services/api'
 import './HomePage.css'
 
 const heroSlides = [
@@ -35,18 +36,36 @@ const heroSlides = [
 
 export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
-  const slide = heroSlides[activeSlide]
+  const [managedSlides, setManagedSlides] = useState([])
+  const slides = managedSlides.length ? managedSlides : heroSlides
+  const slide = slides[Math.min(activeSlide, slides.length - 1)]
+
+  useEffect(() => {
+    api.get('/announcements/active').then(({ data }) => {
+      const items = data?.announcements || data?.data || []
+      const banners = items.filter((item) => item.display_type === 'hero_banner').map((item) => ({
+        headline: item.title,
+        subtext: item.message,
+        primary: item.button_text || 'Shop Products',
+        primaryTo: item.button_link || '/products',
+        secondary: 'View Products',
+        secondaryTo: '/products',
+        image: resolveMediaUrl(item.image_url),
+      }))
+      if (banners.length) { setManagedSlides(banners); setActiveSlide(0) }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setActiveSlide((current) => (current + 1) % heroSlides.length)
+      setActiveSlide((current) => (current + 1) % slides.length)
     }, 5000)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [slides.length])
 
-  const goPrevious = () => setActiveSlide((current) => (current - 1 + heroSlides.length) % heroSlides.length)
-  const goNext = () => setActiveSlide((current) => (current + 1) % heroSlides.length)
+  const goPrevious = () => setActiveSlide((current) => (current - 1 + slides.length) % slides.length)
+  const goNext = () => setActiveSlide((current) => (current + 1) % slides.length)
 
   return (
     <div className="home-page">
@@ -83,7 +102,7 @@ export default function HomePage() {
         </button>
 
         <div className="hero-dots" aria-label="Hero slide controls">
-          {heroSlides.map((item, index) => (
+          {slides.map((item, index) => (
             <button
               type="button"
               key={item.headline}

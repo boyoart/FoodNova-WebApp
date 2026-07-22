@@ -430,6 +430,30 @@ export const adminAPI = {
   createBroadcast: async (payload) => (await api.post("/admin/broadcasts", payload)).data,
   updateBroadcast: async (id, payload) => (await api.patch(`/admin/broadcasts/${id}`, payload)).data,
   deleteBroadcast: async (id) => (await api.delete(`/admin/broadcasts/${id}`)).data,
+  getReports: async (params = {}) => (await api.get('/admin/reports/summary', { params })).data,
+  exportReport: async (type) => (await api.get(`/admin/export/${type}`, { responseType: 'blob' })).data,
+  getAnnouncements: async () => (await api.get('/admin/announcements')).data,
+  createAnnouncement: async (payload) => (await api.post('/admin/announcements', payload)).data,
+  updateAnnouncement: async (id, payload) => (await api.patch(`/admin/announcements/${id}`, payload)).data,
+  deleteAnnouncement: async (id) => (await api.delete(`/admin/announcements/${id}`)).data,
+  uploadAnnouncementImage: async (file) => {
+    const body = new FormData(); body.append('file', file);
+    return (await api.post('/admin/uploads/announcement-image', body, multipartConfig)).data;
+  },
+  getDeliveryZone: async () => (await api.get('/admin/delivery-zone')).data,
+  updateDeliveryZone: async (payload) => (await api.patch('/admin/delivery-zone', payload)).data,
+  getWebsiteSettings: async () => (await api.get('/admin/website-settings')).data,
+  updateWebsiteSettings: async (payload) => (await api.patch('/admin/website-settings', payload)).data,
+  getComingSoonSubscribers: async (params = {}) => (await api.get('/admin/coming-soon-subscribers', { params })).data,
+  deleteComingSoonSubscriber: async (id) => (await api.delete(`/admin/coming-soon-subscribers/${id}`)).data,
+  getCategories: async () => (await api.get('/admin/categories')).data,
+  createCategory: async (payload) => (await api.post('/admin/categories', payload)).data,
+  updateCategory: async (id, payload) => (await api.patch(`/admin/categories/${id}`, payload)).data,
+  deleteCategory: async (id) => (await api.delete(`/admin/categories/${id}`)).data,
+  uploadCategoryImage: async (file) => {
+    const body = new FormData(); body.append('file', file);
+    return (await api.post('/admin/uploads/category-image', body, multipartConfig)).data;
+  },
 };
 
 export const getProducts = async () => (await productsAPI.getAll()).data;

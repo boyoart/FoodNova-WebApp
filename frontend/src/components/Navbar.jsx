@@ -266,6 +266,13 @@ export default function Navbar() {
     { to: '/admin/customers', label: 'Customers', show: canAdmin('customers:view') },
     { to: '/admin/audit-logs', label: 'Activity Logs', show: canAdmin('audit:view') },
     { to: '/admin/users', label: 'Admin Users', show: canAdmin('admins:view') || canAdmin('admins:manage') },
+    { to: '/admin/reports', label: 'Reports', show: canAdmin('reports:view') },
+    { to: '/admin/categories', label: 'Categories', show: canAnyAdmin(['categories:view', 'stock:view']) },
+    { to: '/admin/announcements', label: 'Announcements', show: canAnyAdmin(['announcements:view', 'announcements:manage']) },
+    { to: '/admin/banners', label: 'Homepage Banners', show: canAnyAdmin(['announcements:view', 'announcements:manage']) },
+    { to: '/admin/delivery-zones', label: 'Delivery Zones', show: canAnyAdmin(['delivery_zones:view', 'workforce:view', 'delivery:manage']) },
+    { to: '/admin/website-settings', label: 'Website Settings', show: canAnyAdmin(['website_settings:view', 'announcements:manage']) },
+    { to: '/admin/coming-soon-subscribers', label: 'Coming Soon Subscribers', show: canAnyAdmin(['subscribers:view', 'announcements:view']) },
   ].filter((link) => link.show)
 
   const avatarMenuLinks = isAdmin ? [{ to: '/admin/dashboard', label: 'Dashboard' }, ...adminMenuLinks] : customerMenuLinks

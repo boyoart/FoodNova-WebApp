@@ -2,7 +2,7 @@
 // The previous service worker cached old Vercel build assets and could cause blank pages.
 // This file clears old caches and unregisters itself.
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', (_event) => {
   self.skipWaiting();
 });
 

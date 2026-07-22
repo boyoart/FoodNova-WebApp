@@ -845,6 +845,24 @@ class AnnouncementUpdatePayload(BaseModel):
     end_date: Optional[datetime] = None
 
 
+class CategoryPayload(BaseModel):
+    name: str
+    slug: Optional[str] = None
+    description: Optional[str] = ""
+    image_url: Optional[str] = ""
+    display_order: Optional[int] = 0
+    is_active: Optional[bool] = True
+
+
+class CategoryUpdatePayload(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    display_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
 class NotificationUpdatePayload(BaseModel):
     is_read: Optional[bool] = None
 
@@ -1085,11 +1103,13 @@ ADMIN_ROLE_PERMISSIONS = {
         "admins:view", "admins:manage", "delivery:manage",
         "cancellations:view", "cancellations:manage", "exports:view", "exports:download",
         "reports:view", "orders:delete", "riders:manage", "workforce:view", "workforce:manage",
+        "categories:view", "categories:manage", "website_settings:view", "website_settings:manage",
+        "subscribers:view", "subscribers:manage", "delivery_zones:view", "delivery_zones:manage",
     ],
-    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "cancellations:view", "cancellations:manage", "customers:view"],
-    "stock_manager": ["dashboard:view", "stock:view", "stock:manage"],
+    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "delivery_zones:view", "delivery_zones:manage", "cancellations:view", "cancellations:manage", "customers:view"],
+    "stock_manager": ["dashboard:view", "stock:view", "stock:manage", "categories:view", "categories:manage"],
     "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "cancellations:view", "cancellations:manage", "customers:view"],
-    "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage"],
+    "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage", "website_settings:view", "website_settings:manage", "subscribers:view", "subscribers:manage"],
     "customer_support": ["dashboard:view", "orders:view", "orders:update", "cancellations:view", "customers:view"],
     "viewer": ["dashboard:view", "orders:view", "stock:view", "customers:view"],
 }
@@ -2004,7 +2024,7 @@ def get_public_website_settings():
 
 @app.get("/admin/website-settings")
 def get_admin_website_settings(request: Request):
-    require_any_permission(request, ["announcements:view", "announcements:manage", "admins:manage"])
+    require_any_permission(request, ["website_settings:view", "website_settings:manage", "announcements:view", "announcements:manage", "admins:manage"])
     db = SessionLocal()
     try:
         settings = get_website_settings_from_db(db)
@@ -2024,7 +2044,7 @@ def get_admin_website_settings(request: Request):
 
 @app.patch("/admin/website-settings")
 def update_admin_website_settings(payload: WebsiteSettingsPayload, request: Request):
-    admin = require_any_permission(request, ["announcements:manage", "admins:manage"])
+    admin = require_any_permission(request, ["website_settings:manage", "announcements:manage", "admins:manage"])
     db = SessionLocal()
     try:
         current = get_website_settings_from_db(db)
@@ -2113,15 +2133,21 @@ def subscribe_coming_soon(payload: ComingSoonSubscriberPayload):
 
 
 @app.get("/admin/coming-soon-subscribers")
-def get_admin_coming_soon_subscribers(request: Request, search: Optional[str] = None):
-    require_any_permission(request, ["announcements:view", "announcements:manage", "admins:manage"])
+def get_admin_coming_soon_subscribers(request: Request, search: Optional[str] = None,
+                                      page: int = 1, page_size: int = 50):
+    require_any_permission(request, ["subscribers:view", "subscribers:manage", "announcements:view", "announcements:manage", "admins:manage"])
     db = SessionLocal()
     try:
         query = db.query(DBComingSoonSubscriber)
         clean_search = (search or "").strip().lower()
         if clean_search:
             query = query.filter(func.lower(DBComingSoonSubscriber.email).contains(clean_search))
-        subscribers = query.order_by(DBComingSoonSubscriber.created_at.desc(), DBComingSoonSubscriber.id.desc()).all()
+        total = query.count()
+        safe_page = max(1, int(page or 1))
+        safe_size = max(1, min(int(page_size or 50), 200))
+        subscribers = query.order_by(DBComingSoonSubscriber.created_at.desc(), DBComingSoonSubscriber.id.desc()).offset(
+            (safe_page - 1) * safe_size
+        ).limit(safe_size).all()
         items = [
             {
                 "id": item.id,
@@ -2131,7 +2157,25 @@ def get_admin_coming_soon_subscribers(request: Request, search: Optional[str] = 
             }
             for item in subscribers
         ]
-        return {"success": True, "subscribers": items, "count": len(items), "data": items}
+        return {"success": True, "subscribers": items, "count": len(items), "total": total,
+                "page": safe_page, "page_size": safe_size, "data": items}
+    finally:
+        db.close()
+
+
+@app.delete("/admin/coming-soon-subscribers/{subscriber_id}")
+def delete_admin_coming_soon_subscriber(subscriber_id: int, request: Request):
+    admin = require_any_permission(request, ["subscribers:manage", "announcements:manage", "admins:manage"])
+    db = SessionLocal()
+    try:
+        subscriber = db.query(DBComingSoonSubscriber).filter(DBComingSoonSubscriber.id == subscriber_id).first()
+        if not subscriber:
+            raise HTTPException(status_code=404, detail="Subscriber not found")
+        snapshot = {"id": subscriber.id, "email": subscriber.email, "source": subscriber.source}
+        db.delete(subscriber)
+        db.commit()
+        create_admin_audit_log(request, admin, "coming_soon_subscriber_deleted", "coming_soon_subscriber", subscriber_id, "Admin removed a coming-soon subscriber", snapshot)
+        return {"success": True, "message": "Subscriber removed", "subscriber": snapshot, "data": snapshot}
     finally:
         db.close()
 
@@ -7740,19 +7784,172 @@ def debug_db():
 def list_categories():
     db = SessionLocal()
     try:
-        products = db.query(DBProduct).filter(DBProduct.is_active == True).all()
-        categories = sorted({p.category or p.category_name for p in products if p.category or p.category_name})
-        return [
-            {
-                "id": idx + 1,
-                "name": category,
-                "image_url": FOODNOVA_CATEGORY_IMAGES.get(category, ""),
-                "products": FOODNOVA_CATEGORIES.get(category, []),
-            }
-            for idx, category in enumerate(categories)
-        ]
+        categories = ensure_category_records(db)
+        return [category_to_dict(db, category) for category in categories if category.get("is_active", True)]
     finally:
         db.close()
+
+
+PRODUCT_CATEGORIES_KEY = "product_categories"
+
+
+def category_to_dict(db, category: dict) -> dict:
+    name = str(category.get("name") or "").strip()
+    product_count = db.query(DBProduct).filter(or_(
+        func.lower(DBProduct.category) == name.lower(),
+        func.lower(DBProduct.category_name) == name.lower(),
+    )).count()
+    return {
+        "id": category.get("id"),
+        "name": name,
+        "slug": category.get("slug") or slugify(name),
+        "description": category.get("description") or "",
+        "image_url": category.get("image_url") or FOODNOVA_CATEGORY_IMAGES.get(name, ""),
+        "display_order": int(category.get("display_order") or 0),
+        "is_active": category.get("is_active") is not False,
+        "product_count": product_count,
+        "products": FOODNOVA_CATEGORIES.get(name, []),
+        "created_at": category.get("created_at") or "",
+        "updated_at": category.get("updated_at") or "",
+    }
+
+
+def load_category_records(db) -> list:
+    setting = db.query(DBAppSetting).filter(DBAppSetting.key == PRODUCT_CATEGORIES_KEY).with_for_update().first()
+    raw = setting.value if setting else "[]"
+    parsed = json_load(raw, [])
+    return [dict(item) for item in parsed if isinstance(item, dict) and str(item.get("name") or "").strip()]
+
+
+def save_category_records(db, categories: list) -> list:
+    ordered = sorted(categories, key=lambda item: (int(item.get("display_order") or 0), str(item.get("name") or "").lower()))
+    set_app_setting(db, PRODUCT_CATEGORIES_KEY, json_dump(ordered))
+    db.commit()
+    return ordered
+
+
+def ensure_category_records(db) -> list:
+    categories = load_category_records(db)
+    names = sorted({
+        str(value).strip()
+        for row in db.query(DBProduct.category, DBProduct.category_name).all()
+        for value in row if str(value or "").strip()
+    })
+    existing = {str(item.get("name") or "").lower() for item in categories}
+    changed = False
+    for index, name in enumerate(names):
+        if name.lower() in existing:
+            continue
+        categories.append({"id": max([int(item.get("id") or 0) for item in categories] or [0]) + 1, "name": name,
+                           "slug": slugify(name), "description": "", "image_url": FOODNOVA_CATEGORY_IMAGES.get(name, ""),
+                           "display_order": index, "is_active": True, "created_at": iso(datetime.utcnow()), "updated_at": iso(datetime.utcnow())})
+        changed = True
+    if changed:
+        categories = save_category_records(db, categories)
+    return sorted(categories, key=lambda item: (int(item.get("display_order") or 0), str(item.get("name") or "").lower()))
+
+
+@app.get("/admin/categories")
+def admin_categories(request: Request):
+    require_any_permission(request, ["categories:view", "categories:manage", "stock:view", "stock:manage"])
+    db = SessionLocal()
+    try:
+        ensure_category_records(db)
+        items = [category_to_dict(db, item) for item in ensure_category_records(db)]
+        return {"success": True, "categories": items, "data": items}
+    finally:
+        db.close()
+
+
+@app.post("/admin/categories")
+def create_admin_category(payload: CategoryPayload, request: Request):
+    admin = require_any_permission(request, ["categories:manage", "stock:manage"])
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Category name is required")
+    slug = slugify(payload.slug or name)
+    db = SessionLocal()
+    try:
+        categories = ensure_category_records(db)
+        if any(str(item.get("name") or "").lower() == name.lower() or item.get("slug") == slug for item in categories):
+            raise HTTPException(status_code=409, detail="A category with this name or slug already exists")
+        category = {"id": max([int(item.get("id") or 0) for item in categories] or [0]) + 1, "name": name, "slug": slug,
+                    "description": payload.description or "", "image_url": payload.image_url or "",
+                    "display_order": max(0, int(payload.display_order or 0)), "is_active": payload.is_active is not False,
+                    "created_at": iso(datetime.utcnow()), "updated_at": iso(datetime.utcnow())}
+        categories.append(category)
+        save_category_records(db, categories)
+        data = category_to_dict(db, category)
+        create_admin_audit_log(request, admin, "category_created", "category", category["id"], f"Admin created category {name}", {"category": data})
+        return {"success": True, "message": "Category created", "category": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/categories/{category_id}")
+def update_admin_category(category_id: int, payload: CategoryUpdatePayload, request: Request):
+    admin = require_any_permission(request, ["categories:manage", "stock:manage"])
+    db = SessionLocal()
+    try:
+        categories = ensure_category_records(db)
+        category = next((item for item in categories if int(item.get("id") or 0) == category_id), None)
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        before = category_to_dict(db, category)
+        old_name = str(category.get("name") or "")
+        updates = payload.dict(exclude_unset=True)
+        if "name" in updates:
+            clean_name = str(updates["name"] or "").strip()
+            if not clean_name:
+                raise HTTPException(status_code=422, detail="Category name is required")
+            duplicate = next((item for item in categories if int(item.get("id") or 0) != category_id and str(item.get("name") or "").lower() == clean_name.lower()), None)
+            if duplicate:
+                raise HTTPException(status_code=409, detail="Category name already exists")
+            category["name"] = clean_name
+        if "slug" in updates or "name" in updates:
+            next_slug = slugify(updates.get("slug") or category["name"])
+            if any(int(item.get("id") or 0) != category_id and item.get("slug") == next_slug for item in categories):
+                raise HTTPException(status_code=409, detail="Category slug already exists")
+            category["slug"] = next_slug
+        for field in ["description", "image_url", "display_order", "is_active"]:
+            if field in updates:
+                category[field] = updates[field]
+        if category["name"] != old_name:
+            db.query(DBProduct).filter(func.lower(DBProduct.category) == old_name.lower()).update({DBProduct.category: category["name"]}, synchronize_session=False)
+            db.query(DBProduct).filter(func.lower(DBProduct.category_name) == old_name.lower()).update({DBProduct.category_name: category["name"]}, synchronize_session=False)
+        category["updated_at"] = iso(datetime.utcnow())
+        save_category_records(db, categories)
+        data = category_to_dict(db, category)
+        create_admin_audit_log(request, admin, "category_updated", "category", category_id, f"Admin updated category {category['name']}", {"before": before, "after": data})
+        return {"success": True, "message": "Category updated", "category": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.delete("/admin/categories/{category_id}")
+def delete_admin_category(category_id: int, request: Request):
+    admin = require_any_permission(request, ["categories:manage", "stock:manage"])
+    db = SessionLocal()
+    try:
+        categories = ensure_category_records(db)
+        category = next((item for item in categories if int(item.get("id") or 0) == category_id), None)
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        data = category_to_dict(db, category)
+        if data["product_count"]:
+            raise HTTPException(status_code=409, detail=f"Reassign {data['product_count']} attached product(s) before deleting this category")
+        save_category_records(db, [item for item in categories if int(item.get("id") or 0) != category_id])
+        create_admin_audit_log(request, admin, "category_deleted", "category", category_id, f"Admin deleted category {data['name']}", {"category": data})
+        return {"success": True, "message": "Category deleted", "category": data, "data": data}
+    finally:
+        db.close()
+
+
+@app.post("/admin/uploads/category-image")
+async def upload_category_image(request: Request, file: UploadFile = File(...)):
+    require_any_permission(request, ["categories:manage", "stock:manage"])
+    image_url = await save_uploaded_image(file, os.path.join(UPLOAD_DIR, "catalog", "categories"), "category")
+    return {"success": True, "image_url": image_url, "url": image_url, "data": {"image_url": image_url}}
 
 
 @app.get("/products")
@@ -12188,7 +12385,7 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
 
 @app.get("/admin/delivery-zone")
 def get_delivery_zone(request: Request):
-    require_workforce_view(request)
+    require_any_permission(request, ["delivery_zones:view", "delivery_zones:manage", "workforce:view", "workforce:manage", "delivery:manage"])
     db = SessionLocal()
     try:
         zone = ensure_default_operational_zone(db)
@@ -12200,7 +12397,7 @@ def get_delivery_zone(request: Request):
 
 @app.patch("/admin/delivery-zone")
 def update_delivery_zone(payload: OperationalZonePayload, request: Request):
-    admin = require_workforce_manage(request)
+    admin = require_any_permission(request, ["delivery_zones:manage", "workforce:manage", "delivery:manage"])
     db = SessionLocal()
     try:
         zone = ensure_default_operational_zone(db)

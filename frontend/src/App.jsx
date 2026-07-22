@@ -21,6 +21,7 @@ import AdminCustomers from './pages/AdminCustomers'
 import AdminAuditLogs from './pages/AdminAuditLogs'
 import AdminUsers from './pages/AdminUsers'
 import AdminRiders from './pages/AdminRiders'
+import { AdminAnnouncements, AdminBanners, AdminCategories, AdminComingSoonSubscribers, AdminDeliveryZones, AdminReports, AdminWebsiteSettings } from './pages/AdminExpansion'
 import PrivacyPolicy from './pages/PrivacyPolicy'
 import TermsPage from './pages/TermsPage'
 import ContactPage from './pages/ContactPage'
@@ -62,6 +63,13 @@ function App() {
               <Route path="/admin/customers" element={<AdminCustomers />} />
               <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
               <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/reports" element={<AdminReports />} />
+              <Route path="/admin/banners" element={<AdminBanners />} />
+              <Route path="/admin/announcements" element={<AdminAnnouncements />} />
+              <Route path="/admin/delivery-zones" element={<AdminDeliveryZones />} />
+              <Route path="/admin/website-settings" element={<AdminWebsiteSettings />} />
+              <Route path="/admin/coming-soon-subscribers" element={<AdminComingSoonSubscribers />} />
+              <Route path="/admin/categories" element={<AdminCategories />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/contact" element={<ContactPage />} />
