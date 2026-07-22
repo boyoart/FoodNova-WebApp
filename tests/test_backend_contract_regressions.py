@@ -83,6 +83,42 @@ class BackendContractRegressionTests(unittest.TestCase):
         self.assertAlmostEqual(points[0]["latitude"], 38.5)
         self.assertAlmostEqual(points[0]["longitude"], -120.2)
 
+    def test_online_active_rider_is_manually_assignable_without_location(self):
+        worker = SimpleNamespace(
+            kyc_status="ACTIVE",
+            deleted_at=None,
+            operational_status="ONLINE",
+            latest_latitude=None,
+            latest_longitude=None,
+        )
+        result = main.manual_assignment_eligibility(worker)
+        self.assertTrue(result["assignment_eligible"])
+        self.assertFalse(result["location_present"])
+
+    def test_canada_coordinates_do_not_exclude_active_rider(self):
+        worker = SimpleNamespace(
+            kyc_status="ACTIVE",
+            deleted_at=None,
+            operational_status="ONLINE",
+            latest_latitude=43.6532,
+            latest_longitude=-79.3832,
+        )
+        result = main.manual_assignment_eligibility(worker)
+        self.assertTrue(result["assignment_eligible"])
+        self.assertTrue(result["location_present"])
+
+    def test_active_delivery_excludes_manual_assignment_with_reason(self):
+        worker = SimpleNamespace(
+            kyc_status="ACTIVE",
+            deleted_at=None,
+            operational_status="ONLINE",
+            latest_latitude=43.6532,
+            latest_longitude=-79.3832,
+        )
+        result = main.manual_assignment_eligibility(worker, active_delivery_id=99)
+        self.assertFalse(result["assignment_eligible"])
+        self.assertEqual(result["exclusion_reason"], "active_delivery")
+
     def test_customer_tracking_hides_pin_until_arrival(self):
         for status in ("ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"):
             with self.subTest(status=status):

@@ -2236,6 +2236,12 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
         "order_id": offer.order_id,
         "token_count": len(tokens),
     }))
+    print("RIDER_PUSH_ATTEMPTED", json_dump({
+        "worker_id": worker.id,
+        "offer_id": offer.id,
+        "order_id": offer.order_id,
+        "token_count": len(tokens),
+    }))
     print("RIDER_PUSH_LOOKUP", json_dump({
         "worker_id": worker.id,
         "worker_type": worker.worker_type,
@@ -4173,6 +4179,35 @@ def worker_has_active_assignment(db, worker: DBDeliveryWorker, exclude_offer_id:
     return query.first() is not None
 
 
+def manual_assignment_eligibility(
+    worker: DBDeliveryWorker,
+    active_delivery_id: Optional[int] = None,
+    lifecycle_status: Optional[str] = None,
+) -> dict:
+    effective_status = str(lifecycle_status or getattr(worker, "kyc_status", "") or "").strip().upper()
+    approved = effective_status in {"ACTIVE", "APPROVED"} and not getattr(worker, "deleted_at", None)
+    online = str(getattr(worker, "operational_status", "") or "").upper() == "ONLINE"
+    location_present = valid_tracking_coordinate(
+        getattr(worker, "latest_latitude", None),
+        getattr(worker, "latest_longitude", None),
+    )
+    exclusion_reason = ""
+    if not approved:
+        exclusion_reason = "not_approved"
+    elif not online:
+        exclusion_reason = "offline"
+    elif active_delivery_id is not None:
+        exclusion_reason = "active_delivery"
+    return {
+        "approved": approved,
+        "online": online,
+        "location_present": location_present,
+        "active_delivery_id": active_delivery_id,
+        "assignment_eligible": not exclusion_reason,
+        "exclusion_reason": exclusion_reason or None,
+    }
+
+
 def worker_assignment_counts(db, worker: DBDeliveryWorker, exclude_offer_id: Optional[int] = None) -> dict:
     offer_query = db.query(DBDeliveryOffer).filter(
         DBDeliveryOffer.worker_id == worker.id,
@@ -4478,7 +4513,7 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
         estimated_distance_meters=order.estimated_distance_meters,
         pickup_area="FoodNova pickup",
         delivery_area=delivery_area_for_order(order),
-        expires_at=datetime.utcnow() + timedelta(seconds=60),
+        expires_at=datetime.utcnow() + timedelta(minutes=5),
     )
     db.add(offer)
     db.flush()
@@ -4499,7 +4534,7 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
         "delivery_type": offer.delivery_type,
         "expires_at": iso(offer.expires_at),
     }))
-    _create_user_notification(
+    notification = _create_user_notification(
         worker.email,
         "New delivery request available",
         f"New {offer.delivery_type.replace('_', ' ')} delivery request available for order {order.order_code}.",
@@ -4507,6 +4542,12 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
         "delivery",
         order_to_dict(order),
     )
+    print("RIDER_NOTIFICATIONS_CREATED", json_dump({
+        "order_id": order.id,
+        "offer_id": offer.id,
+        "worker_id": worker.id,
+        "notification_count": 1 if notification else 0,
+    }))
     send_delivery_offer_push(worker, offer)
     offer_payload = {
         "offer": delivery_offer_to_dict(offer, worker, order),
@@ -4616,7 +4657,7 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
         offer.worker_id
         for offer in db.query(DBDeliveryOffer).filter(
             DBDeliveryOffer.order_id == order.id,
-            DBDeliveryOffer.status.in_(["DECLINED", "EXPIRED"]),
+            DBDeliveryOffer.status == "DECLINED",
         ).all()
     }
     created_offers = []
@@ -4627,6 +4668,11 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
         offer = create_delivery_offer_for_order(db, order, worker)
         created_offers.append((offer, worker))
         excluded.add(worker.id)
+    print("ELIGIBLE_RIDERS_RESOLVED", json_dump({
+        "order_id": order.id,
+        "eligible_rider_count": len(created_offers),
+        "worker_ids": [candidate.id for _, candidate in created_offers],
+    }))
     if not created_offers:
         print("ORDER_MATCHING_BLOCKED", json_dump({
             "order_id": order.id,
@@ -10346,7 +10392,11 @@ def register_delivery_worker_fcm_token(payload: FCMTokenPayload, request: Reques
 def get_worker_delivery_offers(request: Request):
     db, user, worker = get_current_worker_record(request)
     try:
-        expire_stale_delivery_offers(db)
+        expired_order_ids = expire_stale_delivery_offers(db)
+        for order_id in set(expired_order_ids):
+            order = db.query(DBOrder).filter(DBOrder.id == order_id).first()
+            if order:
+                start_delivery_matching(db, order, request)
         db.commit()
         offers = db.query(DBDeliveryOffer).filter(
             DBDeliveryOffer.worker_id == worker.id,
@@ -12355,7 +12405,15 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
     require_any_permission(request, ["delivery:manage", "orders:delivery", "riders:manage", "workforce:view", "workforce:manage"])
     db = SessionLocal()
     try:
+        expired_order_ids = expire_stale_delivery_offers(db)
+        if expired_order_ids:
+            db.commit()
         requested_status = (status or "").strip().lower()
+        print("RIDER_CANDIDATE_QUERY_STARTED", json_dump({
+            "endpoint": "/admin/riders",
+            "status_filter": requested_status or "all",
+            "expired_offer_count": len(expired_order_ids),
+        }))
         print("ASSIGN_RIDER_REQUEST", json_dump({
             "endpoint": "/admin/riders",
             "status_filter": requested_status or "all",
@@ -12411,18 +12469,19 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
             rider_status = (linked_rider.status if linked_rider else "") or ""
             raw_worker_status = data.get("kyc_status") or "ONBOARDING"
             lifecycle_status = "DELETED" if data.get("deleted_at") else "ACTIVE" if requested_status in ["active", "approved"] and (worker.kyc_status or "").upper() == "ACTIVE" else rider_lifecycle_status(worker, rider_status)
-            approved = lifecycle_status == "ACTIVE"
-            online = str(worker.operational_status or "").upper() == "ONLINE"
-            location_present = valid_tracking_coordinate(worker.latest_latitude, worker.latest_longitude)
-            has_active_assignment = worker_has_active_assignment(db, worker)
-            exclusion_reason = ""
-            if not approved:
-                exclusion_reason = "not_approved"
-            elif not online:
-                exclusion_reason = "offline"
-            elif has_active_assignment:
-                exclusion_reason = "active_delivery"
-            assignment_eligible = not exclusion_reason
+            active_delivery = active_order_filter(db.query(DBOrder)).filter(
+                or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id),
+                DBOrder.delivery_status.in_(DISPATCH_ACTIVE_DELIVERY_STATUSES),
+            ).first()
+            has_active_assignment = active_delivery is not None
+            eligibility = manual_assignment_eligibility(worker, active_delivery.id if active_delivery else None, lifecycle_status)
+            approved = eligibility["approved"]
+            online = eligibility["online"]
+            location_present = eligibility["location_present"]
+            duplicate_user_count = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == worker.user_id).count()
+            duplicate_email_count = db.query(DBDeliveryWorker).filter(func.lower(DBDeliveryWorker.email) == str(worker.email or "").lower()).count() if worker.email else 0
+            exclusion_reason = eligibility["exclusion_reason"] or ""
+            assignment_eligible = eligibility["assignment_eligible"]
             diagnostic = {
                 "rider_id": worker.id,
                 "email": worker.email,
@@ -12433,9 +12492,11 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
                 "location_present": location_present,
                 "last_seen_at": iso(worker.last_seen_at),
                 "exclusion_reason": exclusion_reason or None,
+                "active_delivery_id": active_delivery.id if active_delivery else None,
+                "duplicate_identity": duplicate_user_count > 1 or duplicate_email_count > 1,
             }
-            print("RIDER_ASSIGNMENT_CANDIDATE", json_dump(diagnostic))
-            print("RIDER_ASSIGNMENT_INCLUDED" if assignment_eligible else "RIDER_ASSIGNMENT_EXCLUDED", json_dump(diagnostic))
+            print("RIDER_CANDIDATE_RECORD_FOUND", json_dump(diagnostic))
+            print("RIDER_CANDIDATE_INCLUDED" if assignment_eligible else "RIDER_CANDIDATE_EXCLUDED", json_dump(diagnostic))
             data.update({
                 "raw_kyc_status": raw_worker_status,
                 "kyc_status": lifecycle_status,
@@ -12454,6 +12515,8 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
                 "last_seen_at": iso(worker.last_seen_at),
                 "assignment_eligible": assignment_eligible,
                 "exclusion_reason": exclusion_reason or None,
+                "active_delivery_id": active_delivery.id if active_delivery else None,
+                "duplicate_identity": duplicate_user_count > 1 or duplicate_email_count > 1,
             })
             riders.append(data)
         if changed_statuses:
@@ -12501,7 +12564,27 @@ def get_riders(request: Request, include_deleted: bool = False, status: Optional
                 for item in riders
             ],
         }))
-        return {"success": True, "riders": riders, "data": riders}
+        eligible_riders = [item for item in riders if item.get("assignment_eligible")]
+        excluded_riders = [
+            {
+                "rider_id": item.get("rider_id"),
+                "email": item.get("email"),
+                "reason": item.get("exclusion_reason"),
+            }
+            for item in riders if not item.get("assignment_eligible")
+        ]
+        print("RIDER_CANDIDATE_QUERY_COMPLETED", json_dump({
+            "record_count": len(riders),
+            "eligible_count": len(eligible_riders),
+            "excluded_count": len(excluded_riders),
+        }))
+        return {
+            "success": True,
+            "riders": riders,
+            "eligible_riders": eligible_riders,
+            "excluded_riders": excluded_riders,
+            "data": riders,
+        }
     finally:
         db.close()
 
@@ -12944,9 +13027,27 @@ def update_order(order_id: int, payload: dict, request: Request):
                 f"Admin updated order {order.order_code}",
                 {"order_code": order.order_code, "changes": changed_fields},
             )
-        if order.payment_status != old_payment_status and order.payment_status == "payment_confirmed":
+        payment_confirmation_requested = str(payload.get("payment_status") or payload.get("status") or "").strip().lower() == "payment_confirmed"
+        if payment_confirmation_requested and order.payment_status == "payment_confirmed":
             note = payload.get("note") or payload.get("admin_note") or ""
-            payment_log = create_payment_approval_log(db, request, admin, order, "payment_confirmed", old_payment_status, order.payment_status, note=note)
+            print("PAYMENT_CONFIRM_STARTED", json_dump({
+                "order_id": order.id,
+                "order_status_before": old_order_status,
+                "payment_status_before": old_payment_status,
+                "order_status_after": order.order_status,
+                "payment_status_after": order.payment_status,
+                "retry": old_payment_status == "payment_confirmed",
+            }))
+            payment_log = None
+            if order.payment_status != old_payment_status:
+                payment_log = create_payment_approval_log(db, request, admin, order, "payment_confirmed", old_payment_status, order.payment_status, note=note)
+            db.commit()
+            print("PAYMENT_CONFIRM_COMMITTED", json_dump({
+                "order_id": order.id,
+                "payment_status": order.payment_status,
+                "order_status": order.order_status,
+            }))
+            print("DELIVERY_WORKFLOW_STARTED", json_dump({"order_id": order.id, "trigger": "admin_payment_confirmation"}))
             if (order.delivery_method or "delivery") == "delivery":
                 classify_and_save_order_delivery(order, db)
                 gate_ok, gate_reason = delivery_order_ready_for_matching(order)
@@ -12961,7 +13062,21 @@ def update_order(order_id: int, payload: dict, request: Request):
                     "status": order.status,
                     "dispatch_status": canonical_dispatch_status(order),
                 }))
+                offers_before = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.order_id == order.id).count()
                 offer = start_delivery_matching(db, order, request)
+                db.commit()
+                offers_after = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.order_id == order.id).count()
+                pending_offers = db.query(DBDeliveryOffer).filter(
+                    DBDeliveryOffer.order_id == order.id,
+                    DBDeliveryOffer.status == "PENDING",
+                ).count()
+                print("DELIVERY_RECORD_FOUND_OR_CREATED", json_dump({"order_id": order.id, "delivery_status": canonical_dispatch_status(order)}))
+                print("DELIVERY_OFFERS_CREATED", json_dump({
+                    "order_id": order.id,
+                    "created_count": max(0, offers_after - offers_before),
+                    "offer_count": offers_after,
+                    "pending_offer_count": pending_offers,
+                }))
                 if offer:
                     print("DISPATCH_MATCHING_GATE", json_dump({
                         "order_id": order.id,
@@ -12971,10 +13086,24 @@ def update_order(order_id: int, payload: dict, request: Request):
                         "offer_id": offer.id,
                         "worker_id": offer.worker_id,
                     }))
-            db.commit()
-            db.refresh(payment_log)
-            create_admin_audit_log(request, admin, "payment_confirmed", "order", order.id, f"Admin confirmed payment for order {order.order_code}", {"order_code": order.order_code, "payment_log": payment_audit_log_to_dict(payment_log)})
-            safe_email_call("customer_payment_confirmed", send_customer_order_email, order_data, "payment_confirmed")
+                if pending_offers:
+                    print("DELIVERY_WORKFLOW_COMPLETED", json_dump({
+                        "order_id": order.id,
+                        "result": "offer_available",
+                        "offer_count": offers_after,
+                    }))
+                else:
+                    print("DELIVERY_WORKFLOW_SKIPPED", json_dump({
+                        "order_id": order.id,
+                        "reason": gate_reason if not gate_ok else "no_eligible_riders",
+                        "offer_count": offers_after,
+                    }))
+            else:
+                print("DELIVERY_WORKFLOW_SKIPPED", json_dump({"order_id": order.id, "reason": "order_not_delivery"}))
+            if payment_log:
+                db.refresh(payment_log)
+                create_admin_audit_log(request, admin, "payment_confirmed", "order", order.id, f"Admin confirmed payment for order {order.order_code}", {"order_code": order.order_code, "payment_log": payment_audit_log_to_dict(payment_log)})
+                safe_email_call("customer_payment_confirmed", send_customer_order_email, order_data, "payment_confirmed")
         if order.payment_status != old_payment_status and order.payment_status == "payment_rejected":
             rejection_reason = payload.get("rejection_reason") or payload.get("reason") or payload.get("admin_note") or ""
             payment_log = create_payment_approval_log(db, request, admin, order, "payment_rejected", old_payment_status, order.payment_status, rejection_reason=rejection_reason)

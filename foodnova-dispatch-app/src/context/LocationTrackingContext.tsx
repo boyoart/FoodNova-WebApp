@@ -31,6 +31,7 @@ export function LocationTrackingProvider({ children }: { children: React.ReactNo
       return;
     }
     let subscription: Location.LocationSubscription | null = null;
+    let heartbeat: ReturnType<typeof setInterval> | null = null;
     let cancelled = false;
     (async () => {
       const permission = await Location.getForegroundPermissionsAsync();
@@ -50,6 +51,27 @@ export function LocationTrackingProvider({ children }: { children: React.ReactNo
           RiderApi.locationPing(coords).catch(() => {});
         }
       );
+      const sendStationaryHeartbeat = async () => {
+        const location = await Location.getLastKnownPositionAsync({ maxAge: 60000, requiredAccuracy: 500 });
+        if (!location || cancelled) return;
+        const coords: Coords = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          accuracy: location.coords.accuracy,
+          heading: location.coords.heading,
+          speed: location.coords.speed,
+          timestamp: new Date().toISOString(),
+        };
+        setLatestCoords(coords);
+        await RiderApi.locationPing(coords);
+      };
+      heartbeat = setInterval(() => {
+        sendStationaryHeartbeat().catch((error) => {
+          console.log("DISPATCH_LOCATION_HEARTBEAT_FAILED", {
+            error: String(error instanceof Error ? error.message : error),
+          });
+        });
+      }, 45000);
     })().catch((error) => {
       console.log("DISPATCH_LOCATION_WATCH_FAILED", {
         error: String(error instanceof Error ? error.message : error),
@@ -57,6 +79,7 @@ export function LocationTrackingProvider({ children }: { children: React.ReactNo
     });
     return () => {
       cancelled = true;
+      if (heartbeat) clearInterval(heartbeat);
       subscription?.remove();
     };
   }, [online, stopTracking]);
