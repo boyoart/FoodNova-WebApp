@@ -207,11 +207,17 @@ class AuthRepository {
   Future<void> _syncPushToken() async {
     try {
       final token = await NotificationService.currentToken();
-      if (token == null || token.isEmpty) return;
-      await _ref.read(notificationsRepositoryProvider).registerFcmToken(token);
+      if (token != null && token.isNotEmpty) {
+        debugPrint('CUSTOMER_FCM_TOKEN_REGISTER_STARTED');
+        await _ref
+            .read(notificationsRepositoryProvider)
+            .registerFcmToken(token);
+        debugPrint('CUSTOMER_FCM_TOKEN_REGISTER_SUCCEEDED');
+      }
       if (!_pushRefreshListenerAttached) {
         _pushRefreshListenerAttached = true;
         NotificationService.tokenRefreshStream.listen((nextToken) {
+          debugPrint('CUSTOMER_FCM_TOKEN_REFRESHED');
           _ref
               .read(notificationsRepositoryProvider)
               .registerFcmToken(nextToken)
@@ -219,7 +225,7 @@ class AuthRepository {
         });
       }
     } catch (error) {
-      debugPrint('FCM_REGISTER_FAILED: $error');
+      debugPrint('CUSTOMER_FCM_TOKEN_REGISTER_FAILED: $error');
       // Push registration must never block login or signup.
     }
   }

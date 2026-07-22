@@ -8,7 +8,6 @@ import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 import type { LatLng, TrackingMapProps } from "./TrackingMap.types";
 
 const LAGOS: LatLng = { latitude: 6.5244, longitude: 3.3792 };
-const DEFAULT_SPEED_KMH = 25;
 
 function mapsKey(): string | null {
   const cfg: any = Constants.expoConfig || Constants.manifest2 || {};
@@ -108,9 +107,12 @@ function formatEta(minutes: number) {
   return `${Math.ceil(minutes)} min`;
 }
 
-async function fetchRoute(origin: LatLng, destination: LatLng): Promise<LatLng[]> {
+type RouteResult = { points: LatLng[]; distanceMeters: number; durationMinutes: number };
+
+async function fetchRoute(origin: LatLng, destination: LatLng): Promise<RouteResult | null> {
   const key = mapsKey();
-  if (!key) return [];
+  if (!key) return null;
+  console.log("DISPATCH_ROUTE_REQUEST_STARTED", { originPresent: true, destinationPresent: true });
   const url =
     "https://maps.googleapis.com/maps/api/directions/json" +
     `?origin=${origin.latitude},${origin.longitude}` +
@@ -125,11 +127,19 @@ async function fetchRoute(origin: LatLng, destination: LatLng): Promise<LatLng[]
       providerStatus: json?.status,
       error: json?.error_message || json?.status || "route_unavailable",
     });
-    return [];
+    console.log("DISPATCH_ROUTE_REQUEST_FAILED", { providerStatus: json?.status || response.status });
+    return null;
   }
   const decoded = decodePolyline(encoded);
-  console.log("TRACKING_ROUTE_CREATED", { points: decoded.length });
-  return decoded;
+  const leg = json?.routes?.[0]?.legs?.[0];
+  const distance = Number(leg?.distance?.value);
+  const durationSeconds = Number(leg?.duration_in_traffic?.value ?? leg?.duration?.value);
+  if (decoded.length < 2 || !Number.isFinite(distance) || !Number.isFinite(durationSeconds)) {
+    console.log("DISPATCH_ROUTE_REQUEST_FAILED", { reason: "invalid_route_response" });
+    return null;
+  }
+  console.log("DISPATCH_ROUTE_REQUEST_SUCCEEDED", { points: decoded.length, distanceMeters: distance, durationSeconds });
+  return { points: decoded, distanceMeters: distance, durationMinutes: durationSeconds / 60 };
 }
 
 // Native map. Google Maps requires a real dev build + API key in app.json.
@@ -137,12 +147,12 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
   const configuredMapsKey = mapsKey();
   const ref = useRef<MapView | null>(null);
   const [route, setRoute] = useState<LatLng[]>([]);
+  const [routeMetrics, setRouteMetrics] = useState<{ distanceMeters: number; durationMinutes: number } | null>(null);
   const [heading, setHeading] = useState(0);
   const headingRef = useRef(0);
   const previousRider = useRef<LatLng | null>(null);
   const fittedOnce = useRef(false);
   const lastRouteRequest = useRef<{ origin: LatLng; destination: LatLng; at: number } | null>(null);
-  const routeTotalMeters = useRef<number | null>(null);
   const initial = rider || pickup || customer || LAGOS;
   const riderRegion = useRef(
     new AnimatedRegion({
@@ -157,10 +167,10 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
     () => routeEndpoints(status, rider, pickup, customer),
     [status, rider, pickup, customer]
   );
-  const displayPath = useMemo(() => (route.length >= 2 ? route : endpoints), [route, endpoints]);
+  const displayPath = useMemo(() => (route.length >= 2 ? route : []), [route]);
   const destination = endpoints.length >= 2 ? endpoints[endpoints.length - 1] : null;
   const remainingMeters = useMemo(() => {
-    if (!rider || !destination) return null;
+    if (!rider || !destination || route.length < 2 || !routeMetrics) return null;
     if (route.length >= 2) {
       let nearestIndex = 0;
       let nearestDistance = Number.POSITIVE_INFINITY;
@@ -173,21 +183,20 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
       });
       return nearestDistance + pathDistance(route.slice(nearestIndex));
     }
-    return distanceMeters(rider, destination);
-  }, [destination, rider, route]);
+    return null;
+  }, [destination, rider, route, routeMetrics]);
   const totalMeters = useMemo(() => {
     if (!destination) return null;
-    return routeTotalMeters.current ?? Math.max(remainingMeters ?? 0, pathDistance(displayPath));
-  }, [destination, displayPath, remainingMeters]);
+    return routeMetrics?.distanceMeters ?? null;
+  }, [destination, routeMetrics]);
   const progress = useMemo(() => {
     if (!remainingMeters || !totalMeters || totalMeters <= 0) return 0;
     return Math.max(0, Math.min(1, 1 - remainingMeters / totalMeters));
   }, [remainingMeters, totalMeters]);
   const etaMinutes = useMemo(() => {
-    if (!remainingMeters) return null;
-    const speedKmh = rider?.speed && rider.speed > 2 ? rider.speed * 3.6 : DEFAULT_SPEED_KMH;
-    return (remainingMeters / 1000 / speedKmh) * 60;
-  }, [remainingMeters, rider?.speed]);
+    if (!remainingMeters || !routeMetrics || !totalMeters) return null;
+    return routeMetrics.durationMinutes * (remainingMeters / totalMeters);
+  }, [remainingMeters, routeMetrics, totalMeters]);
   const fitPoints: LatLng[] = useMemo(
     () => (displayPath.length >= 2 ? displayPath : ([rider, pickup, customer].filter(Boolean) as LatLng[])),
     [displayPath, rider, pickup, customer]
@@ -220,18 +229,10 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
         duration: 900,
         useNativeDriver: false,
       } as any).start();
-      ref.current?.animateCamera(
-        {
-          center: rider,
-          heading: nextHeading,
-          pitch: 35,
-          zoom: 16,
-        },
-        { duration: 900 }
-      );
+      console.log("DISPATCH_MAP_COORDINATES_RESOLVED", { rider: true, pickup: !!pickup, customer: !!customer });
       console.log("TRACKING_MARKER_CREATED", { marker: "rider", latitude: rider.latitude, longitude: rider.longitude });
     }
-  }, [rider, riderRegion]);
+  }, [rider, riderRegion, pickup, customer]);
 
   useEffect(() => {
     let cancelled = false;
@@ -250,13 +251,14 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
       lastRouteRequest.current = { origin, destination: routeDestination, at: Date.now() };
       const next = await fetchRoute(origin, routeDestination).catch((error) => {
         console.log("TRACKING_ROUTE_ERROR", { error: String(error?.message || error) });
-        return [];
+        console.log("DISPATCH_ROUTE_REQUEST_FAILED", { reason: "request_exception" });
+        return null;
       });
       if (!cancelled) {
-        const nextRoute = next.length >= 2 ? next : endpoints;
-        setRoute(nextRoute);
-        const nextTotal = pathDistance(nextRoute);
-        routeTotalMeters.current = routeTotalMeters.current === null ? nextTotal : Math.max(routeTotalMeters.current, nextTotal);
+        setRoute(next?.points || []);
+        setRouteMetrics(next ? { distanceMeters: next.distanceMeters, durationMinutes: next.durationMinutes } : null);
+        if (next) console.log("DISPATCH_ETA_UPDATED", { durationMinutes: next.durationMinutes, distanceMeters: next.distanceMeters });
+        else console.log("DISPATCH_MAP_FALLBACK_SHOWN", { fallback: "markers_only" });
       }
     }
     loadRoute();
@@ -267,7 +269,7 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
 
   useEffect(() => {
     fittedOnce.current = false;
-    routeTotalMeters.current = null;
+    setRouteMetrics(null);
     lastRouteRequest.current = null;
   }, [stageKey]);
 
@@ -332,6 +334,7 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
         )}
       </MapView>
       <View style={styles.metricsCard} pointerEvents="none">
+        {route.length < 2 && <Text style={styles.routeUnavailable}>Driving route temporarily unavailable</Text>}
         <View style={styles.metricRow}>
           <Text style={styles.metricLabel}>ETA</Text>
           <Text style={styles.metricValue}>{etaMinutes == null ? "--" : formatEta(etaMinutes)}</Text>
@@ -399,6 +402,7 @@ const styles = StyleSheet.create({
   metricRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   metricLabel: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, fontWeight: "700" },
   metricValue: { fontFamily: fonts.display, fontSize: type.lg, color: colors.onSurface, fontWeight: "700" },
+  routeUnavailable: { fontFamily: fonts.text, fontSize: type.sm, color: colors.error, textAlign: "center", marginBottom: spacing.sm },
   metricDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.sm },
   progressTrack: { height: 5, backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, overflow: "hidden", marginTop: spacing.sm },
   progressFill: { height: 5, backgroundColor: colors.brandPrimary, borderRadius: radius.pill },

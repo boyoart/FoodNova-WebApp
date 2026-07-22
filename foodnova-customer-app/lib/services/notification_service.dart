@@ -116,11 +116,17 @@ class NotificationService {
   }
 
   static Future<String?> currentToken() async {
+    debugPrint('CUSTOMER_FCM_INITIALIZATION_STARTED');
+    for (var attempt = 0; attempt < 10; attempt += 1) {
+      if (_firebaseReady && Firebase.apps.isNotEmpty) break;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
     if (!_firebaseReady || Firebase.apps.isEmpty) return null;
     try {
       final token = await FirebaseMessaging.instance.getToken();
-      debugPrint(
-          'FCM_TOKEN: ${token == null || token.isEmpty ? 'missing' : 'present'}');
+      debugPrint(token == null || token.isEmpty
+          ? 'CUSTOMER_FCM_TOKEN_MISSING'
+          : 'CUSTOMER_FCM_TOKEN_RECEIVED');
       return token;
     } catch (error) {
       debugPrint('[FoodNova Push] token unavailable: $error');

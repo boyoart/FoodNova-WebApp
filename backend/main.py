@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import and_, func, inspect, or_, text
+from sqlalchemy import and_, false, func, inspect, or_, text
 
 from database import Base, SessionLocal, engine
 from email_service import (
@@ -1698,6 +1698,10 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
     if not email:
         return None
     email = str(email).strip().lower()
+    print("CUSTOMER_NOTIFICATION_EVENT_STARTED", json_dump({
+        "recipient": email, "event_type": notif_type,
+        "order_id": order.get("id") if order else None,
+    }))
     db = SessionLocal()
     try:
         order_id = order.get("id") if order else None
@@ -1710,6 +1714,9 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
                 DBNotification.title == title,
             ).order_by(DBNotification.id.desc()).first()
         if existing:
+            print("CUSTOMER_NOTIFICATION_DUPLICATE_SKIPPED", json_dump({
+                "recipient": email, "event_type": notif_type, "order_id": order_id,
+            }))
             print("NOTIFICATION_DUPLICATE_SUPPRESSED", json_dump({
                 "notification_id": existing.id,
                 "order_id": order_id,
@@ -1731,6 +1738,10 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         db.add(notif)
         db.commit()
         db.refresh(notif)
+        print("CUSTOMER_NOTIFICATION_RECORD_CREATED", json_dump({
+            "recipient": email, "event_type": notif_type,
+            "order_id": order_id, "notification_id": notif.id,
+        }))
         data = notification_to_dict(notif)
         print(
             "NOTIFICATION_CREATED "
@@ -1758,9 +1769,15 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
             # Keep the persisted inbox record, but avoid a second generic push.
             if notif_type == "delivery_offer":
                 tokens = []
+            print("CUSTOMER_FCM_TOKEN_LOOKUP", json_dump({
+                "user_id": user.id, "event_type": notif_type, "token_count": len(tokens),
+            }))
             for token in tokens:
                 push_data = notification_to_dict(notif).get("data", {})
-                send_fcm_push_token(token, title, message, {
+                print("CUSTOMER_PUSH_ATTEMPTED", json_dump({
+                    "user_id": user.id, "event_type": notif_type, "order_id": order_id,
+                }))
+                push_result = send_fcm_push_token_result(token, title, message, {
                     "type": notif_type,
                     "category": category,
                     "notification_id": str(notif.id),
@@ -1774,6 +1791,13 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
                     "destination": push_data.get("destination", "/notifications"),
                     "click_action": push_data.get("destination", "/notifications"),
                 })
+                print("CUSTOMER_PUSH_SENT" if push_result.get("success") else "CUSTOMER_PUSH_FAILED", json_dump({
+                    "user_id": user.id, "event_type": notif_type,
+                    "order_id": order_id, "reason": push_result.get("error") or "",
+                }))
+        print("CUSTOMER_NOTIFICATION_EVENT_COMPLETED", json_dump({
+            "recipient": email, "event_type": notif_type, "order_id": order_id,
+        }))
         return data
     finally:
         db.close()
@@ -3443,6 +3467,32 @@ def order_item_to_dict(item: DBOrderItem) -> dict:
     }
 
 
+PUBLIC_ORDER_SEQUENCE_KEY = "public_order_sequence"
+
+
+def public_order_number_from_code(order_code: str) -> str:
+    match = re.search(r"(\d+)$", str(order_code or ""))
+    return str(int(match.group(1))).zfill(3) if match else ""
+
+
+def next_public_order_code(db) -> tuple[str, str]:
+    if engine.url.get_backend_name().startswith("postgres"):
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext('foodnova_public_order_number'))"))
+    setting = db.query(DBAppSetting).filter(DBAppSetting.key == PUBLIC_ORDER_SEQUENCE_KEY).with_for_update().first()
+    if not setting:
+        highest = 0
+        for code, in db.query(DBOrder.order_code).all():
+            highest = max(highest, int(public_order_number_from_code(code) or 0))
+        setting = DBAppSetting(key=PUBLIC_ORDER_SEQUENCE_KEY, value=str(highest))
+        db.add(setting)
+        db.flush()
+    next_number = int(setting.value or 0) + 1
+    setting.value = str(next_number)
+    setting.updated_at = datetime.utcnow()
+    public_number = str(next_number).zfill(3)
+    return f"FN-{public_number}", public_number
+
+
 def order_to_dict(order: DBOrder) -> dict:
     try:
         items = [order_item_to_dict(item) for item in (order.items or [])]
@@ -3451,6 +3501,7 @@ def order_to_dict(order: DBOrder) -> dict:
     return {
         "id": order.id,
         "order_code": order.order_code,
+        "order_number": public_order_number_from_code(order.order_code),
         "items": items,
         "total_amount": order.total_amount or 0,
         "delivery_address": order.delivery_address or "",
@@ -5638,6 +5689,7 @@ def notification_to_dict(notification: DBNotification) -> dict:
         "category": notification.category or "service",
         "order_id": str(order_id or ""),
         "order_code": notification.order_code or "",
+        "order_number": public_order_number_from_code(notification.order_code),
         "screen": screen,
         "destination": destination,
     }
@@ -5645,6 +5697,7 @@ def notification_to_dict(notification: DBNotification) -> dict:
         "id": notification.id,
         "order_id": notification.order_id,
         "order_code": notification.order_code,
+        "order_number": public_order_number_from_code(notification.order_code),
         "user_email": notification.user_email,
         "customer_email": notification.customer_email,
         "title": notification.title,
@@ -10784,7 +10837,7 @@ def get_notifications(request: Request):
         items = [
             notification_to_dict(notification)
             for notification in db.query(DBNotification)
-            .filter(DBNotification.user_email == email, DBNotification.deleted_at.is_(None))
+            .filter(func.lower(DBNotification.user_email) == str(email or "").strip().lower(), DBNotification.deleted_at.is_(None))
             .order_by(DBNotification.created_at.desc(), DBNotification.id.desc())
             .all()
         ]
@@ -10803,7 +10856,7 @@ def unread_count(request: Request):
     db = SessionLocal()
     try:
         count = db.query(DBNotification).filter(
-            DBNotification.user_email == email,
+            func.lower(DBNotification.user_email) == str(email or "").strip().lower(),
             DBNotification.deleted_at.is_(None),
             DBNotification.is_read.is_(False),
         ).count()
@@ -10999,9 +11052,9 @@ def create_order(payload: OrderPayload, request: Request):
     db = SessionLocal()
     try:
         inventory_deductions = validate_and_deduct_inventory(db, normalized_items)
-        next_id = (db.query(DBOrder).order_by(DBOrder.id.desc()).first().id + 1) if db.query(DBOrder).first() else 1
+        order_code, _ = next_public_order_code(db)
         order = DBOrder(
-            order_code=f"FN-{next_id:05d}",
+            order_code=order_code,
             total_amount=payload.total_amount or payload.total or sum(item["line_total"] for item in normalized_items),
             delivery_address=payload.delivery_address or payload.address or "",
             delivery_address_id=payload.delivery_address_id if getattr(payload, 'delivery_address_id', None) else None,
@@ -11291,7 +11344,8 @@ def get_cancel_request(order_id: int, request: Request):
 
 
 @app.get("/admin/orders")
-def admin_orders(request: Request, include_deleted: bool = False, status: Optional[str] = None):
+def admin_orders(request: Request, include_deleted: bool = False, status: Optional[str] = None,
+                 search: Optional[str] = None):
     require_permission(request, "orders:view")
     db = SessionLocal()
     try:
@@ -11308,6 +11362,14 @@ def admin_orders(request: Request, include_deleted: bool = False, status: Option
                 func.lower(DBOrder.order_status) == clean_status,
                 func.lower(DBOrder.fulfillment_status) == clean_status,
                 func.lower(DBOrder.status) == clean_status,
+            ))
+        clean_search = str(search or "").strip()
+        if clean_search:
+            number_search = re.sub(r"(?i)^order\s*#?", "", clean_search).strip().lstrip("#").strip()
+            query = query.filter(or_(
+                func.lower(DBOrder.order_code).contains(clean_search.lower()),
+                func.lower(DBOrder.order_code).contains(number_search.lower()),
+                DBOrder.order_code.like(f"%-{number_search.zfill(3)}") if number_search.isdigit() else false(),
             ))
         orders = [order_to_dict_for_context(order, db, context="admin") for order in query.order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()]
         return {"success": True, "orders": orders, "data": orders}
@@ -12166,12 +12228,35 @@ def delete_admin_order(order_id: int, request: Request):
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
+        if canonical_dispatch_status(order) in DISPATCH_ACTIVE_DELIVERY_STATUSES:
+            raise HTTPException(status_code=409, detail="Cancel the active delivery before deleting this order.")
         old_data = order_to_dict(order)
+        worker_ids = {value for value in (order.delivery_worker_id, order.rider_id) if value}
+        offers = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.order_id == order.id).all()
+        for offer in offers:
+            if offer.status in {"PENDING", "ACCEPTED", "ASSIGNED"}:
+                offer.status = "WITHDRAWN"
+                offer.assignment_status = "WITHDRAWN"
+                offer.updated_at = datetime.utcnow()
+        for assignment in db.query(DBDeliveryAssignmentLog).filter(DBDeliveryAssignmentLog.order_id == order.id).all():
+            assignment.status = "deleted"
+            assignment.released_at = datetime.utcnow()
+            assignment.updated_at = datetime.utcnow()
+        restock_order_inventory(db, order)
         order.is_deleted = True
         order.deleted_at = datetime.utcnow()
         order.deleted_by_admin_id = admin.get("id")
         order.deleted_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
         order.updated_at = datetime.utcnow()
+        for worker_id in worker_ids:
+            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id).first()
+            if worker and not active_order_filter(db.query(DBOrder)).filter(
+                DBOrder.id != order.id,
+                or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id),
+                DBOrder.delivery_status.in_(DISPATCH_ACTIVE_DELIVERY_STATUSES),
+            ).first():
+                worker.operational_status = "ONLINE"
+                worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)
         create_admin_audit_log(
@@ -12182,6 +12267,13 @@ def delete_admin_order(order_id: int, request: Request):
             order.id,
             f"Admin deleted order {order.order_code}",
             {"order_id": order.id, "order_code": order.order_code, "before": old_data, "after": order_to_dict(order)},
+        )
+        _create_order_notification(
+            old_data,
+            "Order Deleted",
+            f"Order #{old_data.get('order_number') or old_data.get('order_code')} was deleted by FoodNova Admin.",
+            "order_deleted",
+            "order",
         )
         return {"success": True, "message": "Order deleted successfully"}
     finally:

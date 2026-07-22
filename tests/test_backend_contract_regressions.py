@@ -59,6 +59,11 @@ def tracking_order(status: str, pin: str = "1604") -> SimpleNamespace:
 
 
 class BackendContractRegressionTests(unittest.TestCase):
+    def test_public_order_number_is_three_digits_without_wrapping(self):
+        self.assertEqual(main.public_order_number_from_code("FN-1"), "001")
+        self.assertEqual(main.public_order_number_from_code("FN-999"), "999")
+        self.assertEqual(main.public_order_number_from_code("FN-1000"), "1000")
+
     def test_dispatch_client_out_for_delivery_alias_is_supported(self):
         self.assertEqual(
             main.normalize_delivery_status_transition("out_for_delivery"),

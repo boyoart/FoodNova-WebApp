@@ -38,6 +38,7 @@ export default function AdminOrders() {
   const [riders, setRiders] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assigningRider, setAssigningRider] = useState(false)
+  const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '', mark_out_for_delivery: true })
 
   useEffect(() => {
@@ -138,6 +139,22 @@ export default function AdminOrders() {
     setServiceNote(order.service_note || '')
     loadPaymentAudit(order.id)
     loadRiders()
+  }
+
+  const handleDeleteOrder = async (order) => {
+    const publicNumber = order.order_number || order.order_code || order.id
+    if (!window.confirm(`Delete Order #${publicNumber}?\n\nThis action cannot be undone.`)) return
+    try {
+      setDeletingOrderId(order.id)
+      await adminAPI.deleteOrder(order.id)
+      setOrders((current) => current.filter((item) => item.id !== order.id))
+      if (selectedOrder?.id === order.id) handleCloseOrder()
+      toast.success(`Order #${publicNumber} deleted`)
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to delete order')
+    } finally {
+      setDeletingOrderId(null)
+    }
   }
 
   const handleCloseOrder = () => {
@@ -337,6 +354,14 @@ export default function AdminOrders() {
                         onClick={() => handleViewOrder(order)}
                       >
                         Details
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-delete"
+                        disabled={deletingOrderId === order.id}
+                        onClick={() => handleDeleteOrder(order)}
+                      >
+                        {deletingOrderId === order.id ? 'Deleting...' : 'Delete Order'}
                       </button>
                     </td>
                   </tr>
