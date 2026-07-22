@@ -6,13 +6,13 @@ import { useAuth } from "@/src/context/AuthContext";
 import { Logo } from "@/src/components/Logo";
 import { Button } from "@/src/components/ui";
 import { colors, fonts, spacing, type } from "@/src/theme/tokens";
-import { isApprovedRider, isPendingRider, isRejectedRider } from "@/src/lib/rider-state";
+import { resolveOnboardingState } from "@/src/lib/onboarding";
 import { STARTUP_WATCHDOG_MS, startupLog } from "@/src/lib/startup";
 
 // JS startup gate. Native splash is hidden independently in _layout so this
 // screen can always render a recovery action if session routing cannot settle.
 export default function Index() {
-  const { booting, authed, approvalStatus, rider, bootError, retryBootstrap, resetSession } = useAuth();
+  const { booting, authed, approvalStatus, rider, onboardingProgress, verificationStatus, bootError, retryBootstrap, resetSession } = useAuth();
   const router = useRouter();
   const [watchdogExpired, setWatchdogExpired] = useState(false);
 
@@ -31,13 +31,14 @@ export default function Index() {
     if (!authed) route = "/(auth)/login";
     else {
       const state = { ...(rider || {}), approval_status: approvalStatus };
-      if (isApprovedRider(state)) route = "/(tabs)";
-      else if (isPendingRider(state) || isRejectedRider(state)) route = "/onboarding/pending";
+      const destination = resolveOnboardingState(onboardingProgress, verificationStatus, state).destination;
+      if (destination === "dashboard") route = "/(tabs)";
+      else if (destination === "pending_review" || destination === "rejected") route = "/onboarding/pending";
       else route = "/onboarding";
     }
     startupLog("terminal_route_ready", { route });
     router.replace(route);
-  }, [booting, authed, approvalStatus, rider, router, bootError]);
+  }, [booting, authed, approvalStatus, rider, onboardingProgress, verificationStatus, router, bootError]);
 
   if (bootError || watchdogExpired) {
     return (

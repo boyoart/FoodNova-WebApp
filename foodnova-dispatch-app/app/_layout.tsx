@@ -18,6 +18,7 @@ import "@/src/lib/background-location";
 import { colors } from "@/src/theme/tokens";
 import { logBuildIdentity } from "@/src/lib/build-identity";
 import { startupLog } from "@/src/lib/startup";
+import { resolveOnboardingState } from "@/src/lib/onboarding";
 
 startupLog("js_bundle_started");
 SplashScreen.preventAutoHideAsync()
@@ -65,15 +66,20 @@ function PushBridge() {
 }
 
 function SessionGate({ children }: { children: React.ReactNode }) {
-  const { booting, authed } = useAuth();
+  const { booting, authed, rider, onboardingProgress, verificationStatus } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const first = String(segments[0] || "");
   const protectedRoute = first === "(tabs)" || first === "delivery" || first === "notifications" || first === "onboarding";
 
   useEffect(() => {
-    if (!booting && protectedRoute && !authed) router.replace("/(auth)/login");
-  }, [authed, booting, protectedRoute, router]);
+    if (booting) return;
+    if (protectedRoute && !authed) { router.replace("/(auth)/login"); return; }
+    if (!authed) return;
+    const destination = resolveOnboardingState(onboardingProgress, verificationStatus, rider).destination;
+    if (first === "(tabs)" && destination !== "dashboard") router.replace(destination === "pending_review" || destination === "rejected" ? "/onboarding/pending" : "/onboarding");
+    if (first === "onboarding" && destination === "dashboard") router.replace("/(tabs)");
+  }, [authed, booting, first, onboardingProgress, protectedRoute, rider, router, verificationStatus]);
 
   if (booting || (protectedRoute && !authed)) {
     return <View style={{ flex: 1, backgroundColor: colors.surface }} />;

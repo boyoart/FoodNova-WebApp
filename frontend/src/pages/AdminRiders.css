@@ -189,7 +189,15 @@
 .kyc-decision label { display:grid; gap:.5rem; font-weight:800; margin-bottom:1rem; }
 .kyc-decision small { display:block; margin-top:1rem; color:var(--fn-muted); }
 .kyc-decision .btn-approve { background:var(--fn-primary); color:#fff; border:0; border-radius:.65rem; padding:.65rem .9rem; font-weight:900; cursor:pointer; }
+.btn-force-reonboarding { background:#9a3412; color:#fff; border:0; border-radius:.65rem; padding:.65rem .9rem; font-weight:900; cursor:pointer; }
 .kyc-decision button:disabled { opacity:.55; cursor:not-allowed; }
+.force-reonboarding-modal { width:min(620px,94vw); }
+.force-rider-summary { display:flex; flex-wrap:wrap; gap:.55rem 1rem; padding:1rem; border-radius:.75rem; background:var(--fn-surface-2); }
+.force-rider-summary strong { width:100%; color:var(--fn-heading); }
+.force-warning { padding:.9rem; border-left:4px solid #c2410c; background:rgba(194,65,12,.1); color:var(--fn-text); }
+.force-field { display:grid; gap:.5rem; margin-top:1rem; color:var(--fn-heading); font-weight:800; }
+.force-field select,.force-field textarea { width:100%; padding:.75rem; border:1px solid var(--fn-border); border-radius:.7rem; background:var(--fn-input-bg); color:var(--fn-input-text); font:inherit; }
+.force-history-note { color:var(--fn-muted); font-size:.9rem; }
 
 .rider-modal-overlay {
   position: fixed;

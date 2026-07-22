@@ -19,7 +19,7 @@ import { ApiError } from "@/src/api/client";
 import { Button, Field } from "@/src/components/ui";
 import { Logo } from "@/src/components/Logo";
 import { colors, fonts, spacing, type } from "@/src/theme/tokens";
-import { isApprovedRider, isPendingRider, isRejectedRider } from "@/src/lib/rider-state";
+import { resolveOnboardingState } from "@/src/lib/onboarding";
 
 const HERO =
   "https://images.unsplash.com/photo-1695654390723-479197a8c4a3?crop=entropy&cs=srgb&fm=jpg&q=75&w=1000";
@@ -60,8 +60,9 @@ export default function Login() {
         return;
       }
       toast.show("Welcome back!", "success");
-      if (isApprovedRider(rider)) router.replace("/(tabs)");
-      else if (isPendingRider(rider) || isRejectedRider(rider)) router.replace("/onboarding/pending");
+      const destination = resolveOnboardingState(rider?._onboarding?.progress, rider?._onboarding?.verification, rider).destination;
+      if (destination === "dashboard") router.replace("/(tabs)");
+      else if (destination === "pending_review" || destination === "rejected") router.replace("/onboarding/pending");
       else router.replace("/onboarding");
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Unable to sign in";

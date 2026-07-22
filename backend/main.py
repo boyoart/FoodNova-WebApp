@@ -693,8 +693,14 @@ class NINVerificationPayload(BaseModel):
 
 
 class WorkerReviewPayload(BaseModel):
-    status: str
+    status: Optional[str] = ""
     review_note: Optional[str] = ""
+    reset_scope: Optional[str] = None
+
+
+class ForceReonboardingPayload(BaseModel):
+    reset_scope: str
+    reason: str
 
 
 class OperationalZonePayload(BaseModel):
@@ -1114,6 +1120,7 @@ ADMIN_ROLE_PERMISSIONS = {
         "categories:view", "categories:manage", "website_settings:view", "website_settings:manage",
         "subscribers:view", "subscribers:manage", "delivery_zones:view", "delivery_zones:manage",
         "rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete",
+        "rider_kyc:force_reonboarding",
     ],
     "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete", "delivery_zones:view", "delivery_zones:manage", "cancellations:view", "cancellations:manage", "customers:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage", "categories:view", "categories:manage"],
@@ -3308,11 +3315,14 @@ def worker_assignment_policy(worker: DBDeliveryWorker) -> dict:
 
 RIDER_ONBOARDING_TOTAL_STEPS = 10
 RIDER_ONBOARDING_STAGE_STEPS = {
-    "account_created": 4,
-    "identity_submitted": 5,
-    "rider_profile_completed": 6,
-    "selfie_verified": 7,
-    "documents_uploaded": 8,
+    "account_created": 1,
+    "identity_submitted": 2,
+    "address_uploaded": 4,
+    "emergency_contact_added": 5,
+    "rider_profile_completed": 5,
+    "selfie_verified": 6,
+    "documents_uploaded": 7,
+    "training_completed": 9,
     "admin_review": 10,
     "approved": 10,
     "rejected": 10,
@@ -6478,6 +6488,82 @@ def rider_identity_data(db, worker: DBDeliveryWorker, kyc: Optional[DBRiderKyc] 
     }
 
 
+def authoritative_onboarding_state(db, worker: DBDeliveryWorker, kyc: Optional[DBRiderKyc] = None) -> dict:
+    """Compute navigation from persisted completion facts, never from a legacy numeric step."""
+    if kyc is None:
+        kyc = db.query(DBRiderKyc).filter(DBRiderKyc.delivery_worker_id == worker.id).first()
+    meta = delivery_worker_review_meta(worker)
+    documents = rider_documents_map(db, worker)
+    identity = meta.get("identity_verification") or {}
+    address = meta.get("address_verification") or {}
+    emergency = meta.get("emergency_contact") or {}
+    profile = meta.get("profile_data") or {}
+    training = meta.get("training") or {}
+    forced = meta.get("force_reonboarding") or {}
+    forced_active = bool(forced.get("active"))
+    reset_scope = forced.get("scope") if forced_active else None
+    submitted_statuses = {"submitted", "pending_review", "manual_review", "verified", "approved", "completed", "not_required"}
+    identity_complete = bool(worker.nin_verified and ((kyc and kyc.nin_provider_report_id) or worker.nin_report_id or (kyc and kyc.nin_last4) or worker.nin_last4))
+    address_complete = bool(
+        documents.get("address_proof") or documents.get("proof_of_address")
+        or ((address.get("status") or "") in submitted_statuses and (worker.home_address or address.get("operating_city")))
+    )
+    emergency_complete = bool(
+        worker.emergency_contact_name and worker.emergency_contact_phone
+        and (not emergency or (emergency.get("status") or "completed") in submitted_statuses)
+    )
+    vehicle_complete = bool(
+        (worker.worker_type or "").lower() == "messenger"
+        or ((worker.vehicle_type or profile.get("vehicle_type")) and (worker.plate_number or profile.get("plate_number")))
+    )
+    facts = [
+        (1, "identity", identity_complete, "NIN verification and consent are required."),
+        (2, "verified_identity", identity_complete and bool(identity or rider_identity_data(db, worker, kyc).get("full_name")), "Verified identity information is incomplete."),
+        (3, "address", address_complete, "Proof of address is required."),
+        (4, "emergency", emergency_complete, "Emergency contact details are required."),
+        (5, "selfie", bool(worker.selfie_url), "A current rider selfie is required."),
+        (6, "government_id", bool(worker.id_document_url or documents.get("driver_license")), "A government ID document is required."),
+        (7, "vehicle", vehicle_complete, "Vehicle or worker details are required."),
+        (8, "training", bool(training.get("completed")), "Rider training must be completed."),
+    ]
+    completed_steps = [step for step, _, complete, _ in facts if complete]
+    blockers = [message for _, _, complete, message in facts if not complete]
+    first_incomplete = next((step for step, _, complete, _ in facts if not complete), 9)
+    if forced_active and reset_scope == "full_resubmission":
+        first_incomplete = 1
+        blockers = ["FoodNova requested a full onboarding resubmission."] + blockers
+    application_submitted = bool(
+        not forced_active and (
+            (worker.kyc_status or "").upper() in {"PENDING_REVIEW", "APPROVED", "ACTIVE", "REJECTED", "SUSPENDED"}
+            or (kyc and (kyc.onboarding_stage or "") in {"admin_review", "approved", "rejected", "suspended"})
+        )
+    )
+    if application_submitted:
+        completed_steps.extend([9, 10])
+    lifecycle = rider_lifecycle_status(worker)
+    rejected = lifecycle == "SUSPENDED" or (worker.kyc_status or "").upper() == "REJECTED"
+    approved = lifecycle == "ACTIVE" and not forced_active
+    pending = application_submitted and not approved and not rejected
+    destination = "dashboard" if approved else "rejected" if rejected and not forced_active else "pending_review" if pending else "onboarding"
+    return {
+        "authoritative_status": destination,
+        "first_incomplete_step": max(1, min(RIDER_ONBOARDING_TOTAL_STEPS, int(first_incomplete))),
+        "completed_steps": sorted(set(completed_steps)),
+        "blockers": blockers,
+        "application_submitted": application_submitted,
+        "approval_state": lifecycle,
+        "rejection_state": rejected,
+        "force_reonboarding": {
+            "active": forced_active,
+            "scope": reset_scope,
+            "reason": str(forced.get("reason") or "")[:500] if forced_active else "",
+            "requested_at": forced.get("requested_at") or "",
+        },
+        "destination": destination,
+        "step_total": RIDER_ONBOARDING_TOTAL_STEPS,
+    }
+
+
 def onboarding_progress_payload(db, worker: DBDeliveryWorker) -> dict:
     rider, kyc = ensure_rider_records(db, worker)
     sync_rider_onboarding_state(db, worker)
@@ -6499,24 +6585,28 @@ def onboarding_progress_payload(db, worker: DBDeliveryWorker) -> dict:
         "emergency_contact_phone": worker.emergency_contact_phone or "",
         "emergency_contact_relationship": (meta.get("emergency_contact") or {}).get("relationship") or "",
     }
+    navigation = authoritative_onboarding_state(db, worker, kyc)
     data = {
         "rider_id": worker.id,
         "email": worker.email or "",
         "phone": worker.phone or "",
-        "current_step": kyc.current_step if kyc else worker_to_dict(worker).get("current_step", 1),
+        "current_step": navigation["first_incomplete_step"],
         "step_total": RIDER_ONBOARDING_TOTAL_STEPS,
-        "progress_percent": rider_onboarding_progress_percent(kyc.current_step if kyc else 1),
+        "progress_percent": rider_onboarding_progress_percent(navigation["first_incomplete_step"]),
         "nin_verified": bool(worker.nin_verified),
         "nin_report_id": worker.nin_report_id or "",
         "nin_data": rider_identity_data(db, worker, kyc),
         "profile_data": profile_data,
         "documents": documents,
         "training_completed": (kyc.onboarding_stage if kyc else "") in {"training_completed", "admin_review", "approved"},
-        "application_submitted": (worker.kyc_status or "") in {"PENDING_REVIEW", "APPROVED", "ACTIVE", "REJECTED"} or (kyc.onboarding_stage if kyc else "") in {"admin_review", "approved", "rejected"},
+        "application_submitted": navigation["application_submitted"],
         "approval_status": worker.kyc_status or "ONBOARDING",
         "onboarding_stage": kyc.onboarding_stage if kyc else "account_created",
         "last_updated": iso((kyc.updated_at if kyc else None) or worker.updated_at),
+        **navigation,
     }
+    if kyc:
+        kyc.current_step = navigation["first_incomplete_step"]
     identity_log = data["nin_data"]
     print("ONBOARDING_PROGRESS_TRACE", json_dump({
         "rider_id": data["rider_id"],
@@ -6710,6 +6800,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
     verification_logs = db.query(DBVerificationLog).filter(DBVerificationLog.delivery_worker_id == worker.id).order_by(DBVerificationLog.created_at.desc()).limit(30).all()
     sessions = db.query(DBRiderSession).filter(DBRiderSession.delivery_worker_id == worker.id).order_by(DBRiderSession.created_at.desc()).limit(20).all()
     reviews = db.query(DBAdminReview).filter(DBAdminReview.delivery_worker_id == worker.id).order_by(DBAdminReview.created_at.desc()).limit(30).all()
+    onboarding_state = authoritative_onboarding_state(db, worker, kyc)
     return {
         "worker": worker_to_dict(worker),
         "rider": {
@@ -6769,6 +6860,7 @@ def rider_detail_payload(db, worker: DBDeliveryWorker) -> dict:
         "login_history": [{"id": session.id, "active": bool(session.is_active), "ip_address": session.ip_address or "", "device": json_load(session.device_info_json, {}), "created_at": iso(session.created_at), "last_seen_at": iso(session.last_seen_at), "revoked_at": iso(session.revoked_at), "revoked_reason": session.revoked_reason or ""} for session in sessions],
         "admin_reviews": [{"id": review.id, "admin_name": review.admin_name or "", "action": review.action or "", "reason": review.reason or "", "required_changes": json_load(review.required_changes_json, []), "created_at": iso(review.created_at)} for review in reviews],
         "approval_blockers": rider_approval_blockers(db, worker),
+        "onboarding_state": onboarding_state,
     }
 
 
@@ -9751,6 +9843,11 @@ def delivery_onboarding_submit(payload: OnboardingSubmitPayload, request: Reques
         training_meta["completed"] = True
         training_meta["completed_at"] = training_meta.get("completed_at") or iso(datetime.utcnow())
         meta["training"] = training_meta
+        force_meta = meta.get("force_reonboarding") or {}
+        if force_meta.get("active"):
+            force_meta["active"] = False
+            force_meta["completed_at"] = iso(datetime.utcnow())
+            meta["force_reonboarding"] = force_meta
         worker.review_note = json_dump(meta)
         worker.kyc_status = "PENDING_REVIEW"
         worker.updated_at = datetime.utcnow()
@@ -12069,6 +12166,103 @@ def get_rider_verification_detail(worker_id: int, request: Request):
         if not worker:
             raise HTTPException(status_code=404, detail="Rider verification profile not found")
         return {"success": True, "rider": rider_detail_payload(db, worker)}
+    finally:
+        db.close()
+
+
+@app.patch("/admin/rider-verification-queue/{worker_id}/force-reonboarding")
+def force_rider_reonboarding(worker_id: int, payload: ForceReonboardingPayload, request: Request):
+    admin = require_permission(request, "rider_kyc:force_reonboarding")
+    scope = (payload.reset_scope or "").strip().lower()
+    reason = (payload.reason or "").strip()
+    if scope not in {"first_incomplete", "full_resubmission"}:
+        raise HTTPException(status_code=422, detail="Choose first_incomplete or full_resubmission.")
+    if len(reason) < 5:
+        raise HTTPException(status_code=422, detail="A clear reason of at least 5 characters is required.")
+    db = SessionLocal()
+    try:
+        worker = db.query(DBDeliveryWorker).filter(
+            DBDeliveryWorker.id == worker_id,
+            DBDeliveryWorker.worker_type.in_(["rider", "messenger"]),
+            DBDeliveryWorker.deleted_at.is_(None),
+        ).with_for_update().first()
+        if not worker:
+            raise HTTPException(status_code=404, detail="Rider verification profile not found")
+        active_delivery = active_order_filter(db.query(DBOrder)).filter(
+            or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id),
+            DBOrder.delivery_status.in_(DISPATCH_ACTIVE_DELIVERY_STATUSES),
+        ).first()
+        if active_delivery:
+            raise HTTPException(status_code=409, detail=f"Rider has active delivery Order #{active_delivery.order_code or active_delivery.id}. Complete or resolve it before forcing re-onboarding.")
+        meta = delivery_worker_review_meta(worker)
+        existing = meta.get("force_reonboarding") or {}
+        if existing.get("active"):
+            raise HTTPException(status_code=409, detail="Force re-onboarding is already active for this rider.")
+        previous_state = authoritative_onboarding_state(db, worker)
+        previous_status = worker.kyc_status or "ONBOARDING"
+        requested_at = iso(datetime.utcnow())
+        meta["force_reonboarding"] = {
+            "active": True,
+            "scope": scope,
+            "reason": reason,
+            "requested_at": requested_at,
+            "admin_id": admin.get("id"),
+            "admin_name": admin.get("full_name") or admin.get("email") or "Admin",
+        }
+        meta["manual_approval"] = {"active": False, "reason": "force_reonboarding", "updated_at": requested_at}
+        worker.review_note = json_dump(meta)
+        worker.kyc_status = "ONBOARDING"
+        worker.operational_status = "OFFLINE"
+        worker.updated_at = datetime.utcnow()
+        revoked_sessions = revoke_rider_sessions(db, worker, admin, reason="Force re-onboarding")
+        rider, kyc = ensure_rider_records(db, worker)
+        if kyc:
+            kyc.admin_review_status = "reonboarding_required"
+            kyc.resubmission_requested = True
+            kyc.admin_reviewed_at = datetime.utcnow()
+            kyc.updated_at = datetime.utcnow()
+        if rider:
+            rider.status = "onboarding"
+            rider.can_go_online = False
+            rider.can_accept_orders = False
+            rider.wallet_enabled = False
+            rider.updated_at = datetime.utcnow()
+        new_state = authoritative_onboarding_state(db, worker, kyc)
+        if kyc:
+            kyc.current_step = new_state["first_incomplete_step"]
+            kyc.onboarding_stage = "account_created" if scope == "full_resubmission" else kyc.onboarding_stage
+        db.add(DBAdminReview(
+            delivery_worker_id=worker.id,
+            admin_id=admin.get("id"),
+            admin_name=admin.get("full_name") or admin.get("email") or "Admin",
+            action="force_reonboarding",
+            reason=reason,
+            metadata_json=json_dump({"reset_scope": scope, "previous_status": previous_status, "new_status": "ONBOARDING", "first_incomplete_step": new_state["first_incomplete_step"]}),
+        ))
+        log_rider_status_change(db, worker, previous_state.get("authoritative_status"), "onboarding", previous_status, "ONBOARDING", admin, reason, {"reset_scope": scope, "first_incomplete_step": new_state["first_incomplete_step"]})
+        db.commit()
+        db.refresh(worker)
+        rider_user = db.query(DBUser).filter(DBUser.id == worker.user_id).first()
+        _create_user_notification(
+            worker.email or (rider_user.email if rider_user else ""),
+            "Onboarding review required",
+            "Your onboarding information requires review. Please sign in and complete the requested onboarding steps.",
+            "rider_force_reonboarding",
+            "rider",
+        )
+        create_admin_audit_log(request, admin, "rider_force_reonboarding", "delivery_worker", worker.id, "Admin forced rider re-onboarding", {
+            "rider_id": worker.id, "reset_scope": scope, "reason": reason,
+            "previous_state": previous_state.get("authoritative_status"), "new_state": "onboarding",
+            "first_incomplete_step": new_state["first_incomplete_step"], "revoked_sessions": revoked_sessions,
+        })
+        print("RIDER_FORCE_REONBOARDING", json_dump({"rider_id": worker.id, "admin_id": admin.get("id"), "reset_scope": scope, "first_incomplete_step": new_state["first_incomplete_step"], "revoked_sessions": revoked_sessions, "timestamp": requested_at}))
+        return {"success": True, "rider": rider_detail_payload(db, worker), "onboarding_state": new_state, "revoked_sessions": revoked_sessions}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

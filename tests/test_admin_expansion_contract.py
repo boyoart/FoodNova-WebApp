@@ -96,7 +96,7 @@ class AdminExpansionContractTests(unittest.TestCase):
         self.assertEqual(main.rider_lifecycle_status(worker), "ACTIVE")
 
     def test_super_admin_has_granular_rider_kyc_permissions(self):
-        required = {"rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete"}
+        required = {"rider_kyc:view", "rider_kyc:review", "rider_kyc:force_reonboarding", "riders:worker_type", "riders:delete"}
         self.assertTrue(required.issubset(set(main.ADMIN_ROLE_PERMISSIONS["super_admin"])))
 
 

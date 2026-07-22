@@ -28,7 +28,7 @@ const ROLE_OPTIONS = [
 ]
 
 const ROLE_PERMISSIONS = {
-  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'rider_kyc:view', 'rider_kyc:review', 'riders:worker_type', 'riders:delete', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'announcements:view', 'announcements:manage', 'categories:view', 'categories:manage', 'website_settings:view', 'website_settings:manage', 'subscribers:view', 'subscribers:manage', 'delivery_zones:view', 'delivery_zones:manage', 'reports:view', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
+  super_admin: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'rider_kyc:view', 'rider_kyc:review', 'rider_kyc:force_reonboarding', 'riders:worker_type', 'riders:delete', 'payments:view', 'payments:approve', 'stock:view', 'stock:manage', 'broadcasts:view', 'broadcasts:send', 'announcements:view', 'announcements:manage', 'categories:view', 'categories:manage', 'website_settings:view', 'website_settings:manage', 'subscribers:view', 'subscribers:manage', 'delivery_zones:view', 'delivery_zones:manage', 'reports:view', 'customers:view', 'audit:view', 'admins:view', 'admins:manage'],
   orders_manager: ['dashboard:view', 'orders:view', 'orders:update', 'orders:delivery', 'delivery:manage', 'rider_kyc:view', 'rider_kyc:review', 'riders:worker_type', 'riders:delete', 'customers:view'],
   stock_manager: ['dashboard:view', 'stock:view', 'stock:manage'],
   payment_manager: ['dashboard:view', 'orders:view', 'payments:view', 'payments:approve', 'customers:view'],
@@ -66,6 +66,7 @@ const PERMISSION_OPTIONS = [
   ['reports:view', 'Reports View'],
   ['rider_kyc:view', 'Rider KYC View'],
   ['rider_kyc:review', 'Rider KYC Review'],
+  ['rider_kyc:force_reonboarding', 'Force Rider Re-onboarding'],
   ['riders:worker_type', 'Edit Rider Worker Type'],
   ['riders:delete', 'Delete Riders'],
 ]
@@ -83,7 +84,7 @@ const PERMISSION_GROUPS = [
   { title: 'Catalog Categories', items: [['categories:view', 'View categories'], ['categories:manage', 'Manage categories']] },
   { title: 'Delivery Zones', items: [['delivery_zones:view', 'View delivery zones'], ['delivery_zones:manage', 'Manage delivery zones']] },
   { title: 'Reports', items: [['reports:view', 'View and export reports']] },
-  { title: 'Rider KYC', items: [['rider_kyc:view', 'View rider KYC'], ['rider_kyc:review', 'Approve and reject riders'], ['riders:worker_type', 'Edit worker type'], ['riders:delete', 'Delete riders safely']] },
+  { title: 'Rider KYC', items: [['rider_kyc:view', 'View rider KYC'], ['rider_kyc:review', 'Approve and reject riders'], ['rider_kyc:force_reonboarding', 'Force re-onboarding'], ['riders:worker_type', 'Edit worker type'], ['riders:delete', 'Delete riders safely']] },
 ]
 
 const ALL_PERMISSIONS = PERMISSION_OPTIONS.map(([value]) => value)

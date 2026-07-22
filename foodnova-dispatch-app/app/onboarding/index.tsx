@@ -25,6 +25,7 @@ import {
   backendOnboardingStep,
   clearOnboardingDraft,
   loadOnboardingDraft,
+  resolveOnboardingState,
   safeVerifiedIdentity,
   saveOnboardingDraft,
 } from "@/src/lib/onboarding";
@@ -70,11 +71,12 @@ export default function Onboarding() {
   const [ecName, setEcName] = useState("");
   const [ecRelationship, setEcRelationship] = useState("parent");
   const [ecPhone, setEcPhone] = useState("");
+  const accountId = String(onboardingProgress?.data?.rider_id || onboardingProgress?.rider_id || rider?.worker_id || rider?.id || rider?.email || "");
 
   useEffect(() => {
     let active = true;
     (async () => {
-      const draft = await loadOnboardingDraft();
+      const draft = await loadOnboardingDraft(accountId);
       const serverStep = backendOnboardingStep(
         onboardingProgress?.data,
         onboardingProgress,
@@ -83,7 +85,7 @@ export default function Onboarding() {
         rider
       );
       if (!active) return;
-      setStep(Math.max(draft.step || 0, serverStep));
+      setStep(serverStep);
       setVerifiedIdentity({ ...safeVerifiedIdentity(verificationStatus), ...(draft.verifiedIdentity || {}) });
       setVehicleType(draft.vehicleType || "motorcycle");
       setMake(draft.vehicleMake || "");
@@ -98,12 +100,12 @@ export default function Onboarding() {
     return () => {
       active = false;
     };
-  }, [onboardingProgress, rider, verificationStatus]);
+  }, [accountId, onboardingProgress, rider, verificationStatus]);
 
   useEffect(() => {
     if (!hydrated) return;
     const timer = setTimeout(() => {
-      saveOnboardingDraft({
+      saveOnboardingDraft(accountId, {
         step,
         verifiedIdentity,
         vehicleType,
@@ -117,19 +119,21 @@ export default function Onboarding() {
       });
     }, 250);
     return () => clearTimeout(timer);
-  }, [ecName, ecPhone, ecRelationship, governmentIdType, hydrated, make, model, plate, step, vehicleType, verifiedIdentity]);
+  }, [accountId, ecName, ecPhone, ecRelationship, governmentIdType, hydrated, make, model, plate, step, vehicleType, verifiedIdentity]);
 
   useEffect(() => {
-    if (isApprovedRider(rider)) router.replace("/(tabs)");
-    else if (isPendingRider(rider) || (isRejectedRider(rider) && remediate !== "1")) router.replace("/onboarding/pending");
-  }, [remediate, rider, router]);
+    const state = resolveOnboardingState(onboardingProgress, verificationStatus, rider);
+    if (state.destination === "dashboard") router.replace("/(tabs)");
+    else if (state.destination === "pending_review" || (state.destination === "rejected" && remediate !== "1")) router.replace("/onboarding/pending");
+  }, [onboardingProgress, remediate, rider, router, verificationStatus]);
 
   const progress = useMemo(() => ((step + 1) / ONBOARDING_STAGES.length) * 100, [step]);
+  const resolution = useMemo(() => resolveOnboardingState(onboardingProgress, verificationStatus, rider), [onboardingProgress, rider, verificationStatus]);
 
   async function advance(nextStep = step + 1) {
     const next = Math.min(nextStep, ONBOARDING_STAGES.length - 1);
     setStep(next);
-    await saveOnboardingDraft({ step: next, verifiedIdentity, vehicleType, vehicleMake: make, vehicleModel: model, vehiclePlate: plate, emergencyName: ecName, emergencyRelationship: ecRelationship, emergencyPhone: ecPhone, governmentIdType });
+    await saveOnboardingDraft(accountId, { step: next, verifiedIdentity, vehicleType, vehicleMake: make, vehicleModel: model, vehiclePlate: plate, emergencyName: ecName, emergencyRelationship: ecRelationship, emergencyPhone: ecPhone, governmentIdType });
   }
 
   async function verifyNin() {
@@ -212,7 +216,7 @@ export default function Onboarding() {
     setLoading(true);
     try {
       await RiderApi.submitOnboarding();
-      await clearOnboardingDraft();
+      await clearOnboardingDraft(accountId);
       await refreshRider();
       toast.show("Application submitted for review", "success");
       router.replace("/onboarding/pending");
@@ -250,6 +254,7 @@ export default function Onboarding() {
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {resolution.forceReonboarding && <View style={styles.notice}><Ionicons name="information-circle" size={22} color={colors.brandPrimary} /><Text style={styles.noticeText}>FoodNova requested onboarding verification again.{resolution.reason ? ` ${resolution.reason}` : ""}</Text></View>}
           {step === 0 && <Stage icon="finger-print" title="Verify your identity" description="Enter your NIN and consent to secure identity verification.">
             <Field label="NIN" value={nin} onChangeText={setNin} keyboardType="number-pad" maxLength={11} placeholder="11-digit NIN" />
             <Pressable onPress={() => setConsent((value) => !value)} style={styles.consentRow}>
