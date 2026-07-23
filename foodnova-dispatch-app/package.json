@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "verify:android-release": "node scripts/verify-standalone-apk.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "6.1.2",

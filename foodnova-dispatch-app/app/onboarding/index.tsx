@@ -29,7 +29,6 @@ import {
   safeVerifiedIdentity,
   saveOnboardingDraft,
 } from "@/src/lib/onboarding";
-import { isApprovedRider, isPendingRider, isRejectedRider } from "@/src/lib/rider-state";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
 const PHONE_RE = /^[+\d][\d\s().-]{7,}$/;

@@ -49,6 +49,33 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Android APKs
+
+`app-debug.apk` is a development artifact. It intentionally contains no
+embedded JavaScript bundle and requires Metro at `localhost:8081`. Installing
+that APK on a phone without Metro leaves Android's native splash visible because
+the JavaScript root never mounts.
+
+Build the standalone APK from CMD with:
+
+```bat
+cd android
+gradlew.bat clean
+gradlew.bat assembleRelease --no-daemon --stacktrace
+cd ..
+npm run verify:android-release
+```
+
+The installable standalone artifact is:
+
+```text
+android\app\build\outputs\apk\release\app-release.apk
+```
+
+The verification command fails unless the APK contains
+`assets/index.android.bundle`. Do not install `app-debug.apk` for an offline or
+production-style device test.
+
 ## Get a fresh project
 
 When you're ready, run:
