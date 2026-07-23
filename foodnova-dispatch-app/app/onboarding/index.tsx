@@ -141,11 +141,23 @@ export default function Onboarding() {
     setLoading(true);
     try {
       const response = await RiderApi.verifyNin(nin.trim());
+      if (response?.success !== true || response?.verified !== true || response?.provider_verified !== true || response?.status !== "verified") {
+        throw new ApiError(response?.message || "NIN could not be verified by the identity provider", 422, response);
+      }
       const identity = safeVerifiedIdentity(response);
       setVerifiedIdentity(identity);
+      const refreshed = await refreshOnboarding();
+      const next = backendOnboardingStep(
+        refreshed.progress?.data,
+        refreshed.progress,
+        refreshed.verification?.data,
+        refreshed.verification,
+        rider
+      );
+      if (next < 1) throw new ApiError("Verification was not persisted. Please retry.", 409, refreshed);
+      setStep(next);
+      await saveOnboardingDraft(accountId, { step: next, verifiedIdentity: identity });
       toast.show("Identity verified", "success");
-      await refreshOnboarding();
-      await advance(1);
     } catch (error) {
       toast.show(error instanceof ApiError ? error.message : "NIN verification failed", "error");
     } finally {

@@ -232,7 +232,7 @@ class AuthRepository {
 
   void _startPushSync() {
     unawaited(
-      _syncPushToken().timeout(const Duration(seconds: 6)).catchError((error) {
+      _syncPushToken().timeout(const Duration(seconds: 15)).catchError((error) {
         debugPrint('[FoodNova Push] optional token sync skipped: $error');
       }),
     );

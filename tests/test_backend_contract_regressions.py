@@ -12,6 +12,7 @@ sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{ROOT / 'test_foodnova_contracts.db'}")
 
 import main  # noqa: E402
+from services.ninbvnportal_service import authoritative_nin_provider_success  # noqa: E402
 from fastapi import HTTPException  # noqa: E402
 
 
@@ -76,6 +77,13 @@ class BackendContractRegressionTests(unittest.TestCase):
 
     def test_delivery_state_machine_accepts_forward_transition(self):
         main.validate_delivery_status_transition("PICKED_UP", "IN_TRANSIT")
+
+    def test_legacy_manual_assignment_can_arrive_at_pickup(self):
+        main.validate_delivery_status_transition("ASSIGNED", "ARRIVED_AT_PICKUP")
+        self.assertEqual(
+            main.delivery_available_actions("ASSIGNED")[0],
+            "arrived_at_pickup",
+        )
 
     def test_delivery_state_machine_rejects_backward_transition(self):
         with self.assertRaises(HTTPException) as context:
@@ -153,6 +161,51 @@ class BackendContractRegressionTests(unittest.TestCase):
         self.assertEqual(data["screen"], "active_delivery")
         self.assertEqual(data["destination"], "/delivery/25")
         self.assertEqual(data["data"]["order_id"], "25")
+
+    def test_nin_http_success_without_explicit_provider_success_is_rejected(self):
+        verified, _ = authoritative_nin_provider_success(
+            {
+                "status": "success",
+                "data": {
+                    "nin": "12345678901",
+                    "full_name": "Test Person",
+                    "date_of_birth": "1990-01-01",
+                },
+            },
+            "12345678901",
+        )
+        self.assertFalse(verified)
+
+    def test_nin_mismatch_is_rejected(self):
+        verified, _ = authoritative_nin_provider_success(
+            {
+                "status": "success",
+                "success": True,
+                "data": {
+                    "nin": "10987654321",
+                    "full_name": "Test Person",
+                    "date_of_birth": "1990-01-01",
+                },
+            },
+            "12345678901",
+        )
+        self.assertFalse(verified)
+
+    def test_explicit_matching_nin_provider_success_is_accepted(self):
+        verified, identity = authoritative_nin_provider_success(
+            {
+                "status": "success",
+                "success": True,
+                "data": {
+                    "nin": "12345678901",
+                    "full_name": "Test Person",
+                    "date_of_birth": "1990-01-01",
+                },
+            },
+            "12345678901",
+        )
+        self.assertTrue(verified)
+        self.assertEqual(identity["full_name"], "Test Person")
 
 
 if __name__ == "__main__":

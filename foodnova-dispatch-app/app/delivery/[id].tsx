@@ -87,7 +87,11 @@ export default function DeliveryDetail() {
 
   const currentStatus = pick(order, ["dispatch_status", "delivery_status", "deliveryStatus", "status", "order_status"], "assigned");
   const idx = useMemo(() => statusIndex(String(currentStatus)), [currentStatus]);
-  const nextStep = idx + 1 < FLOW.length ? FLOW[idx + 1] : null;
+  const availableActions = Array.isArray(order?.available_actions) ? order.available_actions.map(String) : [];
+  const serverNextAction = availableActions.find((action: string) => action !== "cancelled");
+  const nextStep = serverNextAction
+    ? FLOW.find((item) => item.key === serverNextAction) || null
+    : idx + 1 < FLOW.length ? FLOW[idx + 1] : null;
 
   const pickup = coordFrom(
     order,
@@ -140,6 +144,7 @@ export default function DeliveryDetail() {
       toast.show(`Status updated: ${nextStep.action}`, "success");
       await load();
     } catch (e) {
+      await load();
       toast.show(e instanceof ApiError ? e.message : "Could not update status", "error");
     } finally {
       setBusy(false);

@@ -8,7 +8,7 @@ import { Offer, offerId } from "@/src/components/OfferModal";
 import { asList } from "@/src/lib/normalize";
 import { addForegroundNotificationListener, showLocalOfferNotification } from "@/src/lib/push";
 import { notificationOfferId, resolveNotificationDestination } from "@/src/lib/notification-routing";
-import { isApprovedRider, riderLooksOnline } from "@/src/lib/rider-state";
+import { isApprovedRider } from "@/src/lib/rider-state";
 
 const OFFER_POLL_MS = 15000;
 
@@ -70,7 +70,9 @@ export function OfferProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const eligible = authed && isApprovedRider(rider) && riderLooksOnline(rider);
+  // The backend is authoritative for offer eligibility. Do not suppress the
+  // persisted offer inbox because a locally cached heartbeat is stale.
+  const eligible = authed && isApprovedRider(rider);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", setAppState);

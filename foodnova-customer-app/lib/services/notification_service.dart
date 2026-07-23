@@ -117,7 +117,10 @@ class NotificationService {
 
   static Future<String?> currentToken() async {
     debugPrint('CUSTOMER_FCM_INITIALIZATION_STARTED');
-    for (var attempt = 0; attempt < 10; attempt += 1) {
+    // Firebase is optional during first paint and initializes concurrently with
+    // session restoration. Give that bounded initialization enough time to
+    // finish before deciding this authenticated device has no token.
+    for (var attempt = 0; attempt < 24; attempt += 1) {
       if (_firebaseReady && Firebase.apps.isNotEmpty) break;
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }

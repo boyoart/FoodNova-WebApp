@@ -112,8 +112,9 @@ export async function api<T = any>(path: string, opts: Options = {}): Promise<T>
     if (shouldTrace) {
       console.log("DISPATCH_API_ERROR_RESPONSE", { method, path, status: res.status });
     }
+    const rawMessage = data && (data.detail || data.message || data.error);
     const msg =
-      (data && (data.detail || data.message || data.error)) ||
+      (typeof rawMessage === "object" && rawMessage?.message ? rawMessage.message : rawMessage) ||
       `Request failed (${res.status})`;
     throw new ApiError(typeof msg === "string" ? msg : "Request failed", res.status, data);
   }

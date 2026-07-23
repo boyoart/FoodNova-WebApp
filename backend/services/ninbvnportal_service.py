@@ -293,6 +293,17 @@ def _is_insufficient_balance(message: str) -> bool:
     return "insufficient" in lower_message and ("balance" in lower_message or "wallet" in lower_message)
 
 
+def authoritative_nin_provider_success(result: dict, submitted_nin: str) -> tuple[bool, dict]:
+    """Require an explicit provider success and a matching, usable identity."""
+    status = str((result or {}).get("status", "")).strip().lower()
+    explicit_success = (result or {}).get("success") is True or (result or {}).get("verified") is True
+    identity = _normalize_nin_identity_data(_extract_nin_identity_data(result or {}))
+    returned_nin = "".join(ch for ch in str(identity.get("nin") or "") if ch.isdigit())
+    submitted = "".join(ch for ch in str(submitted_nin or "") if ch.isdigit())
+    identity_present = bool(identity.get("full_name") and (identity.get("birthdate") or identity.get("phone")))
+    return bool(status == "success" and explicit_success and returned_nin == submitted and identity_present), identity
+
+
 def _map_provider_http_error(error: urllib.error.HTTPError, request_id: str, duration_ms: int) -> NINBVNPortalError:
     try:
         body = error.read().decode("utf-8")
@@ -549,7 +560,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         request_body = {"nin": nin, "consent": True}
         payload = json.dumps(request_body).encode("utf-8")
         url = f"{config['base_url']}/nin-verification"
-        print("REQUEST BODY", json.dumps(request_body, default=str))
+        safe_request_body = {"nin": f"*******{nin[-4:]}", "consent": True}
 
         _log_provider_event(
             "request",
@@ -577,7 +588,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
         print("ENDPOINT USED:", url)
         print("NINBVNPORTAL_API_KEY exists:", bool(os.getenv("NINBVNPORTAL_API_KEY", "").strip()))
         print("NINBVNPORTAL_API_KEY length:", len(config["api_key"] or ""))
-        print("Payload:", json.dumps(request_body))
+        print("Payload:", json.dumps(safe_request_body))
         print("NIN_VERIFICATION_STARTED", json.dumps({"endpoint": url, "nin_last4": nin[-4:], "request_id": request_id}))
 
         started = time.monotonic()
@@ -602,7 +613,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 "method": "POST",
                 "endpoint": url,
                 "headers": safe_request_headers,
-                "payload": request_body,
+                "payload": safe_request_body,
             }))
             print("AUTH MODE USED:", auth_meta["auth_mode"])
             print("HEADER NAME USED:", auth_meta["header_name"])
@@ -631,9 +642,7 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             )
             parsed_body = _parse_provider_body(raw_body)
             print("NIN_VERIFY_STATUS", response_status)
-            print("NIN_VERIFY_RESPONSE", raw_body)
             print("Status:", response_status)
-            print("Body:", raw_body)
             attempts.append({
                 "auth_method": auth_meta["auth_mode"],
                 "header_name": auth_meta["header_name"],
@@ -745,17 +754,24 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
                 provider_response=raw_body,
                 provider_attempts=attempts,
             )
-        verified = status == "success"
+        verified, normalized_identity = authoritative_nin_provider_success(result, nin)
+        if status == "success" and not verified:
+            raise NINBVNPortalError(
+                message="NIN verification returned an incomplete or inconsistent identity response.",
+                code="invalid_provider_response",
+                status_code=502,
+                retryable=True,
+                provider_status=response_status,
+                provider_body=_redact_provider_body(result),
+                provider_attempts=attempts,
+            )
         print(("NIN_VERIFY_SUCCESS" if verified else "NIN_VERIFY_FAILURE"), json.dumps({"request_id": request_id, "status": status, "message": provider_message, "http_status": response_status}))
         print(("NIN_VERIFICATION_SUCCESS" if verified else "NIN_VERIFICATION_FAILED"), json.dumps({"request_id": request_id, "status": status, "message": provider_message, "http_status": response_status}))
-        print("RAW PROVIDER RESPONSE", raw_body)
         print("NIN_PROVIDER_RAW_RESPONSE", json.dumps(_redact_provider_body(result), default=str))
         print("NIN_RAW_PROVIDER_RESPONSE", json.dumps(_redact_provider_body(result), default=str))
-        data = _extract_nin_identity_data(result)
-        normalized_identity = _normalize_nin_identity_data(data)
-        print("PARSED PROVIDER RESPONSE", json.dumps(_redact_provider_body(data), default=str))
-        print("NIN_PROVIDER_PARSED_RESPONSE", json.dumps(_redact_provider_body(data), default=str))
-        print("NIN_PARSED_PROVIDER_DATA", json.dumps(_redact_provider_body(data), default=str))
+        print("PARSED PROVIDER RESPONSE", json.dumps(_redact_provider_body(normalized_identity), default=str))
+        print("NIN_PROVIDER_PARSED_RESPONSE", json.dumps(_redact_provider_body(normalized_identity), default=str))
+        print("NIN_PARSED_PROVIDER_DATA", json.dumps(_redact_provider_body(normalized_identity), default=str))
         print("NIN_NORMALIZED_DATA", json.dumps(_redact_provider_body(normalized_identity), default=str))
         return {
             "verified": verified,
@@ -769,11 +785,11 @@ def verify_nin(nin_number: str, consent: bool = True) -> dict:
             "request_endpoint": url,
             "request_method": "POST",
             "request_headers": safe_request_headers,
-            "request_payload": request_body,
-            "raw_response_body": raw_body,
-            "parsed_response_body": result,
+            "request_payload": safe_request_body,
+            "raw_response_body": "",
+            "parsed_response_body": _redact_provider_body(result),
             "failure_stage": "" if verified else "provider_rejection",
-            "raw_response": result,
+            "raw_response": _redact_provider_body(result),
             "provider_attempts": attempts,
             "data": normalized_identity,
         }

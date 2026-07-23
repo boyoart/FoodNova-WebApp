@@ -3854,6 +3854,8 @@ def canonical_dispatch_status(order: DBOrder) -> str:
 def dispatch_order_to_dict(order: DBOrder) -> dict:
     data = order_to_dict(order)
     data["dispatch_status"] = canonical_dispatch_status(order)
+    data["allowed_transitions"] = delivery_allowed_transitions(data["dispatch_status"])
+    data["available_actions"] = delivery_available_actions(data["dispatch_status"])
     data["delivery_code"] = ""
     data["delivery_pin"] = ""
     return data
@@ -4899,13 +4901,34 @@ DELIVERY_STATUS_API_TO_DB = {
     "canceled": "CANCELLED",
 }
 DELIVERY_STATUS_TRANSITIONS = {
-    "ASSIGNED": {"ACCEPTED", "CANCELLED"},
+    "ASSIGNED": {"ACCEPTED", "ARRIVED_AT_PICKUP", "CANCELLED"},
     "ACCEPTED": {"ARRIVED_AT_PICKUP", "PICKED_UP", "CANCELLED"},
     "ARRIVED_AT_PICKUP": {"PICKED_UP", "CANCELLED"},
     "PICKED_UP": {"IN_TRANSIT", "CANCELLED"},
     "IN_TRANSIT": {"ARRIVED", "CANCELLED"},
     "ARRIVED": {"CANCELLED"},
 }
+
+DELIVERY_STATUS_ACTIONS = {
+    "ACCEPTED": "arrived_at_pickup",
+    "ARRIVED_AT_PICKUP": "picked_up",
+    "PICKED_UP": "out_for_delivery",
+    "IN_TRANSIT": "arrived",
+    "ARRIVED": "delivered",
+}
+
+
+def delivery_allowed_transitions(current_status: str) -> List[str]:
+    current = str(current_status or "ASSIGNED").strip().upper()
+    return sorted(DELIVERY_STATUS_TRANSITIONS.get(current, set()))
+
+
+def delivery_available_actions(current_status: str) -> List[str]:
+    current = str(current_status or "ASSIGNED").strip().upper()
+    if current == "ASSIGNED":
+        return ["arrived_at_pickup", "cancelled"]
+    action = DELIVERY_STATUS_ACTIONS.get(current)
+    return ([action] if action else []) + (["cancelled"] if current not in {"DELIVERED", "CANCELLED"} else [])
 
 
 def normalize_delivery_status_transition(raw_status: str) -> tuple[str, str]:
@@ -4923,7 +4946,12 @@ def validate_delivery_status_transition(current_status: str, next_status: str) -
     if current == target:
         return
     if target not in DELIVERY_STATUS_TRANSITIONS.get(current, set()):
-        raise HTTPException(status_code=409, detail=f"Invalid delivery transition from {current} to {target}")
+        raise HTTPException(status_code=409, detail={
+            "message": f"Invalid delivery transition from {current} to {target}",
+            "current_status": current,
+            "allowed_transitions": delivery_allowed_transitions(current),
+            "available_actions": delivery_available_actions(current),
+        })
 
 
 def ensure_dispatch_eligible_admin_status(order: DBOrder) -> bool:
@@ -9035,7 +9063,8 @@ def verify_delivery_kyc_nin(payload: NINVerificationPayload, request: Request):
         db.refresh(worker)
 
         return {
-            "success": status == "verified" or provider_fallback_manual_review,
+            "success": status == "verified",
+            "provider_verified": status == "verified",
             "verified": status == "verified",
             "status": status,
             "message": "Identity Verified. Submitted for operational review." if status == "verified" else ("NIN provider is unavailable. Your identity has been saved for FoodNova manual review." if provider_fallback_manual_review else (provider_message or "NIN requires manual review.")),
@@ -9494,6 +9523,8 @@ def delivery_onboarding_verify_nin(payload: NINVerificationPayload, request: Req
             response = {
                 "success": True,
                 "verified": True,
+                "provider_verified": True,
+                "status": "verified",
                 "cached": True,
                 "message": "Identity already verified.",
                 "report_id": worker.nin_report_id or rider_kyc.nin_provider_report_id,
@@ -12864,7 +12895,7 @@ def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Reques
                 db,
                 order,
                 rider,
-                delivery_status="ASSIGNED",
+                delivery_status="ACCEPTED",
                 delivery_note=payload.delivery_note or "",
                 mark_out_for_delivery=bool(payload.mark_out_for_delivery),
             )
@@ -13297,7 +13328,7 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
             db,
             order,
             rider,
-            delivery_status="ASSIGNED",
+            delivery_status="ACCEPTED",
             delivery_note=payload.delivery_note or "",
             mark_out_for_delivery=bool(payload.mark_out_for_delivery),
         )
