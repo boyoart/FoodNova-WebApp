@@ -324,6 +324,7 @@ export const adminAPI = {
   updateRider: async (id, payload) => (await api.patch(`/admin/riders/${id}`, payload)).data,
   deactivateRider: async (id) => (await api.delete(`/admin/riders/${id}`)).data,
   assignRider: async (orderId, payload) => (await api.patch(`/admin/orders/${orderId}/assign-rider`, payload)).data,
+  confirmPickup: async (orderId, pin) => (await api.post(`/admin/orders/${orderId}/confirm-pickup`, { pin })).data,
   getPacks: async () => {
     try {
       const response = await api.get("/admin/packs");

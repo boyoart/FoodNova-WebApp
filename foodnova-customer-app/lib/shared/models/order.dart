@@ -39,6 +39,10 @@ class OrderSummary {
   String get customerPhone => '${raw['customer_phone'] ?? raw['phone'] ?? ''}';
   String get customerEmail => '${raw['customer_email'] ?? ''}';
   String get deliveryMethod => '${raw['delivery_method'] ?? ''}';
+  bool get isPickup => deliveryMethod.trim().toLowerCase() == 'pickup';
+  String get pickupAddress => '${raw['pickup_address'] ?? ''}';
+  String get pickupInstructions => '${raw['pickup_instructions'] ?? ''}';
+  String get pickupHours => '${raw['pickup_hours'] ?? ''}';
   int get customerRating =>
       int.tryParse('${raw['customer_rating'] ?? ''}') ?? 0;
   String get customerFeedback => '${raw['customer_feedback'] ?? ''}';
@@ -118,6 +122,7 @@ class OrderSummary {
   }
 
   bool get isDeliveryTrackingVisible {
+    if (isPickup) return false;
     final value = canonicalDeliveryStatus;
     if (isDelivered) return false;
     return delivery.isCustomerTrackingStage(delivery.deliveryStageFrom(value));
@@ -143,10 +148,22 @@ class OrderSummary {
   }
 
   bool get isDelivered {
-    return canonicalDeliveryStatus == 'DELIVERED' ||
+    return (!isPickup && canonicalDeliveryStatus == 'DELIVERED') ||
         status.toLowerCase().contains('delivered') ||
-        deliveryConfirmedAt.isNotEmpty;
+        (!isPickup && deliveryConfirmedAt.isNotEmpty);
   }
+
+  bool get isPickedUpByCustomer {
+    final values = [
+      status,
+      deliveryStatus,
+      '${raw['fulfillment_status'] ?? ''}',
+      '${raw['order_status'] ?? ''}',
+    ].map((value) => value.trim().toLowerCase());
+    return isPickup && values.contains('picked_up_by_customer');
+  }
+
+  bool get isFulfillmentComplete => isDelivered || isPickedUpByCustomer;
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
     return OrderSummary(

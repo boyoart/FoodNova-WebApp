@@ -155,16 +155,22 @@ class _OrderCard extends StatelessWidget {
                 ),
                 child: Stack(
                   children: [
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _RouteMapPainter(
-                          color: FoodNovaColors.primary.withValues(alpha: .28),
+                    if (!order.isPickup)
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _RouteMapPainter(
+                            color:
+                                FoodNovaColors.primary.withValues(alpha: .28),
+                          ),
                         ),
                       ),
-                    ),
-                    const Center(
-                      child: Icon(Icons.delivery_dining_rounded,
-                          color: FoodNovaColors.primary, size: 42),
+                    Center(
+                      child: Icon(
+                          order.isPickup
+                              ? Icons.storefront_rounded
+                              : Icons.delivery_dining_rounded,
+                          color: FoodNovaColors.primary,
+                          size: 42),
                     ),
                   ],
                 ),
@@ -212,11 +218,13 @@ class _OrderCard extends StatelessWidget {
                                 fontWeight: FontWeight.w900, fontSize: 16)),
                         const SizedBox(height: 4),
                         Text(
-                          order.deliveryAddress.isEmpty
-                              ? featured
-                                  ? 'Arriving soon'
-                                  : 'FoodNova order'
-                              : order.deliveryAddress,
+                          order.isPickup
+                              ? 'Customer pickup'
+                              : order.deliveryAddress.isEmpty
+                                  ? featured
+                                      ? 'Arriving soon'
+                                      : 'FoodNova order'
+                                  : order.deliveryAddress,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: scheme.onSurfaceVariant),

@@ -3588,6 +3588,9 @@ def order_to_dict(order: DBOrder) -> dict:
         "payment_method": order.payment_method or "bank_transfer",
         "delivery_method": order.delivery_method or "delivery",
         "pickup_note": order.pickup_note or "",
+        "pickup_address": os.getenv("FOODNOVA_PICKUP_ADDRESS", "").strip(),
+        "pickup_instructions": os.getenv("FOODNOVA_PICKUP_INSTRUCTIONS", "").strip(),
+        "pickup_hours": os.getenv("FOODNOVA_PICKUP_HOURS", "").strip(),
         "delivery_notes": order.delivery_notes or "",
         "status": order.status or "pending_payment",
         "payment_status": order.payment_status or "pending_payment",
@@ -3682,6 +3685,13 @@ def order_to_dict_for_context(order: DBOrder, db=None, context: str = "") -> dic
     assignment = order_assignment_snapshot(order, db)
     data.update(assignment)
     if context == "customer" and canonical_dispatch_status(order) == "ARRIVED":
+        data["delivery_code"] = order.delivery_code or ""
+        data["delivery_pin"] = order.delivery_code or ""
+    if (
+        context == "customer"
+        and str(getattr(order, "delivery_method", "") or "").strip().lower() == "pickup"
+        and str(getattr(order, "order_status", "") or "").strip().lower() == "ready_for_pickup"
+    ):
         data["delivery_code"] = order.delivery_code or ""
         data["delivery_pin"] = order.delivery_code or ""
     if context == "admin":
@@ -3834,7 +3844,7 @@ def validate_delivery_pin_input(submitted_code: str, stored_code: str) -> str:
 
 
 def ensure_order_delivery_pin(db, order: DBOrder) -> str:
-    if (order.delivery_method or "delivery") != "delivery":
+    if str(order.delivery_method or "delivery").strip().lower() not in {"delivery", "pickup"}:
         return ""
     if not (order.delivery_code or "").strip():
         order.delivery_code = generate_delivery_pin(db)
@@ -4981,6 +4991,31 @@ def validate_delivery_status_transition(current_status: str, next_status: str) -
             "allowed_transitions": delivery_allowed_transitions(current),
             "available_actions": delivery_available_actions(current),
         })
+
+
+PICKUP_STATUS_TRANSITIONS = {
+    "order_placed": {"preparing", "cancelled"},
+    "pending_payment": {"preparing", "cancelled"},
+    "receipt_submitted": {"preparing", "cancelled"},
+    "payment_confirmed": {"preparing", "cancelled"},
+    "preparing": {"ready_for_pickup", "cancelled"},
+    "processing": {"ready_for_pickup", "cancelled"},
+    "ready_for_pickup": {"cancelled"},
+    "picked_up_by_customer": set(),
+    "cancelled": set(),
+}
+
+
+def validate_pickup_status_transition(current_status: str, next_status: str) -> None:
+    current = str(current_status or "order_placed").strip().lower()
+    target = str(next_status or "").strip().lower()
+    if current == target:
+        return
+    if target not in PICKUP_STATUS_TRANSITIONS.get(current, set()):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Invalid pickup transition from {current.upper()} to {target.upper()}",
+        )
 
 
 def ensure_dispatch_eligible_admin_status(order: DBOrder) -> bool:
@@ -11622,8 +11657,10 @@ async def upload_receipt(order_id: int, request: Request, file: UploadFile = Fil
 
             _create_order_notification(
                 order_data,
-                "Receipt Received",
-                f"Your payment receipt for order {order_data.get('order_code')} has been received and is awaiting approval.",
+                "Payment Submitted" if str(order.delivery_method or "").lower() == "pickup" else "Receipt Received",
+                (f"Payment submitted for pickup order {order_data.get('order_code')} and awaiting confirmation."
+                 if str(order.delivery_method or "").lower() == "pickup"
+                 else f"Your payment receipt for order {order_data.get('order_code')} has been received and is awaiting approval."),
                 "payment_update",
                 "payment"
             )
@@ -12350,14 +12387,21 @@ def submit_order_rating(order_id: int, payload: OrderRatingPayload, request: Req
         ).with_for_update().first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        if canonical_dispatch_status(order) != "DELIVERED":
-            raise HTTPException(status_code=409, detail="Only delivered orders can be rated")
+        is_pickup_complete = (
+            str(order.delivery_method or "").strip().lower() == "pickup"
+            and str(order.order_status or order.fulfillment_status or order.status or "").strip().lower()
+            == "picked_up_by_customer"
+        )
+        if canonical_dispatch_status(order) != "DELIVERED" and not is_pickup_complete:
+            raise HTTPException(status_code=409, detail="Only fulfilled orders can be rated")
         if getattr(order, "customer_rating", None):
             raise HTTPException(status_code=409, detail="This order has already been rated")
         order.customer_rating = payload.rating
         order.customer_feedback = (payload.feedback or "").strip()[:2000]
         order.customer_rated_at = datetime.utcnow()
-        worker_id = getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None)
+        worker_id = None if is_pickup_complete else (
+            getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None)
+        )
         if worker_id:
             ratings = [
                 int(value)
@@ -13515,6 +13559,31 @@ def update_order(order_id: int, payload: dict, request: Request):
                 order.receipt = json_dump(value)
         if requested_payment_status:
             order.payment_status = requested_payment_status
+        is_pickup_order = str(order.delivery_method or "").strip().lower() == "pickup"
+        requested_order_status = str(
+            payload.get("order_status") or payload.get("fulfillment_status") or ""
+        ).strip().lower()
+        current_pickup_status = str(
+            old_order_status or old_fulfillment_status or old_status or "order_placed"
+        ).strip().lower()
+        if is_pickup_order and requested_order_status:
+            validate_pickup_status_transition(current_pickup_status, requested_order_status)
+            if (
+                requested_order_status in {"preparing", "ready_for_pickup"}
+                and str(order.payment_status or "").strip().lower() not in DELIVERY_MATCH_CONFIRMED_PAYMENTS
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Payment must be confirmed before preparing a pickup order",
+                )
+        if (
+            is_pickup_order
+            and str(order.payment_status or "").strip().lower() in DELIVERY_MATCH_CONFIRMED_PAYMENTS
+            and str(old_payment_status or "").strip().lower() not in DELIVERY_MATCH_CONFIRMED_PAYMENTS
+        ):
+            order.status = "preparing"
+            order.order_status = "preparing"
+            order.fulfillment_status = "preparing"
         ensure_dispatch_eligible_admin_status(order)
         if order.order_status == "out_for_delivery" or order.fulfillment_status == "out_for_delivery" or order.status == "out_for_delivery":
             order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
@@ -13547,8 +13616,10 @@ def update_order(order_id: int, payload: dict, request: Request):
                         f"Your receipt for order {order_code} has been submitted and is awaiting review.",
                         "payment_update", "payment")
                 elif status_value == "payment_confirmed":
+                    pickup = str(order_data.get("delivery_method") or "").lower() == "pickup"
                     _create_order_notification(order_data, "Payment Confirmed",
-                        f"Your payment for order {order_code} has been confirmed.",
+                        ("Payment confirmed. Your pickup order is being prepared."
+                         if pickup else f"Your payment for order {order_code} has been confirmed."),
                         "payment_update", "payment")
                 elif status_value == "payment_rejected":
                     rejection_reason = payload.get("rejection_reason") or payload.get("reason") or payload.get("admin_note") or ""
@@ -13561,13 +13632,15 @@ def update_order(order_id: int, payload: dict, request: Request):
                 if not status_value or status_value in notified_statuses:
                     return
                 notified_statuses.add(status_value)
-                if status_value == "processing":
+                if status_value in {"processing", "preparing"}:
                     _create_order_notification(order_data, "Order Processing",
-                        f"Your order {order_code} is now being processed.",
+                        (f"Your pickup order {order_code} is being prepared."
+                         if str(order_data.get("delivery_method") or "").lower() == "pickup"
+                         else f"Your order {order_code} is now being processed."),
                         "order_update", "order")
                 elif status_value == "ready_for_pickup":
                     _create_order_notification(order_data, "Ready for Pickup",
-                        f"Your order {order_code} is ready for pickup.",
+                        "Your order is ready for pickup. Please bring your pickup PIN.",
                         "order_update", "order")
                 elif status_value == "out_for_delivery":
                     _create_order_notification(order_data, "Out for Delivery",
@@ -13690,7 +13763,7 @@ def update_order(order_id: int, payload: dict, request: Request):
                         "offer_count": offers_after,
                     }))
             else:
-                print("DELIVERY_WORKFLOW_SKIPPED", json_dump({"order_id": order.id, "reason": "order_not_delivery"}))
+                print("DELIVERY_MATCHING_SKIPPED", json_dump({"order_id": order.id, "reason": "customer_pickup"}))
             if payment_log:
                 db.refresh(payment_log)
                 create_admin_audit_log(request, admin, "payment_confirmed", "order", order.id, f"Admin confirmed payment for order {order.order_code}", {"order_code": order.order_code, "payment_log": payment_audit_log_to_dict(payment_log)})
@@ -13766,10 +13839,12 @@ def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request
         if str(order.delivery_method or "").strip().lower() != "pickup":
             raise HTTPException(status_code=409, detail="This action is only available for pickup orders")
         current = str(order.order_status or order.fulfillment_status or order.status or "").strip().lower()
-        if current not in {"ready_for_pickup", "picked_up_by_customer", "completed", "delivered"}:
+        if str(order.payment_status or "").strip().lower() not in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
+            raise HTTPException(status_code=409, detail="Payment must be confirmed before pickup")
+        if current not in {"ready_for_pickup", "picked_up_by_customer"}:
             raise HTTPException(status_code=409, detail="Order must be ready for pickup before collection can be confirmed")
-        if current in {"picked_up_by_customer", "completed", "delivered"}:
-            data = order_to_dict(order)
+        if current == "picked_up_by_customer":
+            data = order_to_dict_for_context(order, db, "admin")
             return {"success": True, "message": "Pickup was already confirmed", "order": data, "data": data}
         submitted = str(payload.get("pin") or payload.get("pickup_pin") or payload.get("delivery_pin") or "").strip()
         try:
@@ -13780,20 +13855,20 @@ def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request
             raise HTTPException(status_code=400, detail="Invalid pickup PIN")
 
         now = datetime.utcnow()
-        order.status = "completed"
+        order.status = "picked_up_by_customer"
         order.order_status = "picked_up_by_customer"
-        order.fulfillment_status = "completed"
+        order.fulfillment_status = "picked_up_by_customer"
         order.delivery_status = None
         order.delivery_confirmed_at = order.delivery_confirmed_at or now
         order.delivery_completed_at = order.delivery_completed_at or now
         order.updated_at = now
         db.commit()
         db.refresh(order)
-        data = order_to_dict(order)
+        data = order_to_dict_for_context(order, db, "admin")
         _create_order_notification(
             data,
-            "Pickup Completed",
-            f"Pickup for order {order.order_code} has been confirmed. Thank you for choosing FoodNova.",
+            "Picked up by Customer",
+            "Your order has been picked up successfully.",
             "order_update",
             "order",
         )

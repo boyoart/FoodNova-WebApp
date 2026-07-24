@@ -38,6 +38,8 @@ export default function AdminOrders() {
   const [riders, setRiders] = useState([])
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assigningRider, setAssigningRider] = useState(false)
+  const [pickupPin, setPickupPin] = useState('')
+  const [confirmingPickup, setConfirmingPickup] = useState(false)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
 
@@ -85,7 +87,9 @@ export default function AdminOrders() {
       payload = { ...payload, reason: reason.trim(), rejection_reason: reason.trim() }
     }
     try {
-      await adminAPI.updatePaymentStatus(orderId, payload)
+      const response = await adminAPI.updatePaymentStatus(orderId, payload)
+      const updated = response.order || response.data
+      if (updated?.id && selectedOrder?.id === orderId) setSelectedOrder(updated)
       toast.success('Payment status updated')
       if (selectedOrder?.id === orderId) loadPaymentAudit(orderId)
       fetchOrders()
@@ -96,13 +100,10 @@ export default function AdminOrders() {
 
   const handleOrderStatusUpdate = async (orderId, newStatus) => {
     try {
-      await adminAPI.updateFulfillmentStatus(orderId, { order_status: newStatus, fulfillment_status: newStatus })
+      const response = await adminAPI.updateFulfillmentStatus(orderId, { order_status: newStatus, fulfillment_status: newStatus })
+      const updatedOrder = response.order || response.data
       toast.success('Order status updated')
-      // Refresh the selected order details
-      if (selectedOrder?.id === orderId) {
-        const updated = orders.find(o => o.id === orderId)
-        if (updated) setSelectedOrder(updated)
-      }
+      if (selectedOrder?.id === orderId && updatedOrder?.id) setSelectedOrder(updatedOrder)
       fetchOrders()
     } catch (error) {
       toast.error('Failed to update order status')
@@ -162,6 +163,30 @@ export default function AdminOrders() {
     setServiceNote('')
     setPaymentAuditLogs([])
     setAssignModalOpen(false)
+    setPickupPin('')
+  }
+
+  const handleConfirmPickup = async () => {
+    if (!/^\d{4,8}$/.test(pickupPin.trim())) {
+      toast.error('Enter the customer pickup PIN')
+      return
+    }
+    try {
+      setConfirmingPickup(true)
+      const response = await adminAPI.confirmPickup(selectedOrder.id, pickupPin.trim())
+      const updated = response.order || response.data
+      if (updated?.id) {
+        setSelectedOrder(updated)
+        setOrders((current) => current.map((order) => order.id === updated.id ? updated : order))
+      }
+      setPickupPin('')
+      toast.success('Pickup confirmed')
+      fetchOrders()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Could not confirm pickup')
+    } finally {
+      setConfirmingPickup(false)
+    }
   }
 
   const loadPaymentAudit = async (orderId) => {
@@ -579,7 +604,19 @@ export default function AdminOrders() {
                     onChange={(e) => handleOrderStatusUpdate(selectedOrder.id, e.target.value)}
                     className="status-select"
                   >
-                    {ORDER_STATUS_OPTIONS.map(opt => (
+                    {(selectedOrder.delivery_method === 'pickup'
+                      ? [
+                          { value: selectedOrder.order_status || 'order_placed', label: (selectedOrder.order_status || 'order_placed').replace(/_/g, ' ') },
+                          ...(selectedOrder.order_status === 'preparing' || selectedOrder.fulfillment_status === 'preparing'
+                            ? [{ value: 'ready_for_pickup', label: 'Ready for Pickup' }]
+                            : selectedOrder.order_status === 'ready_for_pickup' || selectedOrder.order_status === 'picked_up_by_customer'
+                              ? []
+                              : [{ value: 'preparing', label: 'Preparing' }]),
+                          ...(!['picked_up_by_customer', 'cancelled'].includes(selectedOrder.order_status)
+                            ? [{ value: 'cancelled', label: 'Cancelled' }]
+                            : []),
+                        ].filter((option, index, all) => all.findIndex((item) => item.value === option.value) === index)
+                      : ORDER_STATUS_OPTIONS).map(opt => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
@@ -587,6 +624,27 @@ export default function AdminOrders() {
                   </select>
                 </div>
               </div>
+
+              {selectedOrder.delivery_method === 'pickup' && selectedOrder.order_status === 'ready_for_pickup' && (
+                <div className="admin-order-section">
+                  <h4>Confirm Customer Pickup</h4>
+                  <p className="muted">Enter the PIN shown in the customer app. This permanently marks the order Picked Up by Customer.</p>
+                  <div className="status-control-group">
+                    <label htmlFor="pickup-pin">Pickup PIN:</label>
+                    <input
+                      id="pickup-pin"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      value={pickupPin}
+                      onChange={(event) => setPickupPin(event.target.value.replace(/\D/g, '').slice(0, 8))}
+                      placeholder="Customer PIN"
+                    />
+                    <button type="button" className="btn-primary" disabled={confirmingPickup || !pickupPin} onClick={handleConfirmPickup}>
+                      {confirmingPickup ? 'Confirming...' : 'Confirm Pickup with PIN'}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Delivery Code */}
               {selectedOrder.delivery_method === 'delivery' && (selectedOrder.order_status === 'out_for_delivery' || selectedOrder.fulfillment_status === 'out_for_delivery') && (

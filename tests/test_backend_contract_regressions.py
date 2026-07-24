@@ -4,6 +4,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -180,7 +181,50 @@ class BackendContractRegressionTests(unittest.TestCase):
     def test_pickup_orders_are_not_dispatch_eligible(self):
         pickup = tracking_order("PAYMENT_CONFIRMED")
         pickup.delivery_method = "pickup"
-        self.assertNotEqual(getattr(pickup, "delivery_method"), "delivery")
+        ready, reason = main.delivery_order_ready_for_matching(pickup)
+        self.assertFalse(ready)
+        self.assertEqual(reason, "not_delivery")
+
+    def test_pickup_state_machine_is_separate_from_delivery(self):
+        main.validate_pickup_status_transition("ORDER_PLACED", "PREPARING")
+        main.validate_pickup_status_transition("PREPARING", "READY_FOR_PICKUP")
+        with self.assertRaises(HTTPException):
+            main.validate_pickup_status_transition("READY_FOR_PICKUP", "DELIVERED")
+
+    def test_pickup_order_receives_secure_collection_pin(self):
+        db = main.SessionLocal()
+        try:
+            order = main.DBOrder(delivery_method="pickup")
+            with patch.object(main, "generate_delivery_pin", return_value="8471"):
+                pin = main.ensure_order_delivery_pin(db, order)
+            self.assertTrue(pin.isdigit())
+            self.assertGreaterEqual(len(pin), 4)
+            self.assertEqual(order.delivery_code, pin)
+        finally:
+            db.close()
+
+    def test_customer_sees_pickup_pin_only_when_ready(self):
+        order = main.DBOrder(
+            id=44,
+            order_code="FN-044",
+            delivery_method="pickup",
+            delivery_code="1604",
+            order_status="preparing",
+            fulfillment_status="preparing",
+            status="preparing",
+        )
+        hidden = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(hidden["delivery_pin"], "")
+        order.order_status = "ready_for_pickup"
+        order.fulfillment_status = "ready_for_pickup"
+        ready = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(ready["delivery_pin"], "1604")
+
+    def test_pickup_terminal_state_cannot_regress(self):
+        with self.assertRaises(HTTPException):
+            main.validate_pickup_status_transition(
+                "PICKED_UP_BY_CUSTOMER", "READY_FOR_PICKUP"
+            )
 
     def test_nin_http_success_without_explicit_provider_success_is_rejected(self):
         verified, _ = authoritative_nin_provider_success(

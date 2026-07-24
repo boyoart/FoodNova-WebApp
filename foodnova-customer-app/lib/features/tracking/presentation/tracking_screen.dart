@@ -97,7 +97,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
 
   void _refreshLiveOrder() {
     final order = ref.read(orderDetailProvider(widget.orderId)).valueOrNull;
-    if (order?.isDelivered == true) {
+    if (order?.isFulfillmentComplete == true) {
       _refreshTimer?.cancel();
       ref.invalidate(orderDetailProvider(widget.orderId));
       ref.invalidate(ordersProvider);
@@ -219,12 +219,14 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
         title: const Text('Order details'),
       ),
       bottomNavigationBar: state.maybeWhen(
-        data: (order) => _BottomActionBar(
-          order: order,
-          onCallRider: () => _callRider(order),
-          onMessageRider: () => _messageRider(order),
-          onTrackOrder: _refreshLiveOrder,
-        ),
+        data: (order) => order.isPickup || order.isFulfillmentComplete
+            ? null
+            : _BottomActionBar(
+                order: order,
+                onCallRider: () => _callRider(order),
+                onMessageRider: () => _messageRider(order),
+                onTrackOrder: _refreshLiveOrder,
+              ),
         orElse: () => null,
       ),
       body: state.when(
@@ -238,7 +240,9 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
           ),
         ),
         data: (order) {
-          final riderLocation = ref.watch(riderLocationProvider(order.id));
+          final riderLocation = order.isPickup
+              ? const AsyncData<RiderLocation?>(null)
+              : ref.watch(riderLocationProvider(order.id));
           return RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(orderDetailProvider(order.id));
@@ -334,7 +338,7 @@ class _OrderDetailsView extends StatelessWidget {
     final showTracking = order.isDeliveryTrackingVisible;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 118),
+      padding: EdgeInsets.fromLTRB(20, 8, 20, order.isPickup ? 28 : 118),
       children: [
         _HeroSummaryCard(
           order: order,
@@ -342,7 +346,10 @@ class _OrderDetailsView extends StatelessWidget {
           lastSyncedAt: lastSyncedAt,
         ),
         const SizedBox(height: 14),
-        _ProgressTrackerCard(order: order),
+        if (!order.isPickup)
+          _ProgressTrackerCard(order: order)
+        else
+          _PickupFulfillmentCard(order: order),
         const SizedBox(height: 14),
         _PaymentCard(order: order),
         const SizedBox(height: 14),
@@ -361,11 +368,12 @@ class _OrderDetailsView extends StatelessWidget {
             onUpload: onUpload,
           ),
         const SizedBox(height: 14),
-        _RiderInformationCard(
-          order: order,
-          onCallRider: onCallRider,
-          onMessageRider: onMessageRider,
-        ),
+        if (!order.isPickup)
+          _RiderInformationCard(
+            order: order,
+            onCallRider: onCallRider,
+            onMessageRider: onMessageRider,
+          ),
         if (showTracking) ...[
           const SizedBox(height: 14),
           _RiderTrackingCard(
@@ -374,11 +382,20 @@ class _OrderDetailsView extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 14),
-        _VerificationCard(
-          order: order,
-          highlight: order.riderArrived,
-        ),
-        const SizedBox(height: 14),
+        if (!order.isPickup) ...[
+          _VerificationCard(
+            order: order,
+            highlight: order.riderArrived,
+          ),
+          const SizedBox(height: 14),
+        ] else if (order.isPickedUpByCustomer) ...[
+          _Card(
+            title: 'Rate your pickup experience',
+            icon: Icons.star_rounded,
+            child: _RatingPrompt(order: order),
+          ),
+          const SizedBox(height: 14),
+        ],
         _InvoiceCard(order: order),
         const SizedBox(height: 14),
         _CancellationCard(order: order, onCancel: onCancel),
@@ -409,7 +426,8 @@ class _HeroSummaryCardState extends State<_HeroSummaryCard> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final order = widget.order;
-    final address = order.deliveryAddress.trim();
+    final address =
+        (order.isPickup ? order.pickupAddress : order.deliveryAddress).trim();
     final status = _dispatchStatusLabel(order);
     return Semantics(
       container: true,
@@ -462,13 +480,19 @@ class _HeroSummaryCardState extends State<_HeroSummaryCard> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _HeroPill(label: status, icon: Icons.local_shipping),
                     _HeroPill(
-                      label: order.estimatedDeliveryTime.trim().isEmpty
-                          ? 'ETA updating'
-                          : 'ETA ${order.estimatedDeliveryTime}',
-                      icon: Icons.schedule_rounded,
+                      label: order.isPickup ? 'Pickup' : status,
+                      icon: order.isPickup
+                          ? Icons.storefront_rounded
+                          : Icons.local_shipping,
                     ),
+                    if (!order.isPickup)
+                      _HeroPill(
+                        label: order.estimatedDeliveryTime.trim().isEmpty
+                            ? 'ETA updating'
+                            : 'ETA ${order.estimatedDeliveryTime}',
+                        icon: Icons.schedule_rounded,
+                      ),
                     _HeroPill(label: widget.amount, icon: Icons.payments),
                   ],
                 ),
@@ -500,7 +524,9 @@ class _HeroSummaryCardState extends State<_HeroSummaryCard> {
                             curve: Curves.easeOutCubic,
                             child: Text(
                               address.isEmpty
-                                  ? 'Delivery address syncing'
+                                  ? order.isPickup
+                                      ? 'Pickup location will appear here'
+                                      : 'Delivery address syncing'
                                   : address,
                               maxLines: _expanded ? null : 2,
                               overflow: _expanded
@@ -2122,6 +2148,109 @@ class _TrackingMapState extends State<_TrackingMap> {
   }
 }
 
+class _PickupFulfillmentCard extends StatelessWidget {
+  const _PickupFulfillmentCard({required this.order});
+
+  final OrderSummary order;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = order.status.trim().toLowerCase();
+    final ready = status == 'ready_for_pickup';
+    final collected = order.isPickedUpByCustomer;
+    final title = collected
+        ? 'Picked up by Customer'
+        : ready
+            ? 'Your order is ready for pickup'
+            : order.paymentConfirmed
+                ? 'Your order is being prepared'
+                : 'Order placed';
+    final message = collected
+        ? 'Pickup completed successfully.'
+        : ready
+            ? 'Please bring your pickup PIN when collecting your order.'
+            : order.paymentConfirmed
+                ? 'Payment confirmed. FoodNova is preparing your pickup order.'
+                : 'Awaiting payment confirmation';
+    final address = order.pickupAddress.trim();
+
+    return _Card(
+      title: title,
+      icon: collected
+          ? Icons.task_alt_rounded
+          : ready
+              ? Icons.shopping_bag_rounded
+              : Icons.storefront_rounded,
+      highlighted: ready,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _MutedText(message),
+          if (address.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(address, style: const TextStyle(fontWeight: FontWeight.w900)),
+          ],
+          if (order.pickupHours.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Collection hours: ${order.pickupHours}'),
+          ],
+          if (order.pickupInstructions.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(order.pickupInstructions),
+          ],
+          if (ready && order.deliveryPin.trim().isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text('Pickup PIN', style: Theme.of(context).textTheme.labelLarge),
+            SelectableText(
+              order.deliveryPin,
+              textAlign: TextAlign.center,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 5),
+            ),
+          ],
+          if (collected && order.deliveryCompletedAt.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Collected: ${_timelineTimeLabel(order.deliveryCompletedAt, false)}',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      launchUrl(Uri.parse('tel:${AppConfig.supportPhone}')),
+                  icon: const Icon(Icons.support_agent_rounded),
+                  label: const Text('Contact FoodNova'),
+                ),
+              ),
+              if (ready && address.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => launchUrl(
+                      Uri.parse(
+                        'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
+                      ),
+                      mode: LaunchMode.externalApplication,
+                    ),
+                    icon: const Icon(Icons.directions_rounded),
+                    label: const Text('Directions'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _VerificationCard extends StatelessWidget {
   const _VerificationCard({
     required this.order,
@@ -2986,6 +3115,13 @@ int _activeIndex(OrderSummary order) {
 }
 
 String _dispatchStatusLabel(OrderSummary order) {
+  if (order.isPickup) {
+    final value = order.status.trim().toLowerCase();
+    if (value == 'picked_up_by_customer') return 'Picked up by Customer';
+    if (value == 'ready_for_pickup') return 'Ready for Pickup';
+    if (value == 'preparing' || value == 'processing') return 'Preparing';
+    if (!order.paymentConfirmed) return 'Awaiting Payment Confirmation';
+  }
   switch (order.canonicalDeliveryStatus) {
     case 'DELIVERED':
       return 'Delivered';
