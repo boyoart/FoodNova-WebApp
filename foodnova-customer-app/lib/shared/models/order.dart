@@ -39,6 +39,10 @@ class OrderSummary {
   String get customerPhone => '${raw['customer_phone'] ?? raw['phone'] ?? ''}';
   String get customerEmail => '${raw['customer_email'] ?? ''}';
   String get deliveryMethod => '${raw['delivery_method'] ?? ''}';
+  int get customerRating =>
+      int.tryParse('${raw['customer_rating'] ?? ''}') ?? 0;
+  String get customerFeedback => '${raw['customer_feedback'] ?? ''}';
+  String get customerRatedAt => '${raw['customer_rated_at'] ?? ''}';
   String get deliveryNotes =>
       '${raw['delivery_notes'] ?? raw['delivery_note'] ?? ''}';
   String get riderName =>

@@ -2158,7 +2158,7 @@ class _VerificationCard extends StatelessWidget {
               'Rate your delivery and leave optional feedback to help us improve the experience.',
             ),
             const SizedBox(height: 14),
-            const _RatingPrompt(),
+            _RatingPrompt(order: order),
             if ((order.deliveryConfirmedAt.isNotEmpty ||
                 order.deliveryCompletedAt.isNotEmpty)) ...[
               const SizedBox(height: 12),
@@ -2314,7 +2314,9 @@ class _SuccessBurst extends StatelessWidget {
 }
 
 class _RatingPrompt extends StatefulWidget {
-  const _RatingPrompt();
+  const _RatingPrompt({required this.order});
+
+  final OrderSummary order;
 
   @override
   State<_RatingPrompt> createState() => _RatingPromptState();
@@ -2323,6 +2325,42 @@ class _RatingPrompt extends StatefulWidget {
 class _RatingPromptState extends State<_RatingPrompt> {
   int _rating = 0;
   final _feedback = TextEditingController();
+  bool _submitting = false;
+  bool _submitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _rating = widget.order.customerRating;
+    _feedback.text = widget.order.customerFeedback;
+    _submitted = _rating > 0;
+  }
+
+  Future<void> _submit() async {
+    if (_rating < 1 || _submitting || _submitted) return;
+    setState(() => _submitting = true);
+    try {
+      await ProviderScope.containerOf(context)
+          .read(ordersRepositoryProvider)
+          .submitRating(
+            orderId: widget.order.id,
+            rating: _rating,
+            feedback: _feedback.text,
+          );
+      if (!mounted) return;
+      setState(() => _submitted = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Rating submitted. Thank you.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(apiMessage(error))),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -2333,6 +2371,22 @@ class _RatingPromptState extends State<_RatingPrompt> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    if (_submitted) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          'Rating submitted: $_rating/5${_feedback.text.trim().isEmpty ? '' : '\n${_feedback.text.trim()}'}',
+          style: TextStyle(
+            color: scheme.onPrimaryContainer,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2358,6 +2412,17 @@ class _RatingPromptState extends State<_RatingPrompt> {
             labelText: 'Optional feedback',
             hintText: 'Tell us how the delivery went',
           ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _rating < 1 || _submitting ? null : _submit,
+          icon: _submitting
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_rounded),
+          label: Text(_submitting ? 'Submitting...' : 'Submit Rating'),
         ),
       ],
     );

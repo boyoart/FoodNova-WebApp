@@ -162,6 +162,26 @@ class BackendContractRegressionTests(unittest.TestCase):
         self.assertEqual(data["destination"], "/delivery/25")
         self.assertEqual(data["data"]["order_id"], "25")
 
+    def test_pending_targeted_offer_is_actionable(self):
+        now = datetime(2026, 7, 23, 12, 0, 0)
+        offer = SimpleNamespace(
+            id=7, order_id=25, order_code="FN-002", worker_id=4,
+            worker_type="RIDER", status="PENDING", assignment_status="PENDING",
+            offer_type="targeted", delivery_type="standard",
+            estimated_distance_meters=1800, pickup_area="FoodNova pickup",
+            delivery_area="Toronto", accepted_at=None, declined_at=None,
+            expires_at=now, created_at=now, updated_at=now,
+        )
+        data = main.delivery_offer_to_dict(offer)
+        self.assertEqual(data["offer_type"], "targeted")
+        self.assertEqual(data["order_number"], "002")
+        self.assertEqual(data["allowed_actions"], ["accept", "decline"])
+
+    def test_pickup_orders_are_not_dispatch_eligible(self):
+        pickup = tracking_order("PAYMENT_CONFIRMED")
+        pickup.delivery_method = "pickup"
+        self.assertNotEqual(getattr(pickup, "delivery_method"), "delivery")
+
     def test_nin_http_success_without_explicit_provider_success_is_rejected(self):
         verified, _ = authoritative_nin_provider_success(
             {

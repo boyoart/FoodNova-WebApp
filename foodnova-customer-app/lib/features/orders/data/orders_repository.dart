@@ -328,6 +328,23 @@ class OrdersRepository {
     return OrderSummary.fromJson(Map<String, dynamic>.from(item));
   }
 
+  Future<OrderSummary> submitRating({
+    required int orderId,
+    required int rating,
+    String feedback = '',
+  }) async {
+    final response = await _dio.post(
+      '/orders/$orderId/rating',
+      data: {'rating': rating, 'feedback': feedback.trim()},
+    );
+    final body = response.data is Map
+        ? Map<String, dynamic>.from(response.data)
+        : <String, dynamic>{};
+    return OrderSummary.fromJson(
+      Map<String, dynamic>.from(body['order'] ?? body['data'] ?? {}),
+    );
+  }
+
   Future<Map<String, dynamic>> uploadReceipt(int orderId, String path) async {
     final form = FormData.fromMap({'file': await MultipartFile.fromFile(path)});
     final response = await _dio.post('/orders/$orderId/receipt', data: form);

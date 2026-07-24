@@ -245,7 +245,14 @@ export default function DeliveryDetail() {
     <View style={styles.root}>
       {/* Map top */}
       <View style={styles.mapWrap}>
-        <TrackingMap rider={riderCoords} pickup={pickup} customer={customer} status={String(currentStatus)} style={{ flex: 1 }} />
+        <TrackingMap
+          rider={riderCoords}
+          pickup={pickup}
+          customer={customer}
+          status={String(currentStatus)}
+          vehicleType={String(pick(order, ["rider_vehicle_type", "vehicle_type", "worker_type"], ""))}
+          style={{ flex: 1 }}
+        />
         <TouchableOpacity testID="delivery-close" style={[styles.floatBtn, { top: insets.top + spacing.sm, left: spacing.lg }]} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={colors.onSurface} />
         </TouchableOpacity>
@@ -259,7 +266,7 @@ export default function DeliveryDetail() {
         <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.orderNo}>Order #{pick(order, ["order_code", "order_number", "order_no", "reference", "id"], "")}</Text>
+              <Text style={styles.orderNo}>Order #{pick(order, ["order_number", "order_code", "order_no", "reference", "id"], "")}</Text>
               <StatusPill status={currentStatus} testID="delivery-status-pill" />
             </View>
 

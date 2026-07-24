@@ -1000,6 +1000,11 @@ class DeliveryOfferActionPayload(BaseModel):
     reason: Optional[str] = ""
 
 
+class OrderRatingPayload(BaseModel):
+    rating: int
+    feedback: Optional[str] = ""
+
+
 class DeliveryAssignmentModePayload(BaseModel):
     mode: str
 
@@ -2363,8 +2368,13 @@ def send_delivery_offer_push(worker: DBDeliveryWorker, offer: DBDeliveryOffer) -
             "You have a new FoodNova delivery offer.",
             {
                 "type": "delivery_offer",
+                "offer_type": getattr(offer, "offer_type", None) or "automatic",
                 "offer_id": offer.id,
                 "order_id": offer.order_id,
+                "order_number": public_order_number_from_code(offer.order_code),
+                "expires_at": iso(offer.expires_at),
+                "target_role": "rider",
+                "route": f"/offers/{offer.id}",
                 "worker_type": offer.worker_type,
                 "sound": "delivery_alert",
                 "android_channel_id": "dispatch",
@@ -3623,6 +3633,9 @@ def order_to_dict(order: DBOrder) -> dict:
         "deleted_at": iso(getattr(order, "deleted_at", None)),
         "deleted_by_admin_id": getattr(order, "deleted_by_admin_id", None),
         "deleted_by_admin_name": getattr(order, "deleted_by_admin_name", "") or "",
+        "customer_rating": getattr(order, "customer_rating", None),
+        "customer_feedback": getattr(order, "customer_feedback", "") or "",
+        "customer_rated_at": iso(getattr(order, "customer_rated_at", None)),
         "created_at": iso(order.created_at),
         "updated_at": iso(order.updated_at),
     }
@@ -4255,6 +4268,10 @@ def delivery_offer_to_dict(offer: DBDeliveryOffer, worker: DBDeliveryWorker = No
         "customer_phone": (order.customer_phone or order.phone) if order else "",
         "status": offer.status or "PENDING",
         "assignment_status": getattr(offer, "assignment_status", None) or offer.status or "PENDING",
+        "offer_type": getattr(offer, "offer_type", None) or "automatic",
+        "type": getattr(offer, "offer_type", None) or "automatic",
+        "order_number": public_order_number_from_code(offer.order_code or (order.order_code if order else "")),
+        "allowed_actions": ["accept", "decline"] if (offer.status or "PENDING") == "PENDING" else [],
         "delivery_type": offer.delivery_type or "needs_admin_review",
         "estimated_distance_meters": offer.estimated_distance_meters,
         "pickup_area": offer.pickup_area or "FoodNova pickup",
@@ -4618,7 +4635,17 @@ def find_available_delivery_worker(db, delivery_type: str, excluded_worker_ids: 
     return None
 
 
-def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker) -> DBDeliveryOffer:
+def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker, offer_type: str = "automatic") -> DBDeliveryOffer:
+    existing = db.query(DBDeliveryOffer).filter(
+        DBDeliveryOffer.order_id == order.id,
+        DBDeliveryOffer.worker_id == worker.id,
+        DBDeliveryOffer.status == "PENDING",
+    ).first()
+    if existing:
+        print("DELIVERY_OFFER_SKIPPED", json_dump({
+            "order_id": order.id, "worker_id": worker.id, "reason": "pending_offer_exists",
+        }))
+        return existing
     offer = DBDeliveryOffer(
         order_id=order.id,
         order_code=order.order_code,
@@ -4626,6 +4653,7 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
         worker_type=worker.worker_type or "",
         status="PENDING",
         assignment_status="PENDING",
+        offer_type=offer_type,
         delivery_type=order.delivery_type or "needs_admin_review",
         estimated_distance_meters=order.estimated_distance_meters,
         pickup_area="FoodNova pickup",
@@ -4650,6 +4678,7 @@ def create_delivery_offer_for_order(db, order: DBOrder, worker: DBDeliveryWorker
         "worker_type": worker.worker_type,
         "delivery_type": offer.delivery_type,
         "expires_at": iso(offer.expires_at),
+        "offer_type": offer_type,
     }))
     notification = _create_user_notification(
         worker.email,
@@ -7267,6 +7296,9 @@ def ensure_database_compatibility():
             "deleted_at": "TIMESTAMP",
             "deleted_by_admin_id": "INTEGER",
             "deleted_by_admin_name": "VARCHAR(150)",
+            "customer_rating": "INTEGER",
+            "customer_feedback": "TEXT DEFAULT ''",
+            "customer_rated_at": "TIMESTAMP",
             "updated_at": "TIMESTAMP",
         },
         "order_items": {
@@ -7455,6 +7487,7 @@ def ensure_database_compatibility():
             "worker_type": "VARCHAR(30) DEFAULT ''",
             "status": "VARCHAR(30) DEFAULT 'PENDING'",
             "assignment_status": "VARCHAR(30) DEFAULT 'PENDING'",
+            "offer_type": "VARCHAR(30) DEFAULT 'automatic'",
             "delivery_type": "VARCHAR(40) DEFAULT 'needs_admin_review'",
             "estimated_distance_meters": "FLOAT",
             "pickup_area": "VARCHAR(180) DEFAULT ''",
@@ -11378,6 +11411,9 @@ def track_order(payload: TrackOrderPayload):
 @app.post("/orders")
 def create_order(payload: OrderPayload, request: Request):
     current_user = require_user(request)
+    delivery_method = str(payload.delivery_method or "delivery").strip().lower()
+    if delivery_method not in {"delivery", "pickup"}:
+        raise HTTPException(status_code=422, detail="Delivery method must be delivery or pickup")
     normalized_items = normalize_order_items(payload.items or [])
     order_data = {}
     inventory_deductions = []
@@ -11400,7 +11436,7 @@ def create_order(payload: OrderPayload, request: Request):
             customer_email=(customer_email or "").strip().lower(),
             customer_phone=customer_phone or "",
             payment_method=payload.payment_method or "bank_transfer",
-            delivery_method=payload.delivery_method or "delivery",
+            delivery_method=delivery_method,
             pickup_note=payload.pickup_note or "",
             delivery_notes=payload.delivery_notes or "",
             status="pending_payment",
@@ -11449,8 +11485,10 @@ def create_order(payload: OrderPayload, request: Request):
     if order_data.get("customer_email"):
         _create_order_notification(
             order_data,
-            "Order Placed",
-            f"Your order {order_data.get('order_code')} has been placed successfully. Use your order code as payment narration, then upload your receipt.",
+            "Pickup Order Placed" if delivery_method == "pickup" else "Order Placed",
+            (f"Your pickup order {order_data.get('order_code')} has been placed. We will notify you when it is ready for collection."
+             if delivery_method == "pickup"
+             else f"Your order {order_data.get('order_code')} has been placed successfully. Use your order code as payment narration, then upload your receipt."),
             "order_update",
             "order",
         )
@@ -12294,6 +12332,49 @@ def force_rider_reonboarding(worker_id: int, payload: ForceReonboardingPayload, 
     except Exception:
         db.rollback()
         raise
+    finally:
+        db.close()
+
+
+@app.post("/orders/{order_id}/rating")
+def submit_order_rating(order_id: int, payload: OrderRatingPayload, request: Request):
+    current_user = require_user(request)
+    email = str(current_user.get("email") or "").strip().lower()
+    if payload.rating < 1 or payload.rating > 5:
+        raise HTTPException(status_code=422, detail="Rating must be between 1 and 5")
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(
+            DBOrder.id == order_id,
+            func.lower(DBOrder.customer_email) == email,
+        ).with_for_update().first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if canonical_dispatch_status(order) != "DELIVERED":
+            raise HTTPException(status_code=409, detail="Only delivered orders can be rated")
+        if getattr(order, "customer_rating", None):
+            raise HTTPException(status_code=409, detail="This order has already been rated")
+        order.customer_rating = payload.rating
+        order.customer_feedback = (payload.feedback or "").strip()[:2000]
+        order.customer_rated_at = datetime.utcnow()
+        worker_id = getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None)
+        if worker_id:
+            ratings = [
+                int(value)
+                for value, in db.query(DBOrder.customer_rating).filter(
+                    or_(DBOrder.delivery_worker_id == worker_id, DBOrder.rider_id == worker_id),
+                    DBOrder.customer_rating.isnot(None),
+                ).all()
+                if value
+            ]
+            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id).first()
+            if worker and ratings:
+                worker.rating = round(sum(ratings) / len(ratings), 2)
+                worker.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(order)
+        data = order_to_dict(order)
+        return {"success": True, "message": "Rating submitted", "rating": payload.rating, "order": data, "data": data}
     finally:
         db.close()
 
@@ -13324,73 +13405,44 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         if lifecycle_status != "ACTIVE":
             raise HTTPException(status_code=400, detail="Rider must be ACTIVE before assignment")
 
-        apply_dispatch_assignment_to_order(
-            db,
-            order,
-            rider,
-            delivery_status="ACCEPTED",
-            delivery_note=payload.delivery_note or "",
-            mark_out_for_delivery=bool(payload.mark_out_for_delivery),
-        )
+        if (order.delivery_method or "delivery") != "delivery":
+            raise HTTPException(status_code=409, detail="Pickup orders do not use riders")
+        if getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None):
+            raise HTTPException(status_code=409, detail="This order already has an accepted rider")
+        db.query(DBDeliveryOffer).filter(
+            DBDeliveryOffer.order_id == order.id,
+            DBDeliveryOffer.status == "PENDING",
+        ).update({"status": "WITHDRAWN", "assignment_status": "WITHDRAWN", "updated_at": datetime.utcnow()}, synchronize_session=False)
+        offer = create_delivery_offer_for_order(db, order, rider, offer_type="targeted")
+        order.delivery_status = "OFFERED"
+        order.delivery_note = payload.delivery_note or order.delivery_note or ""
+        order.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)
         order_data = order_to_dict(order)
         rider_data = worker_to_dict(rider)
-        _create_user_notification(
-            rider.email,
-            "New Delivery Assigned",
-            f"FoodNova order {order_data.get('order_code')} has been assigned to you.",
-            "delivery_assigned",
-            "delivery",
-            order_data,
-        )
-
-        if order_data.get("customer_email"):
-            _create_order_notification(
-                order_data,
-                "Rider Assigned",
-                "Your order has been assigned to a rider.",
-                "rider_assigned",
-                "delivery",
-            )
-            safe_email_call(
-                "customer_rider_assigned",
-                send_customer_order_email,
-                order_data,
-                "rider_assigned",
-                {"rider_name": rider.full_name, "rider_phone": rider.phone},
-            )
-            if payload.mark_out_for_delivery:
-                _create_order_notification(
-                    order_data,
-                    "Out for Delivery",
-                    f"Your order {order_data.get('order_code')} is out for delivery. The dispatch rider will provide the delivery confirmation code when they arrive. Enter it in the app only after you have received your order.",
-                    "delivery_update",
-                    "delivery",
-                )
-                safe_email_call("customer_out_for_delivery", send_customer_order_email, order_data, "out_for_delivery")
 
         create_admin_audit_log(
             request,
             admin,
-            "rider_assigned",
-            "order",
-            order.id,
-            f"Admin assigned rider {rider.full_name} to order {order.order_code}",
-            {"order_code": order.order_code, "rider": rider_data, "delivery_note": payload.delivery_note or ""},
+            "targeted_delivery_offer_created", "delivery_offer", offer.id,
+            f"Admin offered order {order.order_code} to {rider.full_name}",
+            {"order_code": order.order_code, "rider_id": rider.id, "offer_id": offer.id},
         )
         assignment_event = {
             "order_id": order.id,
             "order": order_data,
             "rider": rider_data,
-            "event": "delivery_assigned",
-            "message": f"FoodNova order {order.order_code} has been assigned to you.",
+            "offer": delivery_offer_to_dict(offer, rider, order),
+            "event": "delivery_offer_created",
+            "message": f"FoodNova order {order.order_code} is available for your acceptance.",
             "timestamp": iso(datetime.utcnow()),
         }
-        socket_emit("delivery:assigned", assignment_event, room=f"user:{rider.user_id}")
-        socket_emit("dispatch:assignment", assignment_event, room=f"user:{rider.user_id}")
+        socket_emit("delivery:offer", assignment_event, room=f"user:{rider.user_id}")
+        socket_emit("dispatch:offer", assignment_event, room=f"user:{rider.user_id}")
         socket_emit(f"order:update:{order.id}", assignment_event, room=f"order:{order.id}")
-        return {"success": True, "message": "Rider assigned successfully", "order": order_data, "data": order_data}
+        print("TARGETED_DELIVERY_OFFER_CREATED", json_dump({"order_id": order.id, "offer_id": offer.id, "worker_id": rider.id}))
+        return {"success": True, "message": "Targeted rider offer sent", "offer": delivery_offer_to_dict(offer, rider, order), "order": order_data, "data": order_data}
     finally:
         db.close()
 
@@ -13701,6 +13753,62 @@ def confirm_delivery(order_id: int, payload: dict):
         status_code=403,
         detail="Only the assigned rider can complete delivery with the customer's PIN.",
     )
+
+
+@app.post("/admin/orders/{order_id}/confirm-pickup")
+def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request):
+    admin = require_permission(request, "orders:update")
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if str(order.delivery_method or "").strip().lower() != "pickup":
+            raise HTTPException(status_code=409, detail="This action is only available for pickup orders")
+        current = str(order.order_status or order.fulfillment_status or order.status or "").strip().lower()
+        if current not in {"ready_for_pickup", "picked_up_by_customer", "completed", "delivered"}:
+            raise HTTPException(status_code=409, detail="Order must be ready for pickup before collection can be confirmed")
+        if current in {"picked_up_by_customer", "completed", "delivered"}:
+            data = order_to_dict(order)
+            return {"success": True, "message": "Pickup was already confirmed", "order": data, "data": data}
+        submitted = str(payload.get("pin") or payload.get("pickup_pin") or payload.get("delivery_pin") or "").strip()
+        try:
+            validated = validate_delivery_pin_input(submitted, str(order.delivery_code or ""))
+        except HTTPException:
+            raise HTTPException(status_code=400, detail="Invalid pickup PIN")
+        if validated != str(order.delivery_code or ""):
+            raise HTTPException(status_code=400, detail="Invalid pickup PIN")
+
+        now = datetime.utcnow()
+        order.status = "completed"
+        order.order_status = "picked_up_by_customer"
+        order.fulfillment_status = "completed"
+        order.delivery_status = None
+        order.delivery_confirmed_at = order.delivery_confirmed_at or now
+        order.delivery_completed_at = order.delivery_completed_at or now
+        order.updated_at = now
+        db.commit()
+        db.refresh(order)
+        data = order_to_dict(order)
+        _create_order_notification(
+            data,
+            "Pickup Completed",
+            f"Pickup for order {order.order_code} has been confirmed. Thank you for choosing FoodNova.",
+            "order_update",
+            "order",
+        )
+        create_admin_audit_log(
+            request,
+            admin,
+            "pickup_completed",
+            "order",
+            order.id,
+            f"Customer pickup confirmed for {order.order_code}",
+            {"order_code": order.order_code},
+        )
+        return {"success": True, "message": "Pickup completed", "order": data, "data": data}
+    finally:
+        db.close()
 
 
 def _delivery_worker_order_or_404(db, worker: DBDeliveryWorker, order_id: int) -> DBOrder:

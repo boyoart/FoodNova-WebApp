@@ -468,6 +468,7 @@ class DeliveryOffer(Base):
     worker_type = Column(String(30), default="", index=True)
     status = Column(String(30), default="PENDING", index=True)
     assignment_status = Column(String(30), default="PENDING", index=True)
+    offer_type = Column(String(30), default="automatic", index=True)
     delivery_type = Column(String(40), default="needs_admin_review", index=True)
     estimated_distance_meters = Column(Float, nullable=True)
     pickup_area = Column(String(180), default="")
@@ -554,6 +555,9 @@ class Order(Base):
     deleted_at = Column(DateTime, nullable=True)
     deleted_by_admin_id = Column(Integer, nullable=True)
     deleted_by_admin_name = Column(String(150), nullable=True)
+    customer_rating = Column(Integer, nullable=True)
+    customer_feedback = Column(Text, default="")
+    customer_rated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

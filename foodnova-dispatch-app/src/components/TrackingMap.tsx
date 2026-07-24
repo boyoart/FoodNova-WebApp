@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import MapView, { AnimatedRegion, Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
@@ -142,13 +142,29 @@ async function fetchRoute(origin: LatLng, destination: LatLng): Promise<RouteRes
   return { points: decoded, distanceMeters: distance, durationMinutes: durationSeconds / 60 };
 }
 
+function distanceToPath(point: LatLng, points: LatLng[]): number {
+  if (!points.length) return Number.POSITIVE_INFINITY;
+  return points.reduce((nearest, candidate) => Math.min(nearest, distanceMeters(point, candidate)), Number.POSITIVE_INFINITY);
+}
+
+function vehicleIcon(vehicleType?: string | null): React.ComponentProps<typeof Ionicons>["name"] {
+  const value = String(vehicleType || "").trim().toLowerCase();
+  if (value.includes("bicycle") || value.includes("bike")) return "bicycle";
+  if (value.includes("motorcycle") || value.includes("motorbike") || value.includes("scooter")) return "speedometer";
+  if (value.includes("walk") || value.includes("messenger")) return "walk";
+  if (value.includes("truck") || value.includes("van")) return "bus";
+  if (value.includes("car")) return "car-sport";
+  return "navigate";
+}
+
 // Native map. Google Maps requires a real dev build + API key in app.json.
-export function TrackingMap({ rider, pickup, customer, status, style }: TrackingMapProps) {
+export function TrackingMap({ rider, pickup, customer, status, vehicleType, style }: TrackingMapProps) {
   const configuredMapsKey = mapsKey();
   const ref = useRef<MapView | null>(null);
   const [route, setRoute] = useState<LatLng[]>([]);
   const [routeMetrics, setRouteMetrics] = useState<{ distanceMeters: number; durationMinutes: number } | null>(null);
   const [heading, setHeading] = useState(0);
+  const [followMode, setFollowMode] = useState(true);
   const headingRef = useRef(0);
   const previousRider = useRef<LatLng | null>(null);
   const fittedOnce = useRef(false);
@@ -214,14 +230,17 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
 
   useEffect(() => {
     if (rider) {
+      const moved = previousRider.current ? distanceMeters(previousRider.current, rider) : 0;
       const nextHeading =
-        typeof rider.heading === "number" && rider.heading >= 0
+        typeof rider.heading === "number" && rider.heading >= 0 && (Number(rider.speed || 0) > 0.8 || moved > 5)
             ? rider.heading
-            : previousRider.current
+            : previousRider.current && moved > 5
               ? bearing(previousRider.current, rider)
               : headingRef.current;
-      setHeading(nextHeading);
-      headingRef.current = nextHeading;
+      const delta = ((nextHeading - headingRef.current + 540) % 360) - 180;
+      const smoothedHeading = (headingRef.current + delta * 0.35 + 360) % 360;
+      setHeading(smoothedHeading);
+      headingRef.current = smoothedHeading;
       previousRider.current = rider;
       riderRegion.timing({
         latitude: rider.latitude,
@@ -231,8 +250,10 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
       } as any).start();
       console.log("DISPATCH_MAP_COORDINATES_RESOLVED", { rider: true, pickup: !!pickup, customer: !!customer });
       console.log("TRACKING_MARKER_CREATED", { marker: "rider", latitude: rider.latitude, longitude: rider.longitude });
+      console.log("RIDER_VEHICLE_TYPE_RESOLVED", { vehicleType: String(vehicleType || "unknown").toLowerCase() });
+      if (moved > 5) console.log("RIDER_HEADING_UPDATED", { heading: Math.round(smoothedHeading) });
     }
-  }, [rider, riderRegion, pickup, customer]);
+  }, [rider, riderRegion, pickup, customer, vehicleType]);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,9 +266,16 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
       const routeDestination = endpoints[endpoints.length - 1];
       const previous = lastRouteRequest.current;
       const destinationChanged = !previous || distanceMeters(previous.destination, routeDestination) > 25;
-      const deviated = !previous || distanceMeters(previous.origin, origin) > 500;
+      const moved = !previous || distanceMeters(previous.origin, origin) > 50;
+      const offRoute = route.length >= 2 && distanceToPath(origin, route) > 75;
       const stale = !previous || Date.now() - previous.at > 60000;
-      if (!destinationChanged && !deviated && !stale && route.length >= 2) return;
+      const throttled = !!previous && Date.now() - previous.at < 15000;
+      if (!destinationChanged && !offRoute && !stale && !moved && route.length >= 2) return;
+      if (throttled && !destinationChanged) return;
+      if (offRoute) console.log("DISPATCH_ROUTE_DEVIATION_DETECTED", { thresholdMeters: 75 });
+      console.log("DISPATCH_ROUTE_RECALCULATION_STARTED", {
+        reason: destinationChanged ? "destination_changed" : offRoute ? "off_route" : stale ? "stale" : "movement",
+      });
       lastRouteRequest.current = { origin, destination: routeDestination, at: Date.now() };
       const next = await fetchRoute(origin, routeDestination).catch((error) => {
         console.log("TRACKING_ROUTE_ERROR", { error: String(error?.message || error) });
@@ -257,7 +285,11 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
       if (!cancelled) {
         setRoute(next?.points || []);
         setRouteMetrics(next ? { distanceMeters: next.distanceMeters, durationMinutes: next.durationMinutes } : null);
-        if (next) console.log("DISPATCH_ETA_UPDATED", { durationMinutes: next.durationMinutes, distanceMeters: next.distanceMeters });
+        if (next) {
+          console.log("DISPATCH_ROUTE_RECALCULATION_SUCCEEDED", { points: next.points.length });
+          console.log("DISPATCH_ROUTE_REPLACED", { points: next.points.length });
+          console.log("DISPATCH_ETA_UPDATED", { durationMinutes: next.durationMinutes, distanceMeters: next.distanceMeters });
+        }
         else console.log("DISPATCH_MAP_FALLBACK_SHOWN", { fallback: "markers_only" });
       }
     }
@@ -307,11 +339,12 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
           longitudeDelta: 0.05,
         }}
         onMapReady={() => console.log("TRACKING_MAP_READY")}
+        onPanDrag={() => setFollowMode(false)}
       >
         {rider && (
           <Marker.Animated coordinate={riderRegion as any} title="You" testID="marker-rider" anchor={{ x: 0.5, y: 0.5 }}>
             <View style={[styles.vehicleMarker, { transform: [{ rotate: `${heading}deg` }] }]}>
-              <Ionicons name="navigate" size={20} color={colors.onBrandPrimary} />
+              <Ionicons name={vehicleIcon(vehicleType)} size={20} color={colors.onBrandPrimary} />
             </View>
           </Marker.Animated>
         )}
@@ -333,6 +366,19 @@ export function TrackingMap({ rider, pickup, customer, status, style }: Tracking
           <Polyline coordinates={displayPath} strokeWidth={5} strokeColor={colors.brandPrimary} lineCap="round" lineJoin="round" />
         )}
       </MapView>
+      {!followMode && rider && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Recenter map on rider"
+          style={styles.recenter}
+          onPress={() => {
+            setFollowMode(true);
+            ref.current?.animateCamera({ center: rider, heading, zoom: 16 }, { duration: 500 });
+          }}
+        >
+          <Ionicons name="locate" size={22} color={colors.brandPrimary} />
+        </TouchableOpacity>
+      )}
       <View style={styles.metricsCard} pointerEvents="none">
         {route.length < 2 && <Text style={styles.routeUnavailable}>Driving route temporarily unavailable</Text>}
         <View style={styles.metricRow}>
@@ -386,6 +432,18 @@ const styles = StyleSheet.create({
   },
   pickupMarker: { backgroundColor: colors.warning },
   customerMarker: { backgroundColor: colors.brandSecondary },
+  recenter: {
+    position: "absolute",
+    right: spacing.lg,
+    top: spacing.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 5,
+  },
   metricsCard: {
     position: "absolute",
     left: spacing.lg,

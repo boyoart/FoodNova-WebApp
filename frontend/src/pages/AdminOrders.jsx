@@ -39,7 +39,7 @@ export default function AdminOrders() {
   const [assignModalOpen, setAssignModalOpen] = useState(false)
   const [assigningRider, setAssigningRider] = useState(false)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
-  const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '', mark_out_for_delivery: true })
+  const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
 
   useEffect(() => {
     if (isAdmin) {
@@ -214,7 +214,6 @@ export default function AdminOrders() {
     setAssignmentForm({
       rider_id: selectedOrder?.rider_id || '',
       delivery_note: selectedOrder?.delivery_note || '',
-      mark_out_for_delivery: true,
     })
     setAssignModalOpen(true)
     loadRiders()
@@ -231,7 +230,6 @@ export default function AdminOrders() {
       const response = await adminAPI.assignRider(selectedOrder.id, {
         rider_id: Number(assignmentForm.rider_id),
         delivery_note: assignmentForm.delivery_note,
-        mark_out_for_delivery: assignmentForm.mark_out_for_delivery,
       })
       const updatedOrder = response.order || response.data
       if (updatedOrder?.id) {
@@ -239,7 +237,7 @@ export default function AdminOrders() {
         setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
       }
       setAssignModalOpen(false)
-      toast.success('Rider assigned successfully')
+      toast.success('Targeted rider offer sent')
       fetchOrders()
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to assign rider')
@@ -680,13 +678,10 @@ export default function AdminOrders() {
                     Delivery Note
                     <textarea rows="3" value={assignmentForm.delivery_note} onChange={(event) => setAssignmentForm({ ...assignmentForm, delivery_note: event.target.value })} placeholder="Optional delivery note for customer/rider context" />
                   </label>
-                  <label className="assign-rider-check">
-                    <input type="checkbox" checked={assignmentForm.mark_out_for_delivery} onChange={(event) => setAssignmentForm({ ...assignmentForm, mark_out_for_delivery: event.target.checked })} />
-                    <span>Mark order as Out for Delivery</span>
-                  </label>
+                  <p className="muted">The selected rider must accept this targeted offer before the order is assigned.</p>
                   <div className="assign-rider-actions">
                     <button type="button" className="btn-cancel" onClick={() => setAssignModalOpen(false)}>Cancel</button>
-                    <button type="submit" className="btn-primary" disabled={assigningRider}>{assigningRider ? 'Assigning...' : 'Assign Rider'}</button>
+                    <button type="submit" className="btn-primary" disabled={assigningRider}>{assigningRider ? 'Sending...' : 'Send Rider Offer'}</button>
                   </div>
                 </form>
               </div>

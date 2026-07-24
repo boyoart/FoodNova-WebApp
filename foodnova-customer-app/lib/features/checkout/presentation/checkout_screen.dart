@@ -38,7 +38,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Future<void> _placeOrder() async {
     FocusScope.of(context).unfocus();
     final address = _selectedAddress;
-    if (address == null) {
+    final isPickup = _deliveryMethod == 'pickup';
+    if (!isPickup && address == null) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Select or add a delivery address first.')));
@@ -54,11 +55,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final cartController = ref.read(cartControllerProvider.notifier);
       final order = await checkoutRepository.createOrder(
         items: ref.read(cartControllerProvider),
-        address: address.formatted,
-        phone: address.phone,
+        address: isPickup ? '' : address!.formatted,
+        phone: isPickup ? '' : address!.phone,
+        deliveryMethod: isPickup ? 'pickup' : 'delivery',
         deliveryFee: 0,
         paymentMethod: _paymentMethod,
-        selectedAddress: address,
+        selectedAddress: isPickup ? null : address,
         notes: _deliveryNotes.text.trim(),
       );
       if (!mounted) return;
@@ -216,7 +218,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
                   children: [
-                    _SectionCard(
+                    if (_deliveryMethod != 'pickup')
+                      _SectionCard(
                       title: 'Delivery address',
                       action: TextButton.icon(
                         onPressed: () => _addOrEditAddress(),
@@ -274,6 +277,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    if (_deliveryMethod == 'pickup') ...[
+                      _SectionCard(
+                        title: 'Pickup location',
+                        child: const ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.storefront_rounded),
+                          title: Text('FoodNova pickup location'),
+                          subtitle: Text(
+                            'The confirmed address, collection hours, and secure pickup PIN will appear in your order updates.',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     _SectionCard(
                       title: 'Delivery method',
                       child: Column(
@@ -302,6 +319,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             onTap: () =>
                                 setState(() => _deliveryMethod = 'scheduled'),
                           ),
+                          _DeliveryOption(
+                            icon: Icons.storefront_rounded,
+                            title: 'Pickup',
+                            subtitle:
+                                'Collect your order from the FoodNova pickup location',
+                            selected: _deliveryMethod == 'pickup',
+                            onTap: () =>
+                                setState(() => _deliveryMethod = 'pickup'),
+                          ),
                         ],
                       ),
                     ),
@@ -325,9 +351,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           ),
                           const SizedBox(height: 10),
                           Text(
-                            _deliveryMethod == 'scheduled'
-                                ? 'Scheduled delivery requests are coordinated by FoodNova support after checkout.'
-                                : 'Your ETA starts after payment confirmation and packing.',
+                            _deliveryMethod == 'pickup'
+                                ? 'Pickup details and collection instructions will appear in your order updates.'
+                                : _deliveryMethod == 'scheduled'
+                                    ? 'Scheduled delivery requests are coordinated by FoodNova support after checkout.'
+                                    : 'Your ETA starts after payment confirmation and packing.',
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
@@ -394,8 +422,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               label: 'Subtotal',
                               value: currency.format(subtotal)),
                           const _CheckoutRow(
-                              label: 'Delivery fee',
-                              value: 'Paid after delivery'),
+                              label: 'Delivery fee', value: 'NGN 0'),
                           const Divider(height: 24),
                           _CheckoutRow(
                               label: 'Amount to transfer now',

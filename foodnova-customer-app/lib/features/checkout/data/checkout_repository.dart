@@ -17,6 +17,7 @@ class CheckoutRepository {
     required List<CartItem> items,
     required String address,
     required String phone,
+    required String deliveryMethod,
     required double deliveryFee,
     required String paymentMethod,
     CustomerAddress? selectedAddress,
@@ -51,7 +52,7 @@ class CheckoutRepository {
       'phone': phone,
       'delivery_notes': notes,
       'payment_method': paymentMethod,
-      'delivery_method': 'delivery',
+      'delivery_method': deliveryMethod,
     });
     return Map<String, dynamic>.from(
         response.data['order'] ?? response.data['data'] ?? {});
