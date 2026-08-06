@@ -6,6 +6,7 @@ import { formatPrice } from '../utils/formatters'
 import { normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
 import { MessageCircle } from 'lucide-react'
+import ManualOrderModal from '../components/ManualOrderModal'
 import './AdminPages.css'
 
 const PAYMENT_STATUS_OPTIONS = [
@@ -26,7 +27,7 @@ const ORDER_STATUS_OPTIONS = [
 ]
 
 export default function AdminOrders() {
-  const { isAdmin } = useAuthStore()
+  const { isAdmin, admin } = useAuthStore()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
@@ -42,6 +43,9 @@ export default function AdminOrders() {
   const [confirmingPickup, setConfirmingPickup] = useState(false)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
+  const [manualOrderOpen, setManualOrderOpen] = useState(false)
+  const adminPermissions = admin?.admin_role === 'super_admin' ? ['*'] : (admin?.permissions || [])
+  const canCreateManualOrder = adminPermissions.includes('*') || adminPermissions.includes('orders:manual_create')
 
   useEffect(() => {
     if (isAdmin) {
@@ -277,7 +281,10 @@ export default function AdminOrders() {
 
   return (
     <div className="admin-page">
-      <h1>Order Management</h1>
+      <div className="admin-page-heading">
+        <div><h1>Order Management</h1><p>Create, review, and fulfill customer orders.</p></div>
+        {canCreateManualOrder && <button type="button" className="btn-primary" onClick={() => setManualOrderOpen(true)}>Create Manual Order</button>}
+      </div>
 
       <div className="filter-tabs">
         {[
@@ -440,6 +447,10 @@ export default function AdminOrders() {
                   <div className="info-item">
                     <strong>Created:</strong>
                     <span>{selectedOrder.created_at ? new Date(selectedOrder.created_at).toLocaleString() : 'N/A'}</span>
+                  </div>
+                  <div className="info-item">
+                    <strong>Source:</strong>
+                    <span>{selectedOrder.created_by_admin ? `Created by Admin (${selectedOrder.created_by_admin_name || 'Admin'})` : (selectedOrder.order_source || 'customer_app').replace(/_/g, ' ')}</span>
                   </div>
                 </div>
               </div>
@@ -746,6 +757,20 @@ export default function AdminOrders() {
             </div>
           )}
         </div>
+      )}
+      {manualOrderOpen && (
+        <ManualOrderModal
+          permissions={adminPermissions}
+          onClose={() => setManualOrderOpen(false)}
+          onCreated={(order) => {
+            setManualOrderOpen(false)
+            if (order?.id) {
+              setOrders((current) => [order, ...current.filter((item) => item.id !== order.id)])
+              handleViewOrder(order)
+            }
+            fetchOrders()
+          }}
+        />
       )}
     </div>
   )

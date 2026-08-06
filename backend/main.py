@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import and_, false, func, inspect, or_, text
+from sqlalchemy.exc import IntegrityError
 
 from database import Base, SessionLocal, engine
 from email_service import (
@@ -770,6 +771,33 @@ class OrderPayload(BaseModel):
     delivery_notes: Optional[str] = ""
 
 
+class ManualOrderPayload(BaseModel):
+    idempotency_key: str
+    customer_user_id: Optional[int] = None
+    customer_name: str
+    customer_phone: Optional[str] = ""
+    customer_email: Optional[str] = ""
+    items: list
+    fulfillment_method: str = "delivery"
+    delivery_service_level: Optional[str] = "standard"
+    delivery_address: Optional[str] = ""
+    delivery_address_id: Optional[int] = None
+    delivery_address_snapshot: Optional[dict] = None
+    delivery_notes: Optional[str] = ""
+    pickup_note: Optional[str] = ""
+    delivery_fee: float = 0
+    discount_amount: float = 0
+    discount_percentage: float = 0
+    discount_reason: Optional[str] = ""
+    tax_amount: float = 0
+    payment_method: str
+    payment_status: str = "pending_payment"
+    payment_reference: Optional[str] = ""
+    order_source: Optional[str] = "admin_manual"
+    stock_override: bool = False
+    stock_override_reason: Optional[str] = ""
+
+
 class TrackOrderPayload(BaseModel):
     order_code: Optional[str] = ""
     phone_or_email: Optional[str] = ""
@@ -1126,8 +1154,9 @@ ADMIN_ROLE_PERMISSIONS = {
         "subscribers:view", "subscribers:manage", "delivery_zones:view", "delivery_zones:manage",
         "rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete",
         "rider_kyc:force_reonboarding",
+        "orders:manual_create", "orders:manual_discount", "orders:stock_override", "orders:manual_confirm_payment",
     ],
-    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete", "delivery_zones:view", "delivery_zones:manage", "cancellations:view", "cancellations:manage", "customers:view"],
+    "orders_manager": ["dashboard:view", "orders:view", "orders:update", "orders:delivery", "orders:manual_create", "delivery:manage", "riders:manage", "workforce:view", "workforce:manage", "rider_kyc:view", "rider_kyc:review", "riders:worker_type", "riders:delete", "delivery_zones:view", "delivery_zones:manage", "cancellations:view", "cancellations:manage", "customers:view", "stock:view"],
     "stock_manager": ["dashboard:view", "stock:view", "stock:manage", "categories:view", "categories:manage"],
     "payment_manager": ["dashboard:view", "orders:view", "payments:view", "payments:approve", "cancellations:view", "cancellations:manage", "customers:view"],
     "broadcast_manager": ["dashboard:view", "broadcasts:view", "broadcasts:send", "announcements:view", "announcements:manage", "website_settings:view", "website_settings:manage", "subscribers:view", "subscribers:manage"],
@@ -2456,13 +2485,13 @@ def find_order_variant_for_stock(db, item: dict) -> Optional[DBProductVariant]:
     sku = str(item.get("sku") or "").strip()
     if variant_id:
         try:
-            variant = db.query(DBProductVariant).filter(DBProductVariant.id == int(variant_id)).first()
+            variant = db.query(DBProductVariant).filter(DBProductVariant.id == int(variant_id)).with_for_update().first()
             if variant:
                 return variant
         except Exception:
             pass
     if sku:
-        variant = db.query(DBProductVariant).filter(DBProductVariant.sku == sku).first()
+        variant = db.query(DBProductVariant).filter(DBProductVariant.sku == sku).with_for_update().first()
         if variant:
             return variant
     return None
@@ -2476,19 +2505,19 @@ def find_order_product_for_stock(db, item: dict) -> Optional[DBProduct]:
     product_id = item.get("product_id")
     if product_id:
         try:
-            product = db.query(DBProduct).filter(DBProduct.id == int(product_id)).first()
+            product = db.query(DBProduct).filter(DBProduct.id == int(product_id)).with_for_update().first()
         except Exception:
             product = None
 
     if not product:
         item_name = str(item.get("name") or item.get("product_name") or "").strip().lower()
         if item_name:
-            product = db.query(DBProduct).filter(DBProduct.name.ilike(item_name)).first()
+            product = db.query(DBProduct).filter(DBProduct.name.ilike(item_name)).with_for_update().first()
 
     return product
 
 
-def validate_and_deduct_inventory(db, items: list) -> list:
+def validate_and_deduct_inventory(db, items: list, allow_override: bool = False) -> list:
     deductions = []
     requested_by_variant = {}
     requested_by_product = {}
@@ -2517,7 +2546,7 @@ def validate_and_deduct_inventory(db, items: list) -> list:
         requested = entry["quantity"]
         available = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
         product_name = variant.product.name if variant.product else "Product"
-        if available < requested:
+        if available < requested and not allow_override:
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient stock for {product_name} {variant.weight}. Available: {available}, requested: {requested}",
@@ -2527,7 +2556,7 @@ def validate_and_deduct_inventory(db, items: list) -> list:
         product = entry["product"]
         requested = entry["quantity"]
         available = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
-        if available < requested:
+        if available < requested and not allow_override:
             raise HTTPException(
                 status_code=400,
                 detail=f"Insufficient stock for {product.name}. Available: {available}, requested: {requested}",
@@ -2555,6 +2584,7 @@ def validate_and_deduct_inventory(db, items: list) -> list:
             "new_stock": next_stock,
             "low_stock": 0 < next_stock <= 5,
             "out_of_stock": next_stock <= 0,
+            "stock_overridden": requested > available,
         })
 
     for entry in requested_by_product.values():
@@ -2573,6 +2603,7 @@ def validate_and_deduct_inventory(db, items: list) -> list:
             "new_stock": next_stock,
             "low_stock": 0 < next_stock <= 5,
             "out_of_stock": next_stock <= 0,
+            "stock_overridden": requested > available,
         })
 
     return deductions
@@ -3578,6 +3609,18 @@ def order_to_dict(order: DBOrder) -> dict:
         "order_number": public_order_number_from_code(order.order_code),
         "items": items,
         "total_amount": order.total_amount or 0,
+        "subtotal_amount": getattr(order, "subtotal_amount", 0) or 0,
+        "delivery_fee": getattr(order, "delivery_fee", 0) or 0,
+        "discount_amount": getattr(order, "discount_amount", 0) or 0,
+        "tax_amount": getattr(order, "tax_amount", 0) or 0,
+        "payment_reference": getattr(order, "payment_reference", "") or "",
+        "order_source": getattr(order, "order_source", "customer_app") or "customer_app",
+        "customer_user_id": getattr(order, "customer_user_id", None),
+        "created_by_admin_id": getattr(order, "created_by_admin_id", None),
+        "created_by_admin_name": getattr(order, "created_by_admin_name", "") or "",
+        "created_by_admin": bool(getattr(order, "created_by_admin_id", None)),
+        "manual_discount_reason": getattr(order, "manual_discount_reason", "") or "",
+        "stock_override_reason": getattr(order, "stock_override_reason", "") or "",
         "delivery_address": order.delivery_address or "",
         "delivery_address_id": order.delivery_address_id,
         "delivery_address_snapshot": json_load(order.delivery_address_snapshot, None),
@@ -3587,6 +3630,7 @@ def order_to_dict(order: DBOrder) -> dict:
         "customer_phone": order.customer_phone or "",
         "payment_method": order.payment_method or "bank_transfer",
         "delivery_method": order.delivery_method or "delivery",
+        "delivery_service_level": getattr(order, "delivery_service_level", "standard") or "standard",
         "pickup_note": order.pickup_note or "",
         "pickup_address": os.getenv("FOODNOVA_PICKUP_ADDRESS", "").strip(),
         "pickup_instructions": os.getenv("FOODNOVA_PICKUP_INSTRUCTIONS", "").strip(),
@@ -7293,9 +7337,22 @@ def ensure_database_compatibility():
             "phone": "VARCHAR(50) DEFAULT ''",
             "payment_method": "VARCHAR(80) DEFAULT 'bank_transfer'",
             "delivery_method": "VARCHAR(80) DEFAULT 'delivery'",
+            "delivery_service_level": "VARCHAR(30) DEFAULT 'standard'",
             "pickup_note": "TEXT DEFAULT ''",
             "delivery_notes": "TEXT DEFAULT ''",
             "total_amount": "FLOAT DEFAULT 0",
+            "subtotal_amount": "FLOAT DEFAULT 0",
+            "delivery_fee": "FLOAT DEFAULT 0",
+            "discount_amount": "FLOAT DEFAULT 0",
+            "tax_amount": "FLOAT DEFAULT 0",
+            "payment_reference": "VARCHAR(150) DEFAULT ''",
+            "order_source": "VARCHAR(40) DEFAULT 'customer_app'",
+            "customer_user_id": "INTEGER",
+            "created_by_admin_id": "INTEGER",
+            "created_by_admin_name": "VARCHAR(150) DEFAULT ''",
+            "manual_idempotency_key": "VARCHAR(120)",
+            "manual_discount_reason": "TEXT DEFAULT ''",
+            "stock_override_reason": "TEXT DEFAULT ''",
             "payment_status": "VARCHAR(80) DEFAULT 'pending_payment'",
             "order_status": "VARCHAR(80) DEFAULT 'order_placed'",
             "fulfillment_status": "VARCHAR(80) DEFAULT 'order_placed'",
@@ -7574,6 +7631,8 @@ def ensure_database_compatibility():
         if "products" in existing_tables:
             connection.execute(text("UPDATE products SET stock_qty = COALESCE(stock_qty, stock, 0), stock = COALESCE(stock, stock_qty, 0)"))
             connection.execute(text("UPDATE products SET category_name = COALESCE(NULLIF(category_name, ''), category, '') WHERE category_name IS NULL OR category_name = ''"))
+        if "orders" in existing_tables:
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_orders_manual_idempotency_key ON orders (manual_idempotency_key)"))
             if "image" in table_columns.get("products", {}):
                 connection.execute(text("UPDATE products SET image_url = COALESCE(NULLIF(image_url, ''), image, '') WHERE image_url IS NULL OR image_url = ''"))
             else:
@@ -11443,6 +11502,29 @@ def track_order(payload: TrackOrderPayload):
         db.close()
 
 
+def persist_order_transaction(db, normalized_items: list, fields: dict, allow_stock_override: bool = False):
+    if not normalized_items:
+        raise HTTPException(status_code=422, detail="At least one order item is required")
+    inventory_deductions = validate_and_deduct_inventory(db, normalized_items, allow_override=allow_stock_override)
+    order_code, _ = next_public_order_code(db)
+    order = DBOrder(order_code=order_code, **fields)
+    db.add(order)
+    db.flush()
+    classify_and_save_order_delivery(order, db)
+    ensure_order_delivery_pin(db, order)
+    for item in normalized_items:
+        db.add(DBOrderItem(
+            order_id=order.id,
+            product_id=item.get("product_id"), variant_id=item.get("variant_id"),
+            variant_weight=item.get("variant_weight", ""), sku=item.get("sku", ""),
+            name=item.get("name", ""), product_name=item.get("product_name", ""),
+            price=item.get("price", 0), unit_price=item.get("unit_price", item.get("price", 0)),
+            quantity=item.get("quantity", 1), qty=item.get("qty", item.get("quantity", 1)),
+            line_total=item.get("line_total", 0),
+        ))
+    return order, inventory_deductions
+
+
 @app.post("/orders")
 def create_order(payload: OrderPayload, request: Request):
     current_user = require_user(request)
@@ -11458,47 +11540,28 @@ def create_order(payload: OrderPayload, request: Request):
 
     db = SessionLocal()
     try:
-        inventory_deductions = validate_and_deduct_inventory(db, normalized_items)
-        order_code, _ = next_public_order_code(db)
-        order = DBOrder(
-            order_code=order_code,
-            total_amount=payload.total_amount or payload.total or sum(item["line_total"] for item in normalized_items),
-            delivery_address=payload.delivery_address or payload.address or "",
-            delivery_address_id=payload.delivery_address_id if getattr(payload, 'delivery_address_id', None) else None,
-            delivery_address_snapshot=json_dump(payload.delivery_address_snapshot) if payload.delivery_address_snapshot else None,
-            phone=payload.phone or customer_phone or "",
-            customer_name=customer_name,
-            customer_email=(customer_email or "").strip().lower(),
-            customer_phone=customer_phone or "",
-            payment_method=payload.payment_method or "bank_transfer",
-            delivery_method=delivery_method,
-            pickup_note=payload.pickup_note or "",
-            delivery_notes=payload.delivery_notes or "",
-            status="pending_payment",
-            payment_status="pending_payment",
-            order_status="order_placed",
-            fulfillment_status="order_placed",
+        order, inventory_deductions = persist_order_transaction(
+            db,
+            normalized_items,
+            {
+            "total_amount": payload.total_amount or payload.total or sum(item["line_total"] for item in normalized_items),
+            "subtotal_amount": sum(item["line_total"] for item in normalized_items),
+            "delivery_address": payload.delivery_address or payload.address or "",
+            "delivery_address_id": payload.delivery_address_id if getattr(payload, 'delivery_address_id', None) else None,
+            "delivery_address_snapshot": json_dump(payload.delivery_address_snapshot) if payload.delivery_address_snapshot else None,
+            "phone": payload.phone or customer_phone or "",
+            "customer_name": customer_name,
+            "customer_email": (customer_email or "").strip().lower(),
+            "customer_phone": customer_phone or "",
+            "payment_method": payload.payment_method or "bank_transfer",
+            "delivery_method": delivery_method,
+            "pickup_note": payload.pickup_note or "",
+            "delivery_notes": payload.delivery_notes or "",
+            "status": "pending_payment", "payment_status": "pending_payment",
+            "order_status": "order_placed", "fulfillment_status": "order_placed",
+            "order_source": "customer_app",
+            },
         )
-        db.add(order)
-        db.flush()
-        classify_and_save_order_delivery(order, db)
-        ensure_order_delivery_pin(db, order)
-
-        for item in normalized_items:
-            db.add(DBOrderItem(
-                order_id=order.id,
-                product_id=item.get("product_id"),
-                variant_id=item.get("variant_id"),
-                variant_weight=item.get("variant_weight", ""),
-                sku=item.get("sku", ""),
-                name=item.get("name", ""),
-                product_name=item.get("product_name", ""),
-                price=item.get("price", 0),
-                unit_price=item.get("unit_price", item.get("price", 0)),
-                quantity=item.get("quantity", 1),
-                qty=item.get("qty", item.get("quantity", 1)),
-                line_total=item.get("line_total", 0),
-            ))
         db.commit()
         db.refresh(order)
         order_data = order_to_dict(order)
@@ -11543,6 +11606,182 @@ def create_order(payload: OrderPayload, request: Request):
         "order": order_data,
         "data": order_data,
     }
+
+
+def authoritative_manual_order_items(db, submitted_items: list) -> list:
+    resolved = []
+    for submitted in submitted_items or []:
+        quantity = int(submitted.get("quantity") or submitted.get("qty") or 0)
+        if quantity <= 0:
+            raise HTTPException(status_code=422, detail="Item quantities must be greater than zero")
+        item_type = str(submitted.get("item_type") or submitted.get("type") or "product").strip().lower()
+        if item_type == "pack":
+            pack = db.query(DBPack).filter(DBPack.id == int(submitted.get("product_id") or submitted.get("id") or 0), DBPack.is_active == True).first()
+            if not pack:
+                raise HTTPException(status_code=404, detail="Selected pack is unavailable")
+            resolved.append({"product_id": pack.id, "id": pack.id, "item_type": "pack", "type": "pack", "name": pack.name, "price": float(pack.price or 0), "quantity": quantity})
+            continue
+        product = db.query(DBProduct).filter(DBProduct.id == int(submitted.get("product_id") or submitted.get("id") or 0), DBProduct.is_active == True).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Selected product is unavailable")
+        variant = None
+        variant_id = submitted.get("variant_id")
+        if variant_id:
+            variant = db.query(DBProductVariant).filter(
+                DBProductVariant.id == int(variant_id), DBProductVariant.product_id == product.id, DBProductVariant.is_active == True
+            ).first()
+            if not variant:
+                raise HTTPException(status_code=404, detail=f"Selected variant for {product.name} is unavailable")
+        resolved.append({
+            "product_id": product.id, "id": product.id, "item_type": "product", "type": "product",
+            "name": product.name, "price": float((variant.price if variant else product.price) or 0),
+            "variant_id": variant.id if variant else None, "variant_weight": variant.weight if variant else "",
+            "sku": variant.sku if variant else product_default_sku(product), "quantity": quantity,
+        })
+    return normalize_order_items(resolved)
+
+
+@app.post("/admin/orders/manual")
+def create_manual_order(payload: ManualOrderPayload, request: Request):
+    admin = require_permission(request, "orders:manual_create")
+    idempotency_key = str(payload.idempotency_key or "").strip()
+    if len(idempotency_key) < 12:
+        raise HTTPException(status_code=422, detail="A valid idempotency key is required")
+    fulfillment = str(payload.fulfillment_method or "delivery").strip().lower()
+    if fulfillment not in {"delivery", "pickup"}:
+        raise HTTPException(status_code=422, detail="Fulfillment method must be delivery or pickup")
+    payment_status = str(payload.payment_status or "pending_payment").strip().lower()
+    payment_aliases = {"payment_pending": "pending_payment", "payment_submitted": "receipt_submitted", "paid": "payment_confirmed"}
+    payment_status = payment_aliases.get(payment_status, payment_status)
+    if payment_status not in {"pending_payment", "receipt_submitted", "payment_confirmed"}:
+        raise HTTPException(status_code=422, detail="Unsupported payment status")
+    if not str(payload.payment_method or "").strip():
+        raise HTTPException(status_code=422, detail="Payment method is required")
+    if fulfillment == "delivery" and not str(payload.delivery_address or "").strip() and not payload.delivery_address_id:
+        raise HTTPException(status_code=422, detail="Delivery address is required")
+    if payload.tax_amount:
+        raise HTTPException(status_code=422, detail="Tax is not configured for manual orders")
+    if payload.discount_amount or payload.discount_percentage:
+        if not has_permission(admin, "orders:manual_discount"):
+            raise HTTPException(status_code=403, detail="Manual discount permission is required")
+        if not str(payload.discount_reason or "").strip():
+            raise HTTPException(status_code=422, detail="Discount reason is required")
+    if payload.stock_override:
+        if not has_permission(admin, "orders:stock_override"):
+            raise HTTPException(status_code=403, detail="Stock override permission is required")
+        if not str(payload.stock_override_reason or "").strip():
+            raise HTTPException(status_code=422, detail="Stock override reason is required")
+    if payment_status == "payment_confirmed" and not has_permission(admin, "orders:manual_confirm_payment"):
+        raise HTTPException(status_code=403, detail="Payment confirmation permission is required")
+
+    db = SessionLocal()
+    order = None
+    inventory_deductions = []
+    linked_customer = None
+    try:
+        existing = db.query(DBOrder).filter(DBOrder.manual_idempotency_key == idempotency_key).first()
+        if existing:
+            data = order_to_dict_for_context(existing, db, "admin")
+            return {"success": True, "duplicate": True, "order": data, "data": data}
+        if payload.customer_user_id:
+            linked_customer = db.query(DBUser).filter(DBUser.id == payload.customer_user_id, DBUser.role == "customer").first()
+            if not linked_customer:
+                raise HTTPException(status_code=404, detail="Selected customer was not found")
+        elif str(payload.customer_email or "").strip():
+            linked_customer = db.query(DBUser).filter(
+                DBUser.role == "customer", func.lower(DBUser.email) == str(payload.customer_email).strip().lower()
+            ).first()
+        customer_name = (linked_customer.full_name if linked_customer else payload.customer_name or "Walk-in Customer").strip()
+        customer_email = (linked_customer.email if linked_customer else payload.customer_email or "").strip().lower()
+        customer_phone = (linked_customer.phone if linked_customer else payload.customer_phone or "").strip()
+        address_snapshot = payload.delivery_address_snapshot
+        address_id = payload.delivery_address_id
+        delivery_address = str(payload.delivery_address or "").strip()
+        if address_id:
+            if not linked_customer:
+                raise HTTPException(status_code=422, detail="Guest orders cannot use a saved customer address")
+            saved_address = db.query(DBAddress).filter(DBAddress.id == address_id, DBAddress.user_id == linked_customer.id).first()
+            if not saved_address:
+                raise HTTPException(status_code=404, detail="Selected customer address was not found")
+            address_snapshot = address_to_dict(saved_address)
+            delivery_address = delivery_address or ", ".join(filter(None, [
+                saved_address.address_line or saved_address.street, saved_address.area,
+                saved_address.city or saved_address.lga, saved_address.state, saved_address.country,
+            ]))
+        normalized_items = authoritative_manual_order_items(db, payload.items)
+        subtotal = round(sum(float(item["line_total"]) for item in normalized_items), 2)
+        percentage_discount = subtotal * max(0, min(float(payload.discount_percentage or 0), 100)) / 100
+        discount = round(max(float(payload.discount_amount or 0), percentage_discount), 2)
+        if discount > subtotal:
+            raise HTTPException(status_code=422, detail="Discount cannot exceed subtotal")
+        delivery_fee = 0.0 if fulfillment == "pickup" else max(0, float(payload.delivery_fee or 0))
+        total = round(subtotal + delivery_fee - discount, 2)
+        initial_fulfillment = "preparing" if fulfillment == "pickup" and payment_status == "payment_confirmed" else ("processing" if fulfillment == "delivery" and payment_status == "payment_confirmed" else "order_placed")
+        source = str(payload.order_source or "admin_manual").strip().lower()
+        if source not in {"admin_manual", "phone", "whatsapp", "walk_in"}:
+            source = "admin_manual"
+        order, inventory_deductions = persist_order_transaction(db, normalized_items, {
+            "total_amount": total, "subtotal_amount": subtotal, "delivery_fee": delivery_fee,
+            "discount_amount": discount, "tax_amount": 0, "payment_reference": str(payload.payment_reference or "").strip(),
+            "delivery_address": delivery_address if fulfillment == "delivery" else "", "delivery_address_id": address_id if fulfillment == "delivery" else None,
+            "delivery_address_snapshot": json_dump(address_snapshot) if fulfillment == "delivery" and address_snapshot else None,
+            "phone": customer_phone, "customer_name": customer_name, "customer_email": customer_email, "customer_phone": customer_phone,
+            "customer_user_id": linked_customer.id if linked_customer else None, "payment_method": payload.payment_method.strip(),
+            "delivery_method": fulfillment, "delivery_service_level": payload.delivery_service_level or "standard", "pickup_note": payload.pickup_note or "", "delivery_notes": payload.delivery_notes or "",
+            "status": initial_fulfillment if payment_status == "payment_confirmed" else payment_status,
+            "payment_status": payment_status, "order_status": initial_fulfillment, "fulfillment_status": initial_fulfillment,
+            "order_source": source, "created_by_admin_id": admin.get("id"), "created_by_admin_name": admin.get("full_name") or admin.get("email") or "Admin",
+            "manual_idempotency_key": idempotency_key, "manual_discount_reason": payload.discount_reason or "",
+            "stock_override_reason": payload.stock_override_reason or "",
+        }, allow_stock_override=bool(payload.stock_override))
+        db.commit()
+        db.refresh(order)
+        data = order_to_dict_for_context(order, db, "admin")
+    except HTTPException:
+        db.rollback()
+        raise
+    except IntegrityError:
+        db.rollback()
+        existing = db.query(DBOrder).filter(DBOrder.manual_idempotency_key == idempotency_key).first()
+        if existing:
+            data = order_to_dict_for_context(existing, db, "admin")
+            return {"success": True, "duplicate": True, "order": data, "data": data}
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+    ensure_order_invoice_pdf(data)
+    safe_email_call("admin_new_manual_order", send_admin_order_email, data, "new_order")
+    for deduction in inventory_deductions:
+        entered_low_stock = deduction.get("previous_stock", 0) > 5 and deduction.get("low_stock")
+        entered_out_of_stock = deduction.get("previous_stock", 0) > 0 and deduction.get("out_of_stock")
+        if entered_low_stock or entered_out_of_stock:
+            safe_email_call("admin_low_stock", send_low_stock_alert, deduction, data)
+    if linked_customer:
+        _create_order_notification(data, "Order Created by FoodNova", f"Order {data.get('order_code')} was created for you by FoodNova.", "order_update", "order")
+        if payment_status == "payment_confirmed":
+            _create_order_notification(data, "Payment Confirmed", ("Payment confirmed. Your pickup order is being prepared." if fulfillment == "pickup" else f"Payment for order {data.get('order_code')} is confirmed. Rider matching has started."), "payment_update", "payment")
+    create_admin_audit_log(request, admin, "manual_order_created", "order", order.id, f"Admin created manual order {order.order_code}", {
+        "order_code": order.order_code, "source": data.get("order_source"), "customer_user_id": data.get("customer_user_id"),
+        "guest": not bool(linked_customer), "payment_status": payment_status, "fulfillment_method": fulfillment,
+        "discount_amount": data.get("discount_amount"), "discount_reason": payload.discount_reason or "",
+        "stock_override": bool(payload.stock_override), "stock_override_reason": payload.stock_override_reason or "",
+        "inventory_deductions": inventory_deductions,
+    })
+    if payment_status == "payment_confirmed" and fulfillment == "delivery":
+        delivery_db = SessionLocal()
+        try:
+            current = delivery_db.query(DBOrder).filter(DBOrder.id == order.id).first()
+            start_delivery_matching(delivery_db, current, request)
+            delivery_db.commit()
+        finally:
+            delivery_db.close()
+    elif payment_status == "payment_confirmed":
+        print("DELIVERY_MATCHING_SKIPPED", json_dump({"order_id": order.id, "reason": "customer_pickup"}))
+    return {"success": True, "message": "Manual order created", "order": data, "data": data}
 
 
 @app.get("/orders/my")
@@ -14171,7 +14410,7 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
 
 @app.get("/admin/products")
 def admin_products(request: Request):
-    require_permission(request, "stock:view")
+    require_any_permission(request, ["stock:view", "orders:manual_create"])
     products = list_products(include_inactive=True)
     return {"success": True, "products": products, "data": products}
 
@@ -14433,7 +14672,7 @@ async def admin_bulk_update_product_pricing(request: Request):
 
 @app.get("/admin/packs")
 def admin_packs(request: Request):
-    require_permission(request, "stock:view")
+    require_any_permission(request, ["stock:view", "orders:manual_create"])
     packs = list_packs()
     return {"success": True, "packs": packs, "data": packs}
 
@@ -14554,7 +14793,7 @@ def admin_delete_pack(pack_id: int, request: Request):
 
 @app.get("/admin/customers")
 def admin_customers(request: Request):
-    require_permission(request, "customers:view")
+    require_any_permission(request, ["customers:view", "orders:manual_create"])
 
     db = SessionLocal()
     try:

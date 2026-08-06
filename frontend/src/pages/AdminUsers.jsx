@@ -37,11 +37,18 @@ const ROLE_PERMISSIONS = {
   viewer: ['dashboard:view', 'orders:view', 'stock:view', 'customers:view'],
 }
 
+ROLE_PERMISSIONS.super_admin.push('orders:manual_create', 'orders:manual_discount', 'orders:stock_override', 'orders:manual_confirm_payment')
+ROLE_PERMISSIONS.orders_manager.push('orders:manual_create', 'stock:view')
+
 const PERMISSION_OPTIONS = [
   ['dashboard:view', 'Dashboard View'],
   ['orders:view', 'Orders View'],
   ['orders:update', 'Orders Update'],
   ['orders:delivery', 'Delivery Management'],
+  ['orders:manual_create', 'Create Manual Orders'],
+  ['orders:manual_discount', 'Apply Manual Discounts'],
+  ['orders:stock_override', 'Override Manual Order Stock'],
+  ['orders:manual_confirm_payment', 'Confirm Manual Order Payment'],
   ['delivery:manage', 'Rider Management'],
   ['payments:view', 'Payments View'],
   ['payments:approve', 'Payment Approval'],
@@ -73,7 +80,7 @@ const PERMISSION_OPTIONS = [
 
 const PERMISSION_GROUPS = [
   { title: 'Dashboard', items: [['dashboard:view', 'View dashboard']] },
-  { title: 'Orders', items: [['orders:view', 'View orders'], ['orders:update', 'Update orders'], ['orders:delivery', 'Manage delivery'], ['delivery:manage', 'Manage riders']] },
+  { title: 'Orders', items: [['orders:view', 'View orders'], ['orders:update', 'Update orders'], ['orders:delivery', 'Manage delivery'], ['orders:manual_create', 'Create manual orders'], ['orders:manual_discount', 'Apply manual discounts'], ['orders:stock_override', 'Override stock with reason'], ['orders:manual_confirm_payment', 'Confirm payment during creation'], ['delivery:manage', 'Manage riders']] },
   { title: 'Payments', items: [['payments:view', 'View payments'], ['payments:approve', 'Approve payments']] },
   { title: 'Stock', items: [['stock:view', 'View stock'], ['stock:manage', 'Manage stock']] },
   { title: 'Broadcasts', items: [['broadcasts:view', 'View broadcasts'], ['broadcasts:send', 'Send broadcasts']] },

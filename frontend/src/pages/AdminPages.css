@@ -1619,3 +1619,39 @@ tbody tr:hover {
     text-align: center;
   }
 }
+.admin-page-heading { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:22px; }
+.admin-page-heading h1 { margin-bottom:4px; }
+.admin-page-heading p { margin:0; color:#64748b; }
+.manual-order-overlay { position:fixed; inset:0; z-index:1200; background:rgba(2,30,17,.72); display:grid; place-items:center; padding:20px; }
+.manual-order-modal { width:min(980px,100%); max-height:94vh; overflow:auto; background:#fff; border-radius:24px; box-shadow:0 30px 90px rgba(0,0,0,.3); }
+.manual-order-modal > header { position:sticky; top:0; z-index:2; display:flex; justify-content:space-between; gap:20px; padding:22px 24px 16px; background:#fff; border-bottom:1px solid #e2e8f0; }
+.manual-order-modal > header h2,.manual-order-modal > header p { margin:0; }
+.manual-order-modal > header p { color:#64748b; margin-top:4px; }
+.manual-order-modal > header > button { border:0; background:#f1f5f9; width:38px; height:38px; border-radius:50%; font-size:25px; cursor:pointer; }
+.manual-order-steps { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; padding:16px 24px; background:#f8fafc; }
+.manual-order-steps button { border:1px solid #cbd5e1; background:#fff; border-radius:12px; padding:10px; color:#64748b; font-weight:700; }
+.manual-order-steps button.active { color:#fff; background:#006838; border-color:#006838; }
+.manual-order-steps button.done { color:#006838; border-color:#00a85a; cursor:pointer; }
+.manual-order-body { min-height:420px; padding:24px; }
+.manual-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.manual-grid .full { grid-column:1/-1; }
+.manual-order-body label { display:grid; gap:7px; font-weight:700; color:#334155; }
+.manual-order-body input,.manual-order-body select,.manual-order-body textarea { width:100%; padding:11px 12px; border:1px solid #cbd5e1; border-radius:10px; background:#fff; }
+.manual-choice-list,.manual-catalog { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; max-height:240px; overflow:auto; margin:12px 0; }
+.manual-choice-list button,.manual-catalog button { display:flex; flex-direction:column; align-items:flex-start; text-align:left; gap:3px; padding:12px; border:1px solid #dbe4ea; border-radius:12px; background:#fff; cursor:pointer; }
+.manual-choice-list button.selected { border:2px solid #006838; background:#ecfdf5; }
+.manual-choice-list span,.manual-catalog span,.manual-cart span { color:#64748b; font-size:.88rem; }
+.manual-cart { display:grid; gap:8px; margin-top:16px; }
+.manual-cart > div { display:grid; grid-template-columns:minmax(180px,1fr) 80px 110px auto; align-items:center; gap:10px; padding:12px; border-radius:12px; background:#f8fafc; }
+.manual-cart > div > div { display:flex; flex-direction:column; }
+.manual-cart button { border:0; color:#b91c1c; background:transparent; cursor:pointer; }
+.manual-cart small { grid-column:1/-1; color:#b91c1c; font-weight:700; }
+.manual-note,.manual-warning { padding:14px; border-radius:12px; background:#ecfdf5; color:#14532d; }
+.manual-warning { margin-top:14px; background:#fff7ed; color:#9a3412; }
+.manual-review { padding:18px; background:#f8fafc; border-radius:16px; }
+.manual-review h3 { margin-top:0; }
+.manual-review p { display:flex; justify-content:space-between; gap:20px; border-bottom:1px solid #e2e8f0; padding-bottom:9px; }
+.manual-review p.total { font-size:1.18rem; color:#006838; border:0; }
+.manual-order-modal > footer { position:sticky; bottom:0; display:flex; justify-content:flex-end; gap:10px; padding:16px 24px; background:#fff; border-top:1px solid #e2e8f0; }
+.manual-order-modal > footer button { padding:11px 18px; border-radius:10px; border:1px solid #cbd5e1; cursor:pointer; }
+@media(max-width:700px){.admin-page-heading{align-items:stretch;flex-direction:column}.manual-order-overlay{padding:0}.manual-order-modal{height:100vh;max-height:none;border-radius:0}.manual-order-steps{grid-template-columns:repeat(2,1fr);padding:12px}.manual-order-body{padding:16px}.manual-grid,.manual-choice-list,.manual-catalog{grid-template-columns:1fr}.manual-cart>div{grid-template-columns:1fr 70px}.manual-cart>div>strong,.manual-cart>div>button{justify-self:start}}
