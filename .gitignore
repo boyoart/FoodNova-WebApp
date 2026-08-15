@@ -41,6 +41,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 dump.rdb
+foodnova-dispatch-app/android/dispatch-startup-log.txt
 
 # System files
 .DS_Store
@@ -66,6 +67,7 @@ chainlit.md
 agenthub/agents/youtube/db
 backend/foodnova.db
 backend/uploads/
+/test_foodnova_contracts.db
 
 # Archive files and large assets
 **/*.zip
