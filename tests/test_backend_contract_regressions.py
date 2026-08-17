@@ -61,6 +61,11 @@ def tracking_order(status: str, pin: str = "1604") -> SimpleNamespace:
 
 
 class BackendContractRegressionTests(unittest.TestCase):
+    def test_push_diagnostics_never_log_fcm_token_fragments(self):
+        source = (BACKEND / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("token_suffix", source)
+        self.assertNotIn("token[-12:]", source)
+
     def test_public_order_number_is_three_digits_without_wrapping(self):
         self.assertEqual(main.public_order_number_from_code("FN-1"), "001")
         self.assertEqual(main.public_order_number_from_code("FN-999"), "999")

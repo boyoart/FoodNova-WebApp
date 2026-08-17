@@ -1374,7 +1374,7 @@ def revoke_rider_sessions(db, worker: DBDeliveryWorker, admin: dict = None, reas
         print(
             "FCM_TOKEN_DELETED "
             f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
-            f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+            f"token_length={len((worker.fcm_token or '').strip())}"
         )
     worker.fcm_token = ""
     worker.fcm_tokens_json = "[]"
@@ -1738,11 +1738,10 @@ def user_push_tokens(user, email: str = "") -> list:
         for token in json_load(getattr(user, "fcm_tokens_json", None), []) or []:
             if token and token not in tokens:
                 tokens.append(token)
-    lookup_email = email or (getattr(user, "email", "") if user else "")
     print(
         "FCM_TOKEN_LOOKUP "
         f"table=users user_id={getattr(user, 'id', '') if user else ''} "
-        f"email={str(lookup_email or '').strip().lower()} "
+        f"recipient_resolved={bool(email or (getattr(user, 'email', '') if user else ''))} "
         f"token_length={len((getattr(user, 'fcm_token', '') or '').strip()) if user else 0} "
         f"stored_token_count={len(json_load(getattr(user, 'fcm_tokens_json', None), []) or []) if user else 0}"
     )
@@ -1750,14 +1749,14 @@ def user_push_tokens(user, email: str = "") -> list:
         print(
             "FCM_TOKEN_RECORD_FOUND "
             f"table=users user_id={getattr(user, 'id', '')} "
-            f"email={str(getattr(user, 'email', '') or '').strip().lower()} "
             f"token_length={len((getattr(user, 'fcm_token', '') or '').strip())} "
             f"token_count={len(tokens)}"
         )
     print(
         "PUSH_TOKEN_LOOKUP "
         f"table=users user_id={getattr(user, 'id', '') if user else ''} "
-        f"email={str(lookup_email or '').strip().lower()} token_count={len(tokens)}"
+        f"recipient_resolved={bool(email or (getattr(user, 'email', '') if user else ''))} "
+        f"token_count={len(tokens)}"
     )
     return tokens
 
@@ -1769,7 +1768,7 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         return None
     email = str(email).strip().lower()
     print("CUSTOMER_NOTIFICATION_EVENT_STARTED", json_dump({
-        "recipient": email, "event_type": notif_type,
+        "recipient_resolved": True, "event_type": notif_type,
         "order_id": order.get("id") if order else None,
     }))
     db = SessionLocal()
@@ -1785,13 +1784,13 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
             ).order_by(DBNotification.id.desc()).first()
         if existing:
             print("CUSTOMER_NOTIFICATION_DUPLICATE_SKIPPED", json_dump({
-                "recipient": email, "event_type": notif_type, "order_id": order_id,
+                "recipient_resolved": True, "event_type": notif_type, "order_id": order_id,
             }))
             print("NOTIFICATION_DUPLICATE_SUPPRESSED", json_dump({
                 "notification_id": existing.id,
                 "order_id": order_id,
                 "type": notif_type,
-                "recipient": email,
+                "recipient_resolved": True,
             }))
             return notification_to_dict(existing)
         notif = DBNotification(
@@ -1809,13 +1808,13 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
         db.commit()
         db.refresh(notif)
         print("CUSTOMER_NOTIFICATION_RECORD_CREATED", json_dump({
-            "recipient": email, "event_type": notif_type,
+            "recipient_resolved": True, "event_type": notif_type,
             "order_id": order_id, "notification_id": notif.id,
         }))
         data = notification_to_dict(notif)
         print(
             "NOTIFICATION_CREATED "
-            f"id={notif.id} email={email} type={notif_type} category={category} "
+            f"id={notif.id} recipient_resolved=true type={notif_type} category={category} "
             f"order_id={data.get('order_id') or ''}"
         )
         socket_emit("notification:new", data, room=f"email:{email}")
@@ -1866,7 +1865,7 @@ def _create_user_notification(email: str, title: str, message: str, notif_type: 
                     "order_id": order_id, "reason": push_result.get("error") or "",
                 }))
         print("CUSTOMER_NOTIFICATION_EVENT_COMPLETED", json_dump({
-            "recipient": email, "event_type": notif_type, "order_id": order_id,
+            "recipient_resolved": True, "event_type": notif_type, "order_id": order_id,
         }))
         return data
     finally:
@@ -2266,8 +2265,7 @@ def send_fcm_push_token_result(token: str, title: str, body: str, data: dict = N
     data = {str(key): str(value) for key, value in (data or {}).items() if value is not None}
     print(
         "PUSH_SEND_ATTEMPT "
-        f"token_suffix={token[-12:]} title={title!r} "
-        f"channel={data.get('android_channel_id') or 'foodnova_customer_updates'}"
+        f"token_present=true channel={data.get('android_channel_id') or 'foodnova_customer_updates'}"
     )
     app = get_firebase_app()
     if app and messaging:
@@ -2297,10 +2295,10 @@ def send_fcm_push_token_result(token: str, title: str, body: str, data: dict = N
                 apns=messaging.APNSConfig(payload=messaging.APNSPayload(aps=messaging.Aps(sound=data.get("sound") or "default"))),
             ))
             print(f"FCM_RESPONSE: {response}")
-            print(f"PUSH_SENT token_suffix={token[-12:]} response={response}")
+            print(f"PUSH_SENT provider=firebase_admin response={response}")
             return {"success": True, "provider": "firebase_admin", "response": response}
         except Exception as error:
-            print(f"PUSH_FAILED token_suffix={token[-12:]} error={repr(error)}")
+            print(f"PUSH_FAILED provider=firebase_admin error={repr(error)}")
             return {"success": False, "provider": "firebase_admin", "error": repr(error)}
     server_key = os.getenv("FCM_SERVER_KEY") or ""
     if not server_key:
@@ -2321,7 +2319,7 @@ def send_fcm_push_token_result(token: str, title: str, body: str, data: dict = N
         with urllib.request.urlopen(request_obj, timeout=10) as response:
             response_body = response.read().decode("utf-8", errors="replace")
             print(f"FCM_RESPONSE: status={response.status} body={response_body}")
-            print(f"PUSH_SENT token_suffix={token[-12:]} response_status={response.status}")
+            print(f"PUSH_SENT provider=legacy_server_key response_status={response.status}")
             return {
                 "success": 200 <= response.status < 300,
                 "provider": "legacy_server_key",
@@ -2329,7 +2327,7 @@ def send_fcm_push_token_result(token: str, title: str, body: str, data: dict = N
                 "response": response_body,
             }
     except (urllib.error.URLError, urllib.error.HTTPError) as error:
-        print(f"PUSH_FAILED token_suffix={token[-12:]} legacy_error={repr(error)}")
+        print(f"PUSH_FAILED provider=legacy_server_key error={repr(error)}")
         return {"success": False, "provider": "legacy_server_key", "error": repr(error)}
 
 
@@ -10040,7 +10038,7 @@ def delivery_auth_logout(request: Request):
             print(
                 "FCM_TOKEN_DELETED "
                 f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
-                f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+                f"token_length={len((worker.fcm_token or '').strip())}"
             )
         worker.fcm_token = ""
         worker.fcm_tokens_json = "[]"
@@ -10895,7 +10893,6 @@ def register_delivery_worker_fcm_token(payload: FCMTokenPayload, request: Reques
             "user_id": user.get("id"),
             "worker_type": worker.worker_type,
             "token_length": len(token),
-            "token_suffix": token[-12:],
             "token_count": len(tokens[:5]),
         }))
         db.commit()
@@ -11348,14 +11345,12 @@ def register_customer_fcm_token(payload: FCMTokenPayload, request: Request):
         if (db_user.role or "") == "admin":
             print("ADMIN_FCM_TOKEN_REGISTERED", json_dump({
                 "user_id": db_user.id,
-                "email": str(db_user.email or "").strip().lower(),
                 "token_length": len(token),
-                "token_suffix": token[-12:],
                 "token_count": len(tokens[:5]),
             }))
         print(
             "FCM_TOKEN_UPDATED "
-            f"table=users user_id={db_user.id} email={str(db_user.email or '').strip().lower()} "
+            f"table=users user_id={db_user.id} "
             f"token_length={len(token)} token_count={len(tokens[:5])}"
         )
         db.commit()
@@ -11363,13 +11358,13 @@ def register_customer_fcm_token(payload: FCMTokenPayload, request: Request):
         stored_tokens = json_load(getattr(db_user, "fcm_tokens_json", None), []) or []
         print(
             "FCM_TOKEN_STORED "
-            f"table=users user_id={db_user.id} email={str(db_user.email or '').strip().lower()} "
+            f"table=users user_id={db_user.id} "
             f"token_length={len((getattr(db_user, 'fcm_token', '') or '').strip())} "
-            f"token_suffix={token[-12:]} token_count={len(stored_tokens)}"
+            f"token_count={len(stored_tokens)}"
         )
         print(
             "FCM_TOKEN_RECORD_FOUND "
-            f"table=users user_id={db_user.id} email={str(db_user.email or '').strip().lower()} "
+            f"table=users user_id={db_user.id} "
             f"token_length={len((getattr(db_user, 'fcm_token', '') or '').strip())} "
             f"token_count={len(stored_tokens)}"
         )
@@ -12720,7 +12715,7 @@ def review_rider_verification(worker_id: int, action: str, payload: WorkerReview
                 print(
                     "FCM_TOKEN_DELETED "
                     f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
-                    f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+                    f"token_length={len((worker.fcm_token or '').strip())}"
                 )
             worker.fcm_token = ""
             worker.fcm_tokens_json = "[]"
@@ -12935,7 +12930,7 @@ def review_delivery_worker(worker_id: int, payload: WorkerReviewPayload, request
                     print(
                         "FCM_TOKEN_DELETED "
                         f"table=delivery_workers user_id={worker.user_id} worker_id={worker.id} "
-                        f"email={str(worker.email or '').strip().lower()} token_length={len((worker.fcm_token or '').strip())}"
+                        f"token_length={len((worker.fcm_token or '').strip())}"
                     )
                 worker.fcm_token = ""
                 worker.fcm_tokens_json = "[]"
@@ -15720,7 +15715,7 @@ def admin_test_push(payload: TestPushPayload, request: Request):
         raise HTTPException(status_code=400, detail="FCM token is required")
     print(
         "ADMIN_TEST_PUSH "
-        f"admin={admin.get('email')} token_suffix={token[-12:]} title={title!r}"
+        f"admin_id={admin.get('id')} token_present=true"
     )
     result = send_fcm_push_token_result(token, title, body, {
         "type": "test_push",
