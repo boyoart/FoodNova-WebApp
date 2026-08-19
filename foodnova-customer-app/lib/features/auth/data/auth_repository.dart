@@ -16,6 +16,20 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(ref.watch(dioProvider), ref);
 });
 
+enum SessionRestorationStatus {
+  valid,
+  invalid,
+  networkFailure,
+  serverFailure,
+  timeout
+}
+
+class SessionRestorationResult {
+  const SessionRestorationResult(this.status, {this.user});
+  final SessionRestorationStatus status;
+  final Map<String, dynamic>? user;
+}
+
 class AuthRepository {
   AuthRepository(this._dio, this._ref);
 
@@ -79,37 +93,42 @@ class AuthRepository {
       final user = body is Map ? (body['user'] ?? body['data'] ?? body) : body;
       return Map<String, dynamic>.from(user as Map);
     } catch (error) {
-      throw ApiFailure(
-        apiMessage(error),
-        statusCode: error is DioException ? error.response?.statusCode : null,
-      );
+      throw apiFailure(error);
     }
   }
 
-  Future<Map<String, dynamic>?> restoreSession() async {
+  Future<SessionRestorationResult> restoreSession() async {
     await _ref.read(sessionControllerProvider.notifier).restore();
     final hasToken = _ref.read(sessionControllerProvider).valueOrNull ?? false;
-    if (!hasToken) return null;
+    if (!hasToken) {
+      return const SessionRestorationResult(SessionRestorationStatus.invalid);
+    }
     try {
       final user = await _cacheCurrentUser().timeout(
         const Duration(seconds: 8),
       );
       _logAuthenticatedUser(user);
       _startPushSync();
-      return user;
+      return SessionRestorationResult(SessionRestorationStatus.valid,
+          user: user);
+    } on TimeoutException {
+      return const SessionRestorationResult(SessionRestorationStatus.timeout);
     } catch (error) {
-      if (error is ApiFailure && error.statusCode == 401) {
+      final failure = apiFailure(error);
+      if (failure.kind == ApiFailureKind.unauthorized ||
+          failure.kind == ApiFailureKind.forbidden) {
         await _ref.read(sessionControllerProvider.notifier).clear();
-        return null;
+        return const SessionRestorationResult(SessionRestorationStatus.invalid);
       }
-      final cached =
-          await _ref.read(sessionControllerProvider.notifier).cachedUser();
-      if (cached != null && cached.isNotEmpty) {
-        try {
-          return Map<String, dynamic>.from(jsonDecode(cached) as Map);
-        } catch (_) {}
+      if (failure.kind == ApiFailureKind.timeout) {
+        return const SessionRestorationResult(SessionRestorationStatus.timeout);
       }
-      return null;
+      if (failure.kind == ApiFailureKind.network) {
+        return const SessionRestorationResult(
+            SessionRestorationStatus.networkFailure);
+      }
+      return const SessionRestorationResult(
+          SessionRestorationStatus.serverFailure);
     }
   }
 
@@ -195,10 +214,7 @@ class AuthRepository {
 
   void _logAuthenticatedUser(Map<String, dynamic> user) {
     final role = normalizeAccountRole(user['role'] ?? user['admin_role']);
-    debugPrint('USER_ID: ${user['id'] ?? user['user_id'] ?? ''}');
-    debugPrint('USER_EMAIL: ${user['email'] ?? ''}');
     debugPrint('USER_ROLE: $role');
-    debugPrint('USER_PERMISSIONS: ${user['permissions'] ?? []}');
     if (canUseAdminTools(role)) {
       debugPrint('ADMIN_ROLE_DETECTED');
     }

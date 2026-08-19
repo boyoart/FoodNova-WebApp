@@ -66,14 +66,40 @@ final dioProvider = Provider<Dio>((ref) {
   return dio;
 });
 
+enum ApiFailureKind { unauthorized, forbidden, network, timeout, server, other }
+
 class ApiFailure implements Exception {
-  ApiFailure(this.message, {this.statusCode});
+  ApiFailure(this.message, {this.statusCode, this.kind = ApiFailureKind.other});
 
   final String message;
   final int? statusCode;
+  final ApiFailureKind kind;
 
   @override
   String toString() => message;
+}
+
+ApiFailure apiFailure(Object error) {
+  if (error is ApiFailure) return error;
+  if (error is DioException) {
+    final status = error.response?.statusCode;
+    final kind = switch (error.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        ApiFailureKind.timeout,
+      DioExceptionType.connectionError ||
+      DioExceptionType.badCertificate ||
+      DioExceptionType.unknown =>
+        ApiFailureKind.network,
+      _ when status == 401 => ApiFailureKind.unauthorized,
+      _ when status == 403 => ApiFailureKind.forbidden,
+      _ when status != null && status >= 500 => ApiFailureKind.server,
+      _ => ApiFailureKind.other,
+    };
+    return ApiFailure(apiMessage(error), statusCode: status, kind: kind);
+  }
+  return ApiFailure(apiMessage(error));
 }
 
 void _log(String message) {

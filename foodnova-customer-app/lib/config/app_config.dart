@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class AppConfig {
   static const apiBaseUrl = String.fromEnvironment(
     'FOODNOVA_API_BASE_URL',
@@ -17,6 +19,10 @@ class AppConfig {
     final uri = Uri.parse(apiBaseUrl);
     final isLoopback =
         uri.host == 'localhost' || uri.host == '127.0.0.1' || uri.host == '::1';
+    if (kReleaseMode && isLoopback) {
+      throw StateError(
+          'FoodNova release builds cannot use a loopback API URL.');
+    }
     if (uri.scheme != 'https' && !(isLoopback && uri.scheme == 'http')) {
       throw StateError(
           'FoodNova API must use HTTPS in production: $apiBaseUrl');

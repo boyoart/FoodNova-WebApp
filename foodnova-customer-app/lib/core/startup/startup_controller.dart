@@ -9,11 +9,21 @@ import '../state/session_controller.dart';
 
 enum StartupPhase { idle, restoringSession, ready, failed }
 
+enum StartupSessionState {
+  noneStored,
+  valid,
+  invalidOrExpired,
+  networkFailure,
+  serverFailure,
+  timeout,
+}
+
 class StartupState {
   const StartupState({
     required this.phase,
     this.destination,
     this.error,
+    this.sessionState,
   });
 
   const StartupState.idle() : this(phase: StartupPhase.idle);
@@ -21,6 +31,7 @@ class StartupState {
   final StartupPhase phase;
   final String? destination;
   final String? error;
+  final StartupSessionState? sessionState;
 
   bool get isTerminal =>
       phase == StartupPhase.ready || phase == StartupPhase.failed;
@@ -102,43 +113,93 @@ class StartupController extends StateNotifier<StartupState> {
     debugPrint('CUSTOMER_STARTUP_PHASE=restoring_session');
     try {
       final session = _ref.read(sessionControllerProvider.notifier);
+      debugPrint('startup_begin');
       final savedToken = await _bounded(session.token(), _storageTimeout);
       final hadSavedSession = savedToken != null && savedToken.isNotEmpty;
-
-      Map<String, dynamic>? user;
+      if (!hadSavedSession) {
+        debugPrint('stored_session_absent');
+        final guest = await _bounded(
+          session.isGuest(),
+          _storageTimeout,
+          onTimeout: () => false,
+        );
+        final destination = guest ? '/home' : '/onboarding';
+        debugPrint(destination == '/home'
+            ? 'startup_destination_home'
+            : 'startup_destination_login');
+        if (!_disposed) {
+          state = StartupState(
+              phase: StartupPhase.ready,
+              destination: destination,
+              sessionState: StartupSessionState.noneStored);
+        }
+        return;
+      }
+      debugPrint('stored_session_present');
+      debugPrint('session_restore_begin');
+      late final SessionRestorationResult result;
       try {
-        user = await _bounded(
-          _ref.read(authRepositoryProvider).restoreSession(),
-          _sessionTimeout,
-        );
+        result = await _bounded(
+            _ref.read(authRepositoryProvider).restoreSession(),
+            _sessionTimeout);
       } on TimeoutException {
-        debugPrint('CUSTOMER_STARTUP_SESSION=timeout');
+        debugPrint('session_restore_timeout');
+        if (!_disposed) {
+          state = const StartupState(
+              phase: StartupPhase.failed,
+              error: 'FoodNova could not restore this device session.',
+              sessionState: StartupSessionState.timeout);
+        }
+        return;
       }
-
-      if (user == null && hadSavedSession) {
-        await _bounded(session.clear(), _storageTimeout);
-      }
-      final guest = hadSavedSession
-          ? false
-          : await _bounded(
-              session.isGuest(),
-              _storageTimeout,
-              onTimeout: () => false,
-            );
-      final destination = startupDestination(
-        authenticatedUser: user,
-        hadSavedSession: hadSavedSession,
-        guestMode: guest,
-      );
-      debugPrint(
-        'CUSTOMER_STARTUP_SESSION=${user != null ? 'authenticated' : hadSavedSession ? 'invalid_or_unavailable' : guest ? 'guest' : 'none'}',
-      );
-      debugPrint('CUSTOMER_STARTUP_DESTINATION=$destination');
-      if (!_disposed) {
-        state = StartupState(
-          phase: StartupPhase.ready,
-          destination: destination,
-        );
+      switch (result.status) {
+        case SessionRestorationStatus.valid:
+          debugPrint('session_restore_success');
+          final destination = startupDestination(
+              authenticatedUser: result.user,
+              hadSavedSession: true,
+              guestMode: false);
+          debugPrint('startup_destination_home');
+          if (!_disposed) {
+            state = StartupState(
+                phase: StartupPhase.ready,
+                destination: destination,
+                sessionState: StartupSessionState.valid);
+          }
+        case SessionRestorationStatus.invalid:
+          debugPrint('session_restore_invalid');
+          await _bounded(session.clear(), _storageTimeout);
+          debugPrint('startup_destination_login');
+          if (!_disposed) {
+            state = const StartupState(
+                phase: StartupPhase.ready,
+                destination: '/login',
+                sessionState: StartupSessionState.invalidOrExpired);
+          }
+        case SessionRestorationStatus.networkFailure:
+          debugPrint('session_restore_network_failure');
+          if (!_disposed) {
+            state = const StartupState(
+                phase: StartupPhase.failed,
+                error: 'FoodNova could not restore this device session.',
+                sessionState: StartupSessionState.networkFailure);
+          }
+        case SessionRestorationStatus.serverFailure:
+          debugPrint('session_restore_server_failure');
+          if (!_disposed) {
+            state = const StartupState(
+                phase: StartupPhase.failed,
+                error: 'FoodNova could not restore this device session.',
+                sessionState: StartupSessionState.serverFailure);
+          }
+        case SessionRestorationStatus.timeout:
+          debugPrint('session_restore_timeout');
+          if (!_disposed) {
+            state = const StartupState(
+                phase: StartupPhase.failed,
+                error: 'FoodNova could not restore this device session.',
+                sessionState: StartupSessionState.timeout);
+          }
       }
     } catch (error, stack) {
       debugPrint('CUSTOMER_STARTUP_FAILED=$error');

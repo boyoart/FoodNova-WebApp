@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foodnova_customer_app/core/startup/startup_controller.dart';
+import 'package:foodnova_customer_app/features/auth/data/auth_repository.dart';
 
 void main() {
   test('valid customer session exits splash to home', () {
@@ -55,5 +56,18 @@ void main() {
       ),
       '/onboarding',
     );
+  });
+
+  test('restoration outcomes remain distinct', () {
+    expect(
+        SessionRestorationStatus.values,
+        containsAll(<SessionRestorationStatus>[
+          SessionRestorationStatus.valid,
+          SessionRestorationStatus.invalid,
+          SessionRestorationStatus.networkFailure,
+          SessionRestorationStatus.serverFailure,
+          SessionRestorationStatus.timeout,
+        ]));
+    expect(StartupSessionState.values, hasLength(6));
   });
 }
