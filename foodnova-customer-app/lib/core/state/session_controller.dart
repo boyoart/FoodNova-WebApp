@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/services.dart';
 
 final secureStorageProvider = Provider((_) => const FlutterSecureStorage());
 
@@ -12,6 +13,15 @@ class SessionController extends StateNotifier<AsyncValue<bool>> {
   SessionController(this._storage) : super(const AsyncValue.loading());
 
   final FlutterSecureStorage _storage;
+
+  static const corruptedAuthKeys = <String>[
+    'access_token',
+    'foodnova_user',
+    'foodnova_guest_mode',
+    'foodnova_biometric_token',
+    'foodnova_biometric_enabled',
+    'foodnova_biometric_prompted',
+  ];
 
   Future<void> restore() async {
     final value = await _storage.read(key: 'access_token');
@@ -44,4 +54,31 @@ class SessionController extends StateNotifier<AsyncValue<bool>> {
     await _storage.delete(key: 'foodnova_guest_mode');
     state = const AsyncValue.data(false);
   }
+
+  Future<void> clearCorruptedAuthState() async {
+    for (final key in corruptedAuthKeys) {
+      try {
+        await _storage.delete(key: key);
+      } on PlatformException catch (error) {
+        if (!isSecureStorageCorruption(error)) rethrow;
+      }
+    }
+    state = const AsyncValue.data(false);
+  }
+}
+
+bool isSecureStorageCorruption(PlatformException error) {
+  final text = '${error.code} ${error.message ?? ''} ${error.details ?? ''}'
+      .toLowerCase();
+  return <String>[
+    'badpaddingexception',
+    'bad_decrypt',
+    'keystore',
+    'key permanently invalidated',
+    'keypermanentlyinvalidatedexception',
+    'decrypt',
+    'decryption',
+    'cipher',
+    'encryptedsharedpreferences',
+  ].any(text.contains);
 }

@@ -40,9 +40,18 @@ class OrderSummary {
   String get customerEmail => '${raw['customer_email'] ?? ''}';
   String get deliveryMethod => '${raw['delivery_method'] ?? ''}';
   bool get isPickup => deliveryMethod.trim().toLowerCase() == 'pickup';
-  String get pickupAddress => '${raw['pickup_address'] ?? ''}';
-  String get pickupInstructions => '${raw['pickup_instructions'] ?? ''}';
-  String get pickupHours => '${raw['pickup_hours'] ?? ''}';
+  Map<String, dynamic> get _pickup => raw['pickup'] is Map
+      ? Map<String, dynamic>.from(raw['pickup'] as Map)
+      : const <String, dynamic>{};
+  String get pickupAddress =>
+      '${_pickup['address'] ?? raw['pickup_address'] ?? ''}';
+  String get pickupInstructions =>
+      '${_pickup['instructions'] ?? raw['pickup_instructions'] ?? ''}';
+  String get pickupHours => '${_pickup['hours'] ?? raw['pickup_hours'] ?? ''}';
+  double? get pickupLatitude => double.tryParse(
+      '${_pickup['latitude'] ?? _pickup['lat'] ?? raw['pickup_latitude'] ?? ''}');
+  double? get pickupLongitude => double.tryParse(
+      '${_pickup['longitude'] ?? _pickup['lng'] ?? raw['pickup_longitude'] ?? ''}');
   int get customerRating =>
       int.tryParse('${raw['customer_rating'] ?? ''}') ?? 0;
   String get customerFeedback => '${raw['customer_feedback'] ?? ''}';
@@ -87,7 +96,7 @@ class OrderSummary {
   }
 
   String get deliveryPin =>
-      '${raw['delivery_pin'] ?? raw['delivery_code'] ?? raw['deliveryCode'] ?? ''}';
+      '${_pickup['pin'] ?? raw['pickup_pin'] ?? raw['delivery_pin'] ?? raw['delivery_code'] ?? raw['deliveryCode'] ?? ''}';
   String get confirmedAt =>
       '${raw['confirmed_at'] ?? raw['payment_confirmed_at'] ?? ''}';
   String get preparingAt =>

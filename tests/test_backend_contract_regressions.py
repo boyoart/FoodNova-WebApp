@@ -4,7 +4,7 @@ import unittest
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -224,6 +224,125 @@ class BackendContractRegressionTests(unittest.TestCase):
         order.fulfillment_status = "ready_for_pickup"
         ready = main.order_to_dict_for_context(order, context="customer")
         self.assertEqual(ready["delivery_pin"], "1604")
+        self.assertEqual(ready["pickup_pin"], "1604")
+
+    def test_delivery_order_never_exposes_pickup_pin(self):
+        order = main.DBOrder(
+            id=45, delivery_method="delivery", delivery_code="1604",
+            order_status="ready_for_pickup", fulfillment_status="ready_for_pickup",
+        )
+        data = main.order_to_dict_for_context(order, context="customer")
+        self.assertNotIn("pickup_pin", data)
+
+    def test_completed_pickup_hides_pin(self):
+        order = main.DBOrder(
+            id=46, delivery_method="pickup", delivery_code="1604",
+            order_status="picked_up_by_customer",
+            fulfillment_status="picked_up_by_customer",
+        )
+        data = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(data["delivery_pin"], "")
+        self.assertNotIn("pickup_pin", data)
+
+    def test_pickup_configuration_is_returned_from_environment(self):
+        order = main.DBOrder(id=47, delivery_method="pickup")
+        configured = {
+            "FOODNOVA_PICKUP_ADDRESS": "Configured FoodNova Store",
+            "FOODNOVA_PICKUP_HOURS": "Mon-Sat 9-5",
+            "FOODNOVA_PICKUP_INSTRUCTIONS": "Ask at the collection desk",
+            "FOODNOVA_PICKUP_LATITUDE": "43.65",
+            "FOODNOVA_PICKUP_LONGITUDE": "-79.38",
+        }
+        with patch.dict(os.environ, configured, clear=False):
+            data = main.order_to_dict(order)
+        self.assertEqual(data["pickup_address"], configured["FOODNOVA_PICKUP_ADDRESS"])
+        self.assertEqual(data["pickup_hours"], configured["FOODNOVA_PICKUP_HOURS"])
+        self.assertEqual(data["pickup_instructions"], configured["FOODNOVA_PICKUP_INSTRUCTIONS"])
+        self.assertEqual(data["pickup_latitude"], 43.65)
+        self.assertEqual(data["pickup_longitude"], -79.38)
+
+    def test_missing_pickup_configuration_is_safe(self):
+        order = main.DBOrder(id=48, delivery_method="pickup")
+        names = [
+            "FOODNOVA_PICKUP_ADDRESS", "FOODNOVA_PICKUP_HOURS",
+            "FOODNOVA_PICKUP_INSTRUCTIONS", "FOODNOVA_PICKUP_LATITUDE",
+            "FOODNOVA_PICKUP_LONGITUDE",
+        ]
+        with patch.dict(os.environ, {name: "" for name in names}, clear=False):
+            data = main.order_to_dict(order)
+        self.assertEqual(data["pickup_address"], "")
+        self.assertIsNone(data["pickup_latitude"])
+
+    def test_another_customer_cannot_access_pickup_order(self):
+        order = main.DBOrder(customer_email="owner@example.com")
+        request = SimpleNamespace(headers={"authorization": "Bearer test"})
+        with patch.object(main, "require_user", return_value={
+            "role": "customer", "email": "other@example.com"
+        }):
+            with self.assertRaises(HTTPException) as context:
+                main.require_order_access(request, order, MagicMock())
+        self.assertEqual(context.exception.status_code, 403)
+
+    def _pickup_confirmation_db(self, order):
+        db = MagicMock()
+        active_query = MagicMock()
+        db.query.return_value.filter.return_value = active_query
+        active_query.filter.return_value.first.return_value = order
+        return db
+
+    def test_wrong_admin_pickup_pin_is_rejected(self):
+        order = main.DBOrder(
+            id=49, delivery_method="pickup", delivery_code="1604",
+            payment_status="payment_confirmed", order_status="ready_for_pickup",
+        )
+        db = self._pickup_confirmation_db(order)
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ):
+            with self.assertRaises(HTTPException) as context:
+                main.admin_confirm_customer_pickup(49, {"pin": "9999"}, MagicMock())
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertEqual(order.order_status, "ready_for_pickup")
+
+    def test_correct_admin_pickup_pin_completes_and_invalidates_pin(self):
+        order = main.DBOrder(
+            id=50, order_code="FN-050", delivery_method="pickup",
+            delivery_code="1604", payment_status="payment_confirmed",
+            order_status="ready_for_pickup", fulfillment_status="ready_for_pickup",
+            status="ready_for_pickup",
+        )
+        db = self._pickup_confirmation_db(order)
+        completed = {"id": 50, "order_status": "picked_up_by_customer"}
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ), patch.object(
+            main, "order_to_dict_for_context", return_value=completed
+        ), patch.object(main, "_create_order_notification") as notify, patch.object(
+            main, "create_admin_audit_log"
+        ) as audit:
+            result = main.admin_confirm_customer_pickup(
+                50, {"pickup_pin": "1604"}, MagicMock()
+            )
+        self.assertTrue(result["success"])
+        self.assertEqual(order.order_status, "picked_up_by_customer")
+        self.assertEqual(order.fulfillment_status, "picked_up_by_customer")
+        self.assertEqual(order.delivery_code, "")
+        self.assertIsNotNone(order.delivery_completed_at)
+        notify.assert_called_once()
+        audit.assert_called_once()
+
+    def test_pickup_pin_cannot_be_reused(self):
+        order = main.DBOrder(
+            id=51, delivery_method="pickup", delivery_code="",
+            payment_status="payment_confirmed", order_status="picked_up_by_customer",
+        )
+        db = self._pickup_confirmation_db(order)
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ):
+            with self.assertRaises(HTTPException) as context:
+                main.admin_confirm_customer_pickup(51, {"pin": "1604"}, MagicMock())
+        self.assertEqual(context.exception.status_code, 409)
 
     def test_pickup_terminal_state_cannot_regress(self):
         with self.assertRaises(HTTPException):

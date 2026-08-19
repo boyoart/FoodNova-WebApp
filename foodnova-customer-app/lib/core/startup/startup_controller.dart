@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 
 import '../../features/auth/data/auth_repository.dart';
 import '../../shared/auth/account_roles.dart';
@@ -200,6 +201,45 @@ class StartupController extends StateNotifier<StartupState> {
                 error: 'FoodNova could not restore this device session.',
                 sessionState: StartupSessionState.timeout);
           }
+      }
+    } on PlatformException catch (error, stack) {
+      if (!isSecureStorageCorruption(error)) {
+        debugPrint('CUSTOMER_STARTUP_FAILED=$error');
+        debugPrintStack(stackTrace: stack);
+        if (!_disposed) {
+          state = const StartupState(
+            phase: StartupPhase.failed,
+            error: 'FoodNova could not restore this device session.',
+          );
+        }
+        return;
+      }
+      debugPrint('secure_storage_corruption_detected');
+      try {
+        await _ref
+            .read(sessionControllerProvider.notifier)
+            .clearCorruptedAuthState();
+        debugPrint('secure_auth_state_cleared');
+      } on PlatformException catch (cleanupError, cleanupStack) {
+        if (!isSecureStorageCorruption(cleanupError)) {
+          debugPrint('CUSTOMER_STARTUP_FAILED=$cleanupError');
+          debugPrintStack(stackTrace: cleanupStack);
+          if (!_disposed) {
+            state = const StartupState(
+              phase: StartupPhase.failed,
+              error: 'FoodNova could not restore this device session.',
+            );
+          }
+          return;
+        }
+      }
+      debugPrint('startup_destination_login');
+      if (!_disposed) {
+        state = const StartupState(
+          phase: StartupPhase.ready,
+          destination: '/login',
+          sessionState: StartupSessionState.invalidOrExpired,
+        );
       }
     } catch (error, stack) {
       debugPrint('CUSTOMER_STARTUP_FAILED=$error');

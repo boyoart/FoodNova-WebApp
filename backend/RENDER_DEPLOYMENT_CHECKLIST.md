@@ -22,6 +22,9 @@ Set these manually in Render. Never commit real values.
 - `CLOUDINARY_CLOUD_NAME`
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
+- `FOODNOVA_PICKUP_ADDRESS`
+- `FOODNOVA_PICKUP_INSTRUCTIONS`
+- `FOODNOVA_PICKUP_HOURS`
 
 Recommended:
 

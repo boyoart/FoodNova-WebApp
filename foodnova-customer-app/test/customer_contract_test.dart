@@ -65,4 +65,39 @@ void main() {
     expect(order.pickupAddress, 'FoodNova Store');
     expect(order.isDeliveryTrackingVisible, isFalse);
   });
+
+  test('nested pickup contract provides configured details and coordinates',
+      () {
+    final order = OrderSummary.fromJson({
+      'id': 4,
+      'delivery_method': 'pickup',
+      'order_status': 'ready_for_pickup',
+      'pickup': {
+        'address': 'Configured FoodNova Store',
+        'hours': 'Mon-Sat 9-5',
+        'instructions': 'Ask at the collection desk',
+        'latitude': 43.65,
+        'longitude': -79.38,
+        'pin': '8471',
+      },
+    });
+    expect(order.pickupAddress, 'Configured FoodNova Store');
+    expect(order.pickupHours, 'Mon-Sat 9-5');
+    expect(order.pickupInstructions, 'Ask at the collection desk');
+    expect(order.pickupLatitude, 43.65);
+    expect(order.pickupLongitude, -79.38);
+    expect(order.deliveryPin, '8471');
+  });
+
+  test('completed pickup does not expose a missing PIN as rider state', () {
+    final order = OrderSummary.fromJson({
+      'id': 5,
+      'delivery_method': 'pickup',
+      'order_status': 'picked_up_by_customer',
+      'pickup_pin': '',
+    });
+    expect(order.isPickedUpByCustomer, isTrue);
+    expect(order.deliveryPin, isEmpty);
+    expect(order.isDeliveryTrackingVisible, isFalse);
+  });
 }

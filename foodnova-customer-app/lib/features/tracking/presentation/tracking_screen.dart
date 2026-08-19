@@ -2155,24 +2155,34 @@ class _PickupFulfillmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = order.status.trim().toLowerCase();
-    final ready = status == 'ready_for_pickup';
     final collected = order.isPickedUpByCustomer;
+    final statuses = <String>{
+      order.status,
+      order.deliveryStatus,
+      '${order.raw['order_status'] ?? ''}',
+      '${order.raw['fulfillment_status'] ?? ''}',
+    }.map((value) => value.trim().toLowerCase());
+    final ready = !collected && statuses.contains('ready_for_pickup');
     final title = collected
         ? 'Picked up by Customer'
         : ready
-            ? 'Your order is ready for pickup'
+            ? 'YOUR ORDER IS READY FOR PICKUP'
             : order.paymentConfirmed
                 ? 'Your order is being prepared'
                 : 'Order placed';
     final message = collected
         ? 'Pickup completed successfully.'
         : ready
-            ? 'Please bring your pickup PIN when collecting your order.'
+            ? 'Give this PIN to the FoodNova Admin when collecting your order.'
             : order.paymentConfirmed
                 ? 'Payment confirmed. FoodNova is preparing your pickup order.'
                 : 'Awaiting payment confirmation';
     final address = order.pickupAddress.trim();
+    final hasCoordinates =
+        order.pickupLatitude != null && order.pickupLongitude != null;
+    if (address.isEmpty) {
+      debugPrint('pickup_configuration_missing field=address');
+    }
 
     return _Card(
       title: title,
@@ -2185,30 +2195,44 @@ class _PickupFulfillmentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _MutedText(message),
-          if (address.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(address, style: const TextStyle(fontWeight: FontWeight.w900)),
-          ],
-          if (order.pickupHours.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text('Collection hours: ${order.pickupHours}'),
-          ],
-          if (order.pickupInstructions.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(order.pickupInstructions),
-          ],
           if (ready && order.deliveryPin.trim().isNotEmpty) ...[
-            const SizedBox(height: 14),
             Text('Pickup PIN', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 6),
             SelectableText(
-              order.deliveryPin,
+              order.deliveryPin.split('').join('  '),
               textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme
                   .headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 5),
+                  ?.copyWith(fontWeight: FontWeight.w900, letterSpacing: 3),
             ),
+            const SizedBox(height: 8),
+          ],
+          _MutedText(message),
+          const SizedBox(height: 12),
+          Text('Pickup location',
+              style: Theme.of(context).textTheme.labelLarge),
+          if (address.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(address, style: const TextStyle(fontWeight: FontWeight.w900)),
+          ] else ...[
+            const SizedBox(height: 4),
+            const Text(
+              'Pickup location is temporarily unavailable. Please contact FoodNova.',
+            ),
+          ],
+          if (order.pickupHours.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Pickup hours', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 4),
+            Text(order.pickupHours),
+          ],
+          if (order.pickupInstructions.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text('Pickup instructions',
+                style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 4),
+            Text(order.pickupInstructions),
           ],
           if (collected && order.deliveryCompletedAt.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -2228,14 +2252,13 @@ class _PickupFulfillmentCard extends StatelessWidget {
                   label: const Text('Contact FoodNova'),
                 ),
               ),
-              if (ready && address.isNotEmpty) ...[
+              if (!collected && (address.isNotEmpty || hasCoordinates)) ...[
                 const SizedBox(width: 8),
                 Expanded(
                   child: FilledButton.icon(
                     onPressed: () => launchUrl(
                       Uri.parse(
-                        'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}',
-                      ),
+                          'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(hasCoordinates ? '${order.pickupLatitude},${order.pickupLongitude}' : address)}'),
                       mode: LaunchMode.externalApplication,
                     ),
                     icon: const Icon(Icons.directions_rounded),

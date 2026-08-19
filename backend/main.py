@@ -11,6 +11,7 @@ import json
 import math
 import os
 import random
+import secrets
 import re
 import subprocess
 import traceback
@@ -243,6 +244,13 @@ def startup_configuration_report() -> dict:
         "CONFIG_EMAIL": "enabled" if (email_enabled and _env_present("RESEND_API_KEY")) else ("disabled" if not email_enabled else "missing_resend_key"),
         "CONFIG_DISPATCH_TEST_MODE": dispatch_test_mode_enabled(),
         "CONFIG_RIDER_EARNINGS": "enabled" if rider_earnings_enabled() else "disabled",
+        "CONFIG_PICKUP_ADDRESS": "present" if _env_present("FOODNOVA_PICKUP_ADDRESS") else "missing",
+        "CONFIG_PICKUP_INSTRUCTIONS": "present" if _env_present("FOODNOVA_PICKUP_INSTRUCTIONS") else "missing",
+        "CONFIG_PICKUP_HOURS": "present" if _env_present("FOODNOVA_PICKUP_HOURS") else "missing",
+        "CONFIG_PICKUP_COORDINATES": "present" if (
+            _env_present("FOODNOVA_PICKUP_LATITUDE")
+            and _env_present("FOODNOVA_PICKUP_LONGITUDE")
+        ) else "missing",
         "CONFIG_STARTUP_SCHEMA_MUTATIONS": startup_schema_mutations_allowed(),
     }
 
@@ -267,6 +275,9 @@ def validate_startup_configuration() -> dict:
         "Cloudinary uploads": report["CONFIG_CLOUDINARY"] == "missing",
         "Google route generation": report["CONFIG_MAPS"] == "missing",
         "Email notifications": report["CONFIG_EMAIL"] != "enabled",
+        "Pickup address": report["CONFIG_PICKUP_ADDRESS"] == "missing",
+        "Pickup instructions": report["CONFIG_PICKUP_INSTRUCTIONS"] == "missing",
+        "Pickup hours": report["CONFIG_PICKUP_HOURS"] == "missing",
     }
     for label, missing in warning_checks.items():
         if missing:
@@ -3596,6 +3607,17 @@ def next_public_order_code(db) -> tuple[str, str]:
     return f"FN-{public_number}", public_number
 
 
+def _optional_env_float(name: str) -> Optional[float]:
+    value = str(os.getenv(name) or "").strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        print("PICKUP_CONFIGURATION_INVALID", json_dump({"field": name}))
+        return None
+
+
 def order_to_dict(order: DBOrder) -> dict:
     try:
         items = [order_item_to_dict(item) for item in (order.items or [])]
@@ -3633,6 +3655,8 @@ def order_to_dict(order: DBOrder) -> dict:
         "pickup_address": os.getenv("FOODNOVA_PICKUP_ADDRESS", "").strip(),
         "pickup_instructions": os.getenv("FOODNOVA_PICKUP_INSTRUCTIONS", "").strip(),
         "pickup_hours": os.getenv("FOODNOVA_PICKUP_HOURS", "").strip(),
+        "pickup_latitude": _optional_env_float("FOODNOVA_PICKUP_LATITUDE"),
+        "pickup_longitude": _optional_env_float("FOODNOVA_PICKUP_LONGITUDE"),
         "delivery_notes": order.delivery_notes or "",
         "status": order.status or "pending_payment",
         "payment_status": order.payment_status or "pending_payment",
@@ -3736,6 +3760,7 @@ def order_to_dict_for_context(order: DBOrder, db=None, context: str = "") -> dic
     ):
         data["delivery_code"] = order.delivery_code or ""
         data["delivery_pin"] = order.delivery_code or ""
+        data["pickup_pin"] = order.delivery_code or ""
     if context == "admin":
         lookup_payload = {
             "order_id": getattr(order, "id", None),
@@ -3862,7 +3887,7 @@ LEGACY_DELIVERY_PIN_LENGTHS = {6}
 
 def generate_delivery_pin(db) -> str:
     for _ in range(20):
-        code = f"{random.randint(0, 10 ** DELIVERY_PIN_LENGTH - 1):0{DELIVERY_PIN_LENGTH}d}"
+        code = f"{secrets.randbelow(10 ** DELIVERY_PIN_LENGTH):0{DELIVERY_PIN_LENGTH}d}"
         exists = db.query(DBOrder).filter(
             DBOrder.delivery_code == code,
             DBOrder.delivery_confirmed_at.is_(None),
@@ -3870,7 +3895,7 @@ def generate_delivery_pin(db) -> str:
         ).first()
         if not exists:
             return code
-    return f"{random.randint(0, 10 ** DELIVERY_PIN_LENGTH - 1):0{DELIVERY_PIN_LENGTH}d}"
+    raise RuntimeError("Unable to generate a unique fulfillment PIN")
 
 
 def validate_delivery_pin_input(submitted_code: str, stored_code: str) -> str:
@@ -13810,6 +13835,8 @@ def update_order(order_id: int, payload: dict, request: Request):
                     status_code=409,
                     detail="Payment must be confirmed before preparing a pickup order",
                 )
+            if requested_order_status == "ready_for_pickup":
+                ensure_order_delivery_pin(db, order)
         if (
             is_pickup_order
             and str(order.payment_status or "").strip().lower() in DELIVERY_MATCH_CONFIRMED_PAYMENTS
@@ -13874,7 +13901,7 @@ def update_order(order_id: int, payload: dict, request: Request):
                         "order_update", "order")
                 elif status_value == "ready_for_pickup":
                     _create_order_notification(order_data, "Ready for Pickup",
-                        "Your order is ready for pickup. Please bring your pickup PIN.",
+                        "Your order is ready for pickup. Open FoodNova to view your pickup PIN.",
                         "order_update", "order")
                 elif status_value == "out_for_delivery":
                     _create_order_notification(order_data, "Out for Delivery",
@@ -14078,14 +14105,13 @@ def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request
         if current not in {"ready_for_pickup", "picked_up_by_customer"}:
             raise HTTPException(status_code=409, detail="Order must be ready for pickup before collection can be confirmed")
         if current == "picked_up_by_customer":
-            data = order_to_dict_for_context(order, db, "admin")
-            return {"success": True, "message": "Pickup was already confirmed", "order": data, "data": data}
+            raise HTTPException(status_code=409, detail="Pickup has already been confirmed")
         submitted = str(payload.get("pin") or payload.get("pickup_pin") or payload.get("delivery_pin") or "").strip()
         try:
             validated = validate_delivery_pin_input(submitted, str(order.delivery_code or ""))
         except HTTPException:
             raise HTTPException(status_code=400, detail="Invalid pickup PIN")
-        if validated != str(order.delivery_code or ""):
+        if not secrets.compare_digest(validated, str(order.delivery_code or "")):
             raise HTTPException(status_code=400, detail="Invalid pickup PIN")
 
         now = datetime.utcnow()
@@ -14095,6 +14121,7 @@ def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request
         order.delivery_status = None
         order.delivery_confirmed_at = order.delivery_confirmed_at or now
         order.delivery_completed_at = order.delivery_completed_at or now
+        order.delivery_code = ""
         order.updated_at = now
         db.commit()
         db.refresh(order)
