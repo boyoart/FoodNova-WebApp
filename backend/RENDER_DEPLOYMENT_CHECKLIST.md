@@ -26,6 +26,21 @@ Set these manually in Render. Never commit real values.
 - `FOODNOVA_PICKUP_INSTRUCTIONS`
 - `FOODNOVA_PICKUP_HOURS`
 
+## Reviewed order-schema migration
+
+Do not enable production startup schema mutations. After confirming a recent
+Render PostgreSQL backup, inspect the dry run and apply the reviewed migration:
+
+```bash
+python scripts/apply_production_order_schema_migration.py --dry-run
+python scripts/apply_production_order_schema_migration.py --confirm-production-schema-migration --confirm-recent-backup
+python scripts/check_schema.py
+```
+
+The apply command prints sanitized target information, the complete before
+report, every applied idempotent statement, the after report, and confirms
+`has_drift=false`. It does not drop tables/columns or update application rows.
+
 Recommended:
 
 - `FOODNOVA_BUILD_COMMIT` set to the deployed Git SHA during staging/release validation.
