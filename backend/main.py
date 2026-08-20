@@ -3755,8 +3755,7 @@ def order_to_dict_for_context(order: DBOrder, db=None, context: str = "") -> dic
         data["delivery_pin"] = order.delivery_code or ""
     if (
         context == "customer"
-        and str(getattr(order, "delivery_method", "") or "").strip().lower() == "pickup"
-        and str(getattr(order, "order_status", "") or "").strip().lower() == "ready_for_pickup"
+        and pickup_pin_is_customer_visible(order)
     ):
         data["delivery_code"] = order.delivery_code or ""
         data["delivery_pin"] = order.delivery_code or ""
@@ -3917,6 +3916,58 @@ def ensure_order_delivery_pin(db, order: DBOrder) -> str:
         order.delivery_code = generate_delivery_pin(db)
         order.delivery_code_created_at = datetime.utcnow()
     return order.delivery_code or ""
+
+
+def pickup_pin_is_customer_visible(order: DBOrder) -> bool:
+    statuses = {
+        str(getattr(order, field, "") or "").strip().lower()
+        for field in ("status", "order_status", "fulfillment_status")
+    }
+    return (
+        str(getattr(order, "delivery_method", "") or "").strip().lower() == "pickup"
+        and str(getattr(order, "payment_status", "") or "").strip().lower()
+        in DELIVERY_MATCH_CONFIRMED_PAYMENTS
+        and "ready_for_pickup" in statuses
+        and "picked_up_by_customer" not in statuses
+    )
+
+
+def provision_legacy_ready_pickup_pin(db, order: DBOrder) -> str:
+    """Atomically provision the canonical PIN for an eligible legacy pickup."""
+    existing = str(getattr(order, "delivery_code", "") or "").strip()
+    if existing or not pickup_pin_is_customer_visible(order):
+        return existing
+    candidate = generate_delivery_pin(db)
+    now = datetime.utcnow()
+    ready_status = or_(
+        func.lower(func.coalesce(DBOrder.status, "")) == "ready_for_pickup",
+        func.lower(func.coalesce(DBOrder.order_status, "")) == "ready_for_pickup",
+        func.lower(func.coalesce(DBOrder.fulfillment_status, "")) == "ready_for_pickup",
+    )
+    completed_status = or_(
+        func.lower(func.coalesce(DBOrder.status, "")) == "picked_up_by_customer",
+        func.lower(func.coalesce(DBOrder.order_status, "")) == "picked_up_by_customer",
+        func.lower(func.coalesce(DBOrder.fulfillment_status, "")) == "picked_up_by_customer",
+    )
+    db.query(DBOrder).filter(
+        DBOrder.id == order.id,
+        func.lower(func.coalesce(DBOrder.delivery_method, "")) == "pickup",
+        func.lower(func.coalesce(DBOrder.payment_status, "")).in_(
+            DELIVERY_MATCH_CONFIRMED_PAYMENTS
+        ),
+        ready_status,
+        ~completed_status,
+        or_(DBOrder.delivery_code.is_(None), func.trim(DBOrder.delivery_code) == ""),
+    ).update(
+        {
+            DBOrder.delivery_code: candidate,
+            DBOrder.delivery_code_created_at: now,
+        },
+        synchronize_session=False,
+    )
+    db.commit()
+    db.refresh(order)
+    return str(order.delivery_code or "")
 
 
 def canonical_dispatch_status(order: DBOrder) -> str:
@@ -11810,10 +11861,11 @@ def my_orders(request: Request):
     email = user.get("email")
     db = SessionLocal()
     try:
-        orders = [
-            order_to_dict_for_context(order, db, "customer")
-            for order in active_order_filter(db.query(DBOrder)).filter(DBOrder.customer_email == email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
-        ]
+        customer_orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.customer_email == email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
+        orders = []
+        for order in customer_orders:
+            provision_legacy_ready_pickup_pin(db, order)
+            orders.append(order_to_dict_for_context(order, db, "customer"))
         return {"success": True, "orders": orders, "data": orders}
     except Exception as error:
         print("CUSTOMER ORDERS LOAD ERROR:", repr(error))
@@ -11844,6 +11896,8 @@ def get_order(order_id: int, request: Request):
         if order:
             user = require_order_access(request, order, db)
             context = "customer" if str(user.get("role") or "").lower() == "customer" else "admin"
+            if context == "customer":
+                provision_legacy_ready_pickup_pin(db, order)
             data = order_to_dict_for_context(order, db, context)
             return {"success": True, "order": data, "data": data}
     finally:

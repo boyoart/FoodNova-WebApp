@@ -2186,6 +2186,7 @@ class _PickupFulfillmentCard extends StatelessWidget {
 
     return _Card(
       title: title,
+      compactTitle: ready,
       icon: collected
           ? Icons.task_alt_rounded
           : ready
@@ -2906,6 +2907,7 @@ class _Card extends StatelessWidget {
     this.icon,
     this.trailing,
     this.highlighted = false,
+    this.compactTitle = false,
     required this.child,
   });
 
@@ -2913,6 +2915,7 @@ class _Card extends StatelessWidget {
   final IconData? icon;
   final Widget? trailing;
   final bool highlighted;
+  final bool compactTitle;
   final Widget child;
 
   @override
@@ -2950,10 +2953,13 @@ class _Card extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleLarge
-                        ?.copyWith(fontWeight: FontWeight.w900),
+                    style: (compactTitle
+                            ? Theme.of(context).textTheme.titleMedium
+                            : Theme.of(context).textTheme.titleLarge)
+                        ?.copyWith(
+                      fontWeight:
+                          compactTitle ? FontWeight.w800 : FontWeight.w900,
+                    ),
                   ),
                 ),
                 if (trailing != null) trailing!,

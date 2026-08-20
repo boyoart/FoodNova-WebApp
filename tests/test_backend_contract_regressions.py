@@ -196,10 +196,14 @@ class BackendContractRegressionTests(unittest.TestCase):
         with self.assertRaises(HTTPException):
             main.validate_pickup_status_transition("READY_FOR_PICKUP", "DELIVERED")
 
-    def test_pickup_order_receives_secure_collection_pin(self):
+    def test_new_pickup_ready_transition_receives_secure_collection_pin(self):
         db = main.SessionLocal()
         try:
-            order = main.DBOrder(delivery_method="pickup")
+            order = main.DBOrder(
+                delivery_method="pickup",
+                payment_status="payment_confirmed",
+                order_status="ready_for_pickup",
+            )
             with patch.object(main, "generate_delivery_pin", return_value="8471"):
                 pin = main.ensure_order_delivery_pin(db, order)
             self.assertTrue(pin.isdigit())
@@ -217,6 +221,7 @@ class BackendContractRegressionTests(unittest.TestCase):
             order_status="preparing",
             fulfillment_status="preparing",
             status="preparing",
+            payment_status="payment_confirmed",
         )
         hidden = main.order_to_dict_for_context(order, context="customer")
         self.assertEqual(hidden["delivery_pin"], "")
@@ -229,6 +234,7 @@ class BackendContractRegressionTests(unittest.TestCase):
     def test_delivery_order_never_exposes_pickup_pin(self):
         order = main.DBOrder(
             id=45, delivery_method="delivery", delivery_code="1604",
+            payment_status="payment_confirmed",
             order_status="ready_for_pickup", fulfillment_status="ready_for_pickup",
         )
         data = main.order_to_dict_for_context(order, context="customer")
@@ -237,12 +243,78 @@ class BackendContractRegressionTests(unittest.TestCase):
     def test_completed_pickup_hides_pin(self):
         order = main.DBOrder(
             id=46, delivery_method="pickup", delivery_code="1604",
+            payment_status="payment_confirmed",
             order_status="picked_up_by_customer",
             fulfillment_status="picked_up_by_customer",
         )
         data = main.order_to_dict_for_context(order, context="customer")
         self.assertEqual(data["delivery_pin"], "")
         self.assertNotIn("pickup_pin", data)
+
+    def test_legacy_ready_pickup_missing_pin_is_provisioned_once(self):
+        order = main.DBOrder(
+            id=460,
+            order_code="FN-460",
+            delivery_method="pickup",
+            delivery_code="",
+            payment_status="payment_confirmed",
+            status="ready_for_pickup",
+            order_status="ready_for_pickup",
+            fulfillment_status="ready_for_pickup",
+        )
+        db = MagicMock()
+
+        def apply_update(values, synchronize_session=False):
+            order.delivery_code = values[main.DBOrder.delivery_code]
+            order.delivery_code_created_at = values[
+                main.DBOrder.delivery_code_created_at
+            ]
+            return 1
+
+        db.query.return_value.filter.return_value.update.side_effect = apply_update
+        with patch.object(main, "generate_delivery_pin", return_value="8471") as generate:
+            first = main.provision_legacy_ready_pickup_pin(db, order)
+            second = main.provision_legacy_ready_pickup_pin(db, order)
+
+        self.assertEqual(first, "8471")
+        self.assertEqual(second, "8471")
+        self.assertEqual(order.delivery_code, "8471")
+        generate.assert_called_once_with(db)
+        db.query.return_value.filter.return_value.update.assert_called_once()
+        db.commit.assert_called_once()
+
+    def test_legacy_provisioned_pin_is_returned_to_customer_owner_contract(self):
+        order = main.DBOrder(
+            id=461,
+            delivery_method="pickup",
+            delivery_code="8471",
+            payment_status="payment_confirmed",
+            order_status="ready_for_pickup",
+            fulfillment_status="ready_for_pickup",
+        )
+        data = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(data["pickup_pin"], "8471")
+        self.assertEqual(data["delivery_code"], "8471")
+
+    def test_legacy_provision_does_not_touch_delivery_or_completed_pickup(self):
+        db = MagicMock()
+        delivery = main.DBOrder(
+            id=462,
+            delivery_method="delivery",
+            delivery_code="",
+            payment_status="payment_confirmed",
+            order_status="ready_for_pickup",
+        )
+        completed = main.DBOrder(
+            id=463,
+            delivery_method="pickup",
+            delivery_code="",
+            payment_status="payment_confirmed",
+            order_status="picked_up_by_customer",
+        )
+        self.assertEqual(main.provision_legacy_ready_pickup_pin(db, delivery), "")
+        self.assertEqual(main.provision_legacy_ready_pickup_pin(db, completed), "")
+        db.query.assert_not_called()
 
     def test_pickup_configuration_is_returned_from_environment(self):
         order = main.DBOrder(id=47, delivery_method="pickup")
