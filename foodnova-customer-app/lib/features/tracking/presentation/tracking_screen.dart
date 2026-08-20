@@ -2237,7 +2237,7 @@ class _PickupFulfillmentCard extends StatelessWidget {
           if (collected && order.deliveryCompletedAt.isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
-              'Collected: ${_timelineTimeLabel(order.deliveryCompletedAt, false)}',
+              'Picked up on: ${_timelineTimeLabel(order.deliveryCompletedAt, false)}',
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
           ],
