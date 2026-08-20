@@ -2228,7 +2228,7 @@ class _PickupFulfillmentCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(order.pickupHours),
           ],
-          if (order.pickupInstructions.trim().isNotEmpty) ...[
+          if (!collected && order.pickupInstructions.trim().isNotEmpty) ...[
             const SizedBox(height: 12),
             Text('Pickup instructions',
                 style: Theme.of(context).textTheme.labelLarge),
@@ -2273,6 +2273,11 @@ class _PickupFulfillmentCard extends StatelessWidget {
       ),
     );
   }
+}
+
+@visibleForTesting
+Widget buildPickupFulfillmentCardForTest(OrderSummary order) {
+  return _PickupFulfillmentCard(order: order);
 }
 
 class _VerificationCard extends StatelessWidget {

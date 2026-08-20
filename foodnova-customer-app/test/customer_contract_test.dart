@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foodnova_customer_app/services/notification_destination.dart';
 import 'package:foodnova_customer_app/shared/delivery_status.dart';
 import 'package:foodnova_customer_app/shared/models/order.dart';
+import 'package:foodnova_customer_app/features/tracking/presentation/tracking_screen.dart';
 
 void main() {
   test('delivery aliases use one canonical customer state', () {
@@ -99,5 +101,67 @@ void main() {
     expect(order.isPickedUpByCustomer, isTrue);
     expect(order.deliveryPin, isEmpty);
     expect(order.isDeliveryTrackingVisible, isFalse);
+  });
+
+  testWidgets('ready pickup shows collection details', (tester) async {
+    final order = OrderSummary.fromJson({
+      'id': 6,
+      'delivery_method': 'pickup',
+      'payment_status': 'payment_confirmed',
+      'order_status': 'ready_for_pickup',
+      'delivery_pin': '8471',
+      'pickup_address': 'FoodNova Store',
+      'pickup_hours': 'Mon-Sat 9-5',
+      'pickup_instructions': 'Bring your pickup PIN.',
+    });
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: buildPickupFulfillmentCardForTest(order),
+        ),
+      ),
+    ));
+
+    expect(find.text('Pickup PIN'), findsOneWidget);
+    expect(find.text('Pickup instructions'), findsOneWidget);
+    expect(find.text('Bring your pickup PIN.'), findsOneWidget);
+    expect(find.text('FoodNova Store'), findsOneWidget);
+    expect(find.text('Mon-Sat 9-5'), findsOneWidget);
+  });
+
+  testWidgets('completed pickup hides obsolete collection details',
+      (tester) async {
+    final order = OrderSummary.fromJson({
+      'id': 7,
+      'delivery_method': 'pickup',
+      'payment_status': 'payment_confirmed',
+      'order_status': 'picked_up_by_customer',
+      'fulfillment_status': 'picked_up_by_customer',
+      'delivery_pin': '',
+      'pickup_address': 'FoodNova Store',
+      'pickup_hours': 'Mon-Sat 9-5',
+      'pickup_instructions': 'Bring your pickup PIN.',
+      'delivery_completed_at': '2026-08-20T12:30:00Z',
+    });
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: buildPickupFulfillmentCardForTest(order),
+        ),
+      ),
+    ));
+
+    expect(find.text('Picked up by Customer'), findsOneWidget);
+    expect(find.text('Pickup completed successfully.'), findsOneWidget);
+    expect(find.text('Pickup PIN'), findsNothing);
+    expect(find.text('Pickup instructions'), findsNothing);
+    expect(find.text('Bring your pickup PIN.'), findsNothing);
+    expect(find.text('FoodNova Store'), findsOneWidget);
+    expect(find.text('Mon-Sat 9-5'), findsOneWidget);
+    expect(find.textContaining('Picked up on:'), findsOneWidget);
+    expect(find.text('Contact FoodNova'), findsOneWidget);
+    expect(find.text('Directions'), findsNothing);
   });
 }
