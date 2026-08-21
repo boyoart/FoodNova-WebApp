@@ -2,6 +2,11 @@ import 'dart:math' as math;
 
 enum RiderMarkerKind { motorcycle, car, messenger }
 
+const riderMarkerAnchorX = .5;
+const riderMarkerAnchorY = .5;
+const destinationMarkerAnchorX = .5;
+const destinationMarkerAnchorY = .96;
+
 class TrackingPoint {
   const TrackingPoint(this.latitude, this.longitude);
 

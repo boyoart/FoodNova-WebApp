@@ -1,0 +1,31 @@
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362/skia/e9ed4fc9f1544c58d8a9347c1fc9471d8dd7c465/sksl size=3584 mod=1787178966 from UID=10673 used=253952 quota=67108864 ratio=37
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362/skia/e9ed4fc9f1544c58d8a9347c1fc9471d8dd7c465 size=3584 mod=1787178966 from UID=10673 used=250368 quota=67108864 ratio=37
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362/skia size=3584 mod=1787178966 from UID=10673 used=246784 quota=67108864 ratio=36
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362 size=3584 mod=1787178966 from UID=10673 used=243200 quota=67108864 ratio=36
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine size=3584 mod=1787178966 from UID=10673 used=239616 quota=67108864 ratio=35
+08-19 18:36:41.299  2591 15288 D installd: Purging /data/user_de/0/app.foodnova.customer/cache/com.android.opengl.shaders_cache size=12288 mod=1787178970 from UID=10673 used=236032 quota=67108864 ratio=35
+08-19 18:36:41.299  2591 15288 D installd: Purging /data/user_de/0/app.foodnova.customer/cache/com.android.skia.shaders_cache size=4096 mod=1787178970 from UID=10673 used=223744 quota=67108864 ratio=33
+08-19 18:36:41.299  2591 15288 D installd: Purging /data/data/app.foodnova.customer/cache/oat_primary/arm64/base.art size=237568 mod=1787178971 from UID=10673 used=219648 quota=67108864 ratio=32
+08-19 18:36:41.881  5224  5224 D SatelliteController: getCarrierRoamingNtnAllSatellitePlmnSetFromStorage: [302723, 44026, 71688, 73029, 44055, 312190, 44025, 313130, 73031, 313210, 23402, 310210, 310830, 53004, 53013, 53002, 255707, 50511, 50559]
+08-19 18:36:41.881  5224  5224 D SatelliteController: getCarrierRoamingNtnAllSatellitePlmnSetFromStorage: [302723, 44026, 71688, 73029, 44055, 312190, 44025, 313130, 73031, 313210, 23402, 310210, 310830, 53004, 53013, 53002, 255707, 50511, 50559]
+08-19 18:36:41.889  5324  5587 I ConfigProvider: queryStorage path content://com.samsung.rcs.autoconfigurationprovider/parameter/version#simslot0
+08-19 18:36:41.889  5324  5587 I ConfigProvider: can not find readData from mStorage
+08-19 18:36:41.895  3284  4850 V SemWifiBackOff.5G: restore back off mode, current: [NONE]
+08-19 18:36:43.694  2591 15288 D installd: Purging /data/data/app.foodnova.customer/cache/oat_primary/arm64 size=3584 mod=1787178971 from UID=10673 used=-17920 quota=67108864 ratio=-2
+08-19 18:36:43.695  2591 15288 D installd: Purging /data/data/app.foodnova.customer/cache/oat_primary size=3584 mod=1787178971 from UID=10673 used=-21504 quota=67108864 ratio=-3
+08-19 18:36:43.705  8098  8178 I ExternalStorageServiceImpl: Free cache requested for 1112539136 bytes
+08-19 18:36:43.712 12821 13005 I ExternalStorageServiceImpl: Free cache requested for 1112539136 bytes
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: java.io.IOException: Failed to free 2147483648 on storage device at /data
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at com.android.server.pm.PackageManagerService.freeStorage(qb/111823762 87ddd35bc5d2c408c38f6a57f2ac1076f9dbda659e7b2a275d56e1c946eea8c8:636)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at com.android.server.pm.PackageManagerService$PackageManagerInternalImpl.freeStorage(qb/111823762 87ddd35bc5d2c408c38f6a57f2ac1076f9dbda659e7b2a275d56e1c946eea8c8:3)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at com.android.server.storage.DeviceStorageMonitorService$1.handleMessage(qb/111823762 87ddd35bc5d2c408c38f6a57f2ac1076f9dbda659e7b2a275d56e1c946eea8c8:547)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Handler.dispatchMessage(Handler.java:132)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Looper.loopOnce(Looper.java:288)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Looper.loop(Looper.java:392)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.HandlerThread.run(HandlerThread.java:139)
+08-19 18:36:43.722  3284  4785 W DeviceStorageMonitorService: check(/data) oldLevel:3, newLevel:3 (usableBytes=1034944512)
+08-19 18:36:43.722  3284  4785 W DeviceStorageMonitorService: updateBroadcasts(/data) oldLevel:3, newLevel:3, seq:1
+08-19 18:36:43.723  3284  4785 D DeviceStorageMonitorService: Available File Node Number is [12338938]
+08-19 18:36:43.723  3284  4785 W DeviceStorageMonitorService: updateBroadcasts_filenode(/data) fn_oldLevel:0, fn_newLevel:0, seq:1
+08-19 18:36:43.744  3284  5790 D FreecessHandler: skipping freeze app.foodnova.customer(10673) result : 2

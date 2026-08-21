@@ -1,0 +1,779 @@
+--------- beginning of main
+08-19 18:39:52.875 I/Zygote  (11139): Process 11139 created for app.foodnova.customer
+08-19 18:39:52.875 I/odnova.customer(11139): Using generational CollectorTypeCMC GC.
+08-19 18:39:52.881 D/nativeloader(11139): Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+08-19 18:39:52.882 D/ActivityThread(11139): setConscryptValidator
+08-19 18:39:52.883 D/ActivityThread(11139): setConscryptValidator - put
+08-19 18:39:52.900 D/ApplicationLoaders(11139): Returning zygote-cached class loader: /system/framework/org.apache.http.legacy.jar
+08-19 18:39:52.900 D/ApplicationLoaders(11139): Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+08-19 18:39:52.900 D/ApplicationLoaders(11139): Returning zygote-cached class loader: /system_ext/framework/androidx.window.sidecar.jar
+08-19 18:39:52.906 D/nativeloader(11139): Configuring clns-9 for other apk /data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/lib/arm64:/data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/app.foodnova.customer
+08-19 18:39:52.911 V/GraphicsEnvironment(11139): Currently set values for:
+08-19 18:39:52.911 V/GraphicsEnvironment(11139):   angle_gl_driver_selection_pkgs=[]
+08-19 18:39:52.911 V/GraphicsEnvironment(11139):   angle_gl_driver_selection_values=[]
+08-19 18:39:52.911 V/GraphicsEnvironment(11139): app.foodnova.customer is not listed in per-application setting
+08-19 18:39:52.911 V/GraphicsEnvironment(11139): ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+08-19 18:39:52.911 V/GraphicsEnvironment(11139): No special selections for ANGLE, returning default driver choice
+08-19 18:39:52.911 V/GraphicsEnvironment(11139): App is not on the allowlist for updatable production driver.
+08-19 18:39:52.918 W/ComponentDiscovery(11139): Invalid component registrar.
+08-19 18:39:52.918 W/ComponentDiscovery(11139): u4.k: Could not instantiate com.google.firebase.installations.FirebaseInstallationsKtxRegistrar
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at k5.b.get(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:93)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at u4.e.<init>(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:149)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at p4.f.<init>(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:332)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at p4.f.j(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:121)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at p4.f.i(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:40)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at com.google.firebase.provider.FirebaseInitProvider.onCreate(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:12)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2726)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2695)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at com.google.firebase.provider.FirebaseInitProvider.attachInfo(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:16)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.installProvider(ActivityThread.java:9987)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.installContentProviders(ActivityThread.java:9467)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:9089)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.-$$Nest$mhandleBindApplication(ActivityThread.java:0)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:3016)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.os.Handler.dispatchMessage(Handler.java:132)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.os.Looper.loopOnce(Looper.java:288)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.os.Looper.loop(Looper.java:392)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.main(ActivityThread.java:10346)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at java.lang.reflect.Method.invoke(Native Method)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:638)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:972)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): Caused by: java.lang.NoSuchMethodException: com.google.firebase.installations.FirebaseInstallationsKtxRegistrar.<init> []
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at java.lang.Class.getConstructor0(Class.java:3387)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at java.lang.Class.getDeclaredConstructor(Class.java:3069)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	at k5.b.get(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:36)
+08-19 18:39:52.918 W/ComponentDiscovery(11139): 	... 21 more
+08-19 18:39:52.919 W/ComponentDiscovery(11139): Invalid component registrar.
+08-19 18:39:52.919 W/ComponentDiscovery(11139): u4.k: Could not instantiate com.google.firebase.messaging.FirebaseMessagingKtxRegistrar
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at k5.b.get(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:93)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at u4.e.<init>(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:149)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at p4.f.<init>(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:332)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at p4.f.j(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:121)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at p4.f.i(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:40)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at com.google.firebase.provider.FirebaseInitProvider.onCreate(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:12)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2726)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2695)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at com.google.firebase.provider.FirebaseInitProvider.attachInfo(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:16)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.installProvider(ActivityThread.java:9987)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.installContentProviders(ActivityThread.java:9467)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:9089)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.-$$Nest$mhandleBindApplication(ActivityThread.java:0)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:3016)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.os.Handler.dispatchMessage(Handler.java:132)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.os.Looper.loopOnce(Looper.java:288)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.os.Looper.loop(Looper.java:392)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.main(ActivityThread.java:10346)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at java.lang.reflect.Method.invoke(Native Method)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:638)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:972)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): Caused by: java.lang.NoSuchMethodException: com.google.firebase.messaging.FirebaseMessagingKtxRegistrar.<init> []
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at java.lang.Class.getConstructor0(Class.java:3387)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at java.lang.Class.getDeclaredConstructor(Class.java:3069)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	at k5.b.get(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:36)
+08-19 18:39:52.919 W/ComponentDiscovery(11139): 	... 21 more
+08-19 18:39:52.920 D/SessionsDependencies(11139): Dependency to CRASHLYTICS added.
+08-19 18:39:52.921 W/ComponentDiscovery(11139): Invalid component registrar.
+08-19 18:39:52.921 W/ComponentDiscovery(11139): u4.k: Could not instantiate com.google.firebase.crashlytics.CrashlyticsRegistrar
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at k5.b.get(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:93)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at u4.e.<init>(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:149)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at p4.f.<init>(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:332)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at p4.f.j(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:121)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at p4.f.i(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:40)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at com.google.firebase.provider.FirebaseInitProvider.onCreate(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:12)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2726)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.content.ContentProvider.attachInfo(ContentProvider.java:2695)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at com.google.firebase.provider.FirebaseInitProvider.attachInfo(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:16)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.installProvider(ActivityThread.java:9987)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.installContentProviders(ActivityThread.java:9467)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.handleBindApplication(ActivityThread.java:9089)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.-$$Nest$mhandleBindApplication(ActivityThread.java:0)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:3016)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.os.Handler.dispatchMessage(Handler.java:132)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.os.Looper.loopOnce(Looper.java:288)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.os.Looper.loop(Looper.java:392)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at android.app.ActivityThread.main(ActivityThread.java:10346)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at java.lang.reflect.Method.invoke(Native Method)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:638)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:972)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): Caused by: java.lang.NoSuchMethodException: com.google.firebase.crashlytics.CrashlyticsRegistrar.<init> []
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at java.lang.Class.getConstructor0(Class.java:3387)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at java.lang.Class.getDeclaredConstructor(Class.java:3069)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	at k5.b.get(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:36)
+08-19 18:39:52.921 W/ComponentDiscovery(11139): 	... 21 more
+08-19 18:39:52.922 I/FirebaseApp(11139): Device unlocked: initializing all Firebase APIs for app [DEFAULT]
+08-19 18:39:52.925 D/FirebaseSessions(11139): Initializing Firebase Sessions SDK.
+08-19 18:39:52.927 I/FirebaseInitProvider(11139): FirebaseApp initialization successful
+08-19 18:39:52.927 D/FLTFireContextHolder(11139): received application context.
+08-19 18:39:52.937 I/HWUI    (11139): Using FreeType backend (prop=Auto)
+08-19 18:39:52.943 I/DynamiteModule(11139): Considering local module com.google.android.gms.measurement.dynamite:152 and remote module com.google.android.gms.measurement.dynamite:203
+08-19 18:39:52.943 I/DynamiteModule(11139): Selected remote version of com.google.android.gms.measurement.dynamite, version >= 203
+08-19 18:39:52.943 V/DynamiteModule(11139): Dynamite loader version >= 2, using loadModule2NoCrashUtils
+--------- beginning of system
+08-19 18:39:52.947 D/ActivityThread(11139): app.foodnova.customer will use render engine as VK
+08-19 18:39:52.947 D/HWUI    (11139): HWUI - treat SMPTE_170M as sRGB
+08-19 18:39:52.949 I/DisplayManager(11139): Choreographer implicitly registered for the refresh rate.
+08-19 18:39:52.953 D/HWUI    (11139): CacheManager constructor. deviceInfo=(1080, 1920)
+08-19 18:39:52.954 W/System  (11139): ClassLoader referenced unknown path: 
+08-19 18:39:52.954 D/nativeloader(11139): Configuring clns-10 for other apk . target_sdk_version=37, uses_libraries=, library_path=/data/app/~~Y1VLdnx-kxCpBHieZEhTlg==/com.google.android.gms-27pWvUEJGL7b4r0Csr5WIg==/lib/arm64:/data/app/~~Y1VLdnx-kxCpBHieZEhTlg==/com.google.android.gms-27pWvUEJGL7b4r0Csr5WIg==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.google.android.gms
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): QUALCOMM build                   : 3df4c357f0, I515341007c
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Build Date                       : 01/27/26
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): OpenGL ES Shader Compiler Version: E031.41.03.64
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Local Branch                     : 
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Remote Branch                    : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.13.2.0.11.00.00.856.062
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Remote Branch                    : NONE
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Reconstruct Branch               : NOTHING
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Build Config                     : S P 14.1.4 AArch64
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Driver Path                      : /vendor/lib64/egl/libGLESv2_adreno.so
+08-19 18:39:52.958 I/AdrenoGLES-0(11139): Driver Version                   : 0676.77.1
+08-19 18:39:52.960 D/DesktopExperienceFlags(11139): Toggle override initialized to: false
+08-19 18:39:52.964 E/ashmem  (11139): Pinning is deprecated since Android Q. Please use trim or other methods.
+08-19 18:39:52.976 I/AdrenoGLES-0(11139): PFP: 0x01740181, ME: 0x00000000
+08-19 18:39:52.978 D/CompatChangeReporter(11139): Compat change id reported: 377864165; UID 10673; state: ENABLED
+08-19 18:39:52.978 D/DesktopModeFlags(11139): Toggle override initialized to: OVERRIDE_UNSET
+08-19 18:39:52.980 I/DecorView(11139): setWindowBackground: isPopOver=false color=ff000000 d=android.graphics.drawable.ColorDrawable@ccad4ba
+08-19 18:39:52.989 E/odnova.customer(11139): No package ID 6a found for resource ID 0x6a0b0013.
+08-19 18:39:52.989 I/FA      (11139): App measurement initialized, version: 179007
+08-19 18:39:52.989 I/FA      (11139): To enable debug logging run: adb shell setprop log.tag.FA VERBOSE
+08-19 18:39:52.989 I/FA      (11139): To enable faster debug mode event logging run:
+08-19 18:39:52.989 I/FA      (11139):   adb shell setprop debug.firebase.analytics.app app.foodnova.customer
+08-19 18:39:52.993 D/nativeloader(11139): Load /data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/base.apk!/lib/arm64-v8a/libflutter.so using class loader ns clns-9 (caller=/data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/base.apk): ok
+08-19 18:39:52.995 W/Adreno-AppProfiles(11139): Could not find QSPM HAL service. Skipping adreno profile processing.
+08-19 18:39:52.998 D/skia    (11139): [SkFontMgr Android Parser] '/product/etc/fonts_customization.xml' could not be opened
+08-19 18:39:52.998 I/AdrenoUtils(11139): <ReadGpuID:407>: Reading chip ID through GSL
+08-19 18:39:53.029 D/vulkan  (11139): searching for layers in '/data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/lib/arm64'
+08-19 18:39:53.029 D/vulkan  (11139): searching for layers in '/data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/base.apk!/lib/arm64-v8a'
+08-19 18:39:53.033 W/Adreno-AppProfiles(11139): Could not find QSPM HAL service. Skipping adreno profile processing.
+08-19 18:39:53.034 I/AdrenoVK-0(11139): ===== BEGIN DUMP OF OVERRIDDEN SETTINGS =====
+08-19 18:39:53.034 I/AdrenoVK-0(11139): ===== END DUMP OF OVERRIDDEN SETTINGS =====
+08-19 18:39:53.036 I/AdrenoVK-0(11139): QUALCOMM build          : 3df4c357f0, I515341007c
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Build Date              : 01/27/26
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Shader Compiler Version : E031.41.03.64
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Local Branch            : 
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Remote Branch           : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.13.2.0.11.00.00.856.062
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Remote Branch           : NONE
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Reconstruct Branch      : NOTHING
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Build Config            : S P 14.1.4 AArch64
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Driver Path             : /vendor/lib64/hw/vulkan.adreno.so
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Driver Version          : 0676.77.1
+08-19 18:39:53.036 I/AdrenoVK-0(11139): PFP                     : 0x01740181
+08-19 18:39:53.036 I/AdrenoVK-0(11139): ME                      : 0x00000000
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Application Name    : Impeller
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Application Version : 0x00400000
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Engine Name         : Impeller
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Engine Version      : 0x00800000
+08-19 18:39:53.036 I/AdrenoVK-0(11139): Api Version         : 0x00401000
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.038 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.039 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3b9ff250 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.041 I/AdrenoVK-0(11139): Unknown struct with type 0x3ba17508 provided to vkGetPhysicalDeviceFeatures2
+08-19 18:39:53.044 I/flutter (11139): [IMPORTANT:flutter/shell/platform/android/android_context_vk_impeller.cc(62)] Using the Impeller rendering backend (Vulkan).
+08-19 18:39:53.114 D/FLTFireContextHolder(11139): received application context.
+08-19 18:39:53.116 D/nativeloader(11139): Load /data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/base.apk!/lib/arm64-v8a/libdartjni.so using class loader ns clns-9 (caller=/data/app/~~HfmqtOZ3k71cgCmDCS198g==/app.foodnova.customer-1dCiJtwFhHmUqHtiLwkjAA==/base.apk): ok
+08-19 18:39:53.139 D/SurfaceView(11139): 250791027 updateSurface: has no frame
+08-19 18:39:53.139 D/SurfaceView(11139): 250791027 updateSurface: has no frame
+08-19 18:39:53.140 I/FA      (11139): Tag Manager is not found and thus will not be used
+08-19 18:39:53.146 D/ViewRootImpl(11139): desktopMode is false
+08-19 18:39:53.148 I/ViewRootImpl(11139): dVRR is disabled
+08-19 18:39:53.148 D/HardwareRenderer(11139): onDisplayChanged. displayId=0 current wxh=1080x2340 mLargest wxh=0x0
+08-19 18:39:53.148 D/HardwareRenderer(11139): Set largestWidth and largestHeight as logical resolution. (1080x2340)
+08-19 18:39:53.148 D/HWUI    (11139): setMaxSurfaceArea requested wxh=(1080,2340) requestedSurfaceArea(2527200) mMaxSurfaceArea(2073600)
+08-19 18:39:53.149 D/NativeCustomFrequencyManager(11139): [NativeCFMS] BpCustomFrequencyManager::BpCustomFrequencyManager()
+08-19 18:39:53.158 D/InputTransport(11139): Input channel constructed: '6629dd ', fd=150
+08-19 18:39:53.159 I/InsetsController(11139): onStateChanged: host=app.foodnova.customer/app.foodnova.customer.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3038, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1080, 2340), mDisplayCutout=DisplayCutout{insets=Rect(0, 94 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(513, 0 - 567, 94), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1080 displayHeight=2340 physicalDisplayWidth=1080 physicalDisplayHeight=2340 density={2.8125} cutoutSpec={M 0,0 H -9.6 V 33.42222222222222 H 9.6 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=95, center=Point(95, 95)}, RoundedCorner{position=TopRight, radius=95, center=Point(985, 95)}, RoundedCorner{position=BottomRight, radius=95, center=Point(985, 2245)}, RoundedCorner{position=BottomLeft, radius=95, center=Point(95, 2245)}]}  mRoundedCornerFrame=Rect(0, 0 - 1080, 2340), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(964, 0 - 1080, 94) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1080 displayHeight=2340 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {98af0000 mType=statusBars mFrame=[0,0][1080,94] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {98af0005 mType=mandatorySystemGestures mFrame=[0,0][1080,126] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {98af0006 mType=tappableElement mFrame=[0,0][1080,94] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mAttachedInsets=null mVisible=false mFlags=INVALID mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1080,94] mAttachedInsets=null mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {16dc0001 mType=navigationBars mFrame=[0,2214][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {16dc0004 mType=systemGestures mFrame=[0,0][0,0] mAttachedInsets=null mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {16dc0005 mType=mandatorySystemGestures mFrame=[0,2214][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {16dc0006 mType=tappableElement mFrame=[0,2214][1080,2340] mAttachedInsets=null mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {16dc0024 mType=systemGestures mFrame=[0,0][0,0] mAttachedInsets=null mVisible=true mFlags= mSideHint=NONE mBoundingRects=null} }
+08-19 18:39:53.160 I/VRI[MainActivity]@1089abc(11139): synced displayState. AttachInfo displayState=2
+08-19 18:39:53.161 I/VRI[MainActivity]@1089abc(11139): setView = com.android.internal.policy.DecorView@d2b1c43 IsHRR=false mFlingFrameRateChange=0 TM=true
+08-19 18:39:53.161 I/IDS_TAG (11139): Starting IDS observe window
+08-19 18:39:53.161 I/IDS_TAG (11139): Getting Shared Preference for android.app.Application@876a31f uid = 10673
+08-19 18:39:53.162 I/IDS_TAG (11139): App android.app.Application@876a31f has not finished training
+08-19 18:39:53.172 I/flutter (11139): [FoodNova Products] cleared product repository caches
+08-19 18:39:53.172 I/flutter (11139): CUSTOMER_STARTUP_PHASE=restoring_session
+08-19 18:39:53.172 I/flutter (11139): startup_begin
+08-19 18:39:53.180 D/HWUI    (11139): HWUI - treat SMPTE_170M as sRGB
+08-19 18:39:53.180 I/IDS_TAG (11139): Closing IDS observe window
+08-19 18:39:53.180 I/IDS_TAG (11139): Getting Shared Preference for android.app.Application@876a31f uid = 10673
+08-19 18:39:53.180 I/IDS_TAG (11139): IDS count updated to 6 for android.app.Application@876a31f
+08-19 18:39:53.181 D/WindowOnBackDispatcher(11139): setTopOnBackInvokedCallback (unwrapped): android.app.Activity$$ExternalSyntheticLambda0@1f0fbf9
+08-19 18:39:53.186 I/WindowExtensionsImpl(11139): Initializing Window Extensions, vendor API level=9, activity embedding enabled=true
+08-19 18:39:53.193 I/SV[250791027 MainActivity](11139): onWindowVisibilityChanged(0) true y6.n{ef2c473 V.E...... ......I. 0,0-0,0} of VRI[MainActivity]@1089abc
+08-19 18:39:53.193 D/SurfaceView(11139): 250791027 updateSurface: has no frame
+08-19 18:39:53.193 D/VRI[MainActivity]@1089abc(11139): WindowInsets changed: 1080x2340 statusBars:[0,94,0,0] navigationBars:[0,0,0,126] mandatorySystemGestures:[0,126,0,126] 
+08-19 18:39:53.204 E/BufferQueueProducer(11139): Unable to open libpenguin.so: dlopen failed: library "libpenguin.so" not found.
+08-19 18:39:53.204 E/odnova.customer(11139): Unable to open libpenguin.so: dlopen failed: library "libpenguin.so" not found.
+08-19 18:39:53.204 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:39:53.204 I/BufferQueueProducer(11139): [](id:2b8300000000,api:0,p:-1280,c:11139) setDequeueTimeout:2077252342
+08-19 18:39:53.205 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca80e1c00 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3603 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 android.view.Choreographer.doCallbacks:1423 android.view.Choreographer.doFrame:1348 android.view.Choreographer$FrameDisplayEventReceiver.run:1930 
+08-19 18:39:53.205 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca80e1c00 sc.mNativeObject= 0xb400007ca80c8140 format= -3 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3608 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-19 18:39:53.205 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:39:53.205 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)0 dur=7 res=0x3 s={true 0xb400007ca8066600} ch=true seqId=0
+08-19 18:39:53.206 I/VRI[MainActivity]@1089abc(11139): performConfigurationChange setNightDimText nightDimLevel=0
+08-19 18:39:53.206 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initialize() mSurface={isValid=true 0xb400007ca8066600} hwInitialized=true
+08-19 18:39:53.207 D/SurfaceView(11139): 250791027 updateSurface: has no frame
+08-19 18:39:53.207 I/SV[250791027 MainActivity](11139): windowStopped(false) true y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:39:53.207 D/SurfaceView(11139): 250791027 updateSurface: has no frame
+08-19 18:39:53.207 D/VRI[MainActivity]@1089abc(11139): reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:39:53.207 I/SurfaceView(11139): 250791027 Changes: creating=true format=true size=true visible=true alpha=false hint=false left=true top=true z=false attached=true lifecycleStrategy=false
+08-19 18:39:53.208 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:39:53.208 I/BufferQueueProducer(11139): [](id:2b8300000001,api:0,p:0,c:11139) setDequeueTimeout:2077252342
+08-19 18:39:53.212 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007ca81c7400 caller= android.view.SurfaceView.createBlastSurfaceControls:1878 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.lambda$new$0:283 android.view.SurfaceView.$r8$lambda$NfZyM_TG8F8lqzaOVZ7noREFjzU:0 android.view.SurfaceView$$ExternalSyntheticLambda1.onPreDraw:0 android.view.ViewTreeObserver.dispatchOnPreDraw:1295 android.view.ViewRootImpl.performTraversals:5512 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-19 18:39:53.212 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007ca81c7400 sc.mNativeObject= 0xb400007ca80c9040 format= 4 caller= android.view.SurfaceView.createBlastSurfaceControls:1879 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.lambda$new$0:283 android.view.SurfaceView.$r8$lambda$NfZyM_TG8F8lqzaOVZ7noREFjzU:0 android.view.SurfaceView$$ExternalSyntheticLambda1.onPreDraw:0 android.view.ViewTreeObserver.dispatchOnPreDraw:1295 
+08-19 18:39:53.212 I/SurfaceView(11139): 250791027 Cur surface: Surface(name=null mNativeObject=0)/@0x58da94a
+08-19 18:39:53.212 I/SV[250791027 MainActivity](11139): pST: sr = Rect(0, 0 - 1080, 2340) sw = 1080 sh = 2340
+08-19 18:39:53.213 D/SurfaceView(11139): 250791027 performSurfaceTransaction RenderWorker position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:39:53.213 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:39:53.213 I/SV[250791027 MainActivity](11139): updateSurface: mVisible = true mSurface.isValid() = true
+08-19 18:39:53.213 I/SV[250791027 MainActivity](11139): updateSurface: mSurfaceCreated = false surfaceChanged = true visibleChanged = true
+08-19 18:39:53.213 I/SurfaceView(11139): 250791027 visibleChanged -- surfaceCreated
+08-19 18:39:53.213 I/SV[250791027 MainActivity](11139): surfaceCreated 1 #8 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:39:53.214 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:39:53.214 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:39:53.214 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:39:53.214 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:39:53.214 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:39:53.214 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:39:53.214 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:39:53.214 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:39:53.214 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:39:53.214 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:39:53.217 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:39:53.220 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:39:53.223 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:39:53.225 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:39:53.228 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:39:53.230 I/SurfaceView(11139): 250791027 surfaceChanged -- format=4 w=1080 h=2340
+08-19 18:39:53.230 I/SV[250791027 MainActivity](11139): surfaceChanged (1080,2340) 1 #8 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:39:53.230 I/SurfaceView(11139): 250791027 surfaceRedrawNeeded
+08-19 18:39:53.231 V/SurfaceView(11139): Layout: x=0 y=0 w=1080 h=2340, frame=Rect(0, 0 - 1080, 2340)
+08-19 18:39:53.231 D/VRI[MainActivity]@1089abc(11139): Canceling draw. cancelDueToPreDrawListener=true cancelDueToSync=false
+08-19 18:39:53.254 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:39:53.254 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:39:53.254 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca80e1c00 sc.mNativeObject= 0xb400007ca8292c00 format= -3 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3592 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-19 18:39:53.255 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)0 dur=3 res=0x1 s={true 0xb400007ca8066600} ch=false seqId=0
+08-19 18:39:53.255 I/VRI[MainActivity]@1089abc(11139): updateBoundsLayer: t=android.view.SurfaceControl$Transaction@760271c sc=Surface(name=Bounds for - app.foodnova.customer/app.foodnova.customer.MainActivity@0#92306)/@0xb835f25 frame=1
+08-19 18:39:53.255 D/VRI[MainActivity]@1089abc(11139): reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:39:53.257 I/flutter (11139): [FoodNova Firebase] initialization skipped: PlatformException(java.util.concurrent.ExecutionException: java.util.concurrent.ExecutionException: java.util.concurrent.ExecutionException: java.lang.NullPointerException: FirebaseCrashlytics component is not present., ExecutionException, Cause: java.util.concurrent.ExecutionException: java.util.concurrent.ExecutionException: java.lang.NullPointerException: FirebaseCrashlytics component is not present., Stacktrace: java.util.concurrent.ExecutionException: java.util.concurrent.ExecutionException: java.util.concurrent.ExecutionException: java.lang.NullPointerException: FirebaseCrashlytics component is not present.
+08-19 18:39:53.257 I/flutter (11139): 	at com.google.android.gms.internal.measurement.i5.V(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:33)
+08-19 18:39:53.257 I/flutter (11139): 	at com.google.android.gms.internal.measurement.i5.a(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:86)
+08-19 18:39:53.257 I/flutter (11139): 	at p7.b.run(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:88)
+08-19 18:39:53.257 I/flutter (11139): 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1100)
+08-19 18:39:53.257 I/flutter (11139): 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+08-19 18:39:53.257 I/flutter (11139): 	at java.lang.Thread.run(Thread.java:1572)
+08-19 18:39:53.257 I/flutter (11139): Caused by: java.util.concurrent.ExecutionException: java.util.concurrent.ExecutionException: java.lang.NullPointerException: FirebaseCrashlytics component is not present.
+08-19 18:39:53.257 I/flutter (11139): 	at com.google.android.gms.internal.measurement.i5.V(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:33)
+08-19 18:39:53.257 I/flutter (11139): 	at com.google.android.gms.internal.measurement.i5.a(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:86)
+08-19 18:39:53.257 I/flutter (11139): 	at p7.c.run(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:90)
+08-19 18:39:53.257 I/flutter (11139): 	... 3 more
+08-19 18:39:53.257 I/flutter (11139): Caused by: java.util.concurrent.ExecutionException: java.lang.NullPointerException: FirebaseCrashlytics component is not present.
+08-19 18:39:53.257 I/flutter (11139): 	at com.google.android.gms.internal.measurement.i5.V(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:33)
+08-19 18:39:53.257 I/flutter (11139): 	at com.google.android.gms.internal.measurement.i5.a(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:86)
+08-19 18:39:53.257 I/flutter (11139): 	at io.flutter.plugins.firebase.core.FlutterFirebasePluginRegistry.lambda$getPluginConstantsForFirebaseApp$0(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:48)
+08-19 18:39:53.257 I/flutter (11139): 	at io.flutter.plugins.firebase.core.FlutterFirebasePluginRegistry.b(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:1)
+08-19 18:39:53.257 I/flutter (11139): 	at p7.c.run(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:58)
+08-19 18:39:53.257 I/flutter (11139): 	... 3 more
+08-19 18:39:53.257 I/flutter (11139): Caused by: java.lang.NullPointerException: FirebaseCrashlytics component is not present.
+08-19 18:39:53.257 I/flutter (11139): 	at i4.k.m(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:3)
+08-19 18:39:53.257 I/flutter (11139): 	at w4.a.a(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:15)
+08-19 18:39:53.257 I/flutter (11139): 	at q7.b.a(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:79)
+08-19 18:39:53.257 I/flutter (11139): 	at o7.j.run(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:131)
+08-19 18:39:53.257 I/flutter (11139): 	... 3 more
+08-19 18:39:53.257 I/flutter (11139): , null)
+08-19 18:39:53.258 D/WindowLayoutComponentImpl(11139): Register WindowLayoutInfoListener on Context=app.foodnova.customer.MainActivity@8779583, of which baseContext=android.app.ContextImpl@d083a87
+08-19 18:39:53.264 I/flutter (11139): [FoodNova Push] push notifications disabled for this build.
+08-19 18:39:53.266 I/flutter (11139): CUSTOMER_STARTUP_FAILED=PlatformException(Exception encountered, read, javax.crypto.BadPaddingException: error:1e000065:Cipher functions:OPENSSL_internal:BAD_DECRYPT
+08-19 18:39:53.266 I/flutter (11139): 	at com.android.org.conscrypt.NativeCrypto.EVP_CipherFinal_ex(Native Method)
+08-19 18:39:53.266 I/flutter (11139): 	at com.android.org.conscrypt.OpenSSLEvpCipher.doFinalInternal(OpenSSLEvpCipher.java:152)
+08-19 18:39:53.266 I/flutter (11139): 	at com.android.org.conscrypt.OpenSSLEvpCipher.engineDoFinal(OpenSSLEvpCipher.java:190)
+08-19 18:39:53.266 I/flutter (11139): 	at javax.crypto.Cipher.doFinal(Cipher.java:2074)
+08-19 18:39:53.266 I/flutter (11139): 	at g2.s.b(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:50)
+08-19 18:39:53.266 I/flutter (11139): 	at d0.n.run(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:261)
+08-19 18:39:53.266 I/flutter (11139): 	at android.os.Handler.handleCallback(Handler.java:1070)
+08-19 18:39:53.266 I/flutter (11139): 	at android.os.Handler.dispatchMessage(Handler.java:125)
+08-19 18:39:53.266 I/flutter (11139): 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-19 18:39:53.266 I/flutter (11139): 	at android.os.Looper.loopOnce(Looper.java:288)
+08-19 18:39:53.266 I/flutter (11139): 	at android.os.Looper.loop(Looper.java:392)
+08-19 18:39:53.266 I/flutter (11139): 	at android.os.HandlerThread.run(HandlerThread.java:139)
+08-19 18:39:53.266 I/flutter (11139): , null)
+08-19 18:39:53.267 I/flutter (11139): #0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653)
+08-19 18:39:53.267 I/flutter (11139): #1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366)
+08-19 18:39:53.267 I/flutter (11139): <asynchronous suspension>
+08-19 18:39:53.267 I/flutter (11139): #2      StartupController._bounded.<anonymous closure> (package:foodnova_customer_app/core/startup/startup_controller.dart:89)
+08-19 18:39:53.267 I/flutter (11139): <asynchronous suspension>
+08-19 18:39:53.267 I/flutter (11139): [FoodNova Uncaught] PlatformException(Exception encountered, read, javax.crypto.BadPaddingException: error:1e000065:Cipher functions:OPENSSL_internal:BAD_DECRYPT
+08-19 18:39:53.267 I/flutter (11139): 	at com.android.org.conscrypt.NativeCrypto.EVP_CipherFinal_ex(Native Method)
+08-19 18:39:53.267 I/flutter (11139): 	at com.android.org.conscrypt.OpenSSLEvpCipher.doFinalInternal(OpenSSLEvpCipher.java:152)
+08-19 18:39:53.267 I/flutter (11139): 	at com.android.org.conscrypt.OpenSSLEvpCipher.engineDoFinal(OpenSSLEvpCipher.java:190)
+08-19 18:39:53.267 I/flutter (11139): 	at javax.crypto.Cipher.doFinal(Cipher.java:2074)
+08-19 18:39:53.267 I/flutter (11139): 	at g2.s.b(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:50)
+08-19 18:39:53.267 I/flutter (11139): 	at d0.n.run(r8-map-id-f9e979403b95601e92824e8386284cb1a1ea23890017562f32bc4182ce45eec1:261)
+08-19 18:39:53.267 I/flutter (11139): 	at android.os.Handler.handleCallback(Handler.java:1070)
+08-19 18:39:53.267 I/flutter (11139): 	at android.os.Handler.dispatchMessage(Handler.java:125)
+08-19 18:39:53.267 I/flutter (11139): 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-19 18:39:53.267 I/flutter (11139): 	at android.os.Looper.loopOnce(Looper.java:288)
+08-19 18:39:53.267 I/flutter (11139): 	at android.os.Looper.loop(Looper.java:392)
+08-19 18:39:53.267 I/flutter (11139): 	at android.os.HandlerThread.run(HandlerThread.java:139)
+08-19 18:39:53.267 I/flutter (11139): , null)
+08-19 18:39:53.267 I/flutter (11139): #0      StandardMethodCodec.decodeEnvelope (package:flutter/src/services/message_codecs.dart:653)
+08-19 18:39:53.267 I/flutter (11139): #1      MethodChannel._invokeMethod (package:flutter/src/services/platform_channel.dart:366)
+08-19 18:39:53.267 I/flutter (11139): <asynchronous suspension>
+08-19 18:39:53.267 I/flutter (11139): #2      dioProvider.<anonymous closure>.<anonymous closure> (package:foodnova_customer_app/core/network/api_client.dart:26)
+08-19 18:39:53.267 I/flutter (11139): <asynchronous suspension>
+08-19 18:39:53.309 I/BLASTBufferQueue(11139): [ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0#1](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:39:53.309 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92308, bufferData(ID: 47841640710156, frameNumber: 1)
+08-19 18:39:53.309 I/SurfaceView(11139): 250791027 finishedDrawing
+08-19 18:39:53.316 D/VRI[MainActivity]@1089abc(11139): Setup new sync=wmsSync-VRI[MainActivity]@1089abc#1
+08-19 18:39:53.317 I/VRI[MainActivity]@1089abc(11139): Creating new active sync group VRI[MainActivity]@1089abc#2
+08-19 18:39:53.318 D/VRI[MainActivity]@1089abc(11139): Draw frame after cancel
+08-19 18:39:53.319 D/VRI[MainActivity]@1089abc(11139): registerCallbacksForSync syncBuffer=false
+08-19 18:39:53.320 D/SurfaceView(11139): 250791027 updateSurfacePosition RenderWorker, frameNr = 1, position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:39:53.320 I/SV[250791027 MainActivity](11139): uSP: rtp = Rect(0, 0 - 1080, 2340) rtsw = 1080 rtsh = 2340
+08-19 18:39:53.320 I/SV[250791027 MainActivity](11139): onSSPAndSRT: pl = 0 pt = 0 sx = 1.0 sy = 1.0
+08-19 18:39:53.325 I/SV[250791027 MainActivity](11139): aOrMT: VRI[MainActivity]@1089abc t = android.view.SurfaceControl$Transaction@40b1c11 fN = 1 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 android.graphics.RenderNode$CompositePositionUpdateListener.positionChanged:401 
+08-19 18:39:53.325 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007d452e6600 mBlastBufferQueue=0xb400007ca80e1c00 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.SurfaceView.applyOrMergeTransaction:1960 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 
+08-19 18:39:53.325 D/VRI[MainActivity]@1089abc(11139): Received frameDrawingCallback syncResult=0 frameNum=1.
+08-19 18:39:53.325 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007d4544d400 mBlastBufferQueue=0xb400007ca80e1c00 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15561 android.view.ThreadedRenderer$1.onFrameDraw:751 <bottom of call stack> 
+08-19 18:39:53.325 I/VRI[MainActivity]@1089abc(11139): Setting up sync and frameCommitCallback
+08-19 18:39:53.348 I/BLASTBufferQueue(11139): [VRI[MainActivity]@1089abc#0](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:39:53.348 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92303, bufferData(ID: 47841640710161, frameNumber: 1)
+08-19 18:39:53.348 I/VRI[MainActivity]@1089abc(11139): Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+08-19 18:39:53.349 D/HWUI    (11139): CFMS:: SetUp Pid : 11139    Tid : 11161
+08-19 18:39:53.349 D/VRI[MainActivity]@1089abc(11139): reportDrawFinished seqId=0
+08-19 18:39:53.389 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007ca8066600}
+08-19 18:39:53.389 D/InputMethodManagerUtils(11139): startInputInner - Id : 0
+08-19 18:39:53.389 I/InputMethodManager(11139): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+08-19 18:39:53.396 D/InsetsController(11139): hide(ime())
+08-19 18:39:53.396 I/ImeTracker(11139): app.foodnova.customer:c66a83f4: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+08-19 18:39:53.398 D/InputTransport(11139): Input channel constructed: 'ClientS', fd=190
+08-19 18:39:55.048 I/ImeFocusController(11139): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:39:55.049 I/ImeFocusController(11139): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:39:55.473 I/VRI[MainActivity]@1089abc(11139): stopped(true) old = false
+08-19 18:39:55.473 D/VRI[MainActivity]@1089abc(11139): WindowStopped on app.foodnova.customer/app.foodnova.customer.MainActivity set to true
+08-19 18:39:55.473 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:39:55.473 D/SurfaceView(11139): 163581824 windowPositionLost, frameNr = 0
+08-19 18:39:55.473 I/SV[250791027 MainActivity](11139): aOrMT: VRI[MainActivity]@1089abc t = android.view.SurfaceControl$Transaction@87fc9b9 fN = 0 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionLost:2122 android.graphics.RenderNode$CompositePositionUpdateListener.positionLost:418 
+08-19 18:39:55.473 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007da3657e00 mBlastBufferQueue=0xb400007ca80e1c00 fn= 0 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.SurfaceView.applyOrMergeTransaction:1960 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionLost:2122 
+08-19 18:39:55.474 I/SV[250791027 MainActivity](11139): windowStopped(true) false y6.n{ef2c473 V.E...... ........ 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:39:55.474 I/SurfaceView(11139): 250791027 Changes: creating=false format=false size=false visible=true alpha=false hint=false left=false top=false z=false attached=true lifecycleStrategy=false
+08-19 18:39:55.474 I/SurfaceView(11139): 250791027 Cur surface: Surface(name=null mNativeObject=-5476376611485944064)/@0x58da94a
+08-19 18:39:55.474 I/SurfaceView(11139): 250791027 surfaceDestroyed
+08-19 18:39:55.474 I/SV[250791027 MainActivity](11139): surfaceDestroyed callback.size 1 #1 y6.n{ef2c473 V.E...... ........ 0,0-1080,2340}
+08-19 18:39:55.481 I/SV[250791027 MainActivity](11139): updateSurface: mVisible = false mSurface.isValid() = true
+08-19 18:39:55.482 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:39:55.482 V/SurfaceView(11139): Layout: x=0 y=0 w=1080 h=2340, frame=Rect(0, 0 - 1080, 2340)
+08-19 18:39:55.484 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:39:55.484 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:39:55.510 I/SV[250791027 MainActivity](11139): onWindowVisibilityChanged(4) false y6.n{ef2c473 G.E...... ......I. 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:39:55.510 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:39:55.510 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:39:55.512 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:39:55.515 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)4 dur=3 res=0x2 s={false 0x0} ch=false seqId=0
+08-19 18:39:55.515 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:39:55.515 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:39:55.515 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:39:55.515 D/VRI[MainActivity]@1089abc(11139): Not drawing due to not visible. Reason=View.INVISIBLE
+08-19 18:39:55.516 D/VRI[MainActivity]@1089abc(11139): Pending transaction will not be applied in sync with a draw due to view not visible
+08-19 18:39:55.516 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007d45122200 mBlastBufferQueue=0xnull fn= 0 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl.handleSyncRequestWhenNoAsyncDraw:6812 android.view.ViewRootImpl.performTraversals:5568 android.view.ViewRootImpl.doTraversal:3959 
+08-19 18:39:55.518 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:39:55.521 D/InputTransport(11139): Input channel destroyed: 'ClientS', fd=190
+08-19 18:39:55.522 I/VRI[MainActivity]@1089abc(11139): handleAppVisibility mAppVisible = true visible = false
+08-19 18:39:55.537 D/BBA2    (11139): setIsFg isFg = false; delayValue 3999ms
+08-19 18:39:57.514 I/FA      (11139): Application backgrounded at: timestamp_millis: 1787179195511
+08-19 18:39:58.110 D/ProfileInstaller(11139): Skipping profile installation for app.foodnova.customer
+08-19 18:39:59.681 D/Choreographer(11139): BBA2 receive callback when in bg : 4
+08-19 18:39:59.700 D/HWUI    (11139): CacheManager::trimMemory(40)
+08-19 18:40:04.769 W/odnova.customer(11139): Suspending all threads took: 12.775ms
+08-19 18:40:07.789 I/VRI[MainActivity]@1089abc(11139): handleAppVisibility mAppVisible = false visible = true
+08-19 18:40:07.800 I/VRI[MainActivity]@1089abc(11139): stopped(false) old = true
+08-19 18:40:07.800 D/VRI[MainActivity]@1089abc(11139): WindowStopped on app.foodnova.customer/app.foodnova.customer.MainActivity set to false
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): QUALCOMM build                   : 3df4c357f0, I515341007c
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): Build Date                       : 01/27/26
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): OpenGL ES Shader Compiler Version: E031.41.03.64
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): Local Branch                     : 
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): Remote Branch                    : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.13.2.0.11.00.00.856.062
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): Remote Branch                    : NONE
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): Reconstruct Branch               : NOTHING
+08-19 18:40:07.835 I/AdrenoGLES-0(11139): Build Config                     : S P 14.1.4 AArch64
+08-19 18:40:07.836 I/AdrenoGLES-0(11139): Driver Path                      : /vendor/lib64/egl/libGLESv2_adreno.so
+08-19 18:40:07.836 I/AdrenoGLES-0(11139): Driver Version                   : 0676.77.1
+08-19 18:40:07.839 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:07.839 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:07.839 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:07.852 I/SV[250791027 MainActivity](11139): onWindowVisibilityChanged(0) false y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:07.852 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:07.852 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:07.852 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:07.858 I/AdrenoGLES-0(11139): PFP: 0x01740181, ME: 0x00000000
+08-19 18:40:07.868 W/Adreno-AppProfiles(11139): Could not find QSPM HAL service. Skipping adreno profile processing.
+08-19 18:40:07.877 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:07.877 I/BufferQueueProducer(11139): [](id:2b8300000002,api:0,p:0,c:11139) setDequeueTimeout:2077252342
+08-19 18:40:07.878 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca81c7400 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3603 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 android.view.Choreographer.doCallbacks:1423 android.view.Choreographer.doFrame:1348 android.view.Choreographer$FrameDisplayEventReceiver.run:1930 
+08-19 18:40:07.878 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca81c7400 sc.mNativeObject= 0xb400007ca80c9100 format= -3 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3608 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-19 18:40:07.879 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:07.879 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)0 dur=22 res=0x3 s={true 0xb400007c9054b700} ch=true seqId=0
+08-19 18:40:07.880 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initialize() mSurface={isValid=true 0xb400007c9054b700} hwInitialized=true
+08-19 18:40:07.880 D/SV[250791027 MainActivity](11139): skip updating surface, 5
+08-19 18:40:07.880 I/SV[250791027 MainActivity](11139): windowStopped(false) true y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:07.880 I/SurfaceView(11139): 250791027 Changes: creating=true format=false size=false visible=true alpha=false hint=false left=false top=false z=false attached=true lifecycleStrategy=false
+08-19 18:40:07.881 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:07.881 I/BufferQueueProducer(11139): [](id:2b8300000003,api:0,p:0,c:11139) setDequeueTimeout:2077252342
+08-19 18:40:07.882 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007ca813cc00 caller= android.view.SurfaceView.createBlastSurfaceControls:1878 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.setWindowStopped:542 android.view.SurfaceView.surfaceCreated:2429 android.view.ViewRootImpl.notifySurfaceCreated:3520 android.view.ViewRootImpl.performTraversals:5350 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:40:07.882 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007ca813cc00 sc.mNativeObject= 0xb400007db5830180 format= 4 caller= android.view.SurfaceView.createBlastSurfaceControls:1879 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.setWindowStopped:542 android.view.SurfaceView.surfaceCreated:2429 android.view.ViewRootImpl.notifySurfaceCreated:3520 android.view.ViewRootImpl.performTraversals:5350 
+08-19 18:40:07.882 I/SurfaceView(11139): 250791027 Cur surface: Surface(name=null mNativeObject=0)/@0x58da94a
+08-19 18:40:07.882 I/SV[250791027 MainActivity](11139): pST: sr = Rect(0, 0 - 1080, 2340) sw = 1080 sh = 2340
+08-19 18:40:07.882 D/SurfaceView(11139): 250791027 performSurfaceTransaction RenderWorker position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:40:07.882 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:07.882 I/SV[250791027 MainActivity](11139): updateSurface: mVisible = true mSurface.isValid() = true
+08-19 18:40:07.882 I/SV[250791027 MainActivity](11139): updateSurface: mSurfaceCreated = false surfaceChanged = true visibleChanged = true
+08-19 18:40:07.882 I/SurfaceView(11139): 250791027 visibleChanged -- surfaceCreated
+08-19 18:40:07.882 I/SV[250791027 MainActivity](11139): surfaceCreated 1 #1 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:40:07.883 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:40:07.884 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:40:07.884 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:40:07.884 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:40:07.884 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:40:07.884 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:40:07.884 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:40:07.884 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:40:07.884 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:40:07.884 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:40:07.885 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:07.887 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:07.888 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:07.889 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:07.891 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:07.896 I/SurfaceView(11139): 250791027 surfaceChanged -- format=4 w=1080 h=2340
+08-19 18:40:07.896 I/SV[250791027 MainActivity](11139): surfaceChanged (1080,2340) 1 #1 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:40:07.896 I/SurfaceView(11139): 250791027 surfaceRedrawNeeded
+08-19 18:40:07.897 V/SurfaceView(11139): Layout: x=0 y=0 w=1080 h=2340, frame=Rect(0, 0 - 1080, 2340)
+08-19 18:40:07.897 D/VRI[MainActivity]@1089abc(11139): reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:40:07.897 D/VRI[MainActivity]@1089abc(11139): Setup new sync=wmsSync-VRI[MainActivity]@1089abc#4
+08-19 18:40:07.897 I/VRI[MainActivity]@1089abc(11139): Creating new active sync group VRI[MainActivity]@1089abc#5
+08-19 18:40:07.897 D/VRI[MainActivity]@1089abc(11139): Start draw after previous draw not visible
+08-19 18:40:07.897 D/VRI[MainActivity]@1089abc(11139): registerCallbacksForSync syncBuffer=false
+08-19 18:40:07.899 D/SurfaceView(11139): 250791027 updateSurfacePosition RenderWorker, frameNr = 1, position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:40:07.899 I/SV[250791027 MainActivity](11139): uSP: rtp = Rect(0, 0 - 1080, 2340) rtsw = 1080 rtsh = 2340
+08-19 18:40:07.899 I/SV[250791027 MainActivity](11139): onSSPAndSRT: pl = 0 pt = 0 sx = 1.0 sy = 1.0
+08-19 18:40:07.899 I/SV[250791027 MainActivity](11139): aOrMT: VRI[MainActivity]@1089abc t = android.view.SurfaceControl$Transaction@a71aa0d fN = 1 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 android.graphics.RenderNode$CompositePositionUpdateListener.positionChanged:401 
+08-19 18:40:07.899 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007d453eca00 mBlastBufferQueue=0xb400007ca81c7400 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.SurfaceView.applyOrMergeTransaction:1960 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 
+08-19 18:40:07.899 D/VRI[MainActivity]@1089abc(11139): Received frameDrawingCallback syncResult=0 frameNum=1.
+08-19 18:40:07.899 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007c9031ae00 mBlastBufferQueue=0xb400007ca81c7400 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15561 android.view.ThreadedRenderer$1.onFrameDraw:751 <bottom of call stack> 
+08-19 18:40:07.900 I/VRI[MainActivity]@1089abc(11139): Setting up sync and frameCommitCallback
+08-19 18:40:07.906 I/BLASTBufferQueue(11139): [VRI[MainActivity]@1089abc#2](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:40:07.906 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92405, bufferData(ID: 47841640710179, frameNumber: 1)
+08-19 18:40:07.907 I/VRI[MainActivity]@1089abc(11139): Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+08-19 18:40:07.909 I/VRI[MainActivity]@1089abc(11139): handleResized, frames=ClientWindowFrames{frame=[0,0][1080,2340] display=[0,0][1080,2340] parentFrame=[0,0][0,0]} displayId=0 dragResizing=false compatScale=1.0 frameChanged=false attachedFrameChanged=false configChanged=false displayChanged=false compatScaleChanged=false dragResizingChanged=false
+08-19 18:40:07.909 I/VRI[MainActivity]@1089abc(11139): handleResized mSyncSeqId = 0
+08-19 18:40:07.909 D/VRI[MainActivity]@1089abc(11139): reportNextDraw android.view.ViewRootImpl.handleResized:2995 android.view.ViewRootImpl.-$$Nest$mhandleResized:0 android.view.ViewRootImpl$W.resized:14200 android.app.servertransaction.WindowStateResizeItem.execute:81 android.app.servertransaction.WindowStateTransactionItem.execute:62 
+08-19 18:40:07.909 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:40:07.910 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:40:07.919 I/BLASTBufferQueue(11139): [ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0#3](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:40:07.919 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92408, bufferData(ID: 47841640710174, frameNumber: 1)
+08-19 18:40:07.920 D/VRI[MainActivity]@1089abc(11139): reportDrawFinished seqId=0
+08-19 18:40:07.920 I/SurfaceView(11139): 250791027 finishedDrawing
+08-19 18:40:07.925 D/VRI[MainActivity]@1089abc(11139): Setup new sync=wmsSync-VRI[MainActivity]@1089abc#6
+08-19 18:40:07.926 I/VRI[MainActivity]@1089abc(11139): Creating new active sync group VRI[MainActivity]@1089abc#7
+08-19 18:40:07.926 D/VRI[MainActivity]@1089abc(11139): registerCallbacksForSync syncBuffer=false
+08-19 18:40:07.927 D/VRI[MainActivity]@1089abc(11139): Received frameDrawingCallback syncResult=0 frameNum=2.
+08-19 18:40:07.927 I/VRI[MainActivity]@1089abc(11139): Setting up sync and frameCommitCallback
+08-19 18:40:07.930 I/VRI[MainActivity]@1089abc(11139): Received frameCommittedCallback lastAttemptedDrawFrameNum=2 didProduceBuffer=true
+08-19 18:40:07.930 D/VRI[MainActivity]@1089abc(11139): reportDrawFinished seqId=0
+08-19 18:40:07.949 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007c9054b700}
+08-19 18:40:07.950 D/InputMethodManagerUtils(11139): startInputInner - Id : 0
+08-19 18:40:07.950 I/InputMethodManager(11139): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+08-19 18:40:07.955 D/InsetsController(11139): hide(ime())
+08-19 18:40:07.955 I/ImeTracker(11139): app.foodnova.customer:2b783ea0: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+08-19 18:40:07.957 D/InputTransport(11139): Input channel constructed: 'ClientS', fd=178
+08-19 18:40:08.662 I/ImeFocusController(11139): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:40:08.662 I/ImeFocusController(11139): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:40:08.772 D/InputTransport(11139): Input channel destroyed: 'ClientS', fd=178
+08-19 18:40:09.086 I/VRI[MainActivity]@1089abc(11139): handleAppVisibility mAppVisible = true visible = false
+08-19 18:40:09.086 D/VRI[MainActivity]@1089abc(11139): visibilityChanged oldVisibility=true newVisibility=false
+08-19 18:40:09.094 I/SV[250791027 MainActivity](11139): onWindowVisibilityChanged(8) false y6.n{ef2c473 V.E...... ........ 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:09.095 I/SurfaceView(11139): 250791027 Changes: creating=false format=false size=false visible=true alpha=false hint=false left=false top=false z=false attached=true lifecycleStrategy=false
+08-19 18:40:09.095 I/SurfaceView(11139): 250791027 Cur surface: Surface(name=null mNativeObject=-5476376611487588096)/@0x58da94a
+08-19 18:40:09.095 I/SurfaceView(11139): 250791027 surfaceDestroyed
+08-19 18:40:09.095 I/SV[250791027 MainActivity](11139): surfaceDestroyed callback.size 1 #2 y6.n{ef2c473 V.E...... ........ 0,0-1080,2340}
+08-19 18:40:09.102 I/SV[250791027 MainActivity](11139): updateSurface: mVisible = false mSurface.isValid() = true
+08-19 18:40:09.103 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:09.103 V/SurfaceView(11139): Layout: x=0 y=0 w=1080 h=2340, frame=Rect(0, 0 - 1080, 2340)
+08-19 18:40:09.103 D/SurfaceView(11139): 86913149 windowPositionLost, frameNr = 0
+08-19 18:40:09.104 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:40:09.108 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)8 dur=3 res=0x2 s={false 0x0} ch=true seqId=0
+08-19 18:40:09.108 I/SV[250791027 MainActivity](11139): windowStopped(true) false y6.n{ef2c473 V.E...... ........ 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:09.108 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:09.108 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:09.108 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:09.108 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:09.108 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:09.108 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:09.108 D/VRI[MainActivity]@1089abc(11139): Not drawing due to not visible. Reason=!mAppVisible && !mForceDecorViewVisibility
+08-19 18:40:09.108 D/VRI[MainActivity]@1089abc(11139): Pending transaction will not be applied in sync with a draw due to view not visible
+08-19 18:40:09.109 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007d45122200 mBlastBufferQueue=0xnull fn= 0 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl.handleSyncRequestWhenNoAsyncDraw:6812 android.view.ViewRootImpl.performTraversals:5568 android.view.ViewRootImpl.doTraversal:3959 
+08-19 18:40:09.131 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:40:09.132 I/VRI[MainActivity]@1089abc(11139): stopped(true) old = false
+08-19 18:40:09.132 D/VRI[MainActivity]@1089abc(11139): WindowStopped on app.foodnova.customer/app.foodnova.customer.MainActivity set to true
+08-19 18:40:09.132 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:40:09.133 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:09.133 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:09.133 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:09.144 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:09.144 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:09.144 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:09.146 D/BBA2    (11139): setIsFg isFg = false; delayValue 3999ms
+08-19 18:40:10.636 I/FA      (11139): Application backgrounded at: timestamp_millis: 1787179208635
+08-19 18:40:19.727 D/Choreographer(11139): BBA2 receive callback when in bg : 4
+08-19 18:40:19.742 D/HWUI    (11139): CacheManager::trimMemory(40)
+08-19 18:40:23.045 I/VRI[MainActivity]@1089abc(11139): handleAppVisibility mAppVisible = false visible = true
+08-19 18:40:23.049 I/VRI[MainActivity]@1089abc(11139): stopped(false) old = true
+08-19 18:40:23.049 D/VRI[MainActivity]@1089abc(11139): WindowStopped on app.foodnova.customer/app.foodnova.customer.MainActivity set to false
+08-19 18:40:23.051 D/ViewRootImpl(11139): Skipping stats log for color mode
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): QUALCOMM build                   : 3df4c357f0, I515341007c
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Build Date                       : 01/27/26
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): OpenGL ES Shader Compiler Version: E031.41.03.64
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Local Branch                     : 
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Remote Branch                    : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.13.2.0.11.00.00.856.062
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Remote Branch                    : NONE
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Reconstruct Branch               : NOTHING
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Build Config                     : S P 14.1.4 AArch64
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Driver Path                      : /vendor/lib64/egl/libGLESv2_adreno.so
+08-19 18:40:23.052 I/AdrenoGLES-0(11139): Driver Version                   : 0676.77.1
+08-19 18:40:23.053 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:23.053 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:23.053 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:23.057 I/SV[250791027 MainActivity](11139): onWindowVisibilityChanged(0) false y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:23.057 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:23.057 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:23.057 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:23.061 I/AdrenoGLES-0(11139): PFP: 0x01740181, ME: 0x00000000
+08-19 18:40:23.072 W/Adreno-AppProfiles(11139): Could not find QSPM HAL service. Skipping adreno profile processing.
+08-19 18:40:23.084 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:23.084 I/BufferQueueProducer(11139): [](id:2b8300000004,api:0,p:0,c:11139) setDequeueTimeout:2077252342
+08-19 18:40:23.085 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca81c7400 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3603 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 android.view.Choreographer.doCallbacks:1423 android.view.Choreographer.doFrame:1348 android.view.Choreographer$FrameDisplayEventReceiver.run:1930 
+08-19 18:40:23.085 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca81c7400 sc.mNativeObject= 0xb400007db5830180 format= -3 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3608 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-19 18:40:23.086 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:23.086 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)0 dur=27 res=0x3 s={true 0xb400007ca81f7200} ch=true seqId=0
+08-19 18:40:23.086 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initialize() mSurface={isValid=true 0xb400007ca81f7200} hwInitialized=true
+08-19 18:40:23.087 I/SurfaceView(11139): 250791027 Changes: creating=false format=false size=false visible=false alpha=false hint=false left=false top=false z=false attached=true lifecycleStrategy=false
+08-19 18:40:23.087 I/SV[250791027 MainActivity](11139): windowStopped(false) true y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:23.087 I/SurfaceView(11139): 250791027 Changes: creating=true format=false size=false visible=true alpha=false hint=false left=false top=false z=false attached=true lifecycleStrategy=false
+08-19 18:40:23.088 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:23.088 I/BufferQueueProducer(11139): [](id:2b8300000005,api:0,p:0,c:11139) setDequeueTimeout:2077252342
+08-19 18:40:23.088 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007ca813cc00 caller= android.view.SurfaceView.createBlastSurfaceControls:1878 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.setWindowStopped:542 android.view.SurfaceView.surfaceCreated:2429 android.view.ViewRootImpl.notifySurfaceCreated:3520 android.view.ViewRootImpl.performTraversals:5350 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:40:23.088 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007ca813cc00 sc.mNativeObject= 0xb400007ca80c8ec0 format= 4 caller= android.view.SurfaceView.createBlastSurfaceControls:1879 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.setWindowStopped:542 android.view.SurfaceView.surfaceCreated:2429 android.view.ViewRootImpl.notifySurfaceCreated:3520 android.view.ViewRootImpl.performTraversals:5350 
+08-19 18:40:23.089 I/SurfaceView(11139): 250791027 Cur surface: Surface(name=null mNativeObject=0)/@0x58da94a
+08-19 18:40:23.089 I/SV[250791027 MainActivity](11139): pST: sr = Rect(0, 0 - 1080, 2340) sw = 1080 sh = 2340
+08-19 18:40:23.089 D/SurfaceView(11139): 250791027 performSurfaceTransaction RenderWorker position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:40:23.089 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:23.089 I/SV[250791027 MainActivity](11139): updateSurface: mVisible = true mSurface.isValid() = true
+08-19 18:40:23.089 I/SV[250791027 MainActivity](11139): updateSurface: mSurfaceCreated = false surfaceChanged = true visibleChanged = true
+08-19 18:40:23.089 I/SurfaceView(11139): 250791027 visibleChanged -- surfaceCreated
+08-19 18:40:23.089 I/SV[250791027 MainActivity](11139): surfaceCreated 1 #1 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:40:23.090 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:40:23.090 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:40:23.090 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:40:23.090 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:40:23.090 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:40:23.090 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:40:23.090 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:40:23.090 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:40:23.090 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:40:23.090 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:40:23.091 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:23.092 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:23.093 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:23.094 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:23.095 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:23.097 I/SurfaceView(11139): 250791027 surfaceChanged -- format=4 w=1080 h=2340
+08-19 18:40:23.097 I/SV[250791027 MainActivity](11139): surfaceChanged (1080,2340) 1 #1 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:40:23.097 I/SurfaceView(11139): 250791027 surfaceRedrawNeeded
+08-19 18:40:23.097 V/SurfaceView(11139): Layout: x=0 y=0 w=1080 h=2340, frame=Rect(0, 0 - 1080, 2340)
+08-19 18:40:23.097 D/VRI[MainActivity]@1089abc(11139): reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:40:23.098 D/VRI[MainActivity]@1089abc(11139): Setup new sync=wmsSync-VRI[MainActivity]@1089abc#9
+08-19 18:40:23.098 I/VRI[MainActivity]@1089abc(11139): Creating new active sync group VRI[MainActivity]@1089abc#10
+08-19 18:40:23.098 D/VRI[MainActivity]@1089abc(11139): Start draw after previous draw not visible
+08-19 18:40:23.098 D/VRI[MainActivity]@1089abc(11139): registerCallbacksForSync syncBuffer=false
+08-19 18:40:23.098 D/SurfaceView(11139): 250791027 updateSurfacePosition RenderWorker, frameNr = 1, position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:40:23.098 I/SV[250791027 MainActivity](11139): uSP: rtp = Rect(0, 0 - 1080, 2340) rtsw = 1080 rtsh = 2340
+08-19 18:40:23.098 I/SV[250791027 MainActivity](11139): onSSPAndSRT: pl = 0 pt = 0 sx = 1.0 sy = 1.0
+08-19 18:40:23.098 I/SV[250791027 MainActivity](11139): aOrMT: VRI[MainActivity]@1089abc t = android.view.SurfaceControl$Transaction@b2d4288 fN = 1 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 android.graphics.RenderNode$CompositePositionUpdateListener.positionChanged:401 
+08-19 18:40:23.098 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007da6429000 mBlastBufferQueue=0xb400007ca81c7400 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.SurfaceView.applyOrMergeTransaction:1960 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 
+08-19 18:40:23.098 D/VRI[MainActivity]@1089abc(11139): Received frameDrawingCallback syncResult=0 frameNum=1.
+08-19 18:40:23.098 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007da6429a00 mBlastBufferQueue=0xb400007ca81c7400 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15561 android.view.ThreadedRenderer$1.onFrameDraw:751 <bottom of call stack> 
+08-19 18:40:23.098 I/VRI[MainActivity]@1089abc(11139): Setting up sync and frameCommitCallback
+08-19 18:40:23.104 I/BLASTBufferQueue(11139): [VRI[MainActivity]@1089abc#4](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:40:23.104 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92481, bufferData(ID: 47841640710198, frameNumber: 1)
+08-19 18:40:23.104 I/VRI[MainActivity]@1089abc(11139): Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+08-19 18:40:23.105 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:40:23.105 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:40:23.113 I/BLASTBufferQueue(11139): [ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0#5](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:40:23.113 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92488, bufferData(ID: 47841640710193, frameNumber: 1)
+08-19 18:40:23.113 D/VRI[MainActivity]@1089abc(11139): reportDrawFinished seqId=0
+08-19 18:40:23.114 I/SurfaceView(11139): 250791027 finishedDrawing
+08-19 18:40:23.144 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007ca81f7200}
+08-19 18:40:23.145 D/InputMethodManagerUtils(11139): startInputInner - Id : 0
+08-19 18:40:23.145 I/InputMethodManager(11139): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+08-19 18:40:23.168 D/InsetsController(11139): hide(ime())
+08-19 18:40:23.168 I/ImeTracker(11139): app.foodnova.customer:a4a9f574: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+08-19 18:40:23.180 D/InputTransport(11139): Input channel constructed: 'ClientS', fd=183
+08-19 18:40:24.034 I/ImeFocusController(11139): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:40:24.034 I/ImeFocusController(11139): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:40:24.520 I/VRI[MainActivity]@1089abc(11139): stopped(true) old = false
+08-19 18:40:24.520 D/VRI[MainActivity]@1089abc(11139): WindowStopped on app.foodnova.customer/app.foodnova.customer.MainActivity set to true
+08-19 18:40:24.520 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:40:24.522 D/SurfaceView(11139): 140314201 windowPositionLost, frameNr = 0
+08-19 18:40:24.523 I/SV[250791027 MainActivity](11139): aOrMT: VRI[MainActivity]@1089abc t = android.view.SurfaceControl$Transaction@87fc9b9 fN = 0 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionLost:2122 android.graphics.RenderNode$CompositePositionUpdateListener.positionLost:418 
+08-19 18:40:24.523 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007da3657e00 mBlastBufferQueue=0xb400007ca81c7400 fn= 0 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.SurfaceView.applyOrMergeTransaction:1960 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionLost:2122 
+08-19 18:40:24.524 I/SV[250791027 MainActivity](11139): windowStopped(true) false y6.n{ef2c473 V.E...... ........ 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:24.524 I/SurfaceView(11139): 250791027 Changes: creating=false format=false size=false visible=true alpha=false hint=false left=false top=false z=false attached=true lifecycleStrategy=false
+08-19 18:40:24.524 I/SurfaceView(11139): 250791027 Cur surface: Surface(name=null mNativeObject=-5476376611487598336)/@0x58da94a
+08-19 18:40:24.524 I/SurfaceView(11139): 250791027 surfaceDestroyed
+08-19 18:40:24.524 I/SV[250791027 MainActivity](11139): surfaceDestroyed callback.size 1 #1 y6.n{ef2c473 V.E...... ........ 0,0-1080,2340}
+08-19 18:40:24.528 I/SV[250791027 MainActivity](11139): updateSurface: mVisible = false mSurface.isValid() = true
+08-19 18:40:24.529 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:24.529 V/SurfaceView(11139): Layout: x=0 y=0 w=1080 h=2340, frame=Rect(0, 0 - 1080, 2340)
+08-19 18:40:24.531 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:24.532 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:24.546 I/SV[250791027 MainActivity](11139): onWindowVisibilityChanged(4) false y6.n{ef2c473 G.E...... ......I. 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:24.546 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:24.546 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:24.548 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:40:24.556 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)4 dur=8 res=0x2 s={false 0x0} ch=false seqId=0
+08-19 18:40:24.556 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:24.556 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:24.556 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:24.556 D/VRI[MainActivity]@1089abc(11139): Not drawing due to not visible. Reason=View.INVISIBLE
+08-19 18:40:24.557 D/VRI[MainActivity]@1089abc(11139): Pending transaction will not be applied in sync with a draw due to view not visible
+08-19 18:40:24.557 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007d45122200 mBlastBufferQueue=0xnull fn= 0 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl.handleSyncRequestWhenNoAsyncDraw:6812 android.view.ViewRootImpl.performTraversals:5568 android.view.ViewRootImpl.doTraversal:3959 
+08-19 18:40:24.559 D/HWUI    (11139): CacheManager::trimMemory(20)
+08-19 18:40:24.561 D/InputTransport(11139): Input channel destroyed: 'ClientS', fd=183
+08-19 18:40:24.561 I/VRI[MainActivity]@1089abc(11139): handleAppVisibility mAppVisible = true visible = false
+08-19 18:40:24.563 D/BBA2    (11139): setIsFg isFg = false; delayValue 3999ms
+08-19 18:40:25.052 I/VRI[MainActivity]@1089abc(11139): handleAppVisibility mAppVisible = false visible = true
+08-19 18:40:25.056 I/VRI[MainActivity]@1089abc(11139): stopped(false) old = true
+08-19 18:40:25.056 D/VRI[MainActivity]@1089abc(11139): WindowStopped on app.foodnova.customer/app.foodnova.customer.MainActivity set to false
+08-19 18:40:25.057 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:25.057 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:25.057 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:25.063 I/SV[250791027 MainActivity](11139): onWindowVisibilityChanged(0) false y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:25.063 D/SV[250791027 MainActivity](11139): updateSurface: surface is not valid
+08-19 18:40:25.063 I/SV[250791027 MainActivity](11139): releaseSurfaces: viewRoot = VRI[MainActivity]@1089abc
+08-19 18:40:25.063 D/VRI[MainActivity]@1089abc(11139): applyTransactionOnDraw applyImmediately
+08-19 18:40:25.076 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:25.076 I/BufferQueueProducer(11139): [](id:2b8300000006,api:0,p:0,c:11139) setDequeueTimeout:2077252342
+08-19 18:40:25.076 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca813cc00 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3603 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 android.view.Choreographer.doCallbacks:1423 android.view.Choreographer.doFrame:1348 android.view.Choreographer$FrameDisplayEventReceiver.run:1930 
+08-19 18:40:25.077 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = VRI[MainActivity]@1089abc mNativeObject= 0xb400007ca813cc00 sc.mNativeObject= 0xb400007cb6599d80 format= -3 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3608 android.view.ViewRootImpl.relayoutWindow:11813 android.view.ViewRootImpl.performTraversals:4840 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 
+08-19 18:40:25.077 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:25.077 I/VRI[MainActivity]@1089abc(11139): Relayout returned: old=(0,0,1080,2340) new=(0,0,1080,2340) relayoutAsync=false req=(1080,2340)0 dur=13 res=0x3 s={true 0xb400007ca8065c00} ch=true seqId=0
+08-19 18:40:25.078 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initialize() mSurface={isValid=true 0xb400007ca8065c00} hwInitialized=true
+08-19 18:40:25.078 D/SV[250791027 MainActivity](11139): skip updating surface, 5
+08-19 18:40:25.078 I/SV[250791027 MainActivity](11139): windowStopped(false) true y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340} of VRI[MainActivity]@1089abc
+08-19 18:40:25.078 I/SurfaceView(11139): 250791027 Changes: creating=true format=false size=false visible=true alpha=false hint=false left=false top=false z=false attached=true lifecycleStrategy=false
+08-19 18:40:25.079 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:25.079 I/BufferQueueProducer(11139): [](id:2b8300000007,api:0,p:0,c:11139) setDequeueTimeout:2077252342
+08-19 18:40:25.079 I/BLASTBufferQueue_Java(11139): new BLASTBufferQueue, mName= ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007c904da400 caller= android.view.SurfaceView.createBlastSurfaceControls:1878 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.setWindowStopped:542 android.view.SurfaceView.surfaceCreated:2429 android.view.ViewRootImpl.notifySurfaceCreated:3520 android.view.ViewRootImpl.performTraversals:5350 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:40:25.079 I/BLASTBufferQueue_Java(11139): update, w= 1080 h= 2340 mName = ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0 mNativeObject= 0xb400007c904da400 sc.mNativeObject= 0xb400007ca80c9700 format= 4 caller= android.view.SurfaceView.createBlastSurfaceControls:1879 android.view.SurfaceView.updateSurface:1519 android.view.SurfaceView.setWindowStopped:542 android.view.SurfaceView.surfaceCreated:2429 android.view.ViewRootImpl.notifySurfaceCreated:3520 android.view.ViewRootImpl.performTraversals:5350 
+08-19 18:40:25.080 I/SurfaceView(11139): 250791027 Cur surface: Surface(name=null mNativeObject=0)/@0x58da94a
+08-19 18:40:25.080 I/SV[250791027 MainActivity](11139): pST: sr = Rect(0, 0 - 1080, 2340) sw = 1080 sh = 2340
+08-19 18:40:25.080 D/SurfaceView(11139): 250791027 performSurfaceTransaction RenderWorker position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:40:25.080 W/libc    (11139): Access denied finding property "vendor.display.enable_optimal_refresh_rate"
+08-19 18:40:25.080 I/SV[250791027 MainActivity](11139): updateSurface: mVisible = true mSurface.isValid() = true
+08-19 18:40:25.080 I/SV[250791027 MainActivity](11139): updateSurface: mSurfaceCreated = false surfaceChanged = true visibleChanged = true
+08-19 18:40:25.080 I/SurfaceView(11139): 250791027 visibleChanged -- surfaceCreated
+08-19 18:40:25.080 I/SV[250791027 MainActivity](11139): surfaceCreated 1 #1 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:40:25.081 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:40:25.081 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:40:25.081 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:40:25.081 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:40:25.081 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:40:25.081 E/qdgralloc(11139): GetSize: Unrecognized pixel format: 0x3b
+08-19 18:40:25.081 W/qdgralloc(11139): gralloc failed to allocate buffer for size 0 format 59 AWxAH 1x1 usage 2816
+08-19 18:40:25.081 E/Gralloc4(11139): isSupported(1, 1, 59, 1, ...) failed with 7
+08-19 18:40:25.081 E/GraphicBufferAllocator(11139): Failed to allocate (4 x 4) layerCount 1 format 59 usage b00: 7
+08-19 18:40:25.081 E/AHardwareBuffer(11139): GraphicBuffer(w=4, h=4, lc=1) failed (Unknown error -7), handle=0x0
+08-19 18:40:25.083 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:25.084 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:25.085 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:25.086 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:25.089 W/qdgralloc(11139): getInterlacedFlag: getMetaData returned 3, defaulting to interlaced_flag = 0
+08-19 18:40:25.101 I/SurfaceView(11139): 250791027 surfaceChanged -- format=4 w=1080 h=2340
+08-19 18:40:25.101 I/SV[250791027 MainActivity](11139): surfaceChanged (1080,2340) 1 #1 y6.n{ef2c473 V.E...... ......ID 0,0-1080,2340}
+08-19 18:40:25.101 I/SurfaceView(11139): 250791027 surfaceRedrawNeeded
+08-19 18:40:25.101 V/SurfaceView(11139): Layout: x=0 y=0 w=1080 h=2340, frame=Rect(0, 0 - 1080, 2340)
+08-19 18:40:25.101 D/VRI[MainActivity]@1089abc(11139): reportNextDraw android.view.ViewRootImpl.performTraversals:5507 android.view.ViewRootImpl.doTraversal:3959 android.view.ViewRootImpl$TraversalRunnable.run:13034 android.view.Choreographer$CallbackRecord.run:1961 android.view.Choreographer$CallbackRecord.run:1970 
+08-19 18:40:25.101 D/VRI[MainActivity]@1089abc(11139): Setup new sync=wmsSync-VRI[MainActivity]@1089abc#12
+08-19 18:40:25.101 I/VRI[MainActivity]@1089abc(11139): Creating new active sync group VRI[MainActivity]@1089abc#13
+08-19 18:40:25.102 D/VRI[MainActivity]@1089abc(11139): Start draw after previous draw not visible
+08-19 18:40:25.102 D/VRI[MainActivity]@1089abc(11139): registerCallbacksForSync syncBuffer=false
+08-19 18:40:25.102 D/SurfaceView(11139): 250791027 updateSurfacePosition RenderWorker, frameNr = 1, position = [0, 0, 1080, 2340] surfaceSize = 1080x2340
+08-19 18:40:25.102 I/SV[250791027 MainActivity](11139): uSP: rtp = Rect(0, 0 - 1080, 2340) rtsw = 1080 rtsh = 2340
+08-19 18:40:25.102 I/SV[250791027 MainActivity](11139): onSSPAndSRT: pl = 0 pt = 0 sx = 1.0 sy = 1.0
+08-19 18:40:25.102 I/SV[250791027 MainActivity](11139): aOrMT: VRI[MainActivity]@1089abc t = android.view.SurfaceControl$Transaction@688a539 fN = 1 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 android.graphics.RenderNode$CompositePositionUpdateListener.positionChanged:401 
+08-19 18:40:25.102 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007c9031a400 mBlastBufferQueue=0xb400007ca813cc00 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.SurfaceView.applyOrMergeTransaction:1960 android.view.SurfaceView.-$$Nest$mapplyOrMergeTransaction:0 android.view.SurfaceView$SurfaceViewPositionUpdateListener.positionChanged:2029 
+08-19 18:40:25.102 D/VRI[MainActivity]@1089abc(11139): Received frameDrawingCallback syncResult=0 frameNum=1.
+08-19 18:40:25.102 I/VRI[MainActivity]@1089abc(11139): mWNT: t=0xb400007ca8163600 mBlastBufferQueue=0xb400007ca813cc00 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15561 android.view.ThreadedRenderer$1.onFrameDraw:751 <bottom of call stack> 
+08-19 18:40:25.102 I/VRI[MainActivity]@1089abc(11139): Setting up sync and frameCommitCallback
+08-19 18:40:25.104 I/BLASTBufferQueue(11139): [VRI[MainActivity]@1089abc#6](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:40:25.104 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92504, bufferData(ID: 47841640710217, frameNumber: 1)
+08-19 18:40:25.105 I/VRI[MainActivity]@1089abc(11139): Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+08-19 18:40:25.105 I/VRI[MainActivity]@1089abc(11139): handleResized, frames=ClientWindowFrames{frame=[0,0][1080,2340] display=[0,0][1080,2340] parentFrame=[0,0][0,0]} displayId=0 dragResizing=false compatScale=1.0 frameChanged=false attachedFrameChanged=false configChanged=false displayChanged=false compatScaleChanged=false dragResizingChanged=false
+08-19 18:40:25.105 I/VRI[MainActivity]@1089abc(11139): handleResized mSyncSeqId = 0
+08-19 18:40:25.105 D/VRI[MainActivity]@1089abc(11139): reportNextDraw android.view.ViewRootImpl.handleResized:2995 android.view.ViewRootImpl.-$$Nest$mhandleResized:0 android.view.ViewRootImpl$W.resized:14200 android.app.servertransaction.WindowStateResizeItem.execute:81 android.app.servertransaction.WindowStateTransactionItem.execute:62 
+08-19 18:40:25.106 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:40:25.106 I/InsetsSourceConsumer(11139): applyRequestedVisibilityToControl: visible=true, type=statusBars, host=app.foodnova.customer/app.foodnova.customer.MainActivity
+08-19 18:40:25.112 I/BLASTBufferQueue(11139): [ef2c473 SurfaceView[app.foodnova.customer/app.foodnova.customer.MainActivity]@0#7](f:0,a:0,s:0) onFrameAvailable the first frame is available
+08-19 18:40:25.112 I/SurfaceComposerClient(11139): apply transaction with the first frame. layerId: 92509, bufferData(ID: 47841640710212, frameNumber: 1)
+08-19 18:40:25.113 D/VRI[MainActivity]@1089abc(11139): reportDrawFinished seqId=0
+08-19 18:40:25.113 I/SurfaceView(11139): 250791027 finishedDrawing
+08-19 18:40:25.113 D/VRI[MainActivity]@1089abc(11139): Setup new sync=wmsSync-VRI[MainActivity]@1089abc#14
+08-19 18:40:25.114 I/VRI[MainActivity]@1089abc(11139): Creating new active sync group VRI[MainActivity]@1089abc#15
+08-19 18:40:25.114 D/VRI[MainActivity]@1089abc(11139): registerCallbacksForSync syncBuffer=false
+08-19 18:40:25.116 D/VRI[MainActivity]@1089abc(11139): Received frameDrawingCallback syncResult=0 frameNum=2.
+08-19 18:40:25.116 I/VRI[MainActivity]@1089abc(11139): Setting up sync and frameCommitCallback
+08-19 18:40:25.119 I/VRI[MainActivity]@1089abc(11139): Received frameCommittedCallback lastAttemptedDrawFrameNum=2 didProduceBuffer=true
+08-19 18:40:25.119 D/VRI[MainActivity]@1089abc(11139): reportDrawFinished seqId=0
+08-19 18:40:25.203 D/VRI[MainActivity]@1089abc(11139): mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007ca8065c00}
+08-19 18:40:25.203 D/InputMethodManagerUtils(11139): startInputInner - Id : 0
+08-19 18:40:25.203 I/InputMethodManager(11139): startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+08-19 18:40:25.204 D/InsetsController(11139): hide(ime())
+08-19 18:40:25.205 I/ImeTracker(11139): app.foodnova.customer:8d96f6af: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+08-19 18:40:25.206 D/InputTransport(11139): Input channel constructed: 'ClientS', fd=173
+08-19 18:40:25.935 I/ImeFocusController(11139): onPreWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:40:25.935 I/ImeFocusController(11139): onPostWindowFocus: skipped hasWindowFocus=false mHasImeFocus=true
+08-19 18:40:26.149 D/InputTransport(11139): Input channel destroyed: 'ClientS', fd=173

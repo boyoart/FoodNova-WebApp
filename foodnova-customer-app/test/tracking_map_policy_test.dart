@@ -4,6 +4,13 @@ import 'package:foodnova_customer_app/features/tracking/presentation/tracking_ca
 import 'package:foodnova_customer_app/features/tracking/presentation/tracking_map_policy.dart';
 
 void main() {
+  test('marker anchors place GPS coordinates on the visible marker point', () {
+    expect(riderMarkerAnchorX, .5);
+    expect(riderMarkerAnchorY, .5);
+    expect(destinationMarkerAnchorX, .5);
+    expect(destinationMarkerAnchorY, greaterThan(.9));
+  });
+
   test('production worker and vehicle values map to semantic markers', () {
     expect(riderMarkerKind('Motorcycle', 'rider'), RiderMarkerKind.motorcycle);
     expect(riderMarkerKind('Bike', 'rider'), RiderMarkerKind.motorcycle);

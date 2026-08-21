@@ -726,6 +726,9 @@ class OperationalZonePayload(BaseModel):
 GPS_RECENCY_SECONDS = 60
 MESSENGER_OUTSIDE_ZONE_MESSAGE = "You must be within the operational area to receive delivery requests."
 VALID_DELIVERY_WORKER_TYPES = {"rider", "messenger"}
+FOODNOVA_PICKUP_ADDRESS_DEFAULT = "33 Ariyo Akinloye Street, Bucknor, Isheri Road, Lagos, Nigeria"
+FOODNOVA_PICKUP_LATITUDE_DEFAULT = 6.5207643
+FOODNOVA_PICKUP_LONGITUDE_DEFAULT = 3.2925887
 
 
 def dispatch_test_mode_enabled() -> bool:
@@ -3652,11 +3655,12 @@ def order_to_dict(order: DBOrder) -> dict:
         "delivery_method": order.delivery_method or "delivery",
         "delivery_service_level": getattr(order, "delivery_service_level", "standard") or "standard",
         "pickup_note": order.pickup_note or "",
-        "pickup_address": os.getenv("FOODNOVA_PICKUP_ADDRESS", "").strip(),
+        "pickup_address": os.getenv("FOODNOVA_PICKUP_ADDRESS", "").strip()
+        or FOODNOVA_PICKUP_ADDRESS_DEFAULT,
         "pickup_instructions": os.getenv("FOODNOVA_PICKUP_INSTRUCTIONS", "").strip(),
         "pickup_hours": os.getenv("FOODNOVA_PICKUP_HOURS", "").strip(),
-        "pickup_latitude": _optional_env_float("FOODNOVA_PICKUP_LATITUDE"),
-        "pickup_longitude": _optional_env_float("FOODNOVA_PICKUP_LONGITUDE"),
+        "pickup_latitude": _optional_env_float("FOODNOVA_PICKUP_LATITUDE") or FOODNOVA_PICKUP_LATITUDE_DEFAULT,
+        "pickup_longitude": _optional_env_float("FOODNOVA_PICKUP_LONGITUDE") or FOODNOVA_PICKUP_LONGITUDE_DEFAULT,
         "delivery_notes": order.delivery_notes or "",
         "status": order.status or "pending_payment",
         "payment_status": order.payment_status or "pending_payment",
@@ -3836,8 +3840,7 @@ def get_foodnova_pickup_coordinates(db) -> tuple[Optional[float], Optional[float
             return float(lat), float(lng)
         except (TypeError, ValueError):
             print("PICKUP_COORDINATES_INVALID", json_dump({"latitude": lat, "longitude": lng}))
-    zone = ensure_default_operational_zone(db)
-    return float(zone.center_latitude), float(zone.center_longitude)
+    return FOODNOVA_PICKUP_LATITUDE_DEFAULT, FOODNOVA_PICKUP_LONGITUDE_DEFAULT
 
 
 def get_active_operational_zone(db) -> Optional[DBOperationalZone]:

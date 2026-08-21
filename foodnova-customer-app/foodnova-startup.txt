@@ -1,0 +1,573 @@
+--------- beginning of main
+08-19 18:36:41.284  2591 15288 D installd: Purging /data/data/com.android.vending/cache/logs/com.google.adebayoomosalawu%40gmail.com.metalog/logs_upload_attempt.log size=4096 mod=1787178976 from UID=10231 used=128000 quota=9923495 ratio=128
+08-19 18:36:41.285  2591 15288 D installd: Purging /data/data/com.android.vending/cache/logs/com.google.adebayoomosalawu%40gmail.com.metalog/play_metalog.log size=4096 mod=1787178976 from UID=10231 used=123904 quota=9923495 ratio=124
+08-19 18:36:41.285  2591 15288 D installd: Purging /data/data/com.android.vending/cache/logs/com.google.adebayoomosalawu%40gmail.com.metalog size=3584 mod=1787178976 from UID=10231 used=119808 quota=9923495 ratio=120
+08-19 18:36:41.285  2591 15288 D installd: Purging /data/data/com.android.vending/cache/logs size=3584 mod=1787178976 from UID=10231 used=116224 quota=9923495 ratio=117
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362/skia/e9ed4fc9f1544c58d8a9347c1fc9471d8dd7c465/sksl size=3584 mod=1787178966 from UID=10673 used=253952 quota=67108864 ratio=37
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362/skia/e9ed4fc9f1544c58d8a9347c1fc9471d8dd7c465 size=3584 mod=1787178966 from UID=10673 used=250368 quota=67108864 ratio=37
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362/skia size=3584 mod=1787178966 from UID=10673 used=246784 quota=67108864 ratio=36
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine/4c525dac5ebe5971c5708ef73558ed8edcf4a362 size=3584 mod=1787178966 from UID=10673 used=243200 quota=67108864 ratio=36
+08-19 18:36:41.298  2591 15288 D installd: Purging /data/data/app.foodnova.customer/code_cache/flutter_engine size=3584 mod=1787178966 from UID=10673 used=239616 quota=67108864 ratio=35
+08-19 18:36:41.299  2591 15288 D installd: Purging /data/user_de/0/app.foodnova.customer/cache/com.android.opengl.shaders_cache size=12288 mod=1787178970 from UID=10673 used=236032 quota=67108864 ratio=35
+08-19 18:36:41.299  2591 15288 D installd: Purging /data/user_de/0/app.foodnova.customer/cache/com.android.skia.shaders_cache size=4096 mod=1787178970 from UID=10673 used=223744 quota=67108864 ratio=33
+08-19 18:36:41.299  2591 15288 D installd: Purging /data/data/app.foodnova.customer/cache/oat_primary/arm64/base.art size=237568 mod=1787178971 from UID=10673 used=219648 quota=67108864 ratio=32
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/datadog-a588c719ae523df29023a954180d678b65b9f6c2469b68ce31c1d2a13674af36/logs-v2 size=3584 mod=1787178954 from UID=10446 used=647168 quota=271021203 ratio=23
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/datadog-a588c719ae523df29023a954180d678b65b9f6c2469b68ce31c1d2a13674af36/rum-v2 size=3584 mod=1787178954 from UID=10446 used=643584 quota=271021203 ratio=23
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/datadog-a588c719ae523df29023a954180d678b65b9f6c2469b68ce31c1d2a13674af36/tracing-v2 size=3584 mod=1787178954 from UID=10446 used=640000 quota=271021203 ratio=23
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/datadog-a588c719ae523df29023a954180d678b65b9f6c2469b68ce31c1d2a13674af36 size=3584 mod=1787178954 from UID=10446 used=636416 quota=271021203 ratio=23
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/RevenueCat/etag_payloads/6b5c922885c4c5ba010cc01ba387ef3594b8f2b9bdf560a0178a745725901c03 size=4096 mod=1787178974 from UID=10446 used=632832 quota=271021203 ratio=23
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/statsig_http_cache_com.openai.chatgpt/e20820637efc9c9677cc88e7edb2007a.0 size=8192 mod=1787178974 from UID=10446 used=628736 quota=271021203 ratio=23
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/statsig_http_cache_com.openai.chatgpt/d4a42ad856689945987bf516ac96f2f7.0 size=8192 mod=1787178974 from UID=10446 used=620544 quota=271021203 ratio=22
+08-19 18:36:41.303  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/statsig_http_cache_com.openai.chatgpt/e20820637efc9c9677cc88e7edb2007a.1 size=4096 mod=1787178974 from UID=10446 used=612352 quota=271021203 ratio=22
+08-19 18:36:41.304  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/statsig_http_cache_com.openai.chatgpt/d4a42ad856689945987bf516ac96f2f7.1 size=4096 mod=1787178974 from UID=10446 used=608256 quota=271021203 ratio=22
+08-19 18:36:41.304  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/RevenueCat/etag_payloads size=3584 mod=1787178974 from UID=10446 used=604160 quota=271021203 ratio=22
+08-19 18:36:41.304  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/statsig_http_cache_com.openai.chatgpt size=3584 mod=1787178974 from UID=10446 used=600576 quota=271021203 ratio=22
+08-19 18:36:41.304  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/RevenueCat size=3584 mod=1787178974 from UID=10446 used=596992 quota=271021203 ratio=22
+08-19 18:36:41.304  2591 15288 D installd: Purging /data/user_de/0/com.openai.chatgpt/cache/com.android.skia.shaders_cache size=192512 mod=1787178996 from UID=10446 used=593408 quota=271021203 ratio=21
+08-19 18:36:41.309  2591 15288 D installd: Purging /data/user_de/0/com.openai.chatgpt/cache/com.android.opengl.shaders_cache size=335872 mod=1787178997 from UID=10446 used=400896 quota=271021203 ratio=14
+08-19 18:36:41.314  3284  5790 I NSLocationMonitor: getGPSUsingApps() called
+08-19 18:36:41.316  5803 16068 I NSLocationManager_FLP: getGPSUsingApps, No change
+--------- beginning of system
+08-19 18:36:41.323  3284  5790 D FreecessHandler: skipping freeze com.funsmile.wallpaper(10161) result : 10
+08-19 18:36:41.429  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/sentry/67ab396d999c66b1aab2e9c465a56cb33e565ddf/.scope-cache/tags.json size=12288 mod=1787178999 from UID=10446 used=65024 quota=271021203 ratio=2
+08-19 18:36:41.430  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/sentry/67ab396d999c66b1aab2e9c465a56cb33e565ddf/.scope-cache size=3584 mod=1787178999 from UID=10446 used=52736 quota=271021203 ratio=1
+08-19 18:36:41.430  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/sentry/67ab396d999c66b1aab2e9c465a56cb33e565ddf size=3584 mod=1787178999 from UID=10446 used=49152 quota=271021203 ratio=1
+08-19 18:36:41.430  2591 15288 D installd: Purging /data/data/com.openai.chatgpt/cache/sentry size=3584 mod=1787178999 from UID=10446 used=45568 quota=271021203 ratio=1
+08-19 18:36:41.665  3284 31192 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+08-19 18:36:41.665  3284 31192 D BSOHChargingDataCollector: performBatteryWork++
+08-19 18:36:41.665  3284 31192 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@a0dd8ed
+08-19 18:36:41.665  3284 31192 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+08-19 18:36:41.678  3284 31192 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.015, current:1.930468, soc:0.51, temperature:41.1, status:2, timestamp:1787179001678, voltage_chg:null}
+08-19 18:36:41.678  3284 31192 D BSOHChargingDataCollector: performBatteryWork--
+08-19 18:36:41.806  4063  4076 D SemNativeCarrierFeature_vendor: getInstance
+08-19 18:36:41.835  4063  4076 D SemNativeCarrierFeature_vendor: getInstance
+08-19 18:36:41.847  5224  5349 D SatelliteController: isInCarrierRoamingNbIotNtn: satellite is disabled
+08-19 18:36:41.848  5224  5349 D SatelliteController: getCarrierRoamingNtnConnectType: Falling back to global carrier config connect type: 0
+08-19 18:36:41.850  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2)
+08-19 18:36:41.850  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2) lastNotifiedSignalStrength level: 0
+08-19 18:36:41.850  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2) currSignalStrength level: 0
+08-19 18:36:41.859  5540  5719 I EPDG-0 [IwlanNetworkService]: requestNetworkRegistrationInfo for domain 2
+08-19 18:36:41.864  5540  6486 I EPDG-0 [IwlanNetworkService]: Calling onRequestNetworkRegistrationInfoComplete.resultCode = 0, netState = NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=UNKNOWN networkRegistrationState=UNKNOWN roamingType=NOT_ROAMING accessNetworkTechnology=IWLAN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=**** rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}
+08-19 18:36:41.870  5540  5719 I EPDG-0 [IwlanNetworkService]: requestNetworkRegistrationInfo for domain 2
+08-19 18:36:41.870  5540  6486 I EPDG-0 [IwlanNetworkService]: Calling onRequestNetworkRegistrationInfoComplete.resultCode = 0, netState = NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=UNKNOWN networkRegistrationState=UNKNOWN roamingType=NOT_ROAMING accessNetworkTechnology=IWLAN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=**** rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}
+08-19 18:36:41.874  3284  4850 D SemCellularStateManager: onCellInfoChanged: cellInfoList Number of cell: 27
+08-19 18:36:41.875  3284  4850 D SemCellularStateManager: onCellInfoChanged: Registered = true, mCellularCellId = 102423583
+08-19 18:36:41.875  5324  5324 I TelephonyCallbackForPdnController<0>: onCellInfoChanged: xxxxx
+08-19 18:36:41.875  5324  5324 I ImsCallSessionManager: onCellInfoChanged, phoneId: 0
+08-19 18:36:41.875  5324  5587 I RegiMgr-Handler: handleMessage: EVENT_CELL_INFO_CHANGED
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>: updatePani RegisterTask[0][mProfile=WIND VoLTE, mRegistrationRat=13, mPdnType=11, mState=REGISTERED, mObject=UserAgent - :
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  total records=45587
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[0]: time=08-19 18:35:26.642 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[1]: time=08-19 18:35:26.643 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[2]: time=08-19 18:35:26.681 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[3]: time=08-19 18:35:26.685 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[4]: time=08-19 18:35:26.686 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[5]: time=08-19 18:36:24.017 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[6]: time=08-19 18:36:24.020 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[7]: time=08-19 18:36:24.050 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[8]: time=08-19 18:36:24.050 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[9]: time=08-19 18:36:24.055 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[10]: time=08-19 18:36:26.501 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[11]: time=08-19 18:36:26.501 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[12]: time=08-19 18:36:26.528 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[13]: time=08-19 18:36:26.529 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[14]: time=08-19 18:36:26.529 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[15]: time=08-19 18:36:34.818 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[16]: time=08-19 18:36:34.818 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[17]: time=08-19 18:36:34.855 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[18]: time=08-19 18:36:34.855 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>:  rec[19]: time=08-19 18:36:34.855 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>: curState=RegisteredState
+08-19 18:36:41.876  5324  5587 I RegiMgr<0>: , mReason=, mPcscfHostname=null, mDeregiReason=41]
+08-19 18:36:41.876  5324  5587 I PaniGenerator<0>: generate: subId=2, network=13, pdn=11
+08-19 18:36:41.876  5324  5587 I PaniGenerator<0>: generate: network=13, fallbackPlmn=302490
+08-19 18:36:41.876  5324  5587 I PdnController<0>: getAllCellInfo mNeedCellLocationUpdate : false
+08-19 18:36:41.876  5324  5587 I PaniGenerator: generate: change to NW PLMN(302490)
+08-19 18:36:41.876  5324  5587 I PaniGenerator: setLkcForLastPani: No Last PANI header for WIND VoLTE
+08-19 18:36:41.876  5324  5587 I UserAgent<0>: updatePani
+08-19 18:36:41.877  5324  5587 I RegiMgr<0>: tryRegister:
+08-19 18:36:41.877  5324  5587 I RegiMgr<0>: RegisterTask(s): WIND VoLTE (REGISTERED, rat = 13, service = [smsip, mmtel]), WIND RCS (IDLE)
+08-19 18:36:41.877  5324  5587 I RcsPolicyMgr<0>: pendingRcsRegister: mActiveDataPhoneId = 0
+08-19 18:36:41.877  5324  5587 I RcsPolicyMgr<0>: pendingRcsRegister: mActiveDataPhoneId = 0
+08-19 18:36:41.877  5324  5587 I RegisterTask: isSuspended: mSuspended(false) mSuspendByIrat(false)
+08-19 18:36:41.877  5324  5587 I RegiMgr<0>: [WIND RCS|IDLE] checkForTryRegister id: 458
+08-19 18:36:41.877  5324  6057 I SECIMSJ : [2195]> 140
+08-19 18:36:41.877  5324  5587 I PdnController: getDefaultNetworkBearer:  WIFI
+08-19 18:36:41.878  5324  5587 I RegistrationRatDecider<0>: findBestNetwork: WIFI
+08-19 18:36:41.878  5324  5587 I RegiGvnBase<0>: isReadyToDualRegister: slot 1's call state: 0
+08-19 18:36:41.878  5324  5587 I RegiGvnBase<0>: isReadyToDualRegister : true
+08-19 18:36:41.879  5324  6097 I [IMS6.0]: IMS_onResponse()
+08-19 18:36:41.879  5324  6097 I StackIF : processMessage 2
+08-19 18:36:41.879  5324  6097 I StackIF : Processing Response
+08-19 18:36:41.880  5324  6097 I SECIMSJ : [2195]< 600
+08-19 18:36:41.880  5324  6097 I StackIF : processResponse: reqId 600
+08-19 18:36:41.880  5324  6097 I StackIF : processResponse: handle 28678 result 0 reason 0
+08-19 18:36:41.881  5224  5224 D SatelliteController: getCarrierRoamingNtnAllSatellitePlmnSetFromStorage: [302723, 44026, 71688, 73029, 44055, 312190, 44025, 313130, 73031, 313210, 23402, 310210, 310830, 53004, 53013, 53002, 255707, 50511, 50559]
+08-19 18:36:41.881  5224  5224 D SatelliteController: getAllPlmnList: [302723, 44026, 71688, 73029, 44055, 312190, 44025, 313130, 73031, 313210, 23402, 310210, 310830, 53004, 53013, 53002, 255707, 50511, 50559]
+08-19 18:36:41.881  5224  5224 D SatelliteController: getCarrierRoamingNtnAllSatellitePlmnSetFromStorage: [302723, 44026, 71688, 73029, 44055, 312190, 44025, 313130, 73031, 313210, 23402, 310210, 310830, 53004, 53013, 53002, 255707, 50511, 50559]
+08-19 18:36:41.881  5224  5224 D SatelliteController: getAllPlmnList: [302723, 44026, 71688, 73029, 44055, 312190, 44025, 313130, 73031, 313210, 23402, 310210, 310830, 53004, 53013, 53002, 255707, 50511, 50559]
+08-19 18:36:41.881  5224  5224 D SatelliteController: registerForSatelliteModemStateChanged: add Listeners for ModemState
+08-19 18:36:41.881  5224  5224 E SatelliteController: registerForSatelliteModemStateChanged: mSatelliteSessionController is not initialized yet
+08-19 18:36:41.884  5324  5587 I RegiMgr<0>: [WIND RCS|IDLE] checkInitialRegistrationIsReady: APM ON [false], Roamimg [false]
+08-19 18:36:41.885  5324  5587 I RcsPolicyMgr<0>: pendingRcsRegister: mActiveDataPhoneId = 0
+08-19 18:36:41.885  5324  5587 I ImsProfile: isRttSupportByCallApp : false
+08-19 18:36:41.885  5324  5587 I ImsProfile: carrierId : XAC
+08-19 18:36:41.885  5324  5587 I ImsProfile: ttyType : 1
+08-19 18:36:41.885  5324  5587 I RegiMgr-Utils<0>: getPriorityRegiedTask : isPriority  High? true
+08-19 18:36:41.885  5224  5224 D SatelliteController: registerForSatelliteModemStateChanged: add Listeners for ModemState
+08-19 18:36:41.885  5224  5224 E SatelliteController: registerForSatelliteModemStateChanged: mSatelliteSessionController is not initialized yet
+08-19 18:36:41.885  5324  5587 I RegiGvnBase: checkRegiStatus: getState()=IDLE mIsUpdateRegistering=false
+08-19 18:36:41.885  5324  5587 I RegiMgr<0>: getTelephonyCallStatus:
+08-19 18:36:41.886  5324  5587 I ConfigProvider: query uri:xxxxx
+08-19 18:36:41.888  5224  5349 D SatelliteController: isCarrierRoamingNtnEligible: satellite access is not allowed
+08-19 18:36:41.889  5224  5349 D SatelliteController: evaluateCarrierRoamingNtnEligibilityChange: isCarrierRoamingNtnEligible=false
+08-19 18:36:41.889  5224  5349 E SatelliteController: notifyNtnEligibility: mSatellitePhone is null
+08-19 18:36:41.889  5224  5349 D SatelliteController: handleServiceStateForSatelliteConnectionViaCarrier : SubId = 2
+08-19 18:36:41.889  5324  5587 I ConfigProvider: queryStorage path content://com.samsung.rcs.autoconfigurationprovider/parameter/version#simslot0
+08-19 18:36:41.889  5224  5349 V SatelliteController: getWwanIsInService: return true
+08-19 18:36:41.889  5324  5587 I ConfigProvider: can not find readData from mStorage
+08-19 18:36:41.889  3284  3284 D SemWifiService: onServiceStateChanged : state - 0, dataNetworkType : 13
+08-19 18:36:41.889  5224  5349 D SatelliteController: handleServiceStateForSatelliteConnectionViaCarrier: resetCarrierRoamingSatelliteModeParams: device is connected to terrestrial service or radio is off
+08-19 18:36:41.889  5224  5349 V SatelliteController: getWwanIsInService: return true
+08-19 18:36:41.889  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of fine but the app-ops permission is specifically denied.
+08-19 18:36:41.889  3284  5185 D SLocation: CellLocationManager - onServiceStateChanged 0
+08-19 18:36:41.890  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForFine: DENIED_SOFT
+08-19 18:36:41.890  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of coarse but the app-ops permission is specifically denied.
+08-19 18:36:41.890  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForCoarse: DENIED_SOFT
+08-19 18:36:41.891  3284  3284 D SemWifiApServiceImpl: onServiceStateChanged : 0dataNetworkType : 13,isUsingNonTerrestrialNetwork:false
+08-19 18:36:41.891  3284  4787 W NSLocationMonitor: onServiceStateChanged, state=0 / channel=66961
+08-19 18:36:41.891  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of fine but the app-ops permission is specifically denied.
+08-19 18:36:41.891  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForFine: DENIED_SOFT
+08-19 18:36:41.892  5324  5587 I RegiGvnRcs: isReadyToRegister: User don't try RCS service yet
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of coarse but the app-ops permission is specifically denied.
+08-19 18:36:41.892  3284  4787 I NSLocationMonitor: networkType[13]=LTE / nrState=false
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForCoarse: DENIED_SOFT
+08-19 18:36:41.892  5324  5587 I RegiMgr<0>: [WIND RCS|IDLE] checkForTryRegister: isReadyToRegister = false
+08-19 18:36:41.892  5170  5170 D GlobalActionsDialogLite: Service changed before actions created
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of fine but the app-ops permission is specifically denied.
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForFine: DENIED_SOFT
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of coarse but the app-ops permission is specifically denied.
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForCoarse: DENIED_SOFT
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of fine but the app-ops permission is specifically denied.
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForFine: DENIED_SOFT
+08-19 18:36:41.892  5803  5990 W NetworkManager_FLP: updateServiceStateChanged, serviceState=0 / isRegistered=true / channel=66961 / networkTypeName=LTE / nr=false
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: com.android.systemui is aware of coarse but the app-ops permission is specifically denied.
+08-19 18:36:41.892  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForCoarse: DENIED_SOFT
+08-19 18:36:41.893  3284  4787 W NSLocationMonitor: onServiceStateChanged, state=0 / channel=66961
+08-19 18:36:41.893  3284  4787 I NSLocationMonitor: networkType[13]=LTE / nrState=false
+08-19 18:36:41.893  5803  5990 W NetworkManager_FLP: updateServiceStateChanged, serviceState=0 / isRegistered=true / channel=66961 / networkTypeName=LTE / nr=false
+08-19 18:36:41.893  5324  5324 I VolteServiceModule: onServiceStateChanged({mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=66961, duplexMode()=1, mCellBandwidths=[15000], mOperatorAlphaLong=Freedom, mOperatorAlphaShort=Freedom, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, NonCellular=false, Snap=0, PsOnly=false, OptRadioTech=0, MsimSubmode=0, IsVoiceCallAvailable=true, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=UNKNOWN networkRegistrationState=UNKNOWN roamingType=NOT_ROAMING accessNetworkTechnology=IWLAN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=**** rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[VOICE,SMS,VIDEO] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=VoiceSpecificRegistrationInfo { mCssSupported=false mRoamingIndicator=0 mSystemIsInPrl=0 mDefaultRoamingIndicator=0} dataSpecificInfo=null nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[DATA,MMS] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=null dataSpecificInfo=android.telephony.DataSpecificRegistrationInfo :{ maxDataCalls = 16 isDcNrRestricted = false isNrAvailable = true isEnDcAvailable = true mLteAttachResultType = 0 mLteAttachExtraInfo = 0 LteVopsSupportInfo :  mVopsSupport = 2 mEmcBearerSupport = 2 } nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}], mNrFrequencyRange=0, mOperatorAlphaLongRaw=Freedom, mOperatorAlphaShortRaw=Freedom, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false})
+08-19 18:36:41.893  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10066, callingPid: 6362, resultForFine: DENIED_HARD
+08-19 18:36:41.894  3284  5471 I LocationAccessPolicy: checkLocationPermission - callingUid: 10066, callingPid: 6362, resultForCoarse: DENIED_HARD
+08-19 18:36:41.894  5224  5349 D SatelliteController: getCarrierRoamingNtnConnectType: Falling back to global carrier config connect type: 0
+08-19 18:36:41.894  5224  5349 D SatelliteController: updateLastNotifiedNtnModeAndNotify: subId=2 initialized=true lastNotifiedNtnMode=false lastNotifiedNtnModePhone=false currNtnMode=false
+08-19 18:36:41.894  5224  5349 D SatelliteController: isInCarrierRoamingNbIotNtn: satellite is disabled
+08-19 18:36:41.894  5224  5349 D SatelliteController: getCarrierRoamingNtnConnectType: Falling back to global carrier config connect type: 0
+08-19 18:36:41.894  5324  6153 I VolteServiceModule: onServiceStateChanged({mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=66961, duplexMode()=1, mCellBandwidths=[15000], mOperatorAlphaLong=Freedom, mOperatorAlphaShort=Freedom, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, NonCellular=false, Snap=0, PsOnly=false, OptRadioTech=0, MsimSubmode=0, IsVoiceCallAvailable=true, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=UNKNOWN networkRegistrationState=UNKNOWN roamingType=NOT_ROAMING accessNetworkTechnology=IWLAN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=**** rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[VOICE,SMS,VIDEO] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=VoiceSpecificRegistrationInfo { mCssSupported=false mRoamingIndicator=0 mSystemIsInPrl=0 mDefaultRoamingIndicator=0} dataSpecificInfo=null nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[DATA,MMS] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=null dataSpecificInfo=android.telephony.DataSpecificRegistrationInfo :{ maxDataCalls = 16 isDcNrRestricted = false isNrAvailable = true isEnDcAvailable = true mLteAttachResultType = 0 mLteAttachExtraInfo = 0 LteVopsSupportInfo :  mVopsSupport = 2 mEmcBearerSupport = 2 } nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}], mNrFrequencyRange=0, mOperatorAlphaLongRaw=Freedom, mOperatorAlphaShortRaw=Freedom, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false})
+08-19 18:36:41.894  5324  6153 I VolteServiceModule: mIsLteEpsOnlyAttached(0):false
+08-19 18:36:41.894  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2)
+08-19 18:36:41.894  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2) lastNotifiedSignalStrength level: 0
+08-19 18:36:41.894  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2) currSignalStrength level: 0
+08-19 18:36:41.894  5224  5349 D SatelliteController: handleServiceStateForSatelliteConnectionViaCarrier : SubId = -1
+08-19 18:36:41.895  3284  5471 W ContextImpl: Calling a method in the system process without a qualified user: android.app.ContextImpl.sendBroadcastMultiplePermissions:1424 android.content.Context.sendBroadcastMultiplePermissions:2800 com.android.server.TelephonyRegistry.broadcastServiceStateChanged:63 com.android.server.TelephonyRegistry.notifyServiceStateForPhoneId:184 com.android.internal.telephony.ITelephonyRegistry$Stub.onTransact:667 
+08-19 18:36:41.895  5324  5324 I VolteServiceModule: mIsLteEpsOnlyAttached(1):false
+08-19 18:36:41.895  5170  5170 D SatelliteModeObserver: service state changed : {mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=66961, duplexMode()=1, mCellBandwidths=[15000], mOperatorAlphaLong=null, mOperatorAlphaShort=null, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, NonCellular=false, Snap=0, PsOnly=false, OptRadioTech=0, MsimSubmode=0, IsVoiceCallAvailable=true, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=UNKNOWN networkRegistrationState=UNKNOWN roamingType=NOT_ROAMING accessNetworkTechnology=IWLAN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=**** rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[VOICE,SMS,VIDEO] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=VoiceSpecificRegistrationInfo { mCssSupported=false mRoamingIndicator=0 mSystemIsInPrl=0 mDefaultRoamingIndicator=0} dataSpecificInfo=null nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[DATA,MMS] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=null dataSpecificInfo=android.telephony.DataSpecificRegistrationInfo :{ maxDataCalls = 16 isDcNrRestricted = false isNrAvailable = true isEnDcAvailable = true mLteAttachResultType = 0 mLteAttachExtraInfo = 0 LteVopsSupportInfo :  mVopsSupport = 2 mEmcBearerSupport = 2 } nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}], mNrFrequencyRange=0, mOperatorAlphaLongRaw=Freedom, mOperatorAlphaShortRaw=Freedom, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false}
+08-19 18:36:41.895  5170  5170 D SatelliteModeObserver: isSatelliteNetworksOn(), isUsingTerrestrialNetwork: false
+08-19 18:36:41.895  3284  4850 V SemWifiBackOff.5G: checkAndSetup nrFrequencyRange=0 / prevNrFrequencyRange=0
+08-19 18:36:41.895  3284  4850 V SemWifiBackOff.5G: restore back off mode, current: [NONE]
+08-19 18:36:41.895  3284  5471 W ContextImpl: Calling a method in the system process without a qualified user: android.app.ContextImpl.sendBroadcastMultiplePermissions:1457 com.android.server.TelephonyRegistry.broadcastServiceStateChanged:92 com.android.server.TelephonyRegistry.notifyServiceStateForPhoneId:184 com.android.internal.telephony.ITelephonyRegistry$Stub.onTransact:667 android.os.Binder.execTransactInternal:1514 
+08-19 18:36:41.896  5324  5324 I ImsIconManager<0>: onServiceStateChanged: {mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=66961, duplexMode()=1, mCellBandwidths=[15000], mOperatorAlphaLong=Freedom, mOperatorAlphaShort=Freedom, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, NonCellular=false, Snap=0, PsOnly=false, OptRadioTech=0, MsimSubmode=0, IsVoiceCallAvailable=true, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=UNKNOWN networkRegistrationState=UNKNOWN roamingType=NOT_ROAMING accessNetworkTechnology=IWLAN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=**** rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[VOICE,SMS,VIDEO] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=VoiceSpecificRegistrationInfo { mCssSupported=false mRoamingIndicator=0 mSystemIsInPrl=0 mDefaultRoamingIndicator=0} dataSpecificInfo=null nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[DATA,MMS] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=null dataSpecificInfo=android.telephony.DataSpecificRegistrationInfo :{ maxDataCalls = 16 isDcNrRestricted = false isNrAvailable = true isEnDcAvailable = true mLteAttachResultType = 0 mLteAttachExtraInfo = 0 LteVopsSupportInfo :  mVopsSupport = 2 mEmcBearerSupport = 2 } nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}], mNrFrequencyRange=0, mOperatorAlphaLongRaw=Freedom, mOperatorAlphaShortRaw=Freedom, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false}
+08-19 18:36:41.896  3284  5471 W ContextImpl: Calling a method in the system process without a qualified user: android.app.ContextImpl.sendBroadcastMultiplePermissions:1457 com.android.server.TelephonyRegistry.broadcastServiceStateChanged:121 com.android.server.TelephonyRegistry.notifyServiceStateForPhoneId:184 com.android.internal.telephony.ITelephonyRegistry$Stub.onTransact:667 android.os.Binder.execTransactInternal:1514 
+08-19 18:36:41.897  3284  5471 W ContextImpl: Calling a method in the system process without a qualified user: android.app.ContextImpl.sendBroadcastMultiplePermissions:1457 com.android.server.TelephonyRegistry.broadcastServiceStateChanged:144 com.android.server.TelephonyRegistry.notifyServiceStateForPhoneId:184 com.android.internal.telephony.ITelephonyRegistry$Stub.onTransact:667 android.os.Binder.execTransactInternal:1514 
+08-19 18:36:41.897  5324  5324 I TelephonyCallbackForPdnController<0>: emcbsIndication: SUPPORTED, mobileDataNetworkType: 13
+08-19 18:36:41.897  5540  6942 I EPDG-0 [NetChangeController]: getVoPS, vopsSupportInfo=LteVopsSupportInfo :  mVopsSupport = 2 mEmcBearerSupport = 2
+08-19 18:36:41.897  5540  6942 I EPDG-0 [NetChangeController]: WWAN Voice Regi: 0 Roaming: 0
+08-19 18:36:41.897  5540  6942 I EPDG-0 [NetChangeController]: WWAN Data Regi: 0 Rat: 13 Roaming: false
+08-19 18:36:41.897  5224  5224 D ServiceStateProvider: subId=2
+08-19 18:36:41.897  5540  6942 I EPDG-0 [Subscription]: isAirplaneMode, false
+08-19 18:36:41.898  5324  5324 I NetworkUtil: Network Cap check : INTERNET : true
+08-19 18:36:41.898  5324  5324 I NetworkUtil: isConnected = false isCellularOnly : true
+08-19 18:36:41.899  5540  6942 I EPDG-0 [NetChangeController]: getIsRssiDisabledForProfiling: returning: false
+08-19 18:36:41.899  5224  5224 D SatelliteController: getCarrierRoamingNtnConnectType: Falling back to global carrier config connect type: 0
+08-19 18:36:41.899  5540  6942 I EPDG-0 [SettingManager]: getVoWifiPreference, 1
+08-19 18:36:41.899  5224  5224 D SatelliteController: isInCarrierRoamingNbIotNtn: satellite is disabled
+08-19 18:36:41.899  5540  6942 I EPDG-0 [Subscription]: isAirplaneMode, false
+08-19 18:36:41.899  5324  5324 I TelephonyCallbackForPdnController<0>: onServiceStateChanged: state={mVoiceRegState=0(IN_SERVICE), mDataRegState=0(IN_SERVICE), mChannelNumber=66961, duplexMode()=1, mCellBandwidths=[15000], mOperatorAlphaLong=Freedom, mOperatorAlphaShort=Freedom, isManualNetworkSelection=false(automatic), getRilVoiceRadioTechnology=14(LTE), getRilDataRadioTechnology=14(LTE), mCssIndicator=unsupported, NonCellular=false, Snap=0, PsOnly=false, OptRadioTech=0, MsimSubmode=0, IsVoiceCallAvailable=true, mIsEmergencyOnly=false, isUsingCarrierAggregation=false, mArfcnRsrpBoost=0, mNetworkRegistrationInfos=[NetworkRegistrationInfo{ domain=PS transportType=WLAN registrationState=UNKNOWN networkRegistrationState=UNKNOWN roamingType=NOT_ROAMING accessNetworkTechnology=IWLAN rejectCause=0 emergencyEnabled=false availableServices=[] cellIdentity=null voiceSpecificInfo=null dataSpecificInfo=null nrState=**** rRplmn= isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=CS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[VOICE,SMS,VIDEO] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=VoiceSpecificRegistrationInfo { mCssSupported=false mRoamingIndicator=0 mSystemIsInPrl=0 mDefaultRoamingIndicator=0} dataSpecificInfo=null nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}, NetworkRegistrationInfo{ domain=PS transportType=WWAN registrationState=HOME networkRegistrationState=HOME roamingType=NOT_ROAMING accessNetworkTechnology=LTE rejectCause=0 emergencyEnabled=false availableServices=[DATA,MMS] cellIdentity=CellIdentityLte:{ mCi=[****] mPci=[****] mTac=[****] mEarfcn=[****] mBands=[66] mBandwidth=2147483647 mMcc=302 mMnc=490 mAlphaLong=Freedom mAlphaShort=Freedom mAdditionalPlmns={} mCsgInfo=null} voiceSpecificInfo=null dataSpecificInfo=android.telephony.DataSpecificRegistrationInfo :{ maxDataCalls = 16 isDcNrRestricted = false isNrAvailable = true isEnDcAvailable = true mLteAttachResultType = 0 mLteAttachExtraInfo = 0 LteVopsSupportInfo :  mVopsSupport = 2 mEmcBearerSupport = 2 } nrState=**** rRplmn=302490 isUsingCarrierAggregation=false isNonTerrestrialNetwork=TERRESTRIAL}], mNrFrequencyRange=0, mOperatorAlphaLongRaw=Freedom, mOperatorAlphaShortRaw=Freedom, mIsDataRoamingFromRegistration=false, mIsIwlanPreferred=false, mIsUsingNonTerrestrialNetwork=false}Changed=AvailableServices:[2, 6]=>[2, 6]
+08-19 18:36:41.899  5324  5324 I PdnController<0>: notifyDataConnectionState
+08-19 18:36:41.899  5324  5324 I PdnController<0>: initialize PendedEPDGWeakSignal flag
+08-19 18:36:41.900  5324  5324 I PdnController<0>: setPendedEPDGWeakSignal
+08-19 18:36:41.900  5540  6942 I EPDG-0 [Subscription]: isAirplaneMode, false
+08-19 18:36:41.900  5324  5324 I PdnController<0>: notifyDataConnectionState: needNotify=true networkType=13 isEpdgConnected=false dataNetType=13=>13 dataRegState=0=>0
+08-19 18:36:41.900  3284  5185 D SLocation: CellLocationManager - onCellLocationChanged 2 / 0
+08-19 18:36:41.901  5540  6942 I EPDG-0 [NetChangeController]: voiceNetType: 13 mActiveVoiceRat: 13
+08-19 18:36:41.901  5540  6942 I EPDG-0 [Subscription]: isAirplaneMode, false
+08-19 18:36:41.901  3284  5185 E AppOps  : Bad call made by uid 1001. Package "com.android.phone" does not belong to uid 1000.
+08-19 18:36:41.901  3284  5185 E AppOps  : Cannot noteOperation: non-application UID 1000
+08-19 18:36:41.901  5540  6942 I EPDG-0 [NetChangeController]: onNetworkStatusChanged : mCellularAvailable = true
+08-19 18:36:41.902  5324  5324 I ImsCallSessionManager: onDataConnectionStateChanged(): networkType [LTE]isWifiConnected [true], phoneId [0]
+08-19 18:36:41.902  3284  3284 D SemWifiService: received: android.intent.action.SERVICE_STATE
+08-19 18:36:41.903  5324  5324 I RegiMgr-Handler<0>: onDataConnectionStateChanged(): networkType [LTE], isWifiConnected [true]
+08-19 18:36:41.903  5324  5324 E #IMSREGI: (0, Wind_CA) [LTE] LATCH(DataConnect changed) : 566111.149s
+08-19 18:36:41.903  5324  5587 I RegiMgr-Handler: handleMessage: EVENT_NETWORK_TYPE
+08-19 18:36:41.903  5324  5587 I RegiMgr-NetEvtCtr<0>: onNetworkChanged: suspendByIrat=false
+08-19 18:36:41.903  5324  5587 I NetworkState: setAllCellInfo : Cleared by null set !!!!
+08-19 18:36:41.904  3284  3284 D CcncManager: onReceive - ACTION_SERVICE_STATE_CHANGED
+08-19 18:36:41.904  5324  5324 I TelephonyManagerWrapper<0>: getRilSimOperator: ETC
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>: updatePani RegisterTask[0][mProfile=WIND VoLTE, mRegistrationRat=13, mPdnType=11, mState=REGISTERED, mObject=UserAgent - :
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  total records=45589
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[0]: time=08-19 18:35:26.681 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[1]: time=08-19 18:35:26.685 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[2]: time=08-19 18:35:26.686 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[3]: time=08-19 18:36:24.017 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[4]: time=08-19 18:36:24.020 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[5]: time=08-19 18:36:24.050 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[6]: time=08-19 18:36:24.050 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[7]: time=08-19 18:36:24.055 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[8]: time=08-19 18:36:26.501 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[9]: time=08-19 18:36:26.501 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[10]: time=08-19 18:36:26.528 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[11]: time=08-19 18:36:26.529 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[12]: time=08-19 18:36:26.529 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[13]: time=08-19 18:36:34.818 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[14]: time=08-19 18:36:34.818 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[15]: time=08-19 18:36:34.855 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[16]: time=08-19 18:36:34.855 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[17]: time=08-19 18:36:34.855 processed=ReadyState org=RegisteredState dest=<null> what=50(0x32)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[18]: time=08-19 18:36:41.879 processed=ReadyState org=RegisteredState dest=<null> what=34(0x22)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>:  rec[19]: time=08-19 18:36:41.880 processed=RegisteredState org=RegisteredState dest=<null> what=2000(0x7d0)
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>: curState=RegisteredState
+08-19 18:36:41.904  5324  5587 I RegiMgr<0>: , mReason=, mPcscfHostname=null, mDeregiReason=41]
+08-19 18:36:41.904  5324  5324 I SimManager<0>: hasIsim: [true]
+08-19 18:36:41.904  5324  5324 I SimManager<0>: mSimState:LOADED, mIsimLoaded:true, hasIsim():true
+08-19 18:36:41.904  5324  5324 I TelephonyCallbackForPdnController<0>: notifySnapshotState: snapshotState=0 old=0
+08-19 18:36:41.904  5224  5224 V PhoneGlobals: handleServiceStateChanged
+08-19 18:36:41.904  5224  5224 D NotificationMgr: updateNetworkSelection, Use Samsung codes instead of AOSP codes
+08-19 18:36:41.904  5224  5224 V PhoneGlobals: subId=-1, mDefaultDataSubId=2, ss roaming=false
+08-19 18:36:41.904  5324  5587 I PaniGenerator<0>: generate: subId=2, network=13, pdn=11
+08-19 18:36:41.904  5224  5224 I Telephony: TelecomAccountRegistry$TelecomAccountTelephonyCallback: TelecomAccountRegistry: onServiceStateChanged: newState=0, mServiceState=0
+08-19 18:36:41.904  5324  5587 I PaniGenerator<0>: generate: network=13, fallbackPlmn=302490
+08-19 18:36:41.904  5324  5587 I PdnController<0>: getAllCellInfo mNeedCellLocationUpdate : true
+08-19 18:36:41.905  5324  5587 I PdnController<0>: get latest cellInfo and store, subId = 2
+08-19 18:36:41.905  5324  5587 I PaniGenerator: generate: change to NW PLMN(302490)
+08-19 18:36:41.905  5324  5587 I PaniGenerator: setLkcForLastPani: No Last PANI header for WIND VoLTE
+08-19 18:36:41.905  5324  5587 I UserAgent<0>: updatePani
+08-19 18:36:41.905  5324  5587 I GeolocationCon: handleMessage : what = SERVICE_STATE_CHANGED
+08-19 18:36:41.906  5324  5587 I GeolocationCon: matchTimingReqLocation ,match=2, timing=4
+08-19 18:36:41.906  5324  5587 I GeolocationCon: matchTimingReqLocation ,match=0, timing=4
+08-19 18:36:41.906  5324  5587 I GeolocationCon: matchTimingReqLocation ,match=0, timing=4
+08-19 18:36:41.906  5324  5587 I GeolocationCon: profile is null
+08-19 18:36:41.906  5324  5587 I GeolocationCon<0>: onNetworkCountryIsoChanged: mCountryIso = ca, iso = ca
+08-19 18:36:41.906  5224  5224 I Telephony: TelecomAccountRegistry$AccountEntry: isRttCurrentlySupported -- regular acct,, hasVoiceAvailability: true, isRttSupported: false, alwaysAllowWhileRoaming: false, isRoaming: false, isOnWfc: false
+08-19 18:36:41.906  5224  5224 V PhoneGlobals: handleServiceStateChanged
+08-19 18:36:41.906  5224  5224 D NotificationMgr: updateNetworkSelection, Use Samsung codes instead of AOSP codes
+08-19 18:36:41.906  5224  5224 V PhoneGlobals: subId=2, mDefaultDataSubId=2, ss roaming=false
+08-19 18:36:41.906  5324  6057 I SECIMSJ : [2196]> 140
+08-19 18:36:41.907  3284  5471 D PhoneRestrictionPolicy: isOperationAllowed >>> slotNum: 0 function: 1
+08-19 18:36:41.907  5324  6057 I StackIF : updateRat: 28678 network: 13
+08-19 18:36:41.907  5324  6057 I SECIMSJ : [2197]> 80
+08-19 18:36:41.907  5170  5170 D MULTISIM-PROD-REPO: onReceive() - action = android.intent.action.SERVICE_STATE
+08-19 18:36:41.907  5170  5265 D MULTISIM-PROD-REPO: HANDLE_MSG(2000)
+08-19 18:36:41.907  5324  6097 I [IMS6.0]: IMS_onResponse()
+08-19 18:36:41.908  5224  5224 V PhoneGlobals: updateDataRoamingStatus
+08-19 18:36:41.908  5324  6097 I StackIF : processMessage 2
+08-19 18:36:41.908  5324  6097 I StackIF : Processing Response
+08-19 18:36:41.908  5224  5224 V PhoneGlobals: updateDataRoamingStatus dataAllowed=true, disallowReasons=[], dataIsNowRoaming=false, RoamingNumeric=302490, CallingReason=3
+08-19 18:36:41.908  5324  6097 I SECIMSJ : [2196]< 600
+08-19 18:36:41.908  5324  6097 I StackIF : processResponse: reqId 600
+08-19 18:36:41.908  5324  6097 I StackIF : processResponse: handle 28678 result 0 reason 0
+08-19 18:36:41.908  5170  5170 D CarrierTextController: carrierTextForSimState(2)-(order: 0) : Freedom, Freedom
+08-19 18:36:41.909  6987  6987 D CellBroadcastReceiver: onReceive Intent { act=android.intent.action.SERVICE_STATE flg=0x1000010 xflg=0x4 cmp=com.google.android.cellbroadcastreceiver/com.android.cellbroadcastreceiver.CellBroadcastReceiver (has extras) }
+08-19 18:36:41.910  3284  3623 I ActivityManager: Changes in 10264 19 to 11, 0 to 384
+08-19 18:36:41.913  6987  6987 D CellBroadcastReceiver: onServiceStateChanged, ss: 0
+08-19 18:36:41.913  5170  5170 D CarrierTextController: setCarrierText : Freedom, Freedom allSimsMissing : false anySimReady : true
+08-19 18:36:41.913  5170  5170 D CarrierTextController: carrierTextForSimState(2)-(order: 0) : Freedom, Freedom
+08-19 18:36:41.913  6987  6987 D CellBroadcastReceiver: networkOperator: 302490
+08-19 18:36:41.913  5170  5170 D CarrierTextController: setCarrierText : Freedom, Freedom allSimsMissing : false anySimReady : true
+08-19 18:36:41.913  5170  5170 D CarrierTextController: carrierTextForSimState(2)-(order: 0) : Freedom, Freedom
+08-19 18:36:41.914  5224  6928 I LocationAccessPolicy: com.android.systemui is aware of fine but the app-ops permission is specifically denied.
+08-19 18:36:41.914  5224  6928 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForFine: DENIED_SOFT
+08-19 18:36:41.914  5170  5170 D CarrierTextController: setCarrierText : Freedom, Freedom allSimsMissing : false anySimReady : true
+08-19 18:36:41.914  5224  6928 I LocationAccessPolicy: com.android.systemui is aware of coarse but the app-ops permission is specifically denied.
+08-19 18:36:41.914  5324  6097 I [IMS6.0]: IMS_onResponse()
+08-19 18:36:41.914  5224  6928 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForCoarse: DENIED_SOFT
+08-19 18:36:41.914  5324  6097 I StackIF : processMessage 2
+08-19 18:36:41.914  5170  5170 D FaceWidgetPagesController: onRefreshCarrierInfo()
+08-19 18:36:41.914  6987  6987 D CellBroadcastReceiver: mockmodem is running? = false
+08-19 18:36:41.914  5324  6097 I StackIF : Processing Response
+08-19 18:36:41.915  5224  5297 I LocationAccessPolicy: com.android.systemui is aware of fine but the app-ops permission is specifically denied.
+08-19 18:36:41.915  5224  5297 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForFine: DENIED_SOFT
+08-19 18:36:41.915  5224  5297 I LocationAccessPolicy: com.android.systemui is aware of coarse but the app-ops permission is specifically denied.
+08-19 18:36:41.915  5224  5297 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForCoarse: DENIED_SOFT
+08-19 18:36:41.915  5324  6097 I SECIMSJ : [2197]< 602
+08-19 18:36:41.915  5224  6928 I LocationAccessPolicy: com.android.systemui is aware of fine but the app-ops permission is specifically denied.
+08-19 18:36:41.915  5224  6928 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForFine: DENIED_SOFT
+08-19 18:36:41.915  5224  6928 I LocationAccessPolicy: com.android.systemui is aware of coarse but the app-ops permission is specifically denied.
+08-19 18:36:41.915  6987  6987 D CellBroadcastReceiver: update supported roaming operator as 
+08-19 18:36:41.916  5224  6928 I LocationAccessPolicy: checkLocationPermission - callingUid: 10041, callingPid: 5170, resultForCoarse: DENIED_SOFT
+08-19 18:36:41.916  5324  6097 I StackIF : processResponse: reqId 602
+08-19 18:36:41.916  5324  6097 I StackIF : processResponse: handle 28678 result 0 reason 0
+08-19 18:36:41.916  3284  5471 I ActivityManager: Changes in 10264 11 to 19, 384 to 0
+08-19 18:36:41.918  5170  5170 D FaceWidgetClockRoamManager: isNetworkRoamingState id=2
+08-19 18:36:41.918  5170  5170 D FaceWidgetClockRoamManager: isNetworkRoamingState false
+08-19 18:36:41.918  5170  5170 D FaceWidgetClockRoamManager: onRefreshCarrierInfo(pre, now): false, false
+08-19 18:36:41.918  5170  5170 D FaceWidgetClockPage: onRefreshCarrierInfo : isChanged false mIsRoaming false
+08-19 18:36:41.918  3284  5471 I Telecom : SamsungTelecomServiceImpl : isInCall - callingPackage : com.android.systemui / callingUser : UserHandle{0} / hasCrossUserAccess : true
+08-19 18:36:41.918  5170  5170 D CarrierTextController: info.location: Keyguard, info.carrierText: Freedom, info.carrierTextShort: Freedom
+08-19 18:36:41.919  5170  5170 D CarrierTextController: info.location: null, info.carrierText: Freedom, info.carrierTextShort: Freedom
+08-19 18:36:41.919  5170  5170 D ShadeCarrierGroup: handleUpdateCarrierInfo [Freedom] isLatin=false
+08-19 18:36:41.933  5170  5170 W View    : requestLayout() improperly called by android.widget.FrameLayout{222052c V.E...... ......I. 0,0-1080,2340 #14} during layout: running second layout pass
+08-19 18:36:41.933  5170  5170 W View    : requestLayout() improperly called by com.android.systemui.qs.QSTouchAwareFrameLayout{217cbf5 V.E...... ......ID 0,157-1080,2340 #7e0a0a4c com.android.systemui:id/qs_frame} during layout: running second layout pass
+08-19 18:36:41.937  5170  5170 W RefactorFlag: New code path expects SceneContainerFlag to be enabled.
+08-19 18:36:42.088  1128  1128 D io_stats: !@   8,0 r 290549126 3774350045 w 34844107 416990020 d 5863397 277752372 f 789429 2257895 iot 80295076 0 th 0 0 0 pt 0 inp 0 0 368645.577
+08-19 18:36:42.088  1128  1128 D io_stats: !@ Read_top(KB): binder:2591_2(2591) 91884 ndroid.systemui(5170) 1060 martsuggestions(8129) 632
+08-19 18:36:42.088  1128  1128 D io_stats: !@ Write_top(KB): kworker/u16:4(10491) 660 f2fs_ckpt-254:6(1366) 172 init(1) 32
+08-19 18:36:42.274  2204  2435 D SurfaceFlinger: setDesiredMode 4630947118961383299 {mode={fps=60.00 Hz, modePtr={id=2, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:42.289  2204  2204 I SurfaceFlinger: com.openai.chatgpt/com.openai.chatgpt.MainActivity$_32414#92206 voted ExplicitCategory with category: HighHint
+08-19 18:36:42.289  2204  2204 I SurfaceFlinger: Touch Boost [late] - choose 60.00 Hz
+08-19 18:36:42.289  2204  2204 D SurfaceFlinger: initiateModeChange 4630947118961383299 {mode={fps=60.00 Hz, modePtr={id=2, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:42.289  2204  2204 I SurfaceFlinger: [4630947118961383299] ActiveConfigToHWC, ID : 2
+08-19 18:36:42.290  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] check hs_mode 3
+08-19 18:36:42.290  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:42.290  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:42.290  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] Set mode index:3 1080x2340x60xcmdPHS, hs_mode(3), found_mode(1)
+08-19 18:36:42.291  2133  2348 I SDM     : HWDeviceDRM::UpdateMixerAttributes: Mixer WxH 1080x2340-1 for Peripheral
+08-19 18:36:42.291  2133  2348 I SDM     : HWCDisplay::SubmitDisplayConfig: Active configuration changed from config 8 to 2
+08-19 18:36:42.293  2204  2204 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-19 18:36:42.304  2204  2381 I SurfaceFlinger: Current= 24, Period= 60, hwcPeriod= 60
+08-19 18:36:42.321  2204  2204 I SurfaceFlinger: finalizeDisplayModeChange 4630947118961383299
+08-19 18:36:42.360  5224  5349 D SatelliteController: isInCarrierRoamingNbIotNtn: satellite is disabled
+08-19 18:36:42.362  5224  5349 D SatelliteController: getCarrierRoamingNtnConnectType: Falling back to global carrier config connect type: 0
+08-19 18:36:42.363  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2)
+08-19 18:36:42.363  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2) lastNotifiedSignalStrength level: 0
+08-19 18:36:42.363  5224  5349 D SatelliteController: updateLastNotifiedCarrierRoamingNtnSignalStrengthAndNotify(2) currSignalStrength level: 0
+08-19 18:36:42.388  5170  5170 I WindowManager: WindowManagerGlobal#removeView, ty=2005, view=android.widget.LinearLayout{b1b47bb V.E...... ........ 0,0-591,116}, caller=android.view.WindowManagerGlobal.removeView:654 android.view.WindowManagerImpl.removeViewImmediate:254 android.widget.ToastPresenter.hide:348 
+08-19 18:36:42.397  5170  5170 I VRI[Toast]@1ab4d8: dispatchDetachedFromWindow
+08-19 18:36:42.401  3284  5590 D InputTransport: Input channel destroyed: 'cb70c54', fd=1215
+08-19 18:36:42.402  3284  5590 V WindowManager: Remove Window{cb70c54 u0 Toast}: mSurfaceControl=Surface(name=Toast$_5170#92214)/@0x685677 mAnimatingExit=false mRemoveOnExit=false mHasSurface=true surfaceShowing=true animating=false app-animation=false callers=com.android.server.wm.Session.remove:15 android.view.IWindowSession$Stub.onTransact:813 com.android.server.wm.Session.onTransact:1 android.os.Binder.execTransactInternal:1514 android.os.Binder.execTransact:1454 <bottom of call stack> 
+08-19 18:36:42.405  3284  4850 D CcncManager: CMD_UPDATE_DEVICE_INFO_AND_STATUS
+08-19 18:36:42.406  3284  5590 D PowerManagerService: [api] release WakeLock SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE ACQ=-2s507ms (uid=1000 isFrozen=false pid=3284 ws=WorkSource{10041 com.android.systemui} displayId=0 lock=b3b7613)
+08-19 18:36:42.407  3284  5590 D EdgeLightingManager: hideForWakeLock is no more used
+08-19 18:36:42.407  3284  5590 D PowerManagerService: [api] applyWakeLockFlagsOnReleaseLocked : userActivityNoUpdateLocked is called : SCREEN_BRIGHT_WAKE_LOCK           'WindowManager/displayId:0' ON_AFTER_RELEASE DISABLED (uid=1000 isFrozen=false pid=3284 ws=WorkSource{10041 com.android.systemui} displayId=0 lock=b3b7613)
+08-19 18:36:42.410  5170  5170 D InputTransport: Input channel destroyed: 'cb70c54', fd=604
+08-19 18:36:42.411  3284  4850 D CcncManager: getKnoxMode - restrictions not found: default_b2c
+08-19 18:36:42.411  3284  5590 W NotificationService: Toast already killed. pkg=com.android.systemui token=android.os.BinderProxy@7f9234d
+08-19 18:36:42.421  2204  2204 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{cb70c54 Toast#92213} 1 children}] reparent to OffscreenRoot
+08-19 18:36:42.421  2204  2204 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{cb70c54 Toast#92213} 1 children}] RelativeParent to null
+08-19 18:36:42.421  2204  2204 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{Toast$_5170#92214} no children}] reparent to OffscreenRoot
+08-19 18:36:42.421  2204  2204 I SurfaceFlinger: [LayerHierarchy{RequestedLayerState{Toast$_5170#92214} no children}] RelativeParent to null
+08-19 18:36:42.424  2204  2204 I SurfaceFlinger: id=92213 Removed cb70c54 Toast#92213 (268)
+08-19 18:36:42.424  2204  2204 I SurfaceFlinger: id=92214 Removed Toast$_5170#92214 (268)
+08-19 18:36:42.430  2204  2204 D SurfaceFlinger: Display 4630947118961383299 HWC layers:
+08-19 18:36:42.430  2204  2204 D SurfaceFlinger:        DEVICE |          139217069932607 | 00002102 | RGBA_8888    |    0.0    0.0 1080.0 2340.0 |    0    0 1080 2340 | com.openai.chatgpt/com.openai.chatgpt.MainActivity$_32414#92206 (426)
+08-19 18:36:42.430  2204  2204 D SurfaceFlinger:        DEVICE |           22204980947710 | 00002100 | RGBA_8888    |    0.0    0.0 1080.0   94.0 |    0    0 1080   94 | StatusBar$_5170#104 (120387)
+08-19 18:36:42.430  2204  2204 D SurfaceFlinger:        DEVICE |           25069724123112 | 00002100 | RGBA_8888    |    0.0    0.0   80.0  333.0 |    0 1447   80 1780 | com.sec.android.app.launcher/com.sam[...]l.app.CocktailBarService$_5837#92139 (1)
+08-19 18:36:42.430  2204  2204 D SurfaceFlinger:        DEVICE |           22204980947712 | 00002100 | RGBA_8888    |    0.0    0.0 1080.0  126.0 |    0 2214 1080 2340 | NavigationBar0$_5170#100 (88829)
+08-19 18:36:42.430  2204  2204 D SurfaceFlinger: 
+08-19 18:36:42.438  2204  2204 I SurfaceFlinger: destroyed cb70c54 Toast#92213 form LifecycleManager
+08-19 18:36:42.438  2204  2204 I SurfaceFlinger: destroyed Toast$_5170#92214 form LifecycleManager
+08-19 18:36:42.438  2204  2204 I SurfaceFlinger: id=92213 onLayerDestroyed from LayerHierarchyBuilder(RequestedLayerState{cb70c54 Toast#92213 !handle})
+08-19 18:36:42.438  2204  2204 I SurfaceFlinger: id=92214 onLayerDestroyed from LayerHierarchyBuilder(RequestedLayerState{Toast$_5170#92214 !handle})
+08-19 18:36:42.440  2204  2204 I SurfaceFlinger: id=92213 Destroyed cb70c54 Toast#92213
+08-19 18:36:42.440  2204  2204 I SurfaceFlinger: id=92214 Destroyed Toast$_5170#92214
+08-19 18:36:42.584  2073 17777 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 566172760085454 ns; value = [73, 73, 16, 16, 62, 114, 4, 21, 4208, 28]
+08-19 18:36:42.665  3284 31192 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+08-19 18:36:42.666  3284 31192 D BSOHChargingDataCollector: performBatteryWork++
+08-19 18:36:42.666  3284 31192 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@a0dd8ed
+08-19 18:36:42.666  3284 31192 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+08-19 18:36:42.675  2204  2435 D SurfaceFlinger: setDesiredMode 4630947118961383299 {mode={fps=24.00 Hz, modePtr={id=5, vsyncRate=24.00 Hz, peakRefreshRate=24.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:42.678  2204  2204 I SurfaceFlinger: com.openai.chatgpt/com.openai.chatgpt.MainActivity$_32414#92206 voted ExplicitCategory with category: HighHint
+08-19 18:36:42.679  2204  2204 I SurfaceFlinger: IdleFps - choose 24.00 Hz
+08-19 18:36:42.679  3284 31192 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.015, current:1.845312, soc:0.51, temperature:41.1, status:2, timestamp:1787179002679, voltage_chg:null}
+08-19 18:36:42.679  3284 31192 D BSOHChargingDataCollector: batch_size : 60
+08-19 18:36:42.680  2204  2204 D SurfaceFlinger: initiateModeChange 4630947118961383299 {mode={fps=24.00 Hz, modePtr={id=5, vsyncRate=24.00 Hz, peakRefreshRate=24.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:42.680  2204  2204 I SurfaceFlinger: [4630947118961383299] ActiveConfigToHWC, ID : 8
+08-19 18:36:42.681  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] check hs_mode 3
+08-19 18:36:42.681  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:42.681  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:42.681  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] Set mode index:9 1080x2340x24xcmdPHS, hs_mode(3), found_mode(1)
+08-19 18:36:42.681  2133  2348 I SDM     : HWDeviceDRM::UpdateMixerAttributes: Mixer WxH 1080x2340-1 for Peripheral
+08-19 18:36:42.682  2133  2348 I SDM     : HWCDisplay::SubmitDisplayConfig: Active configuration changed from config 2 to 8
+08-19 18:36:42.688  2204  2381 I SurfaceFlinger: Current= 60, Period= 24, hwcPeriod= 24
+08-19 18:36:42.692  3284 31192 D BSOHChargingDataCollector: Bulk Insertion started
+08-19 18:36:42.696  2204  2204 I SurfaceFlinger: finalizeDisplayModeChange 4630947118961383299
+08-19 18:36:42.699  2591 15288 W installd: Failed to resolve inode 2161593; using /data/data/com.snapchat.android/cache
+08-19 18:36:42.699  2204  2204 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-19 18:36:42.725  3284 31192 D BSOHChargingDataCollector: Bulk inserted 60 records
+08-19 18:36:42.731  3284 31192 D BSOHChargingDataCollector: performBatteryWork--
+08-19 18:36:42.750  3284  3690 D PowerManagerService: UserActivityStateListenerState: 0
+08-19 18:36:42.840 32414 32414 I VRI[MainActivity]@4dc7184: call setFrameRateCategory for touch hint category=no preference, reason=boost timeout, vri=VRI[MainActivity]@4dc7184
+08-19 18:36:42.863  2204  2204 I SurfaceFlinger: [com.openai.chatgpt/com.openai.chatgpt.MainActivity$_32414#92206] setFrameRateCategory: NoPreference
+08-19 18:36:42.876  3284  5590 E AppOps  : Bad call made by uid 1001. Package "com.android.phone" does not belong to uid 1000.
+08-19 18:36:42.876  3284  5590 E AppOps  : Cannot noteOperation: non-application UID 1000
+08-19 18:36:42.945  5190 15909 D IpClient/wlan0: addressUpdated: 2607:fea8:9e0:9000:c036:a3ff:feb5:b610/64 on ifindex 46 flags 0x00000100 scope 0
+08-19 18:36:42.946  5190 15909 D IpClient/wlan0: addressUpdated: 2607:fea8:9e0:9000:5510:9d92:277:1274/64 on ifindex 46 flags 0x00000001 scope 0
+08-19 18:36:42.946  5190 15909 W AlarmManager: Unrecognized alarm listener com.android.networkstack.android.net.ip.IpClientLinkObserver$Dhcp6PdPreferredPrefixAlarmListener@9dd6997
+08-19 18:36:42.952  5540  6942 I EPDG-0 [SmManager]: onNetInterfaceAddressUpdated, addr=xxxx.. , len=38 iface=wlan0 fqdnRetryCount=0
+08-19 18:36:42.952  5540  6942 I EPDG-0 [SmManager]: onNetInterfaceAddressUpdated, addr=xxxx.. , len=37 iface=wlan0 fqdnRetryCount=0
+08-19 18:36:42.953  5540  5540 I EPDG-0 [NetInterfaceEventObserver]: sendInternalMessage, not mobile, ignore
+08-19 18:36:42.954  5540  5540 I EPDG-0 [NetInterfaceEventObserver]: sendInternalMessage, not mobile, ignore
+08-19 18:36:42.956  5190 15909 D ApfFilter: (wlan0): Ignoring RA RA fe80::82d0:4aff:fe60:f5eb -> ff02::1 180s 2607:fea8:9e0:9000::/64 300s/300s DNS 180s 2607:f798:18:10:0:640:7125:5204 2607:f798:18:10:0:640:7125:5198 RIO 180s ::/0  which matches RA fe80::82d0:4aff:fe60:f5eb -> ff02::1 180s 2607:fea8:9e0:9000::/64 300s/300s DNS 180s 2607:f798:18:10:0:640:7125:5204 2607:f798:18:10:0:640:7125:5198 RIO 180s ::/0 
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage(): Output of /proc/2551/stat/ : 2551 (shsusrd0) S 1 2551 0 0 -1 1077936384 3719878 0 95595 0 13583 55837 0 0 20 0 11 0 2127 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 0 0 0 17 6 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.988  2551  2577 I shsusrd : 
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage(): utime 13583 stime 55837 cpu_time_last 69419
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage(): user time = 13583 | system time = 55837 | total = 69420 | cpu_time_delta = 1, clk_tck 100
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage(): time_cur 1787179002 time_last 1787178992
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage(): shsusrd is using 0 pct of CPU - time_delta 10
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage(): shsusrd usage 0
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): time_delta for combined : 10 time_cur 1787179002 time_last_combined 1787178992
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/2551/stat: 2551 (shsusrd0) S 1 2551 0 0 -1 1077936384 1204 0 10 0 1 1 0 0 20 0 11 0 2127 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 17 6 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.988  2551  2577 I shsusrd : 
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2551 utime 1 stime 1 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/2574/stat: 2574 (shsusrd12) S 1 2551 0 0 -1 4194368 3464783 0 34505 0 9942 38708 0 0 20 0 11 0 2131 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 0 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.988  2551  2577 I shsusrd : 
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2574 utime 9942 stime 38708 time_delta 10 clk_tck 100, usage 4800
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/2575/stat: 2575 (shsusrd2) S 1 2551 0 0 -1 4194368 1406 0 2795 0 3 200 0 0 20 0 11 0 2131 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 0 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.988  2551  2577 I shsusrd : 
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2575 utime 3 stime 200 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/2576/stat: 2576 (shsusrd13) S 1 2551 0 0 -1 1077936192 517 0 2110 0 269 1179 0 0 20 0 11 0 2131 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.988  2551  2577 I shsusrd : 
+08-19 18:36:42.988  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2576 utime 269 stime 1179 time_delta 10 clk_tck 100, usage 100
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/2577/stat: 2577 (shsusrd42) R 1 2551 0 0 -1 4194368 9234 0 32815 0 2022 8221 0 0 20 0 11 0 2131 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 0 0 0 -1 2 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.989  2551  2577 I shsusrd : 
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2577 utime 2022 stime 8221 time_delta 10 clk_tck 100, usage 1000
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/2578/stat: 2578 (shsusrd4) S 1 2551 0 0 -1 4194368 0 0 0 0 1 161 0 0 20 0 11 0 2131 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.989  2551  2577 I shsusrd : 
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2578 utime 1 stime 161 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/2579/stat: 2579 (shsusrd14) S 1 2551 0 0 -1 4194368 1239 0 3877 0 5 222 0 0 20 0 11 0 2131 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 6 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.989  2551  2577 I shsusrd : 
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 2579 utime 5 stime 222 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/7510/stat: 7510 (shsusrd14) S 1 2551 0 0 -1 4194368 0 0 198 0 0 178 0 0 20 0 11 0 7014 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 2 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.989  2551  2577 I shsusrd : 
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 7510 utime 0 stime 178 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/7516/stat: 7516 (shsusrd7) S 1 2551 0 0 -1 4194368 26 0 770 0 1 195 0 0 20 0 11 0 7015 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 0 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.989  2551  2577 I shsusrd : 
+08-19 18:36:42.989  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 7516 utime 1 stime 195 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.990  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/7519/stat: 7519 (shsusrd5) S 1 2551 0 0 -1 4194368 111 0 1156 0 4 174 0 0 20 0 11 0 7016 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 3 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.990  2551  2577 I shsusrd : 
+08-19 18:36:42.990  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 7519 utime 4 stime 174 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.990  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Output of /proc/2551/task/7807/stat: 7807 (HwBinder:2551_1) S 1 2551 0 0 -1 1077936192 3 0 0 0 0 0 0 0 20 0 11 0 7206 2467201024 468 18446744073709551615 396160401408 396160659864 549615769472 0 0 0 0 0 1073794810 1 0 0 -1 6 0 0 0 0 0 396160682944 396160683880 396692910080 549615773709 549615773752 549615773752 549615779805 0
+08-19 18:36:42.990  2551  2577 I shsusrd : 
+08-19 18:36:42.990  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): tid 7807 utime 0 stime 0 time_delta 10 clk_tck 100, usage 0
+08-19 18:36:42.990  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Combined CPU usage: total_utime 12248 total_stime 49239 total_cpu_time_seconds 0.00, clk_tck 100
+08-19 18:36:42.990  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Combined shsusrd usage 0
+08-19 18:36:42.990  2551  2577 I shsusrd : shsusr_check_cpu_usage_combined(): Combined shsusrd usage FINAL 0
+08-19 18:36:43.094  2073  7980 I sensors-hal: handle_sns_client_event:190, auto_rotation_debug_2 mode,255, type,1,0 acc,-1.503,7.647,5.848, ar,0, ver,15, pedo,1,e,1,i,3
+08-19 18:36:43.122  2073  8060 I sensors-hal: handle_sns_client_event:574, [0][434] accel_sample [-1.503,  7.668,  5.807] 566173266229360
+08-19 18:36:43.410  2591 15288 W installd: Failed to resolve inode 2126371; using /data/user_de/150/com.facebook.services/cache
+08-19 18:36:43.410  2591 15288 W installd: Failed to resolve inode 2153871; using /data/user_de/150/com.facebook.services/code_cache
+08-19 18:36:43.531  3284  3660 D AppOpHistoryHelper: MetricHandler reporting 97 records.
+08-19 18:36:43.666  3284 31192 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+08-19 18:36:43.666  3284 31192 D BSOHChargingDataCollector: performBatteryWork++
+08-19 18:36:43.666  3284 31192 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@a0dd8ed
+08-19 18:36:43.667  3284 31192 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+08-19 18:36:43.677  3284 31192 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:3.988, current:1.552343, soc:0.51, temperature:41.1, status:2, timestamp:1787179003677, voltage_chg:null}
+08-19 18:36:43.677  3284 31192 D BSOHChargingDataCollector: performBatteryWork--
+08-19 18:36:43.694  2591 15288 D installd: Purging /data/data/app.foodnova.customer/cache/oat_primary/arm64 size=3584 mod=1787178971 from UID=10673 used=-17920 quota=67108864 ratio=-2
+08-19 18:36:43.695  2591 15288 D installd: Purging /data/data/app.foodnova.customer/cache/oat_primary size=3584 mod=1787178971 from UID=10673 used=-21504 quota=67108864 ratio=-3
+08-19 18:36:43.698  2591 15288 E installd: Failed to free up 2147483648 on /data; final free space 1034944512: Success
+08-19 18:36:43.698  2591 15288 W libbinder.Binder: Binder transaction to android.os.IInstalld code 31 took 2521ms. Data bytes: 76 Reply bytes: 152 Flags: 16
+08-19 18:36:43.705  8098  8178 I ExternalStorageServiceImpl: Free cache requested for 1112539136 bytes
+08-19 18:36:43.712 12821 13005 I ExternalStorageServiceImpl: Free cache requested for 1112539136 bytes
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: java.io.IOException: Failed to free 2147483648 on storage device at /data
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at com.android.server.pm.PackageManagerService.freeStorage(qb/111823762 87ddd35bc5d2c408c38f6a57f2ac1076f9dbda659e7b2a275d56e1c946eea8c8:636)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at com.android.server.pm.PackageManagerService$PackageManagerInternalImpl.freeStorage(qb/111823762 87ddd35bc5d2c408c38f6a57f2ac1076f9dbda659e7b2a275d56e1c946eea8c8:3)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at com.android.server.storage.DeviceStorageMonitorService$1.handleMessage(qb/111823762 87ddd35bc5d2c408c38f6a57f2ac1076f9dbda659e7b2a275d56e1c946eea8c8:547)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Handler.dispatchMessage(Handler.java:132)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Looper.dispatchMessage(Looper.java:358)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Looper.loopOnce(Looper.java:288)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.Looper.loop(Looper.java:392)
+08-19 18:36:43.721  3284  4785 W DeviceStorageMonitorService: 	at android.os.HandlerThread.run(HandlerThread.java:139)
+08-19 18:36:43.722  3284  4785 W DeviceStorageMonitorService: check(/data) oldLevel:3, newLevel:3 (usableBytes=1034944512)
+08-19 18:36:43.722  3284  4785 W DeviceStorageMonitorService: updateBroadcasts(/data) oldLevel:3, newLevel:3, seq:1
+08-19 18:36:43.723  3284  4785 D DeviceStorageMonitorService: Available File Node Number is [12338938]
+08-19 18:36:43.723  3284  4785 W DeviceStorageMonitorService: updateBroadcasts_filenode(/data) fn_oldLevel:0, fn_newLevel:0, seq:1
+08-19 18:36:43.730  3284  5790 I NSLocationMonitor: getGPSUsingApps() called
+08-19 18:36:43.732  5803 16068 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-19 18:36:43.744  3284  5790 D FreecessHandler: skipping freeze app.foodnova.customer(10673) result : 2
+08-19 18:36:43.751  3284  4755 D WifiStaIfaceHidlImpl: getCachedScanData is not implemented by HIDL
+08-19 18:36:43.755  3284  3417 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 75938, isSameBssidAndFreq true
+08-19 18:36:43.757  3284  4868 I SemWifiLinkQualityMonitor: Link stat: 622 / 41 / 1.50 (12) / 78 / -38.0 || 100.0 : 78.00 / B (B) || a292ed282417: 0.436 / 18.333 / N / V || N N / 0 0 / N 2.0 / N -1 0.000 0.000 / N / X 0 / 368647245 0 0 || 2026-08-19 18:36:43  / 0: 0 0 0 0 0 0 / 0: 0 0 0 0 0 0 / 0: 0 0 0 0 0 0
+08-19 18:36:43.907  2204  2381 I SurfaceFlinger: Current= 24, Period= 24, hwcPeriod= 24
+08-19 18:36:43.910  2204  2435 D SurfaceFlinger: setDesiredMode 4630947118961383299 {mode={fps=60.00 Hz, modePtr={id=2, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:43.933  2204  2204 I SurfaceFlinger: No layers with votes - choose 60.00 Hz
+08-19 18:36:43.935  2204  2204 D SurfaceFlinger: initiateModeChange 4630947118961383299 {mode={fps=60.00 Hz, modePtr={id=2, vsyncRate=60.00 Hz, peakRefreshRate=60.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:43.935  2204  2204 I SurfaceFlinger: [4630947118961383299] ActiveConfigToHWC, ID : 2
+08-19 18:36:43.936  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] check hs_mode 3
+08-19 18:36:43.937  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:43.937  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:43.937  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] Set mode index:3 1080x2340x60xcmdPHS, hs_mode(3), found_mode(1)
+08-19 18:36:43.937  2133  2348 I SDM     : HWDeviceDRM::UpdateMixerAttributes: Mixer WxH 1080x2340-1 for Peripheral
+08-19 18:36:43.937  2133  2348 I SDM     : HWCDisplay::SubmitDisplayConfig: Active configuration changed from config 8 to 2
+08-19 18:36:43.948  2204  2381 I SurfaceFlinger: Current= 24, Period= 60, hwcPeriod= 60
+08-19 18:36:43.965  2204  2204 I SurfaceFlinger: finalizeDisplayModeChange 4630947118961383299
+08-19 18:36:44.089  1128  1128 D io_stats: !@   8,0 r 290554791 3774373357 w 34844276 416990828 d 5863469 277755492 f 789441 2257907 iot 80297064 0 th 0 0 0 pt 0 inp 0 0 368647.579
+08-19 18:36:44.137  2138 29944 I QC2Comp : [vp9D_2693] Stats: Pending(0) i/p-done(0) Works: Q: 14/Done 15|Work-Rate: Q(0.0/s Avg=0.0/s) Done(0.000/s Avg=0.000/s)| Stream: 24.39fps 222.9Kbps
+08-19 18:36:44.138  2138 29944 I QC2Comp : [vp9D_2693] Mem-usage:  [In-1D: 5 bufs 40.000 MB] [1D-3551: 13 bufs 0.203 MB] [2D-3552: 23 bufs 8.445 MB] | Total: 48.648 MB
+08-19 18:36:44.162  2204  2435 D SurfaceFlinger: setDesiredMode 4630947118961383299 {mode={fps=24.00 Hz, modePtr={id=5, vsyncRate=24.00 Hz, peakRefreshRate=24.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:44.166  2204  2435 W libc    : Access denied finding property "vendor.mpctl.init.complete"
+08-19 18:36:44.168  2204  2204 I SurfaceFlinger: IdleFps - choose 24.00 Hz
+08-19 18:36:44.169  2204  2204 D SurfaceFlinger: initiateModeChange 4630947118961383299 {mode={fps=24.00 Hz, modePtr={id=5, vsyncRate=24.00 Hz, peakRefreshRate=24.00 Hz}}, emitEvent=false, force=false}
+08-19 18:36:44.169  2204  2204 I SurfaceFlinger: [4630947118961383299] ActiveConfigToHWC, ID : 8
+08-19 18:36:44.170  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] check hs_mode 3
+08-19 18:36:44.170  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:44.170  2133  2348 W SDM     : HWDeviceDRM::GetSupportedBitClkRate: Requested rate not supported: 951080000
+08-19 18:36:44.171  2133  2348 I SDM     : HWDeviceDRM::SetDisplaySwitchMode: [DispConfigs] Set mode index:9 1080x2340x24xcmdPHS, hs_mode(3), found_mode(1)
+08-19 18:36:44.171  2133  2348 I SDM     : HWDeviceDRM::UpdateMixerAttributes: Mixer WxH 1080x2340-1 for Peripheral
+08-19 18:36:44.171  2133  2348 I SDM     : HWCDisplay::SubmitDisplayConfig: Active configuration changed from config 2 to 8
+08-19 18:36:44.173  2204  2381 I SurfaceFlinger: Current= 60, Period= 24, hwcPeriod= 24
+08-19 18:36:44.182  2204  2204 I SurfaceFlinger: finalizeDisplayModeChange 4630947118961383299
+08-19 18:36:44.668  3284 31192 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+08-19 18:36:44.668  3284 31192 D BSOHChargingDataCollector: performBatteryWork++
+08-19 18:36:44.668  3284 31192 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@a0dd8ed
+08-19 18:36:44.668  3284 31192 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+08-19 18:36:44.684  3284 31192 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.013, current:1.870312, soc:0.51, temperature:41.1, status:2, timestamp:1787179004684, voltage_chg:null}
+08-19 18:36:44.684  3284 31192 D BSOHChargingDataCollector: performBatteryWork--
+08-19 18:36:45.144  2073 17777 I sensors-hal: handle_sns_std_sensor_event:90, light_cct: ts = 566175320094672 ns; value = [73, 73, 16, 16, 61, 114, 4, 21, 4192, 24]
+08-19 18:36:45.185  2073  8060 I sensors-hal: handle_sns_client_event:574, [0][465] accel_sample [-1.588,  7.664,  5.773] 566175329511964
+08-19 18:36:45.669  3284 31192 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+08-19 18:36:45.669  3284 31192 D BSOHChargingDataCollector: performBatteryWork++
+08-19 18:36:45.669  3284 31192 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@a0dd8ed
+08-19 18:36:45.670  3284 31192 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+08-19 18:36:45.681  3284 31192 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.015, current:1.686718, soc:0.51, temperature:41.1, status:2, timestamp:1787179005681, voltage_chg:null}
+08-19 18:36:45.681  3284 31192 D BSOHChargingDataCollector: performBatteryWork--
+08-19 18:36:45.723  5190 15909 D IpClient/wlan0: interfaceLinkStateChanged: ifindex 46 up
+08-19 18:36:45.809  5190 15909 D IpClient/wlan0: addressUpdated: 2607:fea8:9e0:9000:c036:a3ff:feb5:b610/64 on ifindex 46 flags 0x00000100 scope 0
+08-19 18:36:45.809  5190 15909 D IpClient/wlan0: addressUpdated: 2607:fea8:9e0:9000:5510:9d92:277:1274/64 on ifindex 46 flags 0x00000001 scope 0
+08-19 18:36:45.810  5190 15909 W AlarmManager: Unrecognized alarm listener com.android.networkstack.android.net.ip.IpClientLinkObserver$Dhcp6PdPreferredPrefixAlarmListener@9dd6997
+08-19 18:36:45.811  5190 15909 D ApfFilter: (wlan0): Ignoring RA RA fe80::82d0:4aff:fe60:f5eb -> ff02::1 180s 2607:fea8:9e0:9000::/64 300s/300s DNS 180s 2607:f798:18:10:0:640:7125:5204 2607:f798:18:10:0:640:7125:5198 RIO 180s ::/0  which matches RA fe80::82d0:4aff:fe60:f5eb -> ff02::1 180s 2607:fea8:9e0:9000::/64 300s/300s DNS 180s 2607:f798:18:10:0:640:7125:5204 2607:f798:18:10:0:640:7125:5198 RIO 180s ::/0 
+08-19 18:36:45.812  5540  6942 I EPDG-0 [SmManager]: onNetInterfaceAddressUpdated, addr=xxxx.. , len=38 iface=wlan0 fqdnRetryCount=0
+08-19 18:36:45.813  5540  6942 I EPDG-0 [SmManager]: onNetInterfaceAddressUpdated, addr=xxxx.. , len=37 iface=wlan0 fqdnRetryCount=0
+08-19 18:36:45.813  5540  5540 I EPDG-0 [NetInterfaceEventObserver]: sendInternalMessage, not mobile, ignore
+08-19 18:36:45.813  5540  5540 I EPDG-0 [NetInterfaceEventObserver]: sendInternalMessage, not mobile, ignore
+08-19 18:36:45.817  2138 14928 I QC2Comp : [vp9D_2860] Stats: Pending(0) i/p-done(0) Works: Q: 10/Done 11|Work-Rate: Q(0.0/s Avg=0.0/s) Done(0.000/s Avg=0.001/s)| Stream: 30.30fps 11.1Kbps
+08-19 18:36:45.817  2138 20855 I QC2Comp : [avcD_2871] Stats: Pending(4) i/p-done(0) Works: Q: 612/Done 609|Work-Rate: Q(0.0/s Avg=0.0/s) Done(0.000/s Avg=0.031/s)| Stream: 30.00fps 2.3Mbps
+08-19 18:36:45.817  2138 14928 I QC2Comp : [vp9D_2860] Mem-usage:  [In-1D: 5 bufs 40.000 MB] [1D-3763: 17 bufs 0.266 MB] [2D-3764: 23 bufs 8.445 MB] | Total: 48.711 MB
+08-19 18:36:45.817  2138 20855 I QC2Comp : [avcD_2871] Mem-usage:  [In-1D: 7 bufs 56.000 MB] [1D-3775: 26 bufs 0.406 MB] [2D-3776: 30 bufs 14.531 MB] | Total: 70.938 MB
+08-19 18:36:45.860  3284  3621 I ActivityManager: Changes in 10176 5 to 6, 400 to 384
+08-19 18:36:45.863  3284  3621 I ActivityManager: Changes in 10084 5 to 6, 400 to 384
+08-19 18:36:45.865  2562 20985 I CameraService: onUidStateChanged: uid=10084, procState is changed. (5 -> 6)
+08-19 18:36:45.881  3284  3621 I ActivityManager: Changes in 10104 5 to 15, 400 to 256
+08-19 18:36:45.944  2073 26960 I sensors-hal: handle_sns_std_sensor_event:436, [SSC_LIGHT] P: 73(73),m:13,c:7,b:114,c0:4176,l:73,f(r):82,u(bl):90,j:59
+08-19 18:36:46.090  1128  1128 D io_stats: !@   8,0 r 290555693 3774377277 w 34844365 416991180 d 5863469 277755492 f 789443 2257915 iot 80299064 0 th 0 0 0 pt 0 inp 0 0 368649.580
+08-19 18:36:46.091  1128  1128 D io_stats: !@ Read_top(KB): rs.media.module(8098) 13784 binder:2591_2(2591) 12924 android.vending(21467) 392
+08-19 18:36:46.091  1128  1128 D io_stats: !@ Write_top(KB): f2fs_ckpt-254:6(1366) 116 kworker/u16:0(28076) 80 system_server(3284) 76
+08-19 18:36:46.091  1128  1128 D io_stats: !@ MemInfo(KB): total 7242412 free 91744 avail 1725084 actv(f) 383592 inactv(f) 497488 dirty 2552 wb 0 anonpg 1418536 slab 905068
+08-19 18:36:46.214 30203 30203 I wpa_supplicant: Heartbeat 17740
+08-19 18:36:46.216  3284  5790 I NSLocationMonitor: getGPSUsingApps() called
+08-19 18:36:46.216  5803 16068 I NSLocationManager_FLP: getGPSUsingApps, No change
+08-19 18:36:46.224  3284  5790 D FreecessHandler: skipping freeze com.openai.chatgpt(10446) result : 12
+08-19 18:36:46.670  3284 31192 D BSOHChargingDataCollector:  BSOH Sys-servce ... 
+08-19 18:36:46.670  3284 31192 D BSOHChargingDataCollector: performBatteryWork++
+08-19 18:36:46.670  3284 31192 D BSOHChargingDataCollector: performBatteryWork battery com.android.server.bsoh.device.PrimeBattery@a0dd8ed
+08-19 18:36:46.671  3284 31192 D BSOHChargingDataCollector: primeBatt readVoltage from sysFsBattVolt,  path : /sys/class/power_supply/battery/batt_voltage_now
+08-19 18:36:46.683  3284 31192 D BSOHChargingDataCollector: 0 	 BattData addData data : BattData { voltage:4.017, current:1.880468, soc:0.51, temperature:41.1, status:2, timestamp:1787179006683, voltage_chg:null}
+08-19 18:36:46.683  3284 31192 D BSOHChargingDataCollector: performBatteryWork--
+08-19 18:36:46.765  3284  4755 D WifiStaIfaceHidlImpl: getCachedScanData is not implemented by HIDL
+08-19 18:36:46.769  3284  3417 D SemWifiUsabilityStatsMonitor: onWifiUsabilityStats - seqNum 75939, isSameBssidAndFreq true
+08-19 18:36:46.773  3284  4868 I SemWifiLinkQualityMonitor: Link stat: 408 / 25 / 1.00 (4) / 78 / -38.0 || 100.0 : 78.00 / B (B) || a292ed282417: 0.179 / 44.627 / N / V || N N / 0 0 / N 2.0 / N -1 0.000 0.000 / N / X 0 / 368650261 0 0 || 2026-08-19 18:36:46  / 0: 0 0 0 0 0 0 / 0: 0 0 0 0 0 0 / 0: 0 0 0 0 0 0
+08-19 18:36:46.824  3284  4866 I SemWifiServiceDetector: Service det. suspended: T / T / 16115
+08-19 18:36:46.866 24846 10934 I erkz    : (REDACTED) HDM. appOpsListener %s %s
+08-19 18:36:46.867 24846 10934 I erkz    : (REDACTED) HDM. Ignoring irrelevant audio permission changes for package %s
+08-19 18:36:46.867 24846 10934 I erkz    : (REDACTED) HDM. appOpsListener %s %s
+08-19 18:36:46.867 24846 10934 I erkz    : (REDACTED) HDM. Ignoring irrelevant audio permission changes for package %s
+08-19 18:36:47.035  5780  5780 I adbd    : adbd service requested 'shell,v2:export ANDROID_LOG_TAGS=''; exec logcat '-d' '-t' '500''

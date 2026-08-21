@@ -1106,168 +1106,165 @@ class _RiderTrackingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Card(
-      title: order.riderArrived ? 'Rider has arrived' : 'Track Rider',
-      icon: order.riderArrived
-          ? Icons.delivery_dining_rounded
-          : Icons.map_rounded,
-      child: location.when(
-        loading: () => const SizedBox(
-          height: 220,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-        error: (error, _) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: const [
-            _MutedText('Rider tracking temporarily unavailable.'),
-          ],
-        ),
-        data: (data) {
-          if (data == null) {
-            return const _MutedText(
+    return location.when(
+      loading: () => const SizedBox(
+        height: 220,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => const _Card(
+        title: 'Live tracking',
+        icon: Icons.map_rounded,
+        child: _MutedText('Rider tracking temporarily unavailable.'),
+      ),
+      data: (data) {
+        if (data == null) {
+          return const _Card(
+            title: 'Live tracking',
+            icon: Icons.map_rounded,
+            child: _MutedText(
               'Tracking will appear when your rider picks up the order.',
-            );
-          }
-          if (!data.trackingVisible && !data.hasRiderCoordinates) {
-            return const _MutedText(
-              'Tracking will appear as soon as your rider location is available.',
-            );
-          }
-          if (!data.hasRiderCoordinates) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: const [
-                _MutedText(
-                  'Waiting for rider location...',
-                ),
-              ],
-            );
-          }
-          final riderPoint = LatLng(data.riderLatitude!, data.riderLongitude!);
-          final customerPoint = data.hasCustomerCoordinates
-              ? LatLng(data.customerLatitude!, data.customerLongitude!)
-              : null;
-          final pickupPoint =
-              data.pickupLatitude != null && data.pickupLongitude != null
-                  ? LatLng(data.pickupLatitude!, data.pickupLongitude!)
-                  : null;
-          final routeDestinationPoint = data.routeDestinationLatitude != null &&
-                  data.routeDestinationLongitude != null
-              ? LatLng(
-                  data.routeDestinationLatitude!,
-                  data.routeDestinationLongitude!,
-                )
-              : customerPoint;
-          final routePoints = data.routePolyline
-              .map((point) => LatLng(point['latitude']!, point['longitude']!))
-              .toList();
-          debugPrint(
-            'TRACK_RIDER_RENDER rider=${data.riderLatitude},${data.riderLongitude} '
-            'customer=${data.customerLatitude},${data.customerLongitude} '
-            'distance=${data.distanceMeters} eta=${data.etaMinutes}',
-          );
-          debugPrint(
-            'TRACKING_MAP_DATA '
-            'trackingVisible=${data.trackingVisible} '
-            'trackingAvailable=${data.trackingAvailable} '
-            'hasRider=${data.hasRiderCoordinates} '
-            'hasCustomer=${data.hasCustomerCoordinates} '
-            'routePoints=${routePoints.length}',
-          );
-          debugPrint(
-            'TRACKING_RIDER_COORDS '
-            'latitude=${data.riderLatitude} longitude=${data.riderLongitude}',
-          );
-          debugPrint(
-            'TRACKING_DESTINATION_COORDS '
-            'latitude=${data.customerLatitude} longitude=${data.customerLongitude}',
-          );
-          debugPrint(
-            'TRACKING_POLYLINE_POINTS count=${routePoints.length} '
-            'first=${routePoints.isEmpty ? '' : routePoints.first} '
-            'last=${routePoints.isEmpty ? '' : routePoints.last}',
-          );
-
-          final riderName =
-              data.riderName.isEmpty ? order.riderName : data.riderName;
-          final vehicleType = data.vehicleType.isEmpty
-              ? order.riderVehicleType
-              : data.vehicleType;
-          final eta = _formatEta(data.etaMinutes);
-          final trackingHeight =
-              math.max(520.0, MediaQuery.sizeOf(context).height * .72);
-
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: SizedBox(
-              height: trackingHeight,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: _TrackingMap(
-                      riderPoint: riderPoint,
-                      pickupPoint: pickupPoint,
-                      customerPoint: customerPoint,
-                      routeDestinationPoint: routeDestinationPoint,
-                      routePoints: routePoints,
-                      riderName: riderName,
-                      vehicleType: vehicleType,
-                      workerType: data.workerType,
-                      serverHeading: data.heading,
-                      speedMetersPerSecond: data.speedMetersPerSecond,
-                    ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    right: 14,
-                    top: 14,
-                    child: Row(
-                      children: [
-                        _LiveTrackingBadge(
-                          label: _trackingStageLabel(data.deliveryStatus),
-                        ),
-                        const Spacer(),
-                        _MapMetricChip(
-                          icon: Icons.timer_rounded,
-                          label: eta,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    left: 14,
-                    right: 14,
-                    top: 64,
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _MapMetricChip(
-                        icon: Icons.route_rounded,
-                        label: _formatDistance(data.distanceMeters),
-                      ),
-                    ),
-                  ),
-                  DraggableScrollableSheet(
-                    initialChildSize: .28,
-                    minChildSize: .22,
-                    maxChildSize: .56,
-                    builder: (context, controller) {
-                      return _TrackingBottomSheet(
-                        controller: controller,
-                        order: order,
-                        deliveryStatus: data.deliveryStatus,
-                        eta: eta,
-                        distance: _formatDistance(data.distanceMeters),
-                        lastUpdated: _formatRelativeTime(data.lastUpdatedAt),
-                        hasDestination: customerPoint != null,
-                      );
-                    },
-                  ),
-                ],
-              ),
             ),
           );
-        },
-      ),
+        }
+        if (!data.trackingVisible && !data.hasRiderCoordinates) {
+          return const _Card(
+            title: 'Live tracking',
+            icon: Icons.map_rounded,
+            child: _MutedText(
+              'Tracking will appear as soon as your rider location is available.',
+            ),
+          );
+        }
+        if (!data.hasRiderCoordinates) {
+          return const _Card(
+            title: 'Live tracking',
+            icon: Icons.map_rounded,
+            child: _MutedText('Waiting for rider location...'),
+          );
+        }
+        final riderPoint = LatLng(data.riderLatitude!, data.riderLongitude!);
+        final customerPoint = data.hasCustomerCoordinates
+            ? LatLng(data.customerLatitude!, data.customerLongitude!)
+            : null;
+        final pickupPoint =
+            data.pickupLatitude != null && data.pickupLongitude != null
+                ? LatLng(data.pickupLatitude!, data.pickupLongitude!)
+                : null;
+        final routeDestinationPoint = data.routeDestinationLatitude != null &&
+                data.routeDestinationLongitude != null
+            ? LatLng(
+                data.routeDestinationLatitude!,
+                data.routeDestinationLongitude!,
+              )
+            : customerPoint;
+        final routePoints = data.routePolyline
+            .map((point) => LatLng(point['latitude']!, point['longitude']!))
+            .toList();
+        debugPrint(
+          'TRACK_RIDER_RENDER rider=${data.riderLatitude},${data.riderLongitude} '
+          'customer=${data.customerLatitude},${data.customerLongitude} '
+          'distance=${data.distanceMeters} eta=${data.etaMinutes}',
+        );
+        debugPrint(
+          'TRACKING_MAP_DATA '
+          'trackingVisible=${data.trackingVisible} '
+          'trackingAvailable=${data.trackingAvailable} '
+          'hasRider=${data.hasRiderCoordinates} '
+          'hasCustomer=${data.hasCustomerCoordinates} '
+          'routePoints=${routePoints.length}',
+        );
+        debugPrint(
+          'TRACKING_RIDER_COORDS '
+          'latitude=${data.riderLatitude} longitude=${data.riderLongitude}',
+        );
+        debugPrint(
+          'TRACKING_DESTINATION_COORDS '
+          'latitude=${data.customerLatitude} longitude=${data.customerLongitude}',
+        );
+        debugPrint(
+          'TRACKING_POLYLINE_POINTS count=${routePoints.length} '
+          'first=${routePoints.isEmpty ? '' : routePoints.first} '
+          'last=${routePoints.isEmpty ? '' : routePoints.last}',
+        );
+
+        final riderName =
+            data.riderName.isEmpty ? order.riderName : data.riderName;
+        final vehicleType = data.vehicleType.isEmpty
+            ? order.riderVehicleType
+            : data.vehicleType;
+        final eta = _formatEta(data.etaMinutes);
+        final trackingHeight =
+            math.max(520.0, MediaQuery.sizeOf(context).height * .72);
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: SizedBox(
+            height: trackingHeight,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: _TrackingMap(
+                    riderPoint: riderPoint,
+                    pickupPoint: pickupPoint,
+                    customerPoint: customerPoint,
+                    routeDestinationPoint: routeDestinationPoint,
+                    routePoints: routePoints,
+                    riderName: riderName,
+                    vehicleType: vehicleType,
+                    workerType: data.workerType,
+                    serverHeading: data.heading,
+                    speedMetersPerSecond: data.speedMetersPerSecond,
+                  ),
+                ),
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  top: 14,
+                  child: Row(
+                    children: [
+                      _LiveTrackingBadge(
+                        label: _trackingStageLabel(data.deliveryStatus),
+                      ),
+                      const Spacer(),
+                      _MapMetricChip(
+                        icon: Icons.timer_rounded,
+                        label: eta,
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  top: 64,
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _MapMetricChip(
+                      icon: Icons.route_rounded,
+                      label: _formatDistance(data.distanceMeters),
+                    ),
+                  ),
+                ),
+                DraggableScrollableSheet(
+                  initialChildSize: .21,
+                  minChildSize: .17,
+                  maxChildSize: .36,
+                  builder: (context, controller) {
+                    return _TrackingBottomSheet(
+                      controller: controller,
+                      riderArrived: order.riderArrived,
+                      deliveryStatus: data.deliveryStatus,
+                      eta: eta,
+                      distance: _formatDistance(data.distanceMeters),
+                      lastUpdated: _formatRelativeTime(data.lastUpdatedAt),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1404,96 +1401,6 @@ class _RiderProfileTile extends StatelessWidget {
   }
 }
 
-class _TrackingStageTimeline extends StatelessWidget {
-  const _TrackingStageTimeline({required this.status});
-
-  final String status;
-
-  static const _stages = [
-    ('ACCEPTED', 'Accepted', Icons.assignment_turned_in_rounded),
-    ('ARRIVED_AT_PICKUP', 'At Pickup', Icons.storefront_rounded),
-    ('PICKED_UP', 'Picked Up', Icons.shopping_bag_rounded),
-    ('IN_TRANSIT', 'On Route', Icons.delivery_dining_rounded),
-    ('ARRIVED', 'Arrived', Icons.location_on_rounded),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final normalized = _normalizeTrackingStatus(status);
-    final active = math.max(
-      0,
-      _stages.indexWhere((stage) => stage.$1 == normalized),
-    );
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          for (var i = 0; i < _stages.length; i++) ...[
-            Expanded(
-              child: Column(
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    width: i == active ? 34 : 28,
-                    height: i == active ? 34 : 28,
-                    decoration: BoxDecoration(
-                      color: i <= active ? scheme.primary : scheme.surface,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: i <= active
-                            ? scheme.primary
-                            : scheme.outlineVariant,
-                      ),
-                    ),
-                    child: Icon(
-                      _stages[i].$3,
-                      size: i == active ? 18 : 15,
-                      color: i <= active
-                          ? scheme.onPrimary
-                          : scheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _stages[i].$2,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: i == active
-                          ? scheme.onSurface
-                          : scheme.onSurfaceVariant,
-                      fontWeight:
-                          i == active ? FontWeight.w900 : FontWeight.w700,
-                      fontSize: 10,
-                      height: 1.1,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (i != _stages.length - 1)
-              Container(
-                width: 18,
-                height: 3,
-                margin: const EdgeInsets.only(bottom: 26),
-                decoration: BoxDecoration(
-                  color: i < active ? scheme.primary : scheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _LiveTrackingBadge extends StatelessWidget {
   const _LiveTrackingBadge({required this.label});
 
@@ -1586,21 +1493,19 @@ class _MapMetricChip extends StatelessWidget {
 class _TrackingBottomSheet extends StatelessWidget {
   const _TrackingBottomSheet({
     required this.controller,
-    required this.order,
+    required this.riderArrived,
     required this.deliveryStatus,
     required this.eta,
     required this.distance,
     required this.lastUpdated,
-    required this.hasDestination,
   });
 
   final ScrollController controller;
-  final OrderSummary order;
+  final bool riderArrived;
   final String deliveryStatus;
   final String eta;
   final String distance;
   final String lastUpdated;
-  final bool hasDestination;
 
   @override
   Widget build(BuildContext context) {
@@ -1651,7 +1556,7 @@ class _TrackingBottomSheet extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          if (order.riderArrived) ...[
+          if (riderArrived) ...[
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -1669,17 +1574,15 @@ class _TrackingBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 14),
           ],
-          _TrackingStageTimeline(status: deliveryStatus),
-          if (!hasDestination) ...[
-            const SizedBox(height: 12),
-            const _MutedText(
-              'Rider location is live. Destination coordinates are not available yet, so route distance may be delayed.',
+          Text(
+            'Updated $lastUpdated',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
             ),
-          ],
-          const SizedBox(height: 14),
-          _InfoRow(label: 'Order', value: '#${order.orderCode}'),
-          const SizedBox(height: 8),
-          _InfoRow(label: 'Last updated', value: lastUpdated),
+          ),
         ],
       ),
     );
@@ -1889,6 +1792,8 @@ class _TrackingMapState extends State<_TrackingMap> {
   final _cameraPolicy = TrackingCameraPolicy();
   final _headingPolicy = RiderHeadingPolicy();
   BitmapDescriptor? _riderIcon;
+  BitmapDescriptor? _pickupIcon;
+  BitmapDescriptor? _customerIcon;
 
   @override
   void initState() {
@@ -1911,6 +1816,7 @@ class _TrackingMapState extends State<_TrackingMap> {
       speedMetersPerSecond: widget.speedMetersPerSecond,
     );
     _loadRiderIcon();
+    _loadDestinationIcons();
     final destinationLog = widget.routeDestinationPoint == null
         ? 'none'
         : '${widget.routeDestinationPoint!.latitude},${widget.routeDestinationPoint!.longitude}';
@@ -2046,6 +1952,25 @@ class _TrackingMapState extends State<_TrackingMap> {
     if (mounted) setState(() => _riderIcon = icon);
   }
 
+  Future<void> _loadDestinationIcons() async {
+    final icons = await Future.wait([
+      _buildDestinationMarkerIcon(
+        Icons.storefront_rounded,
+        FoodNovaColors.primary,
+      ),
+      _buildDestinationMarkerIcon(
+        Icons.home_rounded,
+        const Color(0xFF17324D),
+      ),
+    ]);
+    if (mounted) {
+      setState(() {
+        _pickupIcon = icons[0];
+        _customerIcon = icons[1];
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -2078,7 +2003,7 @@ class _TrackingMapState extends State<_TrackingMap> {
       Marker(
         markerId: const MarkerId('rider'),
         position: widget.riderPoint,
-        anchor: const Offset(.5, .5),
+        anchor: const Offset(riderMarkerAnchorX, riderMarkerAnchorY),
         flat: true,
         rotation: (_headingPolicy.heading +
                 _markerOrientationOffset(
@@ -2095,16 +2020,25 @@ class _TrackingMapState extends State<_TrackingMap> {
         Marker(
           markerId: const MarkerId('pickup'),
           position: widget.pickupPoint!,
+          anchor: const Offset(
+            destinationMarkerAnchorX,
+            destinationMarkerAnchorY,
+          ),
           infoWindow: const InfoWindow(title: 'FoodNova pickup'),
-          icon:
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon: _pickupIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         ),
       if (widget.customerPoint != null)
         Marker(
           markerId: const MarkerId('customer'),
           position: widget.customerPoint!,
+          anchor: const Offset(
+            destinationMarkerAnchorX,
+            destinationMarkerAnchorY,
+          ),
           infoWindow: const InfoWindow(title: 'Delivery address'),
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          icon: _customerIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
         ),
     };
     debugPrint(
@@ -2157,18 +2091,18 @@ class _TrackingMapState extends State<_TrackingMap> {
             },
           ),
         ),
-        Positioned(
-          right: 14,
-          bottom: 14,
-          child: FloatingActionButton.small(
-            heroTag: null,
-            tooltip: 'Recenter map',
-            onPressed: _recenter,
-            child: Icon(_cameraPolicy.followingRider
-                ? Icons.gps_fixed_rounded
-                : Icons.gps_not_fixed_rounded),
+        if (!_cameraPolicy.followingRider)
+          Positioned(
+            right: 14,
+            bottom: 126,
+            child: FloatingActionButton.extended(
+              heroTag: null,
+              tooltip: 'Follow rider',
+              onPressed: _recenter,
+              icon: const Icon(Icons.gps_fixed_rounded),
+              label: const Text('Follow rider'),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -3230,13 +3164,16 @@ String _normalizeTrackingStatus(String status) {
 String _trackingStageLabel(String status) {
   switch (_normalizeTrackingStatus(status)) {
     case 'ARRIVED':
-      return 'Rider arrived';
+      return 'Arrived';
     case 'IN_TRANSIT':
-      return 'Rider on route';
+      return 'On the way to you';
     case 'PICKED_UP':
-      return 'Order picked up';
+      return 'On the way to you';
     case 'ARRIVED_AT_PICKUP':
-      return 'Rider at pickup';
+      return 'Arriving at pickup';
+    case 'ASSIGNED':
+    case 'ACCEPTED':
+      return 'On the way to FoodNova';
     default:
       return 'Live tracking';
   }
@@ -3284,6 +3221,45 @@ Future<BitmapDescriptor> _buildRiderMarkerIcon(RiderMarkerKind kind) async {
   );
   final image =
       await recorder.endRecording().toImage(size.toInt(), size.toInt());
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
+}
+
+Future<BitmapDescriptor> _buildDestinationMarkerIcon(
+  IconData icon,
+  Color color,
+) async {
+  const width = 104.0;
+  const height = 124.0;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  final center = const Offset(width / 2, 50);
+  final path = Path()
+    ..moveTo(32, 82)
+    ..lineTo(width / 2, 118)
+    ..lineTo(72, 82)
+    ..close();
+  canvas.drawPath(path, Paint()..color = color);
+  canvas.drawCircle(center, 46, Paint()..color = Colors.white);
+  canvas.drawCircle(center, 41, Paint()..color = color);
+  final painter = TextPainter(
+    text: TextSpan(
+      text: String.fromCharCode(icon.codePoint),
+      style: TextStyle(
+        fontSize: 50,
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+        color: Colors.white,
+      ),
+    ),
+    textDirection: ui.TextDirection.ltr,
+  )..layout();
+  painter.paint(
+    canvas,
+    Offset((width - painter.width) / 2, center.dy - painter.height / 2),
+  );
+  final image =
+      await recorder.endRecording().toImage(width.toInt(), height.toInt());
   final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
   return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
 }
