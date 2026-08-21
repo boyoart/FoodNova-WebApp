@@ -4313,6 +4313,7 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
             "name": (worker.full_name if worker else None) or getattr(order, "rider_name", "") or "",
             "phone": (worker.phone if worker else None) or getattr(order, "rider_phone", "") or "",
             "vehicle_type": (worker.vehicle_type if worker else None) or getattr(order, "rider_vehicle_type", "") or "",
+            "worker_type": (worker.worker_type if worker else None) or getattr(order, "delivery_worker_type", "") or "",
             "vehicle_number": (worker.plate_number if worker else None) or getattr(order, "rider_vehicle_number", "") or "",
             "photo_url": rider_profile_photo_url(worker) or getattr(order, "rider_photo_url", "") or "",
             "rider_photo_url": rider_profile_photo_url(worker) or getattr(order, "rider_photo_url", "") or "",

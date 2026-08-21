@@ -39,6 +39,9 @@ class RiderLocation {
     required this.riderPhone,
     required this.riderPhotoUrl,
     required this.vehicleType,
+    required this.workerType,
+    required this.heading,
+    required this.speedMetersPerSecond,
     required this.riderLatitude,
     required this.riderLongitude,
     required this.customerLatitude,
@@ -61,6 +64,9 @@ class RiderLocation {
   final String riderPhone;
   final String riderPhotoUrl;
   final String vehicleType;
+  final String workerType;
+  final double? heading;
+  final double? speedMetersPerSecond;
   final double? riderLatitude;
   final double? riderLongitude;
   final double? customerLatitude;
@@ -146,6 +152,12 @@ class RiderLocation {
           '${rider['profile_photo_url'] ?? rider['rider_profile_photo_url'] ?? rider['rider_photo_url'] ?? rider['photo'] ?? rider['photo_url'] ?? rider['selfie_url'] ?? ''}',
       vehicleType:
           '${rider['vehicle_type'] ?? rider['vehicleType'] ?? json['vehicle_type'] ?? ''}',
+      workerType:
+          '${rider['worker_type'] ?? rider['workerType'] ?? json['worker_type'] ?? ''}',
+      heading:
+          numberFrom([rider['heading'], location['heading'], json['heading']]),
+      speedMetersPerSecond:
+          numberFrom([rider['speed'], location['speed'], json['speed']]),
       riderLatitude: numberFrom([
         rider['latitude'],
         rider['lat'],

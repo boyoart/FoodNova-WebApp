@@ -17,4 +17,12 @@ class TrackingCameraPolicy {
   void resumeFollowing() {
     followingRider = true;
   }
+
+  bool shouldFitRoute({
+    required bool initialLoad,
+    required bool destinationChanged,
+  }) =>
+      initialLoad || destinationChanged;
+
+  bool get shouldFollowRiderUpdate => followingRider && !programmaticMove;
 }

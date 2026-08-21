@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,17 +8,62 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/colors.dart';
 import '../../../core/theme/shadows.dart';
 import '../../../shared/models/order.dart';
+import '../../../services/notification_service.dart';
 import '../../../widgets/empty_state.dart';
 import '../../../widgets/mobile_app_scaffold.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../../../widgets/status_badge.dart';
 import '../data/orders_repository.dart';
 
-class OrdersScreen extends ConsumerWidget {
+class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrdersScreen> createState() => _OrdersScreenState();
+}
+
+class _OrdersScreenState extends ConsumerState<OrdersScreen>
+    with WidgetsBindingObserver {
+  Timer? _refreshTimer;
+  StreamSubscription<void>? _notificationRefresh;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startRefresh();
+    _notificationRefresh = NotificationService.refreshStream.listen((_) {
+      ref.invalidate(ordersProvider);
+    });
+  }
+
+  void _startRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      ref.invalidate(ordersProvider);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(ordersProvider);
+      _startRefresh();
+    } else {
+      _refreshTimer?.cancel();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
+    _notificationRefresh?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final orders = ref.watch(ordersProvider);
     final currency = NumberFormat.currency(
         locale: 'en_NG', symbol: 'NGN ', decimalDigits: 0);
@@ -38,6 +85,7 @@ class OrdersScreen extends ConsumerWidget {
                 ),
               );
             }
+            final sections = CustomerOrderSections.from(items);
             return RefreshIndicator(
               onRefresh: () async => ref.invalidate(ordersProvider),
               child: ListView(
@@ -57,36 +105,56 @@ class OrdersScreen extends ConsumerWidget {
                         height: 1.35),
                   ),
                   const SizedBox(height: 24),
-                  for (var index = 0; index < items.length; index++) ...[
-                    if (index == 0)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Text(
-                          'Current order',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w900),
-                        ),
-                      )
-                    else if (index == 1)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12, bottom: 10),
-                        child: Text(
-                          'Order history',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w900),
-                        ),
-                      ),
-                    _OrderCard(
-                      order: items[index],
-                      amount: currency.format(items[index].totalAmount),
-                      featured: index == 0,
-                      onTap: () => context.push('/tracking/${items[index].id}'),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Text(
+                      'Current order',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w900),
                     ),
-                    const SizedBox(height: 14),
+                  ),
+                  if (sections.active.isEmpty)
+                    const EmptyState(
+                      title: 'No current order',
+                      message:
+                          'Your next active FoodNova order will appear here.',
+                      icon: Icons.shopping_bag_outlined,
+                    )
+                  else
+                    for (var index = 0;
+                        index < sections.active.length;
+                        index++) ...[
+                      _OrderCard(
+                        order: sections.active[index],
+                        amount:
+                            currency.format(sections.active[index].totalAmount),
+                        featured: index == 0,
+                        onTap: () => context
+                            .push('/tracking/${sections.active[index].id}'),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                  if (sections.history.isNotEmpty) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12, bottom: 10),
+                      child: Text(
+                        'Order history',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleLarge
+                            ?.copyWith(fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    for (final order in sections.history) ...[
+                      _OrderCard(
+                        order: order,
+                        amount: currency.format(order.totalAmount),
+                        onTap: () => context.push('/tracking/${order.id}'),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                   ],
                 ],
               ),

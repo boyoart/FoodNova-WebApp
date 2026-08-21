@@ -172,7 +172,35 @@ class OrderSummary {
     return isPickup && values.contains('picked_up_by_customer');
   }
 
-  bool get isFulfillmentComplete => isDelivered || isPickedUpByCustomer;
+  Set<String> get canonicalOrderStatuses => {
+        status,
+        deliveryStatus,
+        canonicalDeliveryStatus,
+        '${raw['status'] ?? ''}',
+        '${raw['order_status'] ?? ''}',
+        '${raw['fulfillment_status'] ?? ''}',
+      }
+          .map((value) => value
+              .trim()
+              .toUpperCase()
+              .replaceAll('-', '_')
+              .replaceAll(' ', '_'))
+          .where((value) => value.isNotEmpty)
+          .toSet();
+
+  bool get isTerminalOrderStatus => canonicalOrderStatuses.any({
+        'DELIVERED',
+        'PICKED_UP_BY_CUSTOMER',
+        'CANCELLED',
+        'CANCELED',
+        'REFUNDED',
+        'REJECTED',
+        'FAILED',
+      }.contains);
+
+  bool get isActiveOrderStatus => !isTerminalOrderStatus;
+
+  bool get isFulfillmentComplete => isTerminalOrderStatus;
 
   factory OrderSummary.fromJson(Map<String, dynamic> json) {
     return OrderSummary(
@@ -196,5 +224,21 @@ class OrderSummary {
       createdAt: '${json['created_at'] ?? ''}',
       raw: json,
     );
+  }
+}
+
+class CustomerOrderSections {
+  const CustomerOrderSections({required this.active, required this.history});
+
+  final List<OrderSummary> active;
+  final List<OrderSummary> history;
+
+  factory CustomerOrderSections.from(List<OrderSummary> orders) {
+    final active = <OrderSummary>[];
+    final history = <OrderSummary>[];
+    for (final order in orders) {
+      (order.isActiveOrderStatus ? active : history).add(order);
+    }
+    return CustomerOrderSections(active: active, history: history);
   }
 }

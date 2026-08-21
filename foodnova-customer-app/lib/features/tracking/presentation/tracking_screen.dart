@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -16,6 +17,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../config/app_config.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/theme/colors.dart';
 import '../../../shared/models/order.dart';
 import '../../../shared/delivery_status.dart';
 import '../../../services/notification_service.dart';
@@ -25,6 +27,7 @@ import '../../../widgets/primary_button.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../../orders/data/orders_repository.dart';
 import 'tracking_camera_policy.dart';
+import 'tracking_map_policy.dart';
 
 final orderDetailProvider = FutureProvider.family<OrderSummary, int>((ref, id) {
   return ref.watch(ordersRepositoryProvider).order(id);
@@ -1187,18 +1190,10 @@ class _RiderTrackingCard extends StatelessWidget {
 
           final riderName =
               data.riderName.isEmpty ? order.riderName : data.riderName;
-          final riderPhone =
-              data.riderPhone.isEmpty ? order.riderPhone : data.riderPhone;
-          final riderPhoto = data.riderPhotoUrl.isEmpty
-              ? order.riderPhotoUrl
-              : data.riderPhotoUrl;
           final vehicleType = data.vehicleType.isEmpty
               ? order.riderVehicleType
               : data.vehicleType;
-          final eta = data.etaMinutes == null &&
-                  order.estimatedDeliveryTime.trim().isNotEmpty
-              ? order.estimatedDeliveryTime
-              : _formatEta(data.etaMinutes);
+          final eta = _formatEta(data.etaMinutes);
           final trackingHeight =
               math.max(520.0, MediaQuery.sizeOf(context).height * .72);
 
@@ -1216,6 +1211,10 @@ class _RiderTrackingCard extends StatelessWidget {
                       routeDestinationPoint: routeDestinationPoint,
                       routePoints: routePoints,
                       riderName: riderName,
+                      vehicleType: vehicleType,
+                      workerType: data.workerType,
+                      serverHeading: data.heading,
+                      speedMetersPerSecond: data.speedMetersPerSecond,
                     ),
                   ),
                   Positioned(
@@ -1248,18 +1247,14 @@ class _RiderTrackingCard extends StatelessWidget {
                     ),
                   ),
                   DraggableScrollableSheet(
-                    initialChildSize: .38,
-                    minChildSize: .25,
-                    maxChildSize: .84,
+                    initialChildSize: .28,
+                    minChildSize: .22,
+                    maxChildSize: .56,
                     builder: (context, controller) {
                       return _TrackingBottomSheet(
                         controller: controller,
                         order: order,
                         deliveryStatus: data.deliveryStatus,
-                        riderName: riderName,
-                        riderPhone: riderPhone,
-                        riderPhotoUrl: riderPhoto,
-                        vehicleType: vehicleType,
                         eta: eta,
                         distance: _formatDistance(data.distanceMeters),
                         lastUpdated: _formatRelativeTime(data.lastUpdatedAt),
@@ -1593,10 +1588,6 @@ class _TrackingBottomSheet extends StatelessWidget {
     required this.controller,
     required this.order,
     required this.deliveryStatus,
-    required this.riderName,
-    required this.riderPhone,
-    required this.riderPhotoUrl,
-    required this.vehicleType,
     required this.eta,
     required this.distance,
     required this.lastUpdated,
@@ -1606,10 +1597,6 @@ class _TrackingBottomSheet extends StatelessWidget {
   final ScrollController controller;
   final OrderSummary order;
   final String deliveryStatus;
-  final String riderName;
-  final String riderPhone;
-  final String riderPhotoUrl;
-  final String vehicleType;
   final String eta;
   final String distance;
   final String lastUpdated;
@@ -1682,17 +1669,6 @@ class _TrackingBottomSheet extends StatelessWidget {
             ),
             const SizedBox(height: 14),
           ],
-          _RiderProfileTile(
-            name: riderName,
-            phone: riderPhone,
-            photoUrl: riderPhotoUrl,
-            vehicleType: vehicleType,
-            riderId: order.riderDisplayId,
-            rating: order.riderRatingText,
-            onCallRider: null,
-            onMessageRider: null,
-          ),
-          const SizedBox(height: 14),
           _TrackingStageTimeline(status: deliveryStatus),
           if (!hasDestination) ...[
             const SizedBox(height: 12),
@@ -1887,6 +1863,10 @@ class _TrackingMap extends StatefulWidget {
     required this.routeDestinationPoint,
     required this.routePoints,
     required this.riderName,
+    required this.vehicleType,
+    required this.workerType,
+    required this.serverHeading,
+    required this.speedMetersPerSecond,
   });
 
   final LatLng riderPoint;
@@ -1895,6 +1875,10 @@ class _TrackingMap extends StatefulWidget {
   final LatLng? routeDestinationPoint;
   final List<LatLng> routePoints;
   final String riderName;
+  final String vehicleType;
+  final String workerType;
+  final double? serverHeading;
+  final double? speedMetersPerSecond;
 
   @override
   State<_TrackingMap> createState() => _TrackingMapState();
@@ -1902,12 +1886,31 @@ class _TrackingMap extends StatefulWidget {
 
 class _TrackingMapState extends State<_TrackingMap> {
   GoogleMapController? _controller;
-  LatLng? _previousRiderPoint;
   final _cameraPolicy = TrackingCameraPolicy();
+  final _headingPolicy = RiderHeadingPolicy();
+  BitmapDescriptor? _riderIcon;
 
   @override
   void initState() {
     super.initState();
+    final initialDirectionPoint = widget.routePoints.length > 1
+        ? widget.routePoints[1]
+        : widget.riderPoint;
+    _headingPolicy.resolve(
+      previous: widget.serverHeading == null
+          ? TrackingPoint(
+              widget.riderPoint.latitude,
+              widget.riderPoint.longitude,
+            )
+          : null,
+      current: TrackingPoint(
+        initialDirectionPoint.latitude,
+        initialDirectionPoint.longitude,
+      ),
+      serverHeading: widget.serverHeading,
+      speedMetersPerSecond: widget.speedMetersPerSecond,
+    );
+    _loadRiderIcon();
     final destinationLog = widget.routeDestinationPoint == null
         ? 'none'
         : '${widget.routeDestinationPoint!.latitude},${widget.routeDestinationPoint!.longitude}';
@@ -1922,7 +1925,22 @@ class _TrackingMapState extends State<_TrackingMap> {
   @override
   void didUpdateWidget(covariant _TrackingMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _previousRiderPoint = oldWidget.riderPoint;
+    _headingPolicy.resolve(
+      previous: TrackingPoint(
+        oldWidget.riderPoint.latitude,
+        oldWidget.riderPoint.longitude,
+      ),
+      current: TrackingPoint(
+        widget.riderPoint.latitude,
+        widget.riderPoint.longitude,
+      ),
+      serverHeading: widget.serverHeading,
+      speedMetersPerSecond: widget.speedMetersPerSecond,
+    );
+    if (oldWidget.vehicleType != widget.vehicleType ||
+        oldWidget.workerType != widget.workerType) {
+      _loadRiderIcon();
+    }
     final destinationChanged = oldWidget.pickupPoint != widget.pickupPoint ||
         oldWidget.customerPoint != widget.customerPoint ||
         oldWidget.routeDestinationPoint != widget.routeDestinationPoint;
@@ -2021,6 +2039,13 @@ class _TrackingMapState extends State<_TrackingMap> {
     await _fitBounds();
   }
 
+  Future<void> _loadRiderIcon() async {
+    final icon = await _buildRiderMarkerIcon(
+      riderMarkerKind(widget.vehicleType, widget.workerType),
+    );
+    if (mounted) setState(() => _riderIcon = icon);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -2055,15 +2080,16 @@ class _TrackingMapState extends State<_TrackingMap> {
         position: widget.riderPoint,
         anchor: const Offset(.5, .5),
         flat: true,
-        rotation: _bearing(
-          _previousRiderPoint ??
-              (widget.routePoints.isEmpty ? null : widget.routePoints.first),
-          widget.riderPoint,
-        ),
+        rotation: (_headingPolicy.heading +
+                _markerOrientationOffset(
+                  riderMarkerKind(widget.vehicleType, widget.workerType),
+                )) %
+            360,
         infoWindow: InfoWindow(
           title: widget.riderName.isEmpty ? 'Rider' : widget.riderName,
         ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+        icon: _riderIcon ??
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
       ),
       if (widget.pickupPoint != null)
         Marker(
@@ -3187,13 +3213,13 @@ String _timelineTimeLabel(String value, bool current) {
 }
 
 String _formatDistance(double? meters) {
-  if (meters == null) return 'Waiting for rider location...';
+  if (meters == null) return 'Route unavailable';
   if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
   return '${math.max(0, meters).round()} m';
 }
 
 String _formatEta(int? minutes) {
-  if (minutes == null) return 'Waiting for rider location...';
+  if (minutes == null) return 'ETA unavailable';
   return '$minutes min';
 }
 
@@ -3216,18 +3242,50 @@ String _trackingStageLabel(String status) {
   }
 }
 
-double _bearing(LatLng? from, LatLng to) {
-  if (from == null ||
-      (from.latitude == to.latitude && from.longitude == to.longitude)) {
-    return 0;
-  }
-  final lat1 = from.latitude * math.pi / 180;
-  final lat2 = to.latitude * math.pi / 180;
-  final dLng = (to.longitude - from.longitude) * math.pi / 180;
-  final y = math.sin(dLng) * math.cos(lat2);
-  final x = math.cos(lat1) * math.sin(lat2) -
-      math.sin(lat1) * math.cos(lat2) * math.cos(dLng);
-  return (math.atan2(y, x) * 180 / math.pi + 360) % 360;
+double _markerOrientationOffset(RiderMarkerKind kind) {
+  return kind == RiderMarkerKind.car ? 0 : 270;
+}
+
+Future<BitmapDescriptor> _buildRiderMarkerIcon(RiderMarkerKind kind) async {
+  const size = 104.0;
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder);
+  final center = const Offset(size / 2, size / 2);
+  canvas.drawCircle(
+    center,
+    46,
+    Paint()..color = const Color(0xFFFFFFFF),
+  );
+  canvas.drawCircle(
+    center,
+    42,
+    Paint()..color = FoodNovaColors.primary,
+  );
+  final icon = switch (kind) {
+    RiderMarkerKind.motorcycle => Icons.two_wheeler_rounded,
+    RiderMarkerKind.car => Icons.directions_car_filled_rounded,
+    RiderMarkerKind.messenger => Icons.directions_walk_rounded,
+  };
+  final painter = TextPainter(
+    text: TextSpan(
+      text: String.fromCharCode(icon.codePoint),
+      style: TextStyle(
+        fontSize: 56,
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+        color: Colors.white,
+      ),
+    ),
+    textDirection: ui.TextDirection.ltr,
+  )..layout();
+  painter.paint(
+    canvas,
+    Offset((size - painter.width) / 2, (size - painter.height) / 2),
+  );
+  final image =
+      await recorder.endRecording().toImage(size.toInt(), size.toInt());
+  final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+  return BitmapDescriptor.bytes(bytes!.buffer.asUint8List());
 }
 
 String _formatRelativeTime(String value) {
