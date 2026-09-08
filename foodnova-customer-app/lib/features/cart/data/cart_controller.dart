@@ -9,8 +9,8 @@ import '../domain/cart_item.dart';
 
 final cartControllerProvider =
     StateNotifierProvider<CartController, List<CartItem>>((ref) {
-  return CartController(ref.watch(secureStorageProvider))..restore();
-});
+      return CartController(ref.watch(secureStorageProvider))..restore();
+    });
 
 class CartController extends StateNotifier<List<CartItem>> {
   CartController(this._storage) : super(const []);
@@ -37,14 +37,16 @@ class CartController extends StateNotifier<List<CartItem>> {
 
   Future<void> _persist() async {
     await _storage.write(
-        key: _storageKey,
-        value: jsonEncode(state.map((item) => item.toJson()).toList()));
+      key: _storageKey,
+      value: jsonEncode(state.map((item) => item.toJson()).toList()),
+    );
   }
 
   void add(Product product) {
     if (product.stock <= 0) return;
-    final index =
-        state.indexWhere((item) => item.product.cartKey == product.cartKey);
+    final index = state.indexWhere(
+      (item) => item.product.cartKey == product.cartKey,
+    );
     if (index == -1) {
       state = [...state, CartItem(product: product, quantity: 1)];
       _persist();
@@ -53,8 +55,7 @@ class CartController extends StateNotifier<List<CartItem>> {
     state = [
       for (var i = 0; i < state.length; i++)
         if (i == index)
-          state[i].copyWith(
-              quantity: (state[i].quantity + 1).clamp(1, product.stock).toInt())
+          state[i].copyWith(quantity: state[i].quantity + 1)
         else
           state[i],
     ];
@@ -64,8 +65,11 @@ class CartController extends StateNotifier<List<CartItem>> {
   void updateQuantity(dynamic productId, int quantity) {
     if (quantity <= 0) {
       state = state
-          .where((item) =>
-              item.product.cartKey != productId && item.product.id != productId)
+          .where(
+            (item) =>
+                item.product.cartKey != productId &&
+                item.product.id != productId,
+          )
           .toList();
       _persist();
       return;
@@ -73,7 +77,7 @@ class CartController extends StateNotifier<List<CartItem>> {
     state = [
       for (final item in state)
         if (item.product.cartKey == productId || item.product.id == productId)
-          item.copyWith(quantity: quantity.clamp(1, item.product.stock).toInt())
+          item.copyWith(quantity: quantity)
         else
           item,
     ];

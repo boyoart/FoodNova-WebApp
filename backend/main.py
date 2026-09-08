@@ -2535,17 +2535,26 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
     requested_by_product = {}
 
     for item in items:
+        requested_variant_id = item.get("variant_id") or item.get("product_variant_id")
         variant = find_order_variant_for_stock(db, item)
         if variant:
+            if not variant.is_active or not variant.product or not variant.product.is_active:
+                raise HTTPException(status_code=400, detail="Selected product option is currently unavailable.")
             quantity = int(item.get("quantity") or item.get("qty") or 1)
             if quantity > 0:
                 current = requested_by_variant.get(variant.id, {"variant": variant, "quantity": 0})
                 current["quantity"] += quantity
                 requested_by_variant[variant.id] = current
             continue
+        if requested_variant_id:
+            raise HTTPException(status_code=400, detail="Selected product option is currently unavailable.")
         product = find_order_product_for_stock(db, item)
         if not product:
-            continue
+            raise HTTPException(status_code=400, detail="Selected product is currently unavailable.")
+        if not product.is_active:
+            raise HTTPException(status_code=400, detail="Selected product is currently unavailable.")
+        if any(variant.is_active for variant in (product.variants or [])):
+            raise HTTPException(status_code=400, detail="Please select an available product size.")
         quantity = int(item.get("quantity") or item.get("qty") or 1)
         if quantity <= 0:
             continue
@@ -2561,7 +2570,7 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
         if available < requested and not allow_override:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient stock for {product_name} {variant.weight}. Available: {available}, requested: {requested}",
+                detail="Requested quantity is currently unavailable. Please reduce the quantity.",
             )
 
     for entry in requested_by_product.values():
@@ -2571,7 +2580,7 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
         if available < requested and not allow_override:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient stock for {product.name}. Available: {available}, requested: {requested}",
+                detail="Requested quantity is currently unavailable. Please reduce the quantity.",
             )
 
     for entry in requested_by_variant.values():
@@ -2758,6 +2767,17 @@ def variant_to_dict(variant: DBProductVariant) -> dict:
         "created_at": iso(variant.created_at),
         "updated_at": iso(variant.updated_at),
     }
+
+
+def variant_to_customer_dict(variant: DBProductVariant) -> dict:
+    data = variant_to_dict(variant)
+    available = bool(variant.is_active) and int(data["stock_qty"] or 0) > 0
+    for key in ("stock_qty", "stock"):
+        data.pop(key, None)
+    data["is_available"] = available
+    data["stock_status"] = "in_stock" if available else "out_of_stock"
+    data["is_out_of_stock"] = not available
+    return data
 
 
 def product_default_sku(product: DBProduct) -> str:
@@ -2952,7 +2972,7 @@ def apply_product_variants(db, product: DBProduct, variants_payload) -> list[dic
     if not isinstance(variants_payload, list):
         return [variant_to_dict(variant) for variant in (product.variants or [])]
 
-    kept_variant_ids = set()
+    kept_variants = []
     for raw_variant in variants_payload:
         if not isinstance(raw_variant, dict):
             continue
@@ -2973,7 +2993,10 @@ def apply_product_variants(db, product: DBProduct, variants_payload) -> list[dic
         variant.weight = str(raw_variant.get("weight") or variant.weight or "").strip()
         variant.sku = str(raw_variant.get("sku") or variant.sku or foodnova_sku(product.name, variant.weight)).strip()
         if raw_variant.get("price") is not None:
-            variant.price = float(raw_variant.get("price") or 0)
+            next_price = float(raw_variant.get("price") or 0)
+            if not math.isfinite(next_price) or next_price < 0:
+                raise HTTPException(status_code=422, detail="Variant price must be a non-negative number")
+            variant.price = next_price
         if raw_variant.get("stock_qty") is not None or raw_variant.get("stock") is not None:
             stock = int(raw_variant.get("stock_qty") if raw_variant.get("stock_qty") is not None else raw_variant.get("stock") or 0)
             variant.stock_qty = stock
@@ -2983,10 +3006,14 @@ def apply_product_variants(db, product: DBProduct, variants_payload) -> list[dic
         if raw_variant.get("is_active") is not None or raw_variant.get("active") is not None:
             variant.is_active = bool(raw_variant.get("is_active") if raw_variant.get("is_active") is not None else raw_variant.get("active"))
         variant.updated_at = datetime.utcnow()
-        if variant.id:
-            kept_variant_ids.add(variant.id)
+        kept_variants.append(variant)
 
     db.flush()
+    kept_variant_ids = {variant.id for variant in kept_variants if variant.id}
+    for variant in product.variants or []:
+        if variant.id not in kept_variant_ids:
+            variant.is_active = False
+            variant.updated_at = datetime.utcnow()
     product.stock_qty = sum(v.stock_qty if v.stock_qty is not None else (v.stock or 0) for v in product.variants if v.is_active)
     product.stock = product.stock_qty
     active_variants = [v for v in product.variants if v.is_active]
@@ -3162,12 +3189,30 @@ def admin_user_to_dict(user: DBUser) -> dict:
     }
 
 
-def product_to_dict(product: DBProduct) -> dict:
+def _variant_weight_sort_key(variant: dict) -> tuple[float, str]:
+    label = str(variant.get("weight") or "").strip().lower().replace(" ", "")
+    try:
+        if label.endswith("kg"):
+            grams = float(label[:-2]) * 1000
+        elif label.endswith("g"):
+            grams = float(label[:-1])
+        else:
+            grams = float(label)
+    except (TypeError, ValueError):
+        grams = float("inf")
+    return grams, str(variant.get("sku") or "")
+
+
+def product_to_dict(product: DBProduct, include_inactive_variants: bool = False) -> dict:
     stock_qty = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
     low_stock_threshold = 5
     contents = parse_content_list(getattr(product, "contents", None))
-    variants = [variant_to_dict(variant) for variant in (product.variants or []) if variant.is_active]
-    variants.sort(key=lambda variant: (int(str(variant.get("weight") or "999kg").replace("kg", "") or 999), variant.get("sku", "")))
+    variants = [
+        variant_to_dict(variant)
+        for variant in (product.variants or [])
+        if include_inactive_variants or variant.is_active
+    ]
+    variants.sort(key=_variant_weight_sort_key)
     if variants:
         stock_qty = sum(int(variant.get("stock_qty") or 0) for variant in variants)
         available_variants = [variant for variant in variants if int(variant.get("stock_qty") or 0) > 0]
@@ -3207,6 +3252,24 @@ def product_to_dict(product: DBProduct) -> dict:
         "created_at": iso(product.created_at),
         "updated_at": iso(product.updated_at),
     }
+
+
+def product_to_customer_dict(product: DBProduct) -> dict:
+    data = product_to_dict(product)
+    active_variants = [variant for variant in (product.variants or []) if variant.is_active]
+    if active_variants:
+        data["variants"] = [variant_to_customer_dict(variant) for variant in active_variants]
+        data["variants"].sort(key=_variant_weight_sort_key)
+        available = any(variant["is_available"] for variant in data["variants"])
+    else:
+        quantity = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
+        available = bool(product.is_active) and quantity > 0
+    for key in ("stock_qty", "stock", "low_stock", "low_stock_threshold"):
+        data.pop(key, None)
+    data["is_available"] = available
+    data["stock_status"] = "in_stock" if available else "out_of_stock"
+    data["is_out_of_stock"] = not available
+    return data
 
 
 def pack_to_dict(pack: DBPack) -> dict:
@@ -8289,7 +8352,7 @@ async def upload_category_image(request: Request, file: UploadFile = File(...)):
 
 
 @app.get("/products")
-def list_products(search: Optional[str] = None, include_inactive: bool = False):
+def list_products(search: Optional[str] = None, include_inactive: bool = False, admin_view: bool = False):
     db = SessionLocal()
     try:
         query = db.query(DBProduct)
@@ -8299,7 +8362,7 @@ def list_products(search: Optional[str] = None, include_inactive: bool = False):
         for product in query.order_by(DBProduct.category.asc(), DBProduct.name.asc()).all():
             if include_inactive or product.is_active:
                 if product.name in CATALOG_PRODUCT_NAMES or is_combo_product(product) or product.is_active:
-                    products.append(product_to_dict(product))
+                    products.append(product_to_dict(product, include_inactive_variants=True) if admin_view else product_to_customer_dict(product))
         if not search:
             return products
 
@@ -8323,7 +8386,7 @@ def get_product(product_id: int):
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
         if product:
-            return product_to_dict(product)
+            return product_to_customer_dict(product)
     finally:
         db.close()
 
@@ -14491,7 +14554,7 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
 @app.get("/admin/products")
 def admin_products(request: Request):
     require_any_permission(request, ["stock:view", "orders:manual_create"])
-    products = list_products(include_inactive=True)
+    products = list_products(include_inactive=True, admin_view=True)
     return {"success": True, "products": products, "data": products}
 
 
@@ -14510,6 +14573,7 @@ async def admin_create_product(
     serving_estimate: str = Form(""),
     freshness_note: str = Form(""),
     delivery_note: str = Form(""),
+    variants: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
     admin = require_permission(request, "stock:manage")
@@ -14525,7 +14589,10 @@ async def admin_create_product(
     serving_estimate = payload.get("serving_estimate", serving_estimate)
     freshness_note = payload.get("freshness_note", freshness_note)
     delivery_note = payload.get("delivery_note", delivery_note)
+    variants_payload = payload.get("variants") if "variants" in payload else json_load(variants, None)
     image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product") if image else ""
+    if not math.isfinite(float(price or 0)) or float(price or 0) < 0:
+        raise HTTPException(status_code=422, detail="Price must be a non-negative number")
     db = SessionLocal()
     try:
         product = DBProduct(
@@ -14546,11 +14613,11 @@ async def admin_create_product(
         )
         db.add(product)
         db.flush()
-        if "variants" in payload:
-            apply_product_variants(db, product, payload.get("variants"))
+        if variants_payload is not None:
+            apply_product_variants(db, product, variants_payload)
         db.commit()
         db.refresh(product)
-        data = product_to_dict(product)
+        data = product_to_dict(product, include_inactive_variants=True)
         create_admin_audit_log(request, admin, "product_created", "product", product.id, f"Admin created product {product.name}", {"product": data})
         return {
             "success": True,
@@ -14578,6 +14645,7 @@ async def admin_update_product(
     serving_estimate: Optional[str] = Form(None),
     freshness_note: Optional[str] = Form(None),
     delivery_note: Optional[str] = Form(None),
+    variants: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
 ):
     admin = require_permission(request, "stock:manage")
@@ -14594,11 +14662,12 @@ async def admin_update_product(
     serving_estimate = payload.get("serving_estimate", serving_estimate)
     freshness_note = payload.get("freshness_note", freshness_note)
     delivery_note = payload.get("delivery_note", delivery_note)
+    variants_payload = payload.get("variants") if "variants" in payload else json_load(variants, None)
     db = SessionLocal()
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
         if product:
-            old_data = product_to_dict(product)
+            old_data = product_to_dict(product, include_inactive_variants=True)
             if name is not None:
                 product.name = name
             if category is not None:
@@ -14617,6 +14686,8 @@ async def admin_update_product(
             if delivery_note is not None:
                 product.delivery_note = delivery_note
             if price is not None:
+                if not math.isfinite(float(price)) or float(price) < 0:
+                    raise HTTPException(status_code=422, detail="Price must be a non-negative number")
                 product.price = float(price or 0)
             if stock_qty is not None:
                 product.stock_qty = int(stock_qty or 0)
@@ -14625,12 +14696,12 @@ async def admin_update_product(
                 product.is_active = is_active if active is None else active
             if image:
                 product.image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product")
-            if "variants" in payload:
-                apply_product_variants(db, product, payload.get("variants"))
+            if variants_payload is not None:
+                apply_product_variants(db, product, variants_payload)
             product.updated_at = datetime.utcnow()
             db.commit()
             db.refresh(product)
-            data = product_to_dict(product)
+            data = product_to_dict(product, include_inactive_variants=True)
             create_admin_audit_log(request, admin, "product_updated", "product", product.id, f"Admin updated product {product.name}", {"before": old_data, "after": data})
             return {
                 "success": True,
@@ -14651,20 +14722,89 @@ def admin_delete_product(product_id: int, request: Request):
     try:
         product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
         if product:
-            data = product_to_dict(product)
-            db.delete(product)
+            data = product_to_dict(product, include_inactive_variants=True)
+            product.is_active = False
+            for variant in product.variants or []:
+                variant.is_active = False
+                variant.updated_at = datetime.utcnow()
+            product.updated_at = datetime.utcnow()
             db.commit()
-            create_admin_audit_log(request, admin, "product_deleted", "product", product_id, f"Admin deleted product {data.get('name')}", {"product": data})
+            db.refresh(product)
+            create_admin_audit_log(request, admin, "product_archived", "product", product_id, f"Admin archived product {data.get('name')}", {"product_id": product_id, "variant_ids": [variant.id for variant in product.variants or []]})
             return {
                 "success": True,
-                "message": "Product deleted successfully",
-                "product": data,
-                "data": data,
+                "message": "Product archived successfully",
+                "product": product_to_dict(product, include_inactive_variants=True),
+                "data": product_to_dict(product, include_inactive_variants=True),
             }
     finally:
         db.close()
 
     raise HTTPException(status_code=404, detail="Product not found")
+
+
+@app.post("/admin/products/bulk-delete")
+async def admin_bulk_archive_products(request: Request):
+    admin = require_permission(request, "stock:manage")
+    payload = await read_json_payload(request)
+    try:
+        product_ids = sorted({int(value) for value in payload.get("product_ids", [])})
+        variant_ids = sorted({int(value) for value in payload.get("variant_ids", [])})
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Product and variant IDs must be integers")
+    if not product_ids and not variant_ids:
+        raise HTTPException(status_code=422, detail="Select at least one product or variant")
+
+    db = SessionLocal()
+    try:
+        products = db.query(DBProduct).filter(DBProduct.id.in_(product_ids)).all() if product_ids else []
+        variants = db.query(DBProductVariant).filter(DBProductVariant.id.in_(variant_ids)).all() if variant_ids else []
+        found_product_ids = {product.id for product in products}
+        found_variant_ids = {variant.id for variant in variants}
+        missing_products = sorted(set(product_ids) - found_product_ids)
+        missing_variants = sorted(set(variant_ids) - found_variant_ids)
+        if missing_products or missing_variants:
+            raise HTTPException(status_code=404, detail={
+                "message": "No catalog items were archived because one or more IDs were invalid.",
+                "missing_product_ids": missing_products,
+                "missing_variant_ids": missing_variants,
+            })
+
+        archived_variant_ids = set()
+        for product in products:
+            product.is_active = False
+            product.updated_at = datetime.utcnow()
+            for variant in product.variants or []:
+                variant.is_active = False
+                variant.updated_at = datetime.utcnow()
+                archived_variant_ids.add(variant.id)
+        for variant in variants:
+            variant.is_active = False
+            variant.updated_at = datetime.utcnow()
+            archived_variant_ids.add(variant.id)
+            if variant.product:
+                active = [item for item in variant.product.variants if item.is_active and item.id != variant.id]
+                variant.product.stock_qty = sum(item.stock_qty if item.stock_qty is not None else (item.stock or 0) for item in active)
+                variant.product.stock = variant.product.stock_qty
+                variant.product.updated_at = datetime.utcnow()
+        db.commit()
+        summary = {
+            "archived_products": len(products),
+            "archived_variants": len(archived_variant_ids),
+            "failed": 0,
+            "product_ids": product_ids,
+            "variant_ids": sorted(archived_variant_ids),
+        }
+        create_admin_audit_log(request, admin, "products_bulk_archived", "product", "bulk", f"Admin archived {len(products)} products and {len(archived_variant_ids)} variants", summary)
+        return {"success": True, "message": "Selected catalog items archived successfully", **summary, "data": summary}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 @app.post("/admin/products/bulk-stock")
@@ -14723,26 +14863,30 @@ async def admin_bulk_update_product_pricing(request: Request):
             if not isinstance(update, dict):
                 continue
             price = float(update.get("price") or update.get("unit_price") or 0)
+            if not math.isfinite(price) or price < 0:
+                raise HTTPException(status_code=422, detail="Price must be a non-negative number")
             variant_id = update.get("variant_id")
             product_id = update.get("product_id")
             if variant_id:
                 variant = db.query(DBProductVariant).filter(DBProductVariant.id == int(variant_id)).first()
                 if not variant:
                     continue
+                old_price = float(variant.price or 0)
                 variant.price = price
                 variant.updated_at = datetime.utcnow()
                 if variant.product:
                     active_variants = [v for v in variant.product.variants if v.is_active]
                     if active_variants:
                         variant.product.price = active_variants[0].price or variant.product.price or 0
-                changed.append({"variant_id": variant.id, "product_id": variant.product_id, "price": price})
+                changed.append({"variant_id": variant.id, "product_id": variant.product_id, "old_price": old_price, "new_price": price})
             elif product_id:
                 product = db.query(DBProduct).filter(DBProduct.id == int(product_id)).first()
                 if not product:
                     continue
+                old_price = float(product.price or 0)
                 product.price = price
                 product.updated_at = datetime.utcnow()
-                changed.append({"product_id": product.id, "price": price})
+                changed.append({"product_id": product.id, "old_price": old_price, "new_price": price})
         db.commit()
         create_admin_audit_log(request, admin, "products_bulk_pricing_updated", "product", "bulk", f"Admin bulk updated pricing for {len(changed)} entries", {"updates": changed})
         return {"success": True, "updated": changed, "data": changed}

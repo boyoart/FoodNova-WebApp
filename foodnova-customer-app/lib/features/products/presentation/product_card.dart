@@ -7,14 +7,15 @@ import '../../../core/theme/shadows.dart';
 import 'product_image.dart';
 
 class ProductCard extends StatelessWidget {
-  const ProductCard(
-      {required this.product,
-      required this.onTap,
-      required this.onAdd,
-      this.quantity = 0,
-      this.onIncrement,
-      this.onDecrement,
-      super.key});
+  const ProductCard({
+    required this.product,
+    required this.onTap,
+    required this.onAdd,
+    this.quantity = 0,
+    this.onIncrement,
+    this.onDecrement,
+    super.key,
+  });
 
   final Product product;
   final VoidCallback onTap;
@@ -27,10 +28,12 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final currency = NumberFormat.currency(
-        locale: 'en_NG', symbol: 'NGN ', decimalDigits: 0);
+      locale: 'en_NG',
+      symbol: 'NGN ',
+      decimalDigits: 0,
+    );
     final outOfStock = product.stock <= 0;
-    final lowStock = product.stock > 0 && product.stock <= 5;
-    final sale = lowStock || product.type == 'pack';
+    final sale = product.type == 'pack';
     final showStepper = quantity > 0 && !product.hasVariants;
     return InkWell(
       borderRadius: BorderRadius.circular(26),
@@ -52,9 +55,7 @@ class ProductCard extends StatelessWidget {
               flex: 6,
               child: Stack(
                 children: [
-                  Positioned.fill(
-                    child: ProductImage(product: product),
-                  ),
+                  Positioned.fill(child: ProductImage(product: product)),
                   Positioned.fill(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -74,16 +75,10 @@ class ProductCard extends StatelessWidget {
                     top: 10,
                     left: 10,
                     child: _StockPill(
-                      label: outOfStock
-                          ? 'Out'
-                          : lowStock
-                              ? '${product.stock} left'
-                              : 'In stock',
+                      label: outOfStock ? 'Out of stock' : 'In stock',
                       tone: outOfStock
                           ? FoodNovaColors.danger
-                          : lowStock
-                              ? FoodNovaColors.warning
-                              : FoodNovaColors.success,
+                          : FoodNovaColors.success,
                     ),
                   ),
                   if (sale)
@@ -91,13 +86,10 @@ class ProductCard extends StatelessWidget {
                       top: 10,
                       right: 10,
                       child: _SalePill(
-                          label: product.type == 'pack' ? 'Combo' : 'Deal'),
+                        label: product.type == 'pack' ? 'Combo' : 'Deal',
+                      ),
                     ),
-                  Positioned(
-                    right: 10,
-                    bottom: 10,
-                    child: _FavoriteButton(),
-                  ),
+                  Positioned(right: 10, bottom: 10, child: _FavoriteButton()),
                 ],
               ),
             ),
@@ -113,9 +105,10 @@ class ProductCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: scheme.onSurface,
-                        fontWeight: FontWeight.w900,
-                        height: 1.08),
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w900,
+                      height: 1.08,
+                    ),
                   ),
                   const SizedBox(height: 5),
                   Text(
@@ -125,9 +118,10 @@ class ProductCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: scheme.onSurfaceVariant,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700),
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -140,8 +134,9 @@ class ProductCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              color: FoodNovaColors.primary,
-                              fontWeight: FontWeight.w900),
+                            color: FoodNovaColors.primary,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                       showStepper
@@ -154,8 +149,9 @@ class ProductCard extends StatelessWidget {
                               onTap: outOfStock
                                   ? null
                                   : product.hasVariants
-                                      ? onTap
-                                      : onAdd),
+                                  ? onTap
+                                  : onAdd,
+                            ),
                     ],
                   ),
                 ],
@@ -319,7 +315,9 @@ class _QuickAddButton extends StatefulWidget {
 class _QuickAddButtonState extends State<_QuickAddButton>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 220));
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+  );
 
   @override
   void dispose() {
@@ -330,8 +328,10 @@ class _QuickAddButtonState extends State<_QuickAddButton>
   @override
   Widget build(BuildContext context) {
     return ScaleTransition(
-      scale: Tween<double>(begin: 1, end: .88)
-          .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut)),
+      scale: Tween<double>(
+        begin: 1,
+        end: .88,
+      ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut)),
       child: Material(
         color: widget.onTap == null
             ? Theme.of(context).colorScheme.outlineVariant
@@ -351,8 +351,10 @@ class _QuickAddButtonState extends State<_QuickAddButton>
           child: SizedBox(
             width: 42,
             height: 38,
-            child: Icon(Icons.add_rounded,
-                color: Theme.of(context).colorScheme.onPrimary),
+            child: Icon(
+              Icons.add_rounded,
+              color: Theme.of(context).colorScheme.onPrimary,
+            ),
           ),
         ),
       ),
@@ -378,7 +380,10 @@ class _StockPill extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-            color: scheme.onPrimary, fontSize: 11, fontWeight: FontWeight.w900),
+          color: scheme.onPrimary,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }

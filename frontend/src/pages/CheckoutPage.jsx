@@ -116,7 +116,7 @@ export default function CheckoutPage() {
         delivery_address_id: deliveryAddressId, delivery_address: deliveryAddress, address: deliveryAddress, delivery_address_snapshot: finalAddress,
         state: finalAddress?.state || '', city: finalAddress?.city || '', lga: finalAddress?.lga || '', street_address: finalAddress?.address_line || finalAddress?.street || '', landmark: finalAddress?.landmark || '', delivery_notes: formData.delivery_notes,
         delivery_fee_payment: deliveryMethod === 'delivery' ? 'paid_to_rider_after_delivery' : '',
-        items: items.map((item) => { const quantity = item.quantity || item.qty || 1; const price = Number(item.price || item.unit_price || 0); const name = item.name || item.product_name || 'FoodNova Item'; const itemType = item.item_type || item.type || 'product'; return { id: item.id, product_id: item.product_id || item.id, item_type: itemType, type: itemType, name, product_name: name, price, unit_price: price, quantity, qty: quantity } }),
+        items: items.map((item) => { const quantity = item.quantity || item.qty || 1; const price = Number(item.price || item.unit_price || 0); const name = item.name || item.product_name || 'FoodNova Item'; const itemType = item.item_type || item.type || 'product'; return { id: item.id, product_id: item.product_id || item.id, variant_id: item.variant_id, variant_weight: item.variant_weight || '', sku: item.sku || '', item_type: itemType, type: itemType, name, product_name: name, price, unit_price: price, quantity, qty: quantity } }),
         payment_method: 'bank_transfer', total_amount: subtotal, total: subtotal,
       }
       const createdOrder = extractOrder(await ordersAPI.create(orderData))

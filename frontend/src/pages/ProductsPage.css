@@ -178,6 +178,35 @@
   margin-bottom: 1rem;
 }
 
+.variant-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.7rem 0;
+}
+
+.variant-options button {
+  border: 1px solid var(--border, #d7e2d8);
+  border-radius: 999px;
+  background: #fff;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.variant-options button.selected {
+  border-color: var(--primary, #0b7a3b);
+  background: rgba(11, 122, 59, 0.1);
+  color: var(--primary, #0b7a3b);
+  font-weight: 700;
+}
+
+.variant-options button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
 .in-stock {
   color: #22c55e;
   font-size: 0.8rem;

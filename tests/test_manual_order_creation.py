@@ -1,4 +1,5 @@
 import os
+import asyncio
 import sys
 import unittest
 from pathlib import Path
@@ -14,6 +15,16 @@ sys.path.insert(0, str(BACKEND))
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{ROOT / 'test_foodnova_contracts.db'}")
 
 import main  # noqa: E402
+
+
+class JsonRequest:
+    headers = {"content-type": "application/json"}
+
+    def __init__(self, payload):
+        self.payload = payload
+
+    async def json(self):
+        return self.payload
 
 
 class ManualOrderCreationTests(unittest.TestCase):
@@ -129,6 +140,127 @@ class ManualOrderCreationTests(unittest.TestCase):
         db.close()
         self.assertEqual(product.stock_qty, 0)
         self.assertEqual(result["order"]["stock_override_reason"], "Approved phone-order variance")
+
+    def test_customer_product_contract_hides_exact_inventory(self):
+        db = self.Session()
+        product = db.query(main.DBProduct).filter(main.DBProduct.id == self.product_id).first()
+        variant = main.DBProductVariant(
+            product_id=product.id, sku="RICE-2KG", weight="2kg",
+            price=4000, stock_qty=12, stock=12, is_active=True,
+        )
+        db.add(variant)
+        db.commit()
+        payload = main.product_to_customer_dict(product)
+        db.close()
+        self.assertNotIn("stock_qty", payload)
+        self.assertNotIn("stock", payload)
+        self.assertNotIn("low_stock", payload)
+        self.assertTrue(payload["is_available"])
+        self.assertEqual(payload["stock_status"], "in_stock")
+        self.assertNotIn("stock_qty", payload["variants"][0])
+
+    def test_weight_variants_sort_grams_before_kilograms(self):
+        db = self.Session()
+        product = db.query(main.DBProduct).filter(main.DBProduct.id == self.product_id).first()
+        db.add_all([
+            main.DBProductVariant(product_id=product.id, sku="EGUSI-1KG", weight="1kg", price=6000, stock_qty=3, stock=3, is_active=True),
+            main.DBProductVariant(product_id=product.id, sku="EGUSI-600G", weight="600g", price=4000, stock_qty=3, stock=3, is_active=True),
+        ])
+        db.commit()
+        payload = main.product_to_customer_dict(product)
+        db.close()
+        self.assertEqual([variant["weight"] for variant in payload["variants"]], ["600g", "1kg"])
+
+    def test_variant_inventory_is_independent_and_shortage_message_is_private(self):
+        db = self.Session()
+        product = db.query(main.DBProduct).filter(main.DBProduct.id == self.product_id).first()
+        two_kg = main.DBProductVariant(product_id=product.id, sku="RICE-2KG", weight="2kg", price=4000, stock_qty=12, stock=12, is_active=True)
+        three_kg = main.DBProductVariant(product_id=product.id, sku="RICE-3KG", weight="3kg", price=7000, stock_qty=6, stock=6, is_active=True)
+        db.add_all([two_kg, three_kg])
+        db.commit()
+        main.validate_and_deduct_inventory(db, [{"product_id": product.id, "variant_id": two_kg.id, "quantity": 2}])
+        self.assertEqual(two_kg.stock_qty, 10)
+        self.assertEqual(three_kg.stock_qty, 6)
+        with self.assertRaises(main.HTTPException) as context:
+            main.validate_and_deduct_inventory(db, [{"product_id": product.id, "variant_id": three_kg.id, "quantity": 99}])
+        self.assertEqual(context.exception.detail, "Requested quantity is currently unavailable. Please reduce the quantity.")
+        self.assertNotIn("6", context.exception.detail)
+        db.close()
+
+    def test_admin_price_updates_persist_and_customer_contract_reads_them(self):
+        result = asyncio.run(main.admin_bulk_update_product_pricing(JsonRequest({
+            "updates": [{"product_id": self.product_id, "price": 3100}],
+        })))
+        self.assertTrue(result["success"])
+        db = self.Session()
+        product = db.query(main.DBProduct).filter(main.DBProduct.id == self.product_id).first()
+        self.assertEqual(product.price, 3100)
+        self.assertEqual(main.product_to_dict(product)["price"], 3100)
+        self.assertEqual(main.product_to_customer_dict(product)["price"], 3100)
+        db.close()
+
+    def test_variant_price_update_changes_only_selected_variant(self):
+        db = self.Session()
+        product = db.query(main.DBProduct).filter(main.DBProduct.id == self.product_id).first()
+        variants = [
+            main.DBProductVariant(product_id=product.id, sku="RICE-2KG", weight="2kg", price=4000, stock_qty=5, stock=5, is_active=True),
+            main.DBProductVariant(product_id=product.id, sku="RICE-3KG", weight="3kg", price=7000, stock_qty=5, stock=5, is_active=True),
+            main.DBProductVariant(product_id=product.id, sku="RICE-5KG", weight="5kg", price=8000, stock_qty=5, stock=5, is_active=True),
+        ]
+        db.add_all(variants)
+        db.commit()
+        target_id = variants[1].id
+        db.close()
+        asyncio.run(main.admin_bulk_update_product_pricing(JsonRequest({"updates": [{"variant_id": target_id, "price": 7500}]})))
+        db = self.Session()
+        saved = {variant.weight: variant.price for variant in db.query(main.DBProductVariant).filter(main.DBProductVariant.product_id == self.product_id).all()}
+        db.close()
+        self.assertEqual(saved, {"2kg": 4000, "3kg": 7500, "5kg": 8000})
+
+    def test_invalid_price_is_rejected(self):
+        with self.assertRaises(main.HTTPException) as context:
+            asyncio.run(main.admin_bulk_update_product_pricing(JsonRequest({"updates": [{"product_id": self.product_id, "price": -1}]})))
+        self.assertEqual(context.exception.status_code, 422)
+
+    def test_bulk_archive_preserves_history_and_variant_siblings(self):
+        db = self.Session()
+        product = db.query(main.DBProduct).filter(main.DBProduct.id == self.product_id).first()
+        first = main.DBProductVariant(product_id=product.id, sku="RICE-2KG", weight="2kg", price=4000, stock_qty=5, stock=5, is_active=True)
+        second = main.DBProductVariant(product_id=product.id, sku="RICE-3KG", weight="3kg", price=7000, stock_qty=5, stock=5, is_active=True)
+        order = main.DBOrder(order_code="FN-HISTORY", customer_name="History")
+        db.add_all([first, second, order])
+        db.flush()
+        history = main.DBOrderItem(order_id=order.id, product_id=product.id, variant_id=first.id, name="Rice - 2kg", price=4000, quantity=1)
+        db.add(history)
+        db.commit()
+        first_id, second_id, history_id = first.id, second.id, history.id
+        db.close()
+        result = asyncio.run(main.admin_bulk_archive_products(JsonRequest({"variant_ids": [first_id]})))
+        self.assertEqual(result["archived_variants"], 1)
+        db = self.Session()
+        self.assertFalse(db.query(main.DBProductVariant).filter(main.DBProductVariant.id == first_id).one().is_active)
+        self.assertTrue(db.query(main.DBProductVariant).filter(main.DBProductVariant.id == second_id).one().is_active)
+        self.assertEqual(db.query(main.DBOrderItem).filter(main.DBOrderItem.id == history_id).one().name, "Rice - 2kg")
+        db.close()
+        self.assertTrue(any(call.args[2] == "products_bulk_archived" for call in self.mocks[3].call_args_list))
+
+    def test_bulk_archive_invalid_ids_is_transactional(self):
+        with self.assertRaises(main.HTTPException) as context:
+            asyncio.run(main.admin_bulk_archive_products(JsonRequest({"product_ids": [self.product_id, 999999]})))
+        self.assertEqual(context.exception.status_code, 404)
+        db = self.Session()
+        self.assertTrue(db.query(main.DBProduct).filter(main.DBProduct.id == self.product_id).one().is_active)
+        db.close()
+
+    def test_bulk_archive_parent_disappears_from_customer_catalog(self):
+        asyncio.run(main.admin_bulk_archive_products(JsonRequest({"product_ids": [self.product_id]})))
+        self.assertEqual(main.list_products(), [])
+
+    def test_unauthorized_bulk_archive_is_blocked(self):
+        self.mocks[1].side_effect = main.HTTPException(status_code=403, detail="Forbidden")
+        with self.assertRaises(main.HTTPException) as context:
+            asyncio.run(main.admin_bulk_archive_products(JsonRequest({"product_ids": [self.product_id]})))
+        self.assertEqual(context.exception.status_code, 403)
 
 
 if __name__ == "__main__":

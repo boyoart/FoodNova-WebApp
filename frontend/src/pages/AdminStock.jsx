@@ -19,6 +19,8 @@ export default function AdminStock() {
   const [showModal, setShowModal] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [stockFilter, setStockFilter] = useState('all')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedRows, setSelectedRows] = useState([])
   const isProduct = activeTab === 'products'
 
   useEffect(() => {
@@ -70,12 +72,12 @@ export default function AdminStock() {
   }
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return
+    if (!window.confirm('Archive this product and all of its variants? Historical orders will be preserved.')) return
 
     try {
       if (isProduct) {
         await adminAPI.deleteProduct(id)
-        toast.success('Product deleted successfully')
+        toast.success('Product archived successfully')
       } else {
         await adminAPI.deletePack(id)
         toast.success('Pack deleted successfully')
@@ -220,6 +222,20 @@ export default function AdminStock() {
         <span>Active product</span>
       </label>
     </div>
+    <section className="stock-variant-editor">
+      <div className="stock-image-upload-title">Variants / sizes</div>
+      <p className="stock-image-upload-help">Leave empty for a normal single-unit product. Each variant has independent pricing and stock.</p>
+      {(formData.variants || []).map((variant, index) => (
+        <div className="stock-form-grid" key={variant.id || `new-${index}`}>
+          <div className="stock-form-field"><label>Size / weight</label><input value={variant.weight || ''} onChange={(event) => setFormData({ ...formData, variants: formData.variants.map((entry, entryIndex) => entryIndex === index ? { ...entry, weight: event.target.value } : entry) })} /></div>
+          <div className="stock-form-field"><label>Price (₦)</label><input type="number" min="0" value={variant.price ?? ''} onChange={(event) => setFormData({ ...formData, variants: formData.variants.map((entry, entryIndex) => entryIndex === index ? { ...entry, price: Number(event.target.value) || 0 } : entry) })} /></div>
+          <div className="stock-form-field"><label>Quantity</label><input type="number" min="0" value={variant.stock_qty ?? variant.stock ?? ''} onChange={(event) => setFormData({ ...formData, variants: formData.variants.map((entry, entryIndex) => entryIndex === index ? { ...entry, stock_qty: Number(event.target.value) || 0, stock: Number(event.target.value) || 0 } : entry) })} /></div>
+          <label className="stock-toggle"><input type="checkbox" checked={variant.is_active !== false} onChange={(event) => setFormData({ ...formData, variants: formData.variants.map((entry, entryIndex) => entryIndex === index ? { ...entry, is_active: event.target.checked } : entry) })} /><span>Active</span></label>
+          <button type="button" className="stock-secondary-button" onClick={() => setFormData({ ...formData, variants: formData.variants.filter((_, entryIndex) => entryIndex !== index) })}>Remove</button>
+        </div>
+      ))}
+      <button type="button" className="stock-secondary-button" onClick={() => setFormData({ ...formData, variants: [...(formData.variants || []), { weight: '', price: formData.price || 0, stock_qty: 0, is_active: true }] })}>Add variant</button>
+    </section>
     {renderImageUpload('Product Image')}
     </>
   )
@@ -257,11 +273,40 @@ export default function AdminStock() {
   const lowStockProducts = products.filter((item) => getStockState(item) === 'low')
   const outOfStockProducts = products.filter((item) => getStockState(item) === 'out')
   const items = isProduct
-    ? products.filter((item) => stockFilter === 'low' ? getStockState(item) === 'low' : stockFilter === 'out' ? getStockState(item) === 'out' : true)
+    ? products.filter((item) => {
+        const matchesSearch = `${item.name} ${item.category} ${(item.variants || []).map((variant) => `${variant.weight} ${variant.sku}`).join(' ')}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
+        const matchesStock = stockFilter === 'low' ? getStockState(item) === 'low' : stockFilter === 'out' ? getStockState(item) === 'out' : true
+        return matchesSearch && matchesStock
+      })
     : packs
   const modalTitle = editingId
     ? `Edit ${isProduct ? 'Product' : 'Pack'}`
     : `Add New ${isProduct ? 'Product' : 'Pack'}`
+  const visibleRows = isProduct
+    ? items.flatMap((item) => [
+        { key: `product:${item.id}`, item, row: item, kind: 'product' },
+        ...(item.variants || []).map((variant) => ({ key: `variant:${variant.id}`, item, row: variant, kind: 'variant' })),
+      ])
+    : items.map((item) => ({ key: `pack:${item.id}`, item, row: item, kind: 'pack' }))
+  const visibleKeys = visibleRows.map((entry) => entry.key)
+  const allVisibleSelected = visibleKeys.length > 0 && visibleKeys.every((key) => selectedRows.includes(key))
+  const toggleRow = (key) => setSelectedRows((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key])
+  const bulkArchive = async () => {
+    const productIds = selectedRows.filter((key) => key.startsWith('product:')).map((key) => Number(key.split(':')[1]))
+    const variantIds = selectedRows.filter((key) => key.startsWith('variant:')).map((key) => Number(key.split(':')[1]))
+    const parentCount = productIds.length
+    const warning = `Archive ${selectedRows.length} selected item${selectedRows.length === 1 ? '' : 's'}? ${parentCount ? `${parentCount} parent product${parentCount === 1 ? '' : 's'} and all of their active variants will be affected. ` : ''}Catalog availability will change. Historical orders are preserved, but there is no restore screen.`
+    if (!window.confirm(warning)) return
+    try {
+      const result = await adminAPI.bulkDeleteProducts({ product_ids: productIds, variant_ids: variantIds })
+      if (result.failed) throw new Error('Some selected items could not be archived')
+      toast.success(result.message || 'Selected items archived')
+      setSelectedRows([])
+      await fetchData()
+    } catch (error) {
+      toast.error(error.response?.data?.detail?.message || error.response?.data?.detail || error.message || 'Bulk archive failed')
+    }
+  }
 
   return (
     <div className="admin-page">
@@ -276,12 +321,14 @@ export default function AdminStock() {
       </div>
 
       {isProduct && (
-        <div className="stock-filter-tabs">
+        <><div className="stock-filter-tabs">
           <button className={stockFilter === 'all' ? 'active' : ''} onClick={() => setStockFilter('all')}>All ({products.length})</button>
           <button className={stockFilter === 'low' ? 'active' : ''} onClick={() => setStockFilter('low')}>Low Stock ({lowStockProducts.length})</button>
           <button className={stockFilter === 'out' ? 'active' : ''} onClick={() => setStockFilter('out')}>Out of Stock ({outOfStockProducts.length})</button>
-        </div>
+        </div><input className="stock-search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search products, variants, or SKU" /></>
       )}
+
+      {isProduct && selectedRows.length > 0 && <div className="stock-bulk-toolbar"><strong>{selectedRows.length} selected</strong><button type="button" className="btn-delete" onClick={bulkArchive}>Delete Selected</button><button type="button" className="stock-secondary-button" onClick={() => setSelectedRows([])}>Clear selection</button></div>}
 
       {loading ? (
         <div className="loading">Loading...</div>
@@ -292,6 +339,7 @@ export default function AdminStock() {
           <table>
             <thead>
               <tr>
+                {isProduct && <th><input type="checkbox" aria-label="Select all visible results" checked={allVisibleSelected} onChange={() => setSelectedRows((current) => allVisibleSelected ? current.filter((key) => !visibleKeys.includes(key)) : [...new Set([...current, ...visibleKeys])])} /></th>}
                 <th>ID</th>
                 <th>Image</th>
                 <th>Name</th>
@@ -302,15 +350,16 @@ export default function AdminStock() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className={isProduct ? `stock-row-${getStockState(item)}` : ''}>
-                  <td>{item.id}</td>
-                  <td>{renderStockThumb(item)}</td>
-                  <td>{item.name}</td>
+              {visibleRows.map(({ key, item, row, kind }) => {
+                return (<tr key={key} className={isProduct ? `stock-row-${getStockState(row)}` : ''}>
+                  {isProduct && <td><input type="checkbox" aria-label={`Select ${item.name}${kind === 'variant' ? ` ${row.weight}` : ''}`} checked={selectedRows.includes(key)} onChange={() => toggleRow(key)} /></td>}
+                  <td>{row.id}</td>
+                  <td>{renderStockThumb(row.image_url ? row : item)}</td>
+                  <td>{item.name}{kind === 'variant' ? ` — ${row.weight || 'Default'}` : kind === 'product' && item.variants?.length ? ' — All variants' : ''}</td>
                   {isProduct ? (
                     <>
                       <td>{item.category}</td>
-                      <td>{item.stock ?? item.stock_qty}</td>
+                      <td>{row.stock_qty ?? row.stock}</td>
                     </>
                   ) : (
                     <>
@@ -318,16 +367,16 @@ export default function AdminStock() {
                       <td>{Array.isArray(item.items) ? item.items.join(', ') : item.items}</td>
                     </>
                   )}
-                  <td>{formatPrice(item.price)}</td>
-                  <td>{renderStockStatus(item)}</td>
+                  <td>{formatPrice(row.price)}</td>
+                  <td>{renderStockStatus(row)}</td>
                   <td>
                     <div className="action-buttons">
                       <button className="btn-edit" onClick={() => handleEdit(item)}>Edit</button>
-                      <button className="btn-delete" onClick={() => handleDelete(item.id)}>Delete</button>
+                      {kind !== 'variant' && <button className="btn-delete" onClick={() => handleDelete(item.id)}>Archive</button>}
                     </div>
                   </td>
-                </tr>
-              ))}
+                </tr>)
+              })}
             </tbody>
           </table>
         </div>

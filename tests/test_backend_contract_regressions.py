@@ -333,7 +333,7 @@ class BackendContractRegressionTests(unittest.TestCase):
         self.assertEqual(data["pickup_latitude"], 43.65)
         self.assertEqual(data["pickup_longitude"], -79.38)
 
-    def test_missing_pickup_configuration_is_safe(self):
+    def test_missing_pickup_configuration_uses_canonical_defaults(self):
         order = main.DBOrder(id=48, delivery_method="pickup")
         names = [
             "FOODNOVA_PICKUP_ADDRESS", "FOODNOVA_PICKUP_HOURS",
@@ -342,8 +342,9 @@ class BackendContractRegressionTests(unittest.TestCase):
         ]
         with patch.dict(os.environ, {name: "" for name in names}, clear=False):
             data = main.order_to_dict(order)
-        self.assertEqual(data["pickup_address"], "")
-        self.assertIsNone(data["pickup_latitude"])
+        self.assertEqual(data["pickup_address"], main.FOODNOVA_PICKUP_ADDRESS_DEFAULT)
+        self.assertEqual(data["pickup_latitude"], main.FOODNOVA_PICKUP_LATITUDE_DEFAULT)
+        self.assertEqual(data["pickup_longitude"], main.FOODNOVA_PICKUP_LONGITUDE_DEFAULT)
 
     def test_another_customer_cannot_access_pickup_order(self):
         order = main.DBOrder(customer_email="owner@example.com")

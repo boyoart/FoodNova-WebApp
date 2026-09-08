@@ -46,7 +46,8 @@ class DiscoverScreen extends ConsumerWidget {
           },
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(
-                parent: AlwaysScrollableScrollPhysics()),
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
             slivers: [
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
@@ -153,7 +154,7 @@ class DiscoverScreen extends ConsumerWidget {
                     data: (items) => _HorizontalShelf(
                       title: 'Flash sales',
                       products: items
-                          .where((item) => item.stock > 0 && item.stock <= 5)
+                          .where((item) => item.stock > 0)
                           .take(10)
                           .toList(),
                       onTap: (product) =>
@@ -218,11 +219,11 @@ class DiscoverScreen extends ConsumerWidget {
                             itemCount: recent.length,
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              childAspectRatio: .58,
-                              crossAxisSpacing: 14,
-                              mainAxisSpacing: 14,
-                            ),
+                                  crossAxisCount: 2,
+                                  childAspectRatio: .58,
+                                  crossAxisSpacing: 14,
+                                  mainAxisSpacing: 14,
+                                ),
                             itemBuilder: (_, index) {
                               final product = recent[index];
                               return ProductCard(
@@ -264,9 +265,10 @@ class DiscoverScreen extends ConsumerWidget {
                                 .take(8)
                                 .toList(),
                             onTap: (product) => context.push(
-                                product.type == 'pack'
-                                    ? '/packs/${product.id}'
-                                    : '/products/${product.id}'),
+                              product.type == 'pack'
+                                  ? '/packs/${product.id}'
+                                  : '/products/${product.id}',
+                            ),
                             onAdd: (product) => ref
                                 .read(cartControllerProvider.notifier)
                                 .add(product),
@@ -567,10 +569,9 @@ class _SectionTitle extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
         ),
       ],
@@ -619,10 +620,8 @@ Future<void> _showSearchSheet(BuildContext context, WidgetRef ref) async {
       initialChildSize: .92,
       minChildSize: .5,
       maxChildSize: .96,
-      builder: (context, controller) => _SearchSheet(
-        products: products,
-        scrollController: controller,
-      ),
+      builder: (context, controller) =>
+          _SearchSheet(products: products, scrollController: controller),
     ),
   );
 }
@@ -674,17 +673,17 @@ class _FilterSheetState extends State<_FilterSheet> {
         children: [
           Text(
             'Apply filter',
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 18),
-          Text('Price range',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w900)),
+          Text(
+            'Price range',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
           RangeSlider(
             min: 0,
             max: 50000,
@@ -698,19 +697,24 @@ class _FilterSheetState extends State<_FilterSheet> {
           ),
           Row(
             children: [
-              Text('NGN ${_price.start.round()}',
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text(
+                'NGN ${_price.start.round()}',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
               const Spacer(),
-              Text('NGN ${_price.end.round()}',
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              Text(
+                'NGN ${_price.end.round()}',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
             ],
           ),
           const SizedBox(height: 18),
-          Text('Rating',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w900)),
+          Text(
+            'Rating',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -722,7 +726,7 @@ class _FilterSheetState extends State<_FilterSheet> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('$i'),
-                      const Icon(Icons.star_rounded, size: 16)
+                      const Icon(Icons.star_rounded, size: 16),
                     ],
                   ),
                   selectedColor: FoodNovaColors.primary,
@@ -736,11 +740,12 @@ class _FilterSheetState extends State<_FilterSheet> {
             ],
           ),
           const SizedBox(height: 18),
-          Text('Categories',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w900)),
+          Text(
+            'Categories',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -816,10 +821,9 @@ class _SearchSheetState extends State<_SearchSheet> {
         if (_query.isEmpty) ...[
           Text(
             'Recent searches',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w900),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -836,18 +840,18 @@ class _SearchSheetState extends State<_SearchSheet> {
         ],
         Text(
           _query.isEmpty ? 'Trending products' : 'Search results',
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.w900),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         for (final product in filtered.take(24))
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(
-              backgroundColor:
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest,
               child: Icon(
                 product.type == 'pack'
                     ? Icons.inventory_2_rounded
@@ -855,17 +859,21 @@ class _SearchSheetState extends State<_SearchSheet> {
                 color: FoodNovaColors.primary,
               ),
             ),
-            title: Text(product.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w900)),
+            title: Text(
+              product.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w900),
+            ),
             subtitle: Text(product.category),
             onTap: () {
               final router = GoRouter.of(context);
               if (context.mounted) Navigator.pop(context);
-              router.push(product.type == 'pack'
-                  ? '/packs/${product.id}'
-                  : '/products/${product.id}');
+              router.push(
+                product.type == 'pack'
+                    ? '/packs/${product.id}'
+                    : '/products/${product.id}',
+              );
             },
           ),
       ],
@@ -906,7 +914,7 @@ class _CategoryChipsState extends State<_CategoryChips> {
   Widget build(BuildContext context) {
     final categories = [
       const FoodNovaCategory(name: 'All', imageUrl: ''),
-      ...widget.categories.take(12)
+      ...widget.categories.take(12),
     ];
     final scheme = Theme.of(context).colorScheme;
     return SizedBox(
@@ -932,8 +940,9 @@ class _CategoryChipsState extends State<_CategoryChips> {
                     : scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color:
-                      selected ? FoodNovaColors.primary : scheme.outlineVariant,
+                  color: selected
+                      ? FoodNovaColors.primary
+                      : scheme.outlineVariant,
                   width: selected ? 1.5 : 1,
                 ),
               ),
@@ -945,7 +954,8 @@ class _CategoryChipsState extends State<_CategoryChips> {
                       category.imageUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => ProductPlaceholderImage(
-                          icon: _categoryIcon(category.name)),
+                        icon: _categoryIcon(category.name),
+                      ),
                     )
                   else
                     ProductPlaceholderImage(icon: _categoryIcon(category.name)),

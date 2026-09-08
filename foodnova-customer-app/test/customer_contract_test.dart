@@ -4,8 +4,45 @@ import 'package:foodnova_customer_app/services/notification_destination.dart';
 import 'package:foodnova_customer_app/shared/delivery_status.dart';
 import 'package:foodnova_customer_app/shared/models/order.dart';
 import 'package:foodnova_customer_app/features/tracking/presentation/tracking_screen.dart';
+import 'package:foodnova_customer_app/shared/models/product.dart';
 
 void main() {
+  test(
+    'availability-only product contract supports variants without counts',
+    () {
+      final product = Product.fromJson({
+        'id': 10,
+        'name': 'Rice',
+        'is_available': true,
+        'stock_status': 'in_stock',
+        'variants': [
+          {
+            'id': 101,
+            'product_id': 10,
+            'weight': '2kg',
+            'price': 4000,
+            'is_active': true,
+            'is_available': true,
+            'stock_status': 'in_stock',
+          },
+          {
+            'id': 102,
+            'product_id': 10,
+            'weight': '5kg',
+            'price': 8000,
+            'is_active': true,
+            'is_available': false,
+            'stock_status': 'out_of_stock',
+          },
+        ],
+      });
+      expect(product.stock, greaterThan(0));
+      expect(product.variants.first.stock, greaterThan(0));
+      expect(product.variants.last.stock, 0);
+      expect(product.withVariant(product.variants.last).stock, 0);
+    },
+  );
+
   test('delivery aliases use one canonical customer state', () {
     expect(canonicalDeliveryStatus('arrived-at-pickup'), 'ARRIVED_AT_PICKUP');
     expect(canonicalDeliveryStatus('out_for_delivery'), 'IN_TRANSIT');
@@ -68,28 +105,30 @@ void main() {
     expect(order.isDeliveryTrackingVisible, isFalse);
   });
 
-  test('nested pickup contract provides configured details and coordinates',
-      () {
-    final order = OrderSummary.fromJson({
-      'id': 4,
-      'delivery_method': 'pickup',
-      'order_status': 'ready_for_pickup',
-      'pickup': {
-        'address': 'Configured FoodNova Store',
-        'hours': 'Mon-Sat 9-5',
-        'instructions': 'Ask at the collection desk',
-        'latitude': 43.65,
-        'longitude': -79.38,
-        'pin': '8471',
-      },
-    });
-    expect(order.pickupAddress, 'Configured FoodNova Store');
-    expect(order.pickupHours, 'Mon-Sat 9-5');
-    expect(order.pickupInstructions, 'Ask at the collection desk');
-    expect(order.pickupLatitude, 43.65);
-    expect(order.pickupLongitude, -79.38);
-    expect(order.deliveryPin, '8471');
-  });
+  test(
+    'nested pickup contract provides configured details and coordinates',
+    () {
+      final order = OrderSummary.fromJson({
+        'id': 4,
+        'delivery_method': 'pickup',
+        'order_status': 'ready_for_pickup',
+        'pickup': {
+          'address': 'Configured FoodNova Store',
+          'hours': 'Mon-Sat 9-5',
+          'instructions': 'Ask at the collection desk',
+          'latitude': 43.65,
+          'longitude': -79.38,
+          'pin': '8471',
+        },
+      });
+      expect(order.pickupAddress, 'Configured FoodNova Store');
+      expect(order.pickupHours, 'Mon-Sat 9-5');
+      expect(order.pickupInstructions, 'Ask at the collection desk');
+      expect(order.pickupLatitude, 43.65);
+      expect(order.pickupLongitude, -79.38);
+      expect(order.deliveryPin, '8471');
+    },
+  );
 
   test('completed pickup does not expose a missing PIN as rider state', () {
     final order = OrderSummary.fromJson({
@@ -115,13 +154,15 @@ void main() {
       'pickup_instructions': 'Bring your pickup PIN.',
     });
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: buildPickupFulfillmentCardForTest(order),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: buildPickupFulfillmentCardForTest(order),
+          ),
         ),
       ),
-    ));
+    );
 
     expect(find.text('Pickup PIN'), findsOneWidget);
     expect(find.text('Pickup instructions'), findsOneWidget);
@@ -130,8 +171,9 @@ void main() {
     expect(find.text('Mon-Sat 9-5'), findsOneWidget);
   });
 
-  testWidgets('completed pickup hides obsolete collection details',
-      (tester) async {
+  testWidgets('completed pickup hides obsolete collection details', (
+    tester,
+  ) async {
     final order = OrderSummary.fromJson({
       'id': 7,
       'delivery_method': 'pickup',
@@ -145,13 +187,15 @@ void main() {
       'delivery_completed_at': '2026-08-20T12:30:00Z',
     });
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: buildPickupFulfillmentCardForTest(order),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: buildPickupFulfillmentCardForTest(order),
+          ),
         ),
       ),
-    ));
+    );
 
     expect(find.text('Picked up by Customer'), findsOneWidget);
     expect(find.text('Pickup completed successfully.'), findsOneWidget);

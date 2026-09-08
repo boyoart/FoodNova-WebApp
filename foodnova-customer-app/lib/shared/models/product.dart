@@ -22,6 +22,10 @@ class ProductVariant {
   final String imageUrl;
 
   factory ProductVariant.fromJson(Map<String, dynamic> json) {
+    final hasQuantity =
+        json.containsKey('stock_qty') || json.containsKey('stock');
+    final available = json['is_available'] == true ||
+        '${json['stock_status'] ?? ''}'.toLowerCase() == 'in_stock';
     return ProductVariant(
       id: int.tryParse('${json['id']}') ?? 0,
       productId:
@@ -30,10 +34,15 @@ class ProductVariant {
       weight: '${json['weight'] ?? json['label'] ?? ''}',
       price:
           double.tryParse('${json['price'] ?? json['unit_price'] ?? 0}') ?? 0,
-      stock: int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0,
+      stock: hasQuantity
+          ? int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0
+          : available
+              ? 0x3fffffff
+              : 0,
       isActive: (json['is_active'] ?? json['active']) != false,
       imageUrl: AppConfig.resolveMediaUrl(
-          '${json['image_url'] ?? json['imageUrl'] ?? ''}'),
+        '${json['image_url'] ?? json['imageUrl'] ?? ''}',
+      ),
     );
   }
 
@@ -138,8 +147,10 @@ class Product {
     final variants = (json['variants'] is List)
         ? (json['variants'] as List)
             .whereType<Map>()
-            .map((item) =>
-                ProductVariant.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+              (item) =>
+                  ProductVariant.fromJson(Map<String, dynamic>.from(item)),
+            )
             .where((variant) => variant.isActive)
             .toList()
         : <ProductVariant>[];
@@ -152,15 +163,24 @@ class Product {
     final productImage =
         '${json['image_url'] ?? json['imageUrl'] ?? json['image'] ?? ''}';
     final effectiveImage = '${json['effective_image_url'] ?? ''}';
+    final hasQuantity =
+        json.containsKey('stock_qty') || json.containsKey('stock');
+    final available = json['is_available'] == true ||
+        '${json['stock_status'] ?? ''}'.toLowerCase() == 'in_stock';
     final stockTotal = variants.isNotEmpty
         ? variants.fold<int>(0, (sum, variant) => sum + variant.stock)
-        : int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0;
+        : hasQuantity
+            ? int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0
+            : available
+                ? 0x3fffffff
+                : 0;
     return Product(
       id: int.tryParse('${json['id']}') ?? 0,
       name: '${json['name'] ?? ''}',
       price: double.tryParse('${startingPrice ?? json['price'] ?? 0}') ?? 0,
       imageUrl: AppConfig.resolveMediaUrl(
-          productImage.isNotEmpty ? productImage : effectiveImage),
+        productImage.isNotEmpty ? productImage : effectiveImage,
+      ),
       category: '${json['category'] ?? json['category_name'] ?? ''}',
       description: '${json['description'] ?? ''}',
       stock: stockTotal,
@@ -179,7 +199,7 @@ class Product {
           '${json['delivery_note'] ?? json['deliveryNote'] ?? _defaultDeliveryNote(type)}'
               .trim(),
       variants: variants,
-      selectedVariant: null,
+      selectedVariant: variants.length == 1 ? variants.first : null,
     );
   }
 
@@ -232,9 +252,11 @@ List<String> _parseContents(dynamic value) {
                 '${item['name'] ?? item['title'] ?? item['item'] ?? ''}'.trim();
             final quantity = '${item['quantity'] ?? item['qty'] ?? ''}'.trim();
             final unit = '${item['unit'] ?? ''}'.trim();
-            return [quantity, unit, name]
-                .where((part) => part.isNotEmpty)
-                .join(' ');
+            return [
+              quantity,
+              unit,
+              name,
+            ].where((part) => part.isNotEmpty).join(' ');
           }
           return '$item'.trim();
         })
