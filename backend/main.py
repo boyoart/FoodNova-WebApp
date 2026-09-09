@@ -8351,31 +8351,63 @@ async def upload_category_image(request: Request, file: UploadFile = File(...)):
     return {"success": True, "image_url": image_url, "url": image_url, "data": {"image_url": image_url}}
 
 
+def catalog_page(items: list, total: int, page: int, page_size: int) -> dict:
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, math.ceil(total / page_size)),
+    }
+
+
 @app.get("/products")
-def list_products(search: Optional[str] = None, include_inactive: bool = False, admin_view: bool = False):
+def list_products(
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: int = 10,
+    include_inactive: bool = False,
+    admin_view: bool = False,
+):
     db = SessionLocal()
     try:
         query = db.query(DBProduct)
         if not include_inactive:
             query = query.filter(DBProduct.is_active == True)
-        products = []
-        for product in query.order_by(DBProduct.category.asc(), DBProduct.name.asc()).all():
-            if include_inactive or product.is_active:
-                if product.name in CATALOG_PRODUCT_NAMES or is_combo_product(product) or product.is_active:
-                    products.append(product_to_dict(product, include_inactive_variants=True) if admin_view else product_to_customer_dict(product))
-        if not search:
-            return products
+        if search and search.strip():
+            pattern = f"%{search.strip()}%"
+            query = query.filter(or_(
+                DBProduct.name.ilike(pattern),
+                DBProduct.category.ilike(pattern),
+                DBProduct.category_name.ilike(pattern),
+            ))
+        if category and category.strip():
+            category_name = category.strip().lower()
+            query = query.filter(or_(
+                func.lower(DBProduct.category) == category_name,
+                func.lower(DBProduct.category_name) == category_name,
+            ))
 
-        search_lower = search.lower()
-        return [
-            product for product in products
-            if search_lower in product.get("name", "").lower()
-            or search_lower in product.get("category", "").lower()
-            or search_lower in product.get("category_name", "").lower()
+        query = query.order_by(DBProduct.category.asc(), DBProduct.name.asc(), DBProduct.id.asc())
+        if page is None:
+            rows = query.all()
+        else:
+            if page < 1 or page_size < 1 or page_size > 100:
+                raise HTTPException(status_code=422, detail="page must be at least 1 and page_size must be between 1 and 100")
+            total = query.count()
+            rows = query.offset((page - 1) * page_size).limit(page_size).all()
+
+        products = [
+            product_to_dict(product, include_inactive_variants=True) if admin_view else product_to_customer_dict(product)
+            for product in rows
         ]
+        return catalog_page(products, total, page, page_size) if page is not None else products
+    except HTTPException:
+        raise
     except Exception as error:
         print("PRODUCTS LOAD ERROR:", repr(error))
-        return []
+        return catalog_page([], 0, page, page_size) if page is not None else []
     finally:
         db.close()
 
@@ -8394,23 +8426,28 @@ def get_product(product_id: int):
 
 
 @app.get("/packs")
-def list_packs(search: Optional[str] = None):
+def list_packs(search: Optional[str] = None, page: Optional[int] = None, page_size: int = 10):
     db = SessionLocal()
     try:
-        packs = [pack_to_dict(pack) for pack in db.query(DBPack).all()]
-        if not search:
-            return packs
-
-        search_lower = search.lower()
-        return [
-            pack for pack in packs
-            if search_lower in pack.get("name", "").lower()
-            or search_lower in pack.get("description", "").lower()
-            or any(search_lower in str(item).lower() for item in pack.get("items", []))
-        ]
+        query = db.query(DBPack).filter(DBPack.is_active == True)
+        if search and search.strip():
+            pattern = f"%{search.strip()}%"
+            query = query.filter(or_(DBPack.name.ilike(pattern), DBPack.description.ilike(pattern)))
+        query = query.order_by(DBPack.name.asc(), DBPack.id.asc())
+        if page is None:
+            rows = query.all()
+        else:
+            if page < 1 or page_size < 1 or page_size > 100:
+                raise HTTPException(status_code=422, detail="page must be at least 1 and page_size must be between 1 and 100")
+            total = query.count()
+            rows = query.offset((page - 1) * page_size).limit(page_size).all()
+        packs = [pack_to_dict(pack) for pack in rows]
+        return catalog_page(packs, total, page, page_size) if page is not None else packs
+    except HTTPException:
+        raise
     except Exception as error:
         print("PACKS LOAD ERROR:", repr(error))
-        return []
+        return catalog_page([], 0, page, page_size) if page is not None else []
     finally:
         db.close()
 

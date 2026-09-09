@@ -59,6 +59,13 @@ const normalizeList = (body, keys = []) => {
   return [];
 };
 
+const normalizePagination = (body, itemCount) => ({
+  page: Number(body?.page || 1),
+  page_size: Number(body?.page_size || itemCount || 10),
+  total: Number(body?.total ?? itemCount),
+  total_pages: Number(body?.total_pages || 1),
+});
+
 const logEndpointError = (endpoint, error) => {
   console.error(`${endpoint} failed`, error?.response?.status, error?.response?.data || error);
 };
@@ -173,10 +180,11 @@ const setLocalDefaultAddress = (id) => {
 };
 
 export const productsAPI = {
-  getAll: async () => {
+  getAll: async (params = {}) => {
     try {
-      const response = await api.get("/products");
-      return { data: normalizeList(response.data, ["products"]), raw: response.data };
+      const response = await api.get("/products", { params });
+      const data = normalizeList(response.data, ["products"]);
+      return { data, pagination: normalizePagination(response.data, data.length), raw: response.data };
     } catch (error) {
       logEndpointError("GET /products", error);
       throw error;
@@ -186,10 +194,11 @@ export const productsAPI = {
 };
 
 export const packsAPI = {
-  getAll: async () => {
+  getAll: async (params = {}) => {
     try {
-      const response = await api.get("/packs");
-      return { data: normalizeList(response.data, ["packs"]), raw: response.data };
+      const response = await api.get("/packs", { params });
+      const data = normalizeList(response.data, ["packs"]);
+      return { data, pagination: normalizePagination(response.data, data.length), raw: response.data };
     } catch (error) {
       logEndpointError("GET /packs", error);
       throw error;
