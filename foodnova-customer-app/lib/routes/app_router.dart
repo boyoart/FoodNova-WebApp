@@ -17,7 +17,7 @@ import '../features/orders/presentation/orders_screen.dart';
 import '../features/products/presentation/categories_screen.dart';
 import '../features/products/presentation/product_detail_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
-import '../features/tracking/presentation/tracking_screen.dart';
+import '../features/tracking/presentation/live_tracking_screen.dart';
 import '../core/state/session_controller.dart';
 
 final _routerRefreshProvider = Provider<_RouterRefresh>((ref) {
@@ -75,7 +75,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
       GoRoute(
         path: '/tracking/:id',
-        builder: (_, state) => TrackingScreen(
+        builder: (_, state) => LiveTrackingScreen(
+            orderId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
+      ),
+      GoRoute(
+        path: '/orders/:id/live-tracking',
+        builder: (_, state) => LiveTrackingScreen(
             orderId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
       ),
       GoRoute(
@@ -123,5 +128,6 @@ bool _requiresSession(String path) {
       path == '/notifications' ||
       path == '/profile' ||
       path.startsWith('/tracking/') ||
+      path.startsWith('/orders/') ||
       path.startsWith('/admin/');
 }

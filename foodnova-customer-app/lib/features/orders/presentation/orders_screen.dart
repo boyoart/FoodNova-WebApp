@@ -132,7 +132,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
                             currency.format(sections.active[index].totalAmount),
                         featured: index == 0,
                         onTap: () => context
-                            .push('/tracking/${sections.active[index].id}'),
+                            .push('/orders/${sections.active[index].id}/live-tracking'),
                       ),
                       const SizedBox(height: 14),
                     ],
@@ -151,7 +151,7 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
                       _OrderCard(
                         order: order,
                         amount: currency.format(order.totalAmount),
-                        onTap: () => context.push('/tracking/${order.id}'),
+                        onTap: () => context.push('/orders/${order.id}/live-tracking'),
                       ),
                       const SizedBox(height: 14),
                     ],
