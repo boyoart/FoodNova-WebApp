@@ -345,6 +345,13 @@ class BackendContractRegressionTests(unittest.TestCase):
         self.assertEqual(data["pickup_address"], main.FOODNOVA_PICKUP_ADDRESS_DEFAULT)
         self.assertEqual(data["pickup_latitude"], main.FOODNOVA_PICKUP_LATITUDE_DEFAULT)
         self.assertEqual(data["pickup_longitude"], main.FOODNOVA_PICKUP_LONGITUDE_DEFAULT)
+        self.assertEqual(
+            main.get_foodnova_pickup_coordinates(MagicMock()),
+            (
+                main.FOODNOVA_PICKUP_LATITUDE_DEFAULT,
+                main.FOODNOVA_PICKUP_LONGITUDE_DEFAULT,
+            ),
+        )
 
     def test_another_customer_cannot_access_pickup_order(self):
         order = main.DBOrder(customer_email="owner@example.com")

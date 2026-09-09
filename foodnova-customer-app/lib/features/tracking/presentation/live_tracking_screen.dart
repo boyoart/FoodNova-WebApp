@@ -1,0 +1,17 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'tracking_screen.dart';
+
+String liveTrackingRoute(int orderId) => '/orders/$orderId/live-tracking';
+
+class LiveTrackingScreen extends ConsumerWidget {
+  const LiveTrackingScreen({required this.orderId, super.key});
+
+  final int orderId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return TrackingScreen(orderId: orderId);
+  }
+}

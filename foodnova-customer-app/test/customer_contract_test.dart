@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:foodnova_customer_app/services/notification_destination.dart';
 import 'package:foodnova_customer_app/shared/delivery_status.dart';
 import 'package:foodnova_customer_app/shared/models/order.dart';
+import 'package:foodnova_customer_app/features/tracking/presentation/live_tracking_screen.dart';
 import 'package:foodnova_customer_app/features/tracking/presentation/tracking_screen.dart';
 import 'package:foodnova_customer_app/features/products/data/product_repository.dart';
 import 'package:foodnova_customer_app/features/products/presentation/product_card.dart';
@@ -156,7 +157,46 @@ void main() {
       'screen': 'order_tracking',
       'order_id': 25,
     });
-    expect(order.route, '/tracking/25');
+    expect(order.route, '/orders/25/live-tracking');
+    expect(liveTrackingRoute(25), '/orders/25/live-tracking');
+  });
+
+  test('track live is shown only for active delivery orders with a rider', () {
+    final activeDelivery = OrderSummary.fromJson({
+      'id': 8,
+      'delivery_method': 'delivery',
+      'rider_id': 44,
+      'delivery_status': 'in_transit',
+      'assigned_worker_name': 'Rider A',
+      'status': 'confirmed',
+      'payment_status': 'paid',
+    });
+    final pickup = OrderSummary.fromJson({
+      'id': 9,
+      'delivery_method': 'pickup',
+      'rider_id': 44,
+      'delivery_status': 'in_transit',
+      'status': 'ready_for_pickup',
+    });
+    final delivered = OrderSummary.fromJson({
+      'id': 10,
+      'delivery_method': 'delivery',
+      'rider_id': 44,
+      'delivery_status': 'delivered',
+      'status': 'delivered',
+    });
+    final cancelled = OrderSummary.fromJson({
+      'id': 11,
+      'delivery_method': 'delivery',
+      'rider_id': 44,
+      'delivery_status': 'cancelled',
+      'status': 'cancelled',
+    });
+
+    expect(activeDelivery.canTrackLive, isTrue);
+    expect(pickup.canTrackLive, isFalse);
+    expect(delivered.canTrackLive, isFalse);
+    expect(cancelled.canTrackLive, isFalse);
   });
 
   test('pickup completion is not treated as rider delivery', () {

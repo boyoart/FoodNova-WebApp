@@ -137,6 +137,13 @@ class OrderSummary {
     return delivery.isCustomerTrackingStage(delivery.deliveryStageFrom(value));
   }
 
+  bool get canTrackLive {
+    if (isPickup) return false;
+    if (isTerminalOrderStatus) return false;
+    if (!hasAssignedRider) return false;
+    return isDeliveryTrackingVisible;
+  }
+
   bool get riderArrived {
     return !isDelivered && canonicalDeliveryStatus == 'ARRIVED';
   }

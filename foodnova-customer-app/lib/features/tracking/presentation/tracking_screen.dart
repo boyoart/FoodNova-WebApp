@@ -8,6 +8,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -371,12 +372,6 @@ class _OrderDetailsView extends StatelessWidget {
             onUpload: onUpload,
           ),
         const SizedBox(height: 14),
-        if (!order.isPickup)
-          _RiderInformationCard(
-            order: order,
-            onCallRider: onCallRider,
-            onMessageRider: onMessageRider,
-          ),
         if (showTracking) ...[
           const SizedBox(height: 14),
           _RiderTrackingCard(
@@ -403,6 +398,97 @@ class _OrderDetailsView extends StatelessWidget {
         const SizedBox(height: 14),
         _CancellationCard(order: order, onCancel: onCancel),
       ],
+    );
+  }
+}
+
+class _CompactTrackingSummaryCard extends StatelessWidget {
+  const _CompactTrackingSummaryCard({
+    required this.order,
+    required this.location,
+  });
+
+  final OrderSummary order;
+  final AsyncValue<RiderLocation?> location;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final eta = order.estimatedDeliveryTime.trim().isNotEmpty
+        ? order.estimatedDeliveryTime
+        : 'ETA unavailable';
+    final distance = location.maybeWhen(
+      data: (data) => data == null || data.distanceMeters == null
+          ? 'Route unavailable'
+          : _formatDistance(data.distanceMeters),
+      orElse: () => 'Route unavailable',
+    );
+    final status = _trackingStageLabel(order.canonicalDeliveryStatus);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withValues(alpha: .08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Rider is on the way',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _TrackingMetricBlock(label: 'ETA', value: eta),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TrackingMetricBlock(label: 'Distance', value: distance),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _TrackingMetricBlock(label: 'Status', value: status),
+              ),
+            ],
+          ),
+          if (order.canTrackLive) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => GoRouter.of(context)
+                    .push('/orders/${order.id}/live-tracking'),
+                icon: const Icon(Icons.navigation_rounded),
+                label: const Text('Track Live'),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -1065,33 +1151,37 @@ class _RiderInformationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Card(
-      title: 'Rider information',
-      icon: Icons.delivery_dining_rounded,
-      child: Column(
-        children: [
-          if (order.hasAssignedRider)
-            _RiderProfileTile(
-              name: order.riderName,
-              phone: order.riderPhone,
-              photoUrl: order.riderPhotoUrl,
-              vehicleType: order.riderVehicleType,
-              riderId: order.riderDisplayId,
-              rating: order.riderRatingText,
-              onCallRider: onCallRider,
-              onMessageRider: onMessageRider,
-            )
-          else
-            const _MutedText(
-              'Looking for an available rider...',
-            ),
-          if (order.deliveryNotes.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            _InfoRow(label: 'Notes', value: order.deliveryNotes),
+    const legacyVisible = false;
+    if (legacyVisible) {
+      return _Card(
+        title: 'Rider information',
+        icon: Icons.delivery_dining_rounded,
+        child: Column(
+          children: [
+            if (order.hasAssignedRider)
+              _RiderProfileTile(
+                name: order.riderName,
+                phone: order.riderPhone,
+                photoUrl: order.riderPhotoUrl,
+                vehicleType: order.riderVehicleType,
+                riderId: order.riderDisplayId,
+                rating: order.riderRatingText,
+                onCallRider: onCallRider,
+                onMessageRider: onMessageRider,
+              )
+            else
+              const _MutedText(
+                'Looking for an available rider...',
+              ),
+            if (order.deliveryNotes.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _InfoRow(label: 'Notes', value: order.deliveryNotes),
+            ],
           ],
-        ],
-      ),
-    );
+        ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 
@@ -1106,165 +1196,9 @@ class _RiderTrackingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return location.when(
-      loading: () => const SizedBox(
-        height: 220,
-        child: Center(child: CircularProgressIndicator()),
-      ),
-      error: (error, _) => const _Card(
-        title: 'Live tracking',
-        icon: Icons.map_rounded,
-        child: _MutedText('Rider tracking temporarily unavailable.'),
-      ),
-      data: (data) {
-        if (data == null) {
-          return const _Card(
-            title: 'Live tracking',
-            icon: Icons.map_rounded,
-            child: _MutedText(
-              'Tracking will appear when your rider picks up the order.',
-            ),
-          );
-        }
-        if (!data.trackingVisible && !data.hasRiderCoordinates) {
-          return const _Card(
-            title: 'Live tracking',
-            icon: Icons.map_rounded,
-            child: _MutedText(
-              'Tracking will appear as soon as your rider location is available.',
-            ),
-          );
-        }
-        if (!data.hasRiderCoordinates) {
-          return const _Card(
-            title: 'Live tracking',
-            icon: Icons.map_rounded,
-            child: _MutedText('Waiting for rider location...'),
-          );
-        }
-        final riderPoint = LatLng(data.riderLatitude!, data.riderLongitude!);
-        final customerPoint = data.hasCustomerCoordinates
-            ? LatLng(data.customerLatitude!, data.customerLongitude!)
-            : null;
-        final pickupPoint =
-            data.pickupLatitude != null && data.pickupLongitude != null
-                ? LatLng(data.pickupLatitude!, data.pickupLongitude!)
-                : null;
-        final routeDestinationPoint = data.routeDestinationLatitude != null &&
-                data.routeDestinationLongitude != null
-            ? LatLng(
-                data.routeDestinationLatitude!,
-                data.routeDestinationLongitude!,
-              )
-            : customerPoint;
-        final routePoints = data.routePolyline
-            .map((point) => LatLng(point['latitude']!, point['longitude']!))
-            .toList();
-        debugPrint(
-          'TRACK_RIDER_RENDER rider=${data.riderLatitude},${data.riderLongitude} '
-          'customer=${data.customerLatitude},${data.customerLongitude} '
-          'distance=${data.distanceMeters} eta=${data.etaMinutes}',
-        );
-        debugPrint(
-          'TRACKING_MAP_DATA '
-          'trackingVisible=${data.trackingVisible} '
-          'trackingAvailable=${data.trackingAvailable} '
-          'hasRider=${data.hasRiderCoordinates} '
-          'hasCustomer=${data.hasCustomerCoordinates} '
-          'routePoints=${routePoints.length}',
-        );
-        debugPrint(
-          'TRACKING_RIDER_COORDS '
-          'latitude=${data.riderLatitude} longitude=${data.riderLongitude}',
-        );
-        debugPrint(
-          'TRACKING_DESTINATION_COORDS '
-          'latitude=${data.customerLatitude} longitude=${data.customerLongitude}',
-        );
-        debugPrint(
-          'TRACKING_POLYLINE_POINTS count=${routePoints.length} '
-          'first=${routePoints.isEmpty ? '' : routePoints.first} '
-          'last=${routePoints.isEmpty ? '' : routePoints.last}',
-        );
-
-        final riderName =
-            data.riderName.isEmpty ? order.riderName : data.riderName;
-        final vehicleType = data.vehicleType.isEmpty
-            ? order.riderVehicleType
-            : data.vehicleType;
-        final eta = _formatEta(data.etaMinutes);
-        final trackingHeight =
-            math.max(520.0, MediaQuery.sizeOf(context).height * .72);
-
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: SizedBox(
-            height: trackingHeight,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: _TrackingMap(
-                    riderPoint: riderPoint,
-                    pickupPoint: pickupPoint,
-                    customerPoint: customerPoint,
-                    routeDestinationPoint: routeDestinationPoint,
-                    routePoints: routePoints,
-                    riderName: riderName,
-                    vehicleType: vehicleType,
-                    workerType: data.workerType,
-                    serverHeading: data.heading,
-                    speedMetersPerSecond: data.speedMetersPerSecond,
-                  ),
-                ),
-                Positioned(
-                  left: 14,
-                  right: 14,
-                  top: 14,
-                  child: Row(
-                    children: [
-                      _LiveTrackingBadge(
-                        label: _trackingStageLabel(data.deliveryStatus),
-                      ),
-                      const Spacer(),
-                      _MapMetricChip(
-                        icon: Icons.timer_rounded,
-                        label: eta,
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 14,
-                  right: 14,
-                  top: 64,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _MapMetricChip(
-                      icon: Icons.route_rounded,
-                      label: _formatDistance(data.distanceMeters),
-                    ),
-                  ),
-                ),
-                DraggableScrollableSheet(
-                  initialChildSize: .21,
-                  minChildSize: .17,
-                  maxChildSize: .36,
-                  builder: (context, controller) {
-                    return _TrackingBottomSheet(
-                      controller: controller,
-                      riderArrived: order.riderArrived,
-                      deliveryStatus: data.deliveryStatus,
-                      eta: eta,
-                      distance: _formatDistance(data.distanceMeters),
-                      lastUpdated: _formatRelativeTime(data.lastUpdatedAt),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    return _CompactTrackingSummaryCard(
+      order: order,
+      location: location,
     );
   }
 }
@@ -2818,6 +2752,7 @@ class _BottomActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final canContact = order.riderPhone.trim().isNotEmpty;
+    final canTrackLive = order.canTrackLive;
     return SafeArea(
       minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Container(
@@ -2851,14 +2786,16 @@ class _BottomActionBar extends StatelessWidget {
                 label: const FittedBox(child: Text('WhatsApp')),
               ),
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: onTrackOrder,
-                icon: const Icon(Icons.near_me_rounded),
-                label: const FittedBox(child: Text('Track Order')),
+            if (canTrackLive) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: onTrackOrder,
+                  icon: const Icon(Icons.near_me_rounded),
+                  label: const FittedBox(child: Text('Track Live')),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
