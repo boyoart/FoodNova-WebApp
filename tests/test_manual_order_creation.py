@@ -256,6 +256,26 @@ class ManualOrderCreationTests(unittest.TestCase):
         asyncio.run(main.admin_bulk_archive_products(JsonRequest({"product_ids": [self.product_id]})))
         self.assertEqual(main.list_products(), [])
 
+    def test_archived_parent_can_be_restored_with_legacy_variants(self):
+        db = self.Session()
+        db.add_all([
+            main.DBProductVariant(product_id=self.product_id, sku="RESTORE-2KG", weight="2kg", price=4000, stock_qty=4, stock=4, is_active=True),
+            main.DBProductVariant(product_id=self.product_id, sku="RESTORE-5KG", weight="5kg", price=8000, stock_qty=0, stock=0, is_active=True),
+        ])
+        db.commit()
+        db.close()
+
+        asyncio.run(main.admin_bulk_archive_products(JsonRequest({"product_ids": [self.product_id]})))
+        restored = main.admin_restore_product(self.product_id, object())
+
+        self.assertTrue(restored["product"]["is_active"])
+        self.assertEqual(len(restored["restored_variant_ids"]), 2)
+        public = main.list_products()
+        self.assertEqual([item["name"] for item in public], ["Rice"])
+        self.assertTrue(public[0]["is_available"])
+        self.assertFalse(next(item for item in public[0]["variants"] if item["weight"] == "5kg")["is_available"])
+        self.assertTrue(any(call.args[2] == "product_restored" for call in self.mocks[3].call_args_list))
+
     def test_unauthorized_bulk_archive_is_blocked(self):
         self.mocks[1].side_effect = main.HTTPException(status_code=403, detail="Forbidden")
         with self.assertRaises(main.HTTPException) as context:

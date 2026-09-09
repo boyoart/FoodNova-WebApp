@@ -1,4 +1,5 @@
 import os
+import inspect
 import sys
 import unittest
 from pathlib import Path
@@ -79,6 +80,88 @@ class PublicCatalogPaginationTests(unittest.TestCase):
         packs = main.list_packs(page=1, page_size=100)
         self.assertNotIn("Archived", [item["name"] for item in products["items"]])
         self.assertNotIn("Archived Pack", [item["name"] for item in packs["items"]])
+
+    def test_inactive_product_cannot_be_loaded_by_public_detail_id(self):
+        db = self.Session()
+        archived_id = db.query(main.DBProduct).filter(main.DBProduct.name == "Archived").one().id
+        db.close()
+        with self.assertRaises(HTTPException) as raised:
+            main.get_product(archived_id)
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_public_route_does_not_expose_admin_catalog_switches(self):
+        parameters = inspect.signature(main.list_products).parameters
+        self.assertNotIn("include_inactive", parameters)
+        self.assertNotIn("admin_view", parameters)
+
+    def test_available_variant_makes_parent_available_without_affecting_sibling(self):
+        db = self.Session()
+        product = main.DBProduct(
+            name="Mixed Rice",
+            category="Rice",
+            price=4000,
+            stock_qty=3,
+            stock=3,
+            is_active=True,
+        )
+        db.add(product)
+        db.flush()
+        db.add_all([
+            main.DBProductVariant(
+                product_id=product.id,
+                sku="MIXED-2KG",
+                weight="2kg",
+                price=4000,
+                stock_qty=3,
+                stock=3,
+                is_active=True,
+            ),
+            main.DBProductVariant(
+                product_id=product.id,
+                sku="MIXED-5KG",
+                weight="5kg",
+                price=8000,
+                stock_qty=0,
+                stock=0,
+                is_active=True,
+            ),
+        ])
+        db.commit()
+        product_id = product.id
+        db.close()
+
+        payload = main.get_product(product_id)
+        variants = {variant["weight"]: variant for variant in payload["variants"]}
+        self.assertTrue(payload["is_available"])
+        self.assertTrue(variants["2kg"]["is_available"])
+        self.assertFalse(variants["5kg"]["is_available"])
+        self.assertNotIn("stock_qty", payload)
+        self.assertNotIn("stock_qty", variants["2kg"])
+
+    def test_all_unavailable_variants_make_parent_out_of_stock(self):
+        db = self.Session()
+        product = main.DBProduct(name="Empty Beans", price=1000, stock_qty=0, stock=0, is_active=True)
+        db.add(product)
+        db.flush()
+        db.add(main.DBProductVariant(
+            product_id=product.id,
+            sku="EMPTY-1KG",
+            weight="1kg",
+            price=1000,
+            stock_qty=0,
+            stock=0,
+            is_active=True,
+        ))
+        db.commit()
+        product_id = product.id
+        db.close()
+
+        self.assertFalse(main.get_product(product_id)["is_available"])
+
+    def test_admin_catalog_can_inspect_archived_product(self):
+        result = main._list_products(search="Archived", include_inactive=True, admin_view=True)
+        self.assertEqual([item["name"] for item in result], ["Archived"])
+        self.assertIn("stock_qty", result[0])
 
     def test_packs_use_the_same_server_pagination_contract(self):
         first = main.list_packs(page=1, page_size=10)

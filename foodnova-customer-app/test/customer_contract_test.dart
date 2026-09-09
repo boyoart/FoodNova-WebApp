@@ -4,6 +4,8 @@ import 'package:foodnova_customer_app/services/notification_destination.dart';
 import 'package:foodnova_customer_app/shared/delivery_status.dart';
 import 'package:foodnova_customer_app/shared/models/order.dart';
 import 'package:foodnova_customer_app/features/tracking/presentation/tracking_screen.dart';
+import 'package:foodnova_customer_app/features/products/data/product_repository.dart';
+import 'package:foodnova_customer_app/features/products/presentation/product_card.dart';
 import 'package:foodnova_customer_app/shared/models/product.dart';
 
 void main() {
@@ -37,11 +39,94 @@ void main() {
         ],
       });
       expect(product.stock, greaterThan(0));
+      expect(product.isAvailable, isTrue);
       expect(product.variants.first.stock, greaterThan(0));
+      expect(product.variants.first.isAvailable, isTrue);
       expect(product.variants.last.stock, 0);
+      expect(product.variants.last.isAvailable, isFalse);
       expect(product.withVariant(product.variants.last).stock, 0);
+      expect(product.withVariant(product.variants.last).isAvailable, isFalse);
     },
   );
+
+  test('parent availability is aggregated from active variants', () {
+    final product = Product.fromJson({
+      'id': 11,
+      'name': 'Garri Ijebu',
+      'is_available': false,
+      'variants': [
+        {
+          'id': 111,
+          'weight': '1kg',
+          'price': 1700,
+          'is_active': true,
+          'is_available': true,
+        },
+        {
+          'id': 112,
+          'weight': '5kg',
+          'price': 5500,
+          'is_active': true,
+          'is_available': false,
+        },
+      ],
+    });
+
+    expect(product.isAvailable, isTrue);
+    expect(product.variants.first.isAvailable, isTrue);
+    expect(product.variants.last.isAvailable, isFalse);
+  });
+
+  test('inactive products are excluded from the customer catalog parser', () {
+    final products = parseCustomerProductsResponse({
+      'items': [
+        {'id': 1, 'name': 'Visible', 'is_active': true, 'is_available': true},
+        {'id': 2, 'name': 'Archived', 'is_active': false, 'is_available': true},
+      ],
+    });
+
+    expect(products.map((product) => product.name), ['Visible']);
+  });
+
+  test('a single unavailable product uses the explicit stock contract', () {
+    final product = Product.fromJson({
+      'id': 12,
+      'name': 'Unavailable item',
+      'is_active': true,
+      'is_available': false,
+      'stock_status': 'out_of_stock',
+    });
+    expect(product.isAvailable, isFalse);
+  });
+
+  testWidgets('product card shows status without exposing exact stock', (
+    tester,
+  ) async {
+    const product = Product(
+      id: 13,
+      name: 'Rice',
+      price: 4000,
+      imageUrl: '',
+      category: 'Food Staples',
+      description: '',
+      stock: 37,
+      isAvailable: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 174,
+            height: 318,
+            child: ProductCard(product: product, onTap: () {}, onAdd: () {}),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('In stock'), findsOneWidget);
+    expect(find.text('37'), findsNothing);
+  });
 
   test('delivery aliases use one canonical customer state', () {
     expect(canonicalDeliveryStatus('arrived-at-pickup'), 'ARRIVED_AT_PICKUP');

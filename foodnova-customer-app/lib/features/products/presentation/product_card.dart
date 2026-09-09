@@ -32,7 +32,7 @@ class ProductCard extends StatelessWidget {
       symbol: 'NGN ',
       decimalDigits: 0,
     );
-    final outOfStock = product.stock <= 0;
+    final outOfStock = !product.isAvailable;
     final sale = product.type == 'pack';
     final showStepper = quantity > 0 && !product.hasVariants;
     return InkWell(
@@ -149,8 +149,8 @@ class ProductCard extends StatelessWidget {
                               onTap: outOfStock
                                   ? null
                                   : product.hasVariants
-                                  ? onTap
-                                  : onAdd,
+                                      ? onTap
+                                      : onAdd,
                             ),
                     ],
                   ),

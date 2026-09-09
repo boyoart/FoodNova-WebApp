@@ -1,5 +1,26 @@
 import '../../config/app_config.dart';
 
+bool _readAvailability(
+  Map<String, dynamic> json, {
+  required bool isActive,
+  required int fallbackStock,
+  required bool hasQuantity,
+}) {
+  if (!isActive) return false;
+  if (json.containsKey('is_available')) {
+    final value = json['is_available'];
+    return value == true || '$value'.toLowerCase() == 'true';
+  }
+  if (json.containsKey('stock_status')) {
+    return '${json['stock_status'] ?? ''}'.toLowerCase() == 'in_stock';
+  }
+  if (json.containsKey('is_out_of_stock')) {
+    final value = json['is_out_of_stock'];
+    return !(value == true || '$value'.toLowerCase() == 'true');
+  }
+  return hasQuantity && fallbackStock > 0;
+}
+
 class ProductVariant {
   const ProductVariant({
     required this.id,
@@ -9,6 +30,7 @@ class ProductVariant {
     required this.price,
     required this.stock,
     required this.isActive,
+    this.isAvailable = true,
     this.imageUrl = '',
   });
 
@@ -19,13 +41,22 @@ class ProductVariant {
   final double price;
   final int stock;
   final bool isActive;
+  final bool isAvailable;
   final String imageUrl;
 
   factory ProductVariant.fromJson(Map<String, dynamic> json) {
     final hasQuantity =
         json.containsKey('stock_qty') || json.containsKey('stock');
-    final available = json['is_available'] == true ||
-        '${json['stock_status'] ?? ''}'.toLowerCase() == 'in_stock';
+    final stock = hasQuantity
+        ? int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0
+        : 0;
+    final isActive = (json['is_active'] ?? json['active']) != false;
+    final available = _readAvailability(
+      json,
+      isActive: isActive,
+      fallbackStock: stock,
+      hasQuantity: hasQuantity,
+    );
     return ProductVariant(
       id: int.tryParse('${json['id']}') ?? 0,
       productId:
@@ -35,11 +66,12 @@ class ProductVariant {
       price:
           double.tryParse('${json['price'] ?? json['unit_price'] ?? 0}') ?? 0,
       stock: hasQuantity
-          ? int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0
+          ? stock
           : available
               ? 0x3fffffff
               : 0,
-      isActive: (json['is_active'] ?? json['active']) != false,
+      isActive: isActive,
+      isAvailable: available,
       imageUrl: AppConfig.resolveMediaUrl(
         '${json['image_url'] ?? json['imageUrl'] ?? ''}',
       ),
@@ -55,6 +87,9 @@ class ProductVariant {
         'stock_qty': stock,
         'stock': stock,
         'is_active': isActive,
+        'is_available': isAvailable,
+        'stock_status': isAvailable ? 'in_stock' : 'out_of_stock',
+        'is_out_of_stock': !isAvailable,
         'image_url': imageUrl,
       };
 }
@@ -76,6 +111,8 @@ class Product {
     this.deliveryNote = '',
     this.variants = const [],
     this.selectedVariant,
+    this.isActive = true,
+    this.isAvailable = true,
   });
 
   final int id;
@@ -93,6 +130,8 @@ class Product {
   final String deliveryNote;
   final List<ProductVariant> variants;
   final ProductVariant? selectedVariant;
+  final bool isActive;
+  final bool isAvailable;
 
   bool get hasVariants =>
       variants.where((variant) => variant.isActive).length > 1;
@@ -131,6 +170,8 @@ class Product {
       deliveryNote: deliveryNote,
       variants: variants,
       selectedVariant: variant,
+      isActive: isActive,
+      isAvailable: isActive && variant.isAvailable,
     );
   }
 
@@ -165,12 +206,24 @@ class Product {
     final effectiveImage = '${json['effective_image_url'] ?? ''}';
     final hasQuantity =
         json.containsKey('stock_qty') || json.containsKey('stock');
-    final available = json['is_available'] == true ||
-        '${json['stock_status'] ?? ''}'.toLowerCase() == 'in_stock';
+    final isActive = (json['is_active'] ?? json['active']) != false;
+    final fallbackStock = hasQuantity
+        ? int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0
+        : 0;
+    final contractAvailable = _readAvailability(
+      json,
+      isActive: isActive,
+      fallbackStock: fallbackStock,
+      hasQuantity: hasQuantity,
+    );
+    final available = isActive &&
+        (variants.isNotEmpty
+            ? variants.any((variant) => variant.isAvailable)
+            : contractAvailable);
     final stockTotal = variants.isNotEmpty
         ? variants.fold<int>(0, (sum, variant) => sum + variant.stock)
         : hasQuantity
-            ? int.tryParse('${json['stock_qty'] ?? json['stock'] ?? 0}') ?? 0
+            ? fallbackStock
             : available
                 ? 0x3fffffff
                 : 0;
@@ -200,6 +253,8 @@ class Product {
               .trim(),
       variants: variants,
       selectedVariant: variants.length == 1 ? variants.first : null,
+      isActive: isActive,
+      isAvailable: available,
     );
   }
 
@@ -214,6 +269,10 @@ class Product {
       'description': description,
       'stock_qty': stock,
       'stock': stock,
+      'is_active': isActive,
+      'is_available': isAvailable,
+      'stock_status': isAvailable ? 'in_stock' : 'out_of_stock',
+      'is_out_of_stock': !isAvailable,
       'item_type': type,
       'type': type,
       'variant_id': selectedVariant?.id,

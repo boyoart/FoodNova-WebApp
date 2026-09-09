@@ -9,8 +9,8 @@ import '../domain/cart_item.dart';
 
 final cartControllerProvider =
     StateNotifierProvider<CartController, List<CartItem>>((ref) {
-      return CartController(ref.watch(secureStorageProvider))..restore();
-    });
+  return CartController(ref.watch(secureStorageProvider))..restore();
+});
 
 class CartController extends StateNotifier<List<CartItem>> {
   CartController(this._storage) : super(const []);
@@ -43,7 +43,7 @@ class CartController extends StateNotifier<List<CartItem>> {
   }
 
   void add(Product product) {
-    if (product.stock <= 0) return;
+    if (!product.isAvailable) return;
     final index = state.indexWhere(
       (item) => item.product.cartKey == product.cartKey,
     );

@@ -10,7 +10,7 @@ final productRepositoryProvider =
     Provider((ref) => ProductRepository(ref.watch(dioProvider)));
 
 final productsProvider = FutureProvider<List<Product>>((ref) {
-  return ref.watch(productRepositoryProvider).listProducts();
+  return ref.watch(productRepositoryProvider).listProducts(forceRefresh: true);
 });
 
 final categoriesProvider = FutureProvider<List<FoodNovaCategory>>((ref) {
@@ -26,8 +26,26 @@ final packDetailProvider = FutureProvider.family<Product, int>((ref, id) {
 });
 
 final packsProvider = FutureProvider<List<Product>>((ref) {
-  return ref.watch(productRepositoryProvider).listPacks();
+  return ref.watch(productRepositoryProvider).listPacks(forceRefresh: true);
 });
+
+List<dynamic> _catalogItems(dynamic body, List<String> keys) {
+  if (body is List) return body;
+  if (body is! Map) return const [];
+  for (final key in keys) {
+    final value = body[key];
+    if (value is List) return value;
+  }
+  return const [];
+}
+
+List<Product> parseCustomerProductsResponse(dynamic body) {
+  return _catalogItems(body, const ['products', 'items', 'data'])
+      .whereType<Map>()
+      .map((item) => Product.fromJson(Map<String, dynamic>.from(item)))
+      .where((product) => product.isActive)
+      .toList();
+}
 
 final activeAnnouncementsProvider =
     FutureProvider<List<FoodNovaAnnouncement>>((ref) {
@@ -67,12 +85,12 @@ class ProductRepository {
         queryParameters:
             normalizedSearch.isEmpty ? null : {'search': normalizedSearch});
     final body = response.data;
-    final items = body is Map ? (body['products'] ?? body['data']) : body;
-    final products = (items as List? ?? []).map((item) {
+    for (final item in _catalogItems(body, const ['products', 'items', 'data'])
+        .whereType<Map>()) {
       final json = Map<String, dynamic>.from(item);
       _logProductPayload(json);
-      return Product.fromJson(json);
-    }).toList();
+    }
+    final products = parseCustomerProductsResponse(body);
     if (normalizedSearch.isEmpty) _productCache = products;
     return products;
   }
@@ -83,26 +101,32 @@ class ProductRepository {
     final item = body is Map ? (body['product'] ?? body['data'] ?? body) : body;
     final json = Map<String, dynamic>.from(item);
     _logProductPayload(json);
-    return Product.fromJson(json);
+    final product = Product.fromJson(json);
+    if (!product.isActive) throw StateError('Product is unavailable');
+    return product;
   }
 
   Future<List<Product>> listPacks({bool forceRefresh = false}) async {
     if (!forceRefresh && _packCache != null) return _packCache!;
     final response = await _dio.get('/packs');
     final body = response.data;
-    final items = body is Map ? (body['packs'] ?? body['data']) : body;
-    final packs = (items as List? ?? []).map((item) {
-      final data = Map<String, dynamic>.from(item);
-      _logProductPayload(data);
-      return Product.fromJson({
-        ...data,
-        'category': 'Food Packs',
-        'category_name': 'Food Packs',
-        'stock_qty': data['stock_qty'] ?? data['stock'] ?? 999,
-        'item_type': 'pack',
-        'type': 'pack',
-      });
-    }).toList();
+    final items = _catalogItems(body, const ['packs', 'items', 'data']);
+    final packs = items
+        .whereType<Map>()
+        .map((item) {
+          final data = Map<String, dynamic>.from(item);
+          _logProductPayload(data);
+          return Product.fromJson({
+            ...data,
+            'category': 'Food Packs',
+            'category_name': 'Food Packs',
+            'stock_qty': data['stock_qty'] ?? data['stock'] ?? 999,
+            'item_type': 'pack',
+            'type': 'pack',
+          });
+        })
+        .where((pack) => pack.isActive)
+        .toList();
     _packCache = packs;
     return packs;
   }

@@ -184,6 +184,7 @@ export default function AdminStock() {
   }
 
   const getStockState = (item) => {
+    if (item.is_active === false || item.active === false) return 'archived'
     const stock = Number(item.stock_qty ?? item.stock ?? 0)
     if (item.is_out_of_stock || stock <= 0) return 'out'
     if (item.low_stock || stock <= Number(item.low_stock_threshold || 5)) return 'low'
@@ -193,6 +194,7 @@ export default function AdminStock() {
   const renderStockStatus = (item) => {
     if (!isProduct) return <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
     const state = getStockState(item)
+    if (state === 'archived') return <span className="stock-badge archived">Archived</span>
     if (state === 'out') return <span className="stock-badge out">Out of Stock</span>
     if (state === 'low') return <span className="stock-badge low">Low Stock</span>
     return <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
@@ -272,10 +274,20 @@ export default function AdminStock() {
 
   const lowStockProducts = products.filter((item) => getStockState(item) === 'low')
   const outOfStockProducts = products.filter((item) => getStockState(item) === 'out')
+  const activeProducts = products.filter((item) => item.is_active !== false)
+  const archivedProducts = products.filter((item) => item.is_active === false)
   const items = isProduct
     ? products.filter((item) => {
         const matchesSearch = `${item.name} ${item.category} ${(item.variants || []).map((variant) => `${variant.weight} ${variant.sku}`).join(' ')}`.toLowerCase().includes(searchTerm.trim().toLowerCase())
-        const matchesStock = stockFilter === 'low' ? getStockState(item) === 'low' : stockFilter === 'out' ? getStockState(item) === 'out' : true
+        const matchesStock = stockFilter === 'active'
+          ? item.is_active !== false
+          : stockFilter === 'archived'
+            ? item.is_active === false
+            : stockFilter === 'low'
+              ? getStockState(item) === 'low'
+              : stockFilter === 'out'
+                ? getStockState(item) === 'out'
+                : true
         return matchesSearch && matchesStock
       })
     : packs
@@ -295,7 +307,7 @@ export default function AdminStock() {
     const productIds = selectedRows.filter((key) => key.startsWith('product:')).map((key) => Number(key.split(':')[1]))
     const variantIds = selectedRows.filter((key) => key.startsWith('variant:')).map((key) => Number(key.split(':')[1]))
     const parentCount = productIds.length
-    const warning = `Archive ${selectedRows.length} selected item${selectedRows.length === 1 ? '' : 's'}? ${parentCount ? `${parentCount} parent product${parentCount === 1 ? '' : 's'} and all of their active variants will be affected. ` : ''}Catalog availability will change. Historical orders are preserved, but there is no restore screen.`
+    const warning = `Archive ${selectedRows.length} selected item${selectedRows.length === 1 ? '' : 's'}? ${parentCount ? `${parentCount} parent product${parentCount === 1 ? '' : 's'} and all of their active variants will be affected. ` : ''}Catalog availability will change. Historical orders are preserved, and parent products can be restored from the Archived filter.`
     if (!window.confirm(warning)) return
     try {
       const result = await adminAPI.bulkDeleteProducts({ product_ids: productIds, variant_ids: variantIds })
@@ -305,6 +317,16 @@ export default function AdminStock() {
       await fetchData()
     } catch (error) {
       toast.error(error.response?.data?.detail?.message || error.response?.data?.detail || error.message || 'Bulk archive failed')
+    }
+  }
+
+  const handleRestore = async (id) => {
+    try {
+      await adminAPI.restoreProduct(id)
+      toast.success('Product restored successfully')
+      await fetchData()
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to restore product')
     }
   }
 
@@ -323,6 +345,8 @@ export default function AdminStock() {
       {isProduct && (
         <><div className="stock-filter-tabs">
           <button className={stockFilter === 'all' ? 'active' : ''} onClick={() => setStockFilter('all')}>All ({products.length})</button>
+          <button className={stockFilter === 'active' ? 'active' : ''} onClick={() => setStockFilter('active')}>Active ({activeProducts.length})</button>
+          <button className={stockFilter === 'archived' ? 'active' : ''} onClick={() => setStockFilter('archived')}>Archived ({archivedProducts.length})</button>
           <button className={stockFilter === 'low' ? 'active' : ''} onClick={() => setStockFilter('low')}>Low Stock ({lowStockProducts.length})</button>
           <button className={stockFilter === 'out' ? 'active' : ''} onClick={() => setStockFilter('out')}>Out of Stock ({outOfStockProducts.length})</button>
         </div><input className="stock-search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search products, variants, or SKU" /></>
@@ -372,7 +396,9 @@ export default function AdminStock() {
                   <td>
                     <div className="action-buttons">
                       <button className="btn-edit" onClick={() => handleEdit(item)}>Edit</button>
-                      {kind !== 'variant' && <button className="btn-delete" onClick={() => handleDelete(item.id)}>Archive</button>}
+                      {kind !== 'variant' && (item.is_active === false
+                        ? <button className="btn-edit" onClick={() => handleRestore(item.id)}>Restore</button>
+                        : <button className="btn-delete" onClick={() => handleDelete(item.id)}>Archive</button>)}
                     </div>
                   </td>
                 </tr>)

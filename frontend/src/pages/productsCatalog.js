@@ -1,11 +1,36 @@
 export const CATALOG_PAGE_SIZE = 10
 
+const contractAvailability = (item) => {
+  if (item?.is_active === false || item?.active === false) return false
+  if (item?.is_available !== undefined) return item.is_available === true
+  if (item?.stock_status !== undefined) return String(item.stock_status).toLowerCase() === 'in_stock'
+  if (item?.is_out_of_stock !== undefined) return item.is_out_of_stock !== true
+  if (item?.stock_qty !== undefined || item?.stock !== undefined) {
+    return Number(item.stock_qty ?? item.stock ?? 0) > 0
+  }
+  return true
+}
+
+export const normalizeVariant = (variant = {}) => {
+  const available = contractAvailability(variant)
+  return {
+    ...variant,
+    price: Number(variant.price ?? variant.unit_price ?? 0),
+    is_available: available,
+    stock_status: available ? 'in_stock' : 'out_of_stock',
+    is_out_of_stock: !available,
+  }
+}
+
 export const normalizeStoreItem = (item, itemType = 'product') => {
   const name = item?.name || item?.product_name || 'FoodNova Item'
   const price = Number(item?.price || item?.unit_price || 0)
-  const available = item?.is_available !== false
-    && item?.stock_status !== 'out_of_stock'
-    && item?.is_out_of_stock !== true
+  const variants = (item?.variants || [])
+    .filter((variant) => variant?.is_active !== false && variant?.active !== false)
+    .map(normalizeVariant)
+  const available = itemType === 'product' && variants.length
+    ? item?.is_active !== false && item?.active !== false && variants.some((variant) => variant.is_available)
+    : contractAvailability(item)
 
   return {
     ...item,
@@ -17,6 +42,7 @@ export const normalizeStoreItem = (item, itemType = 'product') => {
     is_available: available,
     stock_status: available ? 'in_stock' : 'out_of_stock',
     is_out_of_stock: !available,
+    variants,
     item_type: item?.item_type || item?.type || itemType,
     type: item?.type || item?.item_type || itemType,
     quantity: item?.quantity || item?.qty || 1,
@@ -27,12 +53,21 @@ export const normalizeStoreItem = (item, itemType = 'product') => {
   }
 }
 
+export const galleryImagesFor = (item) => {
+  const images = [
+    item?.image_url,
+    item?.image,
+    item?.effective_image_url,
+    ...(item?.variants || []).map((variant) => variant?.image_url || variant?.image),
+  ]
+  return [...new Set(images.map((image) => String(image || '').trim()).filter(Boolean))]
+}
+
 export const selectedVariantFor = (item, selections = {}) => {
   const variants = item?.variants || []
   const selected = selections[item?.id]
-  if (selected && variants.some((variant) => variant.id === selected.id && variant.is_available)) {
-    return selected
-  }
+  const currentSelection = selected && variants.find((variant) => variant.id === selected.id)
+  if (currentSelection?.is_available) return currentSelection
   return variants.find((variant) => variant.is_available) || null
 }
 

@@ -3260,7 +3260,7 @@ def product_to_customer_dict(product: DBProduct) -> dict:
     if active_variants:
         data["variants"] = [variant_to_customer_dict(variant) for variant in active_variants]
         data["variants"].sort(key=_variant_weight_sort_key)
-        available = any(variant["is_available"] for variant in data["variants"])
+        available = bool(product.is_active) and any(variant["is_available"] for variant in data["variants"])
     else:
         quantity = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
         available = bool(product.is_active) and quantity > 0
@@ -8361,8 +8361,7 @@ def catalog_page(items: list, total: int, page: int, page_size: int) -> dict:
     }
 
 
-@app.get("/products")
-def list_products(
+def _list_products(
     search: Optional[str] = None,
     category: Optional[str] = None,
     page: Optional[int] = None,
@@ -8412,11 +8411,29 @@ def list_products(
         db.close()
 
 
+@app.get("/products")
+def list_products(
+    search: Optional[str] = None,
+    category: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: int = 10,
+):
+    return _list_products(
+        search=search,
+        category=category,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @app.get("/products/{product_id}")
 def get_product(product_id: int):
     db = SessionLocal()
     try:
-        product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
+        product = db.query(DBProduct).filter(
+            DBProduct.id == product_id,
+            DBProduct.is_active == True,
+        ).first()
         if product:
             return product_to_customer_dict(product)
     finally:
@@ -8456,7 +8473,10 @@ def list_packs(search: Optional[str] = None, page: Optional[int] = None, page_si
 def get_pack(pack_id: int):
     db = SessionLocal()
     try:
-        pack = db.query(DBPack).filter(DBPack.id == pack_id).first()
+        pack = db.query(DBPack).filter(
+            DBPack.id == pack_id,
+            DBPack.is_active == True,
+        ).first()
         if pack:
             return pack_to_dict(pack)
     finally:
@@ -14591,7 +14611,7 @@ def delivery_worker_submit_proof(order_id: int, payload: DeliveryProofPayload, r
 @app.get("/admin/products")
 def admin_products(request: Request):
     require_any_permission(request, ["stock:view", "orders:manual_create"])
-    products = list_products(include_inactive=True, admin_view=True)
+    products = _list_products(include_inactive=True, admin_view=True)
     return {"success": True, "products": products, "data": products}
 
 
@@ -14778,6 +14798,61 @@ def admin_delete_product(product_id: int, request: Request):
         db.close()
 
     raise HTTPException(status_code=404, detail="Product not found")
+
+
+@app.post("/admin/products/{product_id}/restore")
+def admin_restore_product(product_id: int, request: Request):
+    admin = require_permission(request, "stock:manage")
+    db = SessionLocal()
+    try:
+        product = db.query(DBProduct).filter(DBProduct.id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        before = product_to_dict(product, include_inactive_variants=True)
+        product.is_active = True
+        restored_variant_ids = []
+        variants = list(product.variants or [])
+        if variants and not any(variant.is_active for variant in variants):
+            for variant in variants:
+                variant.is_active = True
+                variant.updated_at = datetime.utcnow()
+                restored_variant_ids.append(variant.id)
+        if variants:
+            product.stock_qty = sum(
+                variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
+                for variant in variants
+                if variant.is_active
+            )
+            product.stock = product.stock_qty
+        product.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(product)
+        data = product_to_dict(product, include_inactive_variants=True)
+        create_admin_audit_log(
+            request,
+            admin,
+            "product_restored",
+            "product",
+            product.id,
+            f"Admin restored product {product.name}",
+            {"before": before, "after": data, "restored_variant_ids": restored_variant_ids},
+        )
+        return {
+            "success": True,
+            "message": "Product restored successfully",
+            "product": data,
+            "data": data,
+            "restored_variant_ids": restored_variant_ids,
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 @app.post("/admin/products/bulk-delete")

@@ -1566,6 +1566,11 @@ tbody tr:hover {
   background: rgba(239, 68, 68, 0.1);
 }
 
+.stock-row-archived td {
+  background: color-mix(in srgb, var(--fn-muted, #64748b) 10%, transparent);
+  color: var(--fn-muted);
+}
+
 .stock-badge {
   display: inline-flex;
   align-items: center;
@@ -1584,6 +1589,12 @@ tbody tr:hover {
   background: rgba(239, 68, 68, 0.16);
   color: #dc2626;
   border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.stock-badge.archived {
+  border: 1px solid var(--fn-border);
+  background: var(--fn-surface-2);
+  color: var(--fn-muted);
 }
 
 .theme-dark .stock-modal,

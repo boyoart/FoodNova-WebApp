@@ -35,8 +35,8 @@ class ProductDetailScreen extends ConsumerWidget {
     final quantity = product == null
         ? 0
         : cartItems
-              .where((item) => item.product.id == product.id)
-              .fold<int>(0, (sum, item) => sum + item.quantity);
+            .where((item) => item.product.id == product.id)
+            .fold<int>(0, (sum, item) => sum + item.quantity);
 
     return Scaffold(
       appBar: AppBar(
@@ -113,9 +113,8 @@ class ProductDetailScreen extends ConsumerWidget {
           ),
         ),
       ),
-      bottomNavigationBar: product == null
-          ? null
-          : _StickyAddToCart(product: product),
+      bottomNavigationBar:
+          product == null ? null : _StickyAddToCart(product: product),
     );
   }
 }
@@ -142,9 +141,8 @@ class _ImageGalleryStrip extends StatelessWidget {
             color: scheme.surface,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: index == 0
-                  ? FoodNovaColors.primary
-                  : scheme.outlineVariant,
+              color:
+                  index == 0 ? FoodNovaColors.primary : scheme.outlineVariant,
               width: index == 0 ? 1.4 : 1,
             ),
           ),
@@ -231,10 +229,10 @@ class _ProductSummary extends StatelessWidget {
                 compact: true,
               ),
               _HeroChip(
-                icon: product.stock > 0
+                icon: product.isAvailable
                     ? Icons.check_circle_rounded
                     : Icons.error_rounded,
-                label: product.stock > 0 ? 'In stock' : 'Unavailable',
+                label: product.isAvailable ? 'In stock' : 'Unavailable',
                 compact: true,
               ),
             ],
@@ -328,18 +326,18 @@ class _DeliveryEstimate extends StatelessWidget {
                 Text(
                   'Delivery estimate',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
+                        fontWeight: FontWeight.w900,
+                      ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  product.stock > 0
+                  product.isAvailable
                       ? 'Prepared from FoodNova inventory after payment confirmation.'
                       : 'This item is currently unavailable.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    height: 1.35,
-                  ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
                 ),
               ],
             ),
@@ -501,9 +499,9 @@ class _DetailsCard extends StatelessWidget {
           Text(
             description,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              height: 1.48,
-            ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  height: 1.48,
+                ),
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -562,10 +560,10 @@ class _InfoPill extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: scheme.onSurface,
-                fontWeight: FontWeight.w800,
-                height: 1.15,
-              ),
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
             ),
           ),
         ],
@@ -666,13 +664,11 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
       symbol: 'NGN ',
       decimalDigits: 0,
     );
-    final activeVariants = widget.product.variants
-        .where((variant) => variant.isActive)
-        .toList();
+    final activeVariants =
+        widget.product.variants.where((variant) => variant.isActive).toList();
     final requiresVariant = activeVariants.length > 1;
     final selectedProduct = widget.product.withVariant(_selectedVariant);
-    final canAdd =
-        selectedProduct.stock > 0 &&
+    final canAdd = selectedProduct.isAvailable &&
         (!requiresVariant || _selectedVariant != null);
     final cartItems = ref.watch(cartControllerProvider);
     final quantity = cartItems
@@ -710,7 +706,7 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
                     ChoiceChip(
                       label: Text(variant.weight),
                       selected: _selectedVariant?.id == variant.id,
-                      onSelected: variant.stock > 0
+                      onSelected: variant.isAvailable
                           ? (_) => setState(() => _selectedVariant = variant)
                           : null,
                     ),
@@ -729,23 +725,23 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
                         requiresVariant && _selectedVariant == null
                             ? 'From ${currency.format(widget.product.startingPrice)}'
                             : currency.format(selectedProduct.price),
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: FoodNovaColors.primary,
-                              fontWeight: FontWeight.w900,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: FoodNovaColors.primary,
+                                  fontWeight: FontWeight.w900,
+                                ),
                       ),
                       Text(
                         requiresVariant && _selectedVariant == null
                             ? 'Select an available weight'
-                            : selectedProduct.stock > 0
-                            ? 'In stock'
-                            : 'Out of stock',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
-                            ),
+                            : selectedProduct.isAvailable
+                                ? 'In stock'
+                                : 'Out of stock',
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
                       ),
                     ],
                   ),
@@ -787,8 +783,8 @@ class _StickyAddToCartState extends ConsumerState<_StickyAddToCart> {
                     label: requiresVariant && _selectedVariant == null
                         ? 'Select weight'
                         : quantity > 0
-                        ? 'Add more'
-                        : 'Add to cart',
+                            ? 'Add more'
+                            : 'Add to cart',
                     icon: Icons.add_shopping_cart_rounded,
                     onPressed: canAdd
                         ? () => cartController.add(selectedProduct)
@@ -857,9 +853,9 @@ class _HeroChip extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: scheme.onSurface,
-              fontWeight: FontWeight.w900,
-            ),
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w900,
+                ),
           ),
         ],
       ),

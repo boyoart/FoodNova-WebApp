@@ -325,6 +325,7 @@ export const adminAPI = {
   updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   updateStock: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   deleteProduct: async (id) => (await api.delete(`/admin/products/${id}`)).data,
+  restoreProduct: async (id) => (await api.post(`/admin/products/${id}/restore`)).data,
   bulkDeleteProducts: async (payload) => (await api.post("/admin/products/bulk-delete", payload)).data,
   getRiders: async () => {
     const response = await api.get("/admin/riders");

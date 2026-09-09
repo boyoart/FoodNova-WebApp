@@ -154,7 +154,7 @@ class DiscoverScreen extends ConsumerWidget {
                     data: (items) => _HorizontalShelf(
                       title: 'Flash sales',
                       products: items
-                          .where((item) => item.stock > 0)
+                          .where((item) => item.isAvailable)
                           .take(10)
                           .toList(),
                       onTap: (product) =>
@@ -219,11 +219,11 @@ class DiscoverScreen extends ConsumerWidget {
                             itemCount: recent.length,
                             gridDelegate:
                                 const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 2,
-                                  childAspectRatio: .58,
-                                  crossAxisSpacing: 14,
-                                  mainAxisSpacing: 14,
-                                ),
+                              crossAxisCount: 2,
+                              childAspectRatio: .58,
+                              crossAxisSpacing: 14,
+                              mainAxisSpacing: 14,
+                            ),
                             itemBuilder: (_, index) {
                               final product = recent[index];
                               return ProductCard(
@@ -940,9 +940,8 @@ class _CategoryChipsState extends State<_CategoryChips> {
                     : scheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: selected
-                      ? FoodNovaColors.primary
-                      : scheme.outlineVariant,
+                  color:
+                      selected ? FoodNovaColors.primary : scheme.outlineVariant,
                   width: selected ? 1.5 : 1,
                 ),
               ),
