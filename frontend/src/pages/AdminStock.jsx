@@ -5,7 +5,7 @@ import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
-const emptyProduct = { name: '', price: '', stock_qty: '', category: '', is_active: true, image_url: '' }
+const emptyProduct = { name: '', description: '', price: '', stock_qty: '', category: '', is_active: true, image_url: '', images: [], image_files: [], remove_image_ids: [] }
 const emptyPack = { name: '', price: '', description: '', items: [], is_active: true, image_url: '' }
 
 export default function AdminStock() {
@@ -94,37 +94,14 @@ export default function AdminStock() {
   }
 
   const handleImageChange = (event) => {
-    const file = event.target.files?.[0]
-    clearPreview()
-
-    if (!file) {
-      setFormData((current) => ({ ...current, image_file: null, image_preview: '' }))
-      return
-    }
-
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please choose an image file')
+    const files = [...(event.target.files || [])]
+    if (!files.length) return
+    if (files.some((file) => !file.type.startsWith('image/') || file.size > 5 * 1024 * 1024)) {
+      toast.error('Choose JPG, PNG or WEBP images up to 5MB each')
       event.target.value = ''
       return
     }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be 5MB or smaller')
-      event.target.value = ''
-      return
-    }
-
-    setFormData((current) => ({ ...current, image_file: file, image_preview: URL.createObjectURL(file) }))
-  }
-
-  const removeSelectedImage = () => {
-    clearPreview()
-    setFormData((current) => ({
-      ...current,
-      image_file: null,
-      image_preview: '',
-      image_url: current.id ? current.image_url : '',
-    }))
+    setFormData((current) => ({ ...current, image_files: [...(current.image_files || []), ...files.map((file) => ({ file, preview: URL.createObjectURL(file) }))] }))
   }
 
   const handleSubmit = async (event) => {
@@ -139,7 +116,9 @@ export default function AdminStock() {
             const after = formData?.[field]
             if (JSON.stringify(before) !== JSON.stringify(after)) patch[field] = after
           })
-          if (formData.image_file) patch.image_file = formData.image_file
+          if ((formData.image_files || []).length) patch.image_files = formData.image_files.map((entry) => entry.file)
+          if ((formData.remove_image_ids || []).length) patch.remove_image_ids = formData.remove_image_ids
+          if (formData.primary_image_id) patch.primary_image_id = formData.primary_image_id
           await adminAPI.updateProduct(editingId, patch)
           toast.success('Product updated successfully')
         } else {
@@ -162,26 +141,26 @@ export default function AdminStock() {
   }
 
   const renderImageUpload = (label) => {
-    const preview = formData.image_preview || resolveMediaUrl(formData.image_url)
+    const existing = formData.images || []
+    const pending = formData.image_files || []
     return (
       <section className="stock-image-upload">
         <div>
           <div className="stock-image-upload-title">{label}</div>
-          <p className="stock-image-upload-help">JPG, PNG or WEBP up to 5MB. Existing images stay unchanged unless you upload a new one.</p>
+          <p className="stock-image-upload-help">Select multiple JPG, PNG or WEBP images, up to 5MB each.</p>
         </div>
         <div className="stock-image-upload-row">
-          <div className="stock-image-preview">
-            {preview ? <img src={preview} alt="Stock item preview" /> : <span>No image selected</span>}
-          </div>
           <div className="stock-image-actions">
             <label className="stock-file-button">
-              Choose Image
-              <input type="file" accept="image/*" onChange={handleImageChange} />
+              Upload Images
+              <input type="file" accept="image/*" multiple onChange={handleImageChange} />
             </label>
-            {formData.image_file && (
-              <button type="button" className="stock-remove-image" onClick={removeSelectedImage}>Remove selected image</button>
-            )}
           </div>
+        </div>
+        <div className="stock-image-gallery">
+          {existing.map((entry) => <div className={`stock-image-card ${entry.is_primary ? 'primary' : ''}`} key={entry.id || entry.image_url}><img src={resolveMediaUrl(entry.image_url)} alt="Product" /><strong>{entry.is_primary ? 'Primary' : ''}</strong>{!entry.is_primary && entry.id && <button type="button" onClick={() => setFormData((current) => ({ ...current, primary_image_id: entry.id, images: current.images.map((image) => ({ ...image, is_primary: image.id === entry.id })) }))}>Set Primary</button>}<button type="button" onClick={() => setFormData((current) => ({ ...current, images: current.images.filter((image) => image !== entry), remove_image_ids: entry.id ? [...(current.remove_image_ids || []), entry.id] : current.remove_image_ids }))}>Remove</button></div>)}
+          {pending.map((entry, index) => <div className="stock-image-card" key={entry.preview}><img src={entry.preview} alt="New product" /><strong>New</strong><button type="button" onClick={() => setFormData((current) => ({ ...current, image_files: current.image_files.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button></div>)}
+          {!existing.length && !pending.length && <span>No images uploaded</span>}
         </div>
       </section>
     )
@@ -236,6 +215,10 @@ export default function AdminStock() {
         <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
         <span>Active product</span>
       </label>
+      <div className="stock-form-field stock-form-field-wide">
+        <label>Description</label>
+        <textarea rows="4" value={formData.description || ''} onChange={(event) => setFormData({ ...formData, description: event.target.value })} />
+      </div>
     </div>
     <section className="stock-variant-editor">
       <div className="stock-image-upload-title">Variants / sizes</div>
@@ -343,6 +326,17 @@ export default function AdminStock() {
     }
   }
 
+  const bulkRestore = async () => {
+    const product_ids = selectedRows.filter((key) => key.startsWith('product:')).map((key) => Number(key.split(':')[1]))
+    const variant_ids = selectedRows.filter((key) => key.startsWith('variant:')).map((key) => Number(key.split(':')[1]))
+    try {
+      await adminAPI.bulkRestoreProducts({ product_ids, variant_ids })
+      toast.success('Selected items restored')
+      setSelectedRows([])
+      await fetchData()
+    } catch (error) { toast.error(error.response?.data?.detail || 'Bulk restore failed') }
+  }
+
   return (
     <div className="admin-page">
       <div className="admin-header">
@@ -365,7 +359,7 @@ export default function AdminStock() {
         </div><input className="stock-search" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Search products, variants, or SKU" /></>
       )}
 
-      {isProduct && selectedRows.length > 0 && <div className="stock-bulk-toolbar"><strong>{selectedRows.length} selected</strong><button type="button" className="btn-delete" onClick={bulkArchive}>Delete Selected</button><button type="button" className="stock-secondary-button" onClick={() => setSelectedRows([])}>Clear selection</button></div>}
+      {isProduct && selectedRows.length > 0 && <div className="stock-bulk-toolbar"><strong>{selectedRows.length} selected</strong><button type="button" className="btn-delete" onClick={bulkArchive}>Archive Selected</button>{stockFilter === 'archived' && <button type="button" className="btn-edit" onClick={bulkRestore}>Restore Selected</button>}<button type="button" className="stock-secondary-button" onClick={() => setSelectedRows([])}>Clear selection</button></div>}
 
       {loading ? (
         <div className="loading">Loading...</div>

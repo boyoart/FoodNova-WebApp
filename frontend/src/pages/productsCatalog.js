@@ -55,6 +55,7 @@ export const normalizeStoreItem = (item, itemType = 'product') => {
 
 export const galleryImagesFor = (item) => {
   const images = [
+    ...(item?.images || []).map((image) => typeof image === 'string' ? image : image?.image_url),
     item?.image_url,
     item?.image,
     item?.effective_image_url,

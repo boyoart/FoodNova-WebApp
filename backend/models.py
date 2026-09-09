@@ -103,6 +103,21 @@ class Product(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan", order_by="ProductImage.sort_order")
+
+
+class ProductImage(Base):
+    __tablename__ = "product_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    image_url = Column(Text, nullable=False)
+    public_id = Column(Text, default="")
+    is_primary = Column(Boolean, default=False, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    product = relationship("Product", back_populates="images")
 
 
 class Pack(Base):

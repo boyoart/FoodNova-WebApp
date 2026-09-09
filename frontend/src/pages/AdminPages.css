@@ -652,6 +652,8 @@ tbody tr:hover {
   background: color-mix(in srgb, var(--fn-primary) 7%, var(--fn-surface));
 }
 
+.stock-image-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:.8rem;margin-top:1rem}.stock-image-card{display:flex;flex-direction:column;gap:.45rem;padding:.55rem;border:1px solid var(--admin-border);border-radius:.75rem}.stock-image-card.primary{border:2px solid #16834a}.stock-image-card img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:.5rem}.stock-image-card button{min-height:36px}
+
 .stock-image-preview {
   width: 150px;
   aspect-ratio: 4 / 3;

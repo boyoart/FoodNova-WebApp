@@ -62,6 +62,7 @@ from models import (
     Pack as DBPack,
     PaymentApprovalLog as DBPaymentApprovalLog,
     Product as DBProduct,
+    ProductImage as DBProductImage,
     ProductVariant as DBProductVariant,
     Profile as DBProfile,
     DeliveryRider as DBDeliveryRider,
@@ -3220,6 +3221,14 @@ def product_to_dict(product: DBProduct, include_inactive_variants: bool = False)
         display_price = display_variant.get("price", product.price or 0)
     else:
         display_price = product.price or 0
+    media = sorted((product.images or []), key=lambda entry: (not bool(entry.is_primary), entry.sort_order, entry.id))
+    images = [{"id": entry.id, "image_url": entry.image_url, "is_primary": bool(entry.is_primary), "sort_order": entry.sort_order} for entry in media]
+    primary_image = next((entry["image_url"] for entry in images if entry["is_primary"]), None)
+    if not primary_image and images:
+        primary_image = images[0]["image_url"]
+    if not images and product.image_url:
+        images = [{"id": None, "image_url": product.image_url, "is_primary": True, "sort_order": 0}]
+        primary_image = product.image_url
     return {
         "id": product.id,
         "name": product.name,
@@ -3231,8 +3240,9 @@ def product_to_dict(product: DBProduct, include_inactive_variants: bool = False)
         "category": product.category or "",
         "category_name": product.category_name or product.category or "",
         "category_image_url": FOODNOVA_CATEGORY_IMAGES.get(product.category or product.category_name or "", ""),
-        "image_url": product.image_url or "",
-        "effective_image_url": product.image_url or FOODNOVA_CATEGORY_IMAGES.get(product.category or product.category_name or "", "") or FOODNOVA_DEFAULT_PLACEHOLDER,
+        "image_url": primary_image or "",
+        "images": images,
+        "effective_image_url": primary_image or FOODNOVA_CATEGORY_IMAGES.get(product.category or product.category_name or "", "") or FOODNOVA_DEFAULT_PLACEHOLDER,
         "default_image_url": FOODNOVA_DEFAULT_PLACEHOLDER,
         "description": product.description or "",
         "contents": contents,
@@ -3270,6 +3280,17 @@ def product_to_customer_dict(product: DBProduct) -> dict:
     data["stock_status"] = "in_stock" if available else "out_of_stock"
     data["is_out_of_stock"] = not available
     return data
+
+
+def ensure_product_image_primary(product: DBProduct) -> None:
+    images = sorted((product.images or []), key=lambda entry: (entry.sort_order, entry.id or 0))
+    if not images:
+        product.image_url = ""
+        return
+    primary = next((entry for entry in images if entry.is_primary), images[0])
+    for entry in images:
+        entry.is_primary = entry is primary
+    product.image_url = primary.image_url
 
 
 def pack_to_dict(pack: DBPack) -> dict:
@@ -14632,6 +14653,7 @@ async def admin_create_product(
     delivery_note: str = Form(""),
     variants: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
+    images: Optional[List[UploadFile]] = File(None),
 ):
     admin = require_permission(request, "stock:manage")
     payload = await read_json_payload(request)
@@ -14647,7 +14669,7 @@ async def admin_create_product(
     freshness_note = payload.get("freshness_note", freshness_note)
     delivery_note = payload.get("delivery_note", delivery_note)
     variants_payload = payload.get("variants") if "variants" in payload else json_load(variants, None)
-    image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product") if image else ""
+    image_url = ""
     if not math.isfinite(float(price or 0)) or float(price or 0) < 0:
         raise HTTPException(status_code=422, detail="Price must be a non-negative number")
     db = SessionLocal()
@@ -14670,6 +14692,14 @@ async def admin_create_product(
         )
         db.add(product)
         db.flush()
+        uploaded = list(images or [])
+        if image:
+            uploaded.insert(0, image)
+        for index, upload in enumerate(uploaded):
+            url = await save_uploaded_image(upload, PRODUCT_UPLOAD_DIR, "product")
+            db.add(DBProductImage(product_id=product.id, image_url=url, is_primary=index == 0, sort_order=index))
+            if index == 0:
+                product.image_url = url
         if variants_payload is not None:
             apply_product_variants(db, product, variants_payload)
         db.commit()
@@ -14704,6 +14734,9 @@ async def admin_update_product(
     delivery_note: Optional[str] = Form(None),
     variants: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
+    images: Optional[List[UploadFile]] = File(None),
+    remove_image_ids: Optional[str] = Form(None),
+    primary_image_id: Optional[int] = Form(None),
 ):
     admin = require_permission(request, "stock:manage")
     payload = await read_json_payload(request)
@@ -14751,8 +14784,28 @@ async def admin_update_product(
                 product.stock = int(stock_qty or 0)
             if is_active is not None or active is not None:
                 product.is_active = is_active if active is None else active
+            uploads = list(images or [])
             if image:
-                product.image_url = await save_uploaded_image(image, PRODUCT_UPLOAD_DIR, "product")
+                uploads.insert(0, image)
+            if uploads:
+                if not product.images and product.image_url:
+                    db.add(DBProductImage(product_id=product.id, image_url=product.image_url, is_primary=True, sort_order=0))
+                    db.flush()
+                next_order = max([entry.sort_order for entry in product.images] or [-1]) + 1
+                for offset, upload in enumerate(uploads):
+                    url = await save_uploaded_image(upload, PRODUCT_UPLOAD_DIR, "product")
+                    db.add(DBProductImage(product_id=product.id, image_url=url, is_primary=not product.images and offset == 0, sort_order=next_order + offset))
+                db.flush()
+            removal_ids = [int(value) for value in (json_load(remove_image_ids, []) or []) if str(value).isdigit()]
+            if removal_ids:
+                db.query(DBProductImage).filter(DBProductImage.product_id == product.id, DBProductImage.id.in_(removal_ids)).delete(synchronize_session=False)
+                db.flush()
+                db.expire(product, ["images"])
+            if primary_image_id is not None:
+                for entry in product.images:
+                    entry.is_primary = entry.id == primary_image_id
+            if uploads or removal_ids or primary_image_id is not None:
+                ensure_product_image_primary(product)
             if variants_payload is not None:
                 apply_product_variants(db, product, variants_payload)
             product.updated_at = datetime.utcnow()
@@ -14912,6 +14965,44 @@ async def admin_bulk_archive_products(request: Request):
     except HTTPException:
         db.rollback()
         raise
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@app.post("/admin/products/bulk-restore")
+async def admin_bulk_restore_products(request: Request):
+    admin = require_permission(request, "stock:manage")
+    payload = await read_json_payload(request)
+    try:
+        product_ids = sorted({int(value) for value in payload.get("product_ids", [])})
+        variant_ids = sorted({int(value) for value in payload.get("variant_ids", [])})
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Product and variant IDs must be integers")
+    if not product_ids and not variant_ids:
+        raise HTTPException(status_code=422, detail="Select at least one product or variant")
+    db = SessionLocal()
+    try:
+        products = db.query(DBProduct).filter(DBProduct.id.in_(product_ids)).all() if product_ids else []
+        variants = db.query(DBProductVariant).filter(DBProductVariant.id.in_(variant_ids)).all() if variant_ids else []
+        if len(products) != len(product_ids) or len(variants) != len(variant_ids):
+            raise HTTPException(status_code=404, detail="No items were restored because one or more IDs were invalid")
+        restored_variants = set()
+        for product in products:
+            product.is_active = True
+            for variant in product.variants or []:
+                variant.is_active = True
+                restored_variants.add(variant.id)
+        for variant in variants:
+            variant.is_active = True
+            variant.product.is_active = True
+            restored_variants.add(variant.id)
+        db.commit()
+        summary = {"restored_products": len(products), "restored_variants": len(restored_variants), "failed": 0}
+        create_admin_audit_log(request, admin, "products_bulk_restored", "product", "bulk", "Admin restored selected catalog items", summary)
+        return {"success": True, "message": "Selected catalog items restored successfully", **summary, "data": summary}
     except Exception:
         db.rollback()
         raise

@@ -89,6 +89,9 @@ const toStockFormData = (payload = {}, { partial = false } = {}) => {
   if (payload.items !== undefined) formData.append("items", Array.isArray(payload.items) ? JSON.stringify(payload.items) : payload.items || "[]");
   if (payload.variants !== undefined) formData.append("variants", JSON.stringify(payload.variants || []));
   if (payload.image_file) formData.append("image", payload.image_file);
+  (payload.image_files || []).forEach((file) => formData.append("images", file));
+  if (payload.remove_image_ids !== undefined) formData.append("remove_image_ids", JSON.stringify(payload.remove_image_ids || []));
+  if (payload.primary_image_id !== undefined && payload.primary_image_id !== null) formData.append("primary_image_id", payload.primary_image_id);
   return formData;
 };
 
@@ -332,6 +335,7 @@ export const adminAPI = {
   deleteProduct: async (id) => (await api.delete(`/admin/products/${id}`)).data,
   restoreProduct: async (id) => (await api.post(`/admin/products/${id}/restore`)).data,
   bulkDeleteProducts: async (payload) => (await api.post("/admin/products/bulk-delete", payload)).data,
+  bulkRestoreProducts: async (payload) => (await api.post("/admin/products/bulk-restore", payload)).data,
   getRiders: async () => {
     const response = await api.get("/admin/riders");
     const riders = normalizeList(response.data, ["riders"]);
