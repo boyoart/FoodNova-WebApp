@@ -16,6 +16,7 @@ export default function AdminStock() {
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyProduct)
+  const [initialFormData, setInitialFormData] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [stockFilter, setStockFilter] = useState('all')
@@ -54,19 +55,23 @@ export default function AdminStock() {
     clearPreview()
     setEditingId(null)
     setFormData(isProduct ? emptyProduct : emptyPack)
+    setInitialFormData(null)
     setShowModal(true)
   }
 
   const handleEdit = (item) => {
     clearPreview()
     setEditingId(item.id)
-    setFormData({ ...(isProduct ? emptyProduct : emptyPack), ...item })
+    const next = { ...(isProduct ? emptyProduct : emptyPack), ...item }
+    setFormData(next)
+    setInitialFormData(next)
     setShowModal(true)
   }
 
   const closeModal = () => {
     clearPreview()
     setEditingId(null)
+    setInitialFormData(null)
     setFormData(isProduct ? emptyProduct : emptyPack)
     setShowModal(false)
   }
@@ -127,7 +132,15 @@ export default function AdminStock() {
     try {
       if (isProduct) {
         if (editingId) {
-          await adminAPI.updateProduct(editingId, formData)
+          const patch = {}
+          const fields = ['name', 'price', 'stock_qty', 'category', 'description', 'contents', 'pack_info', 'serving_estimate', 'freshness_note', 'delivery_note', 'is_active', 'variants']
+          fields.forEach((field) => {
+            const before = initialFormData?.[field]
+            const after = formData?.[field]
+            if (JSON.stringify(before) !== JSON.stringify(after)) patch[field] = after
+          })
+          if (formData.image_file) patch.image_file = formData.image_file
+          await adminAPI.updateProduct(editingId, patch)
           toast.success('Product updated successfully')
         } else {
           await adminAPI.createProduct(formData)

@@ -389,11 +389,12 @@
 
 .product-modal-backdrop {
   position: fixed;
-  z-index: 1200;
+  z-index: 9999;
   inset: 0;
   display: grid;
-  place-items: center;
-  padding: 1.25rem;
+  place-items: start center;
+  overflow-y: auto;
+  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
   background: rgba(5, 18, 11, 0.72);
   backdrop-filter: blur(5px);
 }
@@ -402,7 +403,8 @@
   position: relative;
   display: grid;
   width: min(960px, 100%);
-  max-height: min(88vh, 760px);
+  max-height: calc(100vh - 2rem);
+  margin: auto 0;
   grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
   overflow: auto;
   border: 1px solid var(--fn-border);

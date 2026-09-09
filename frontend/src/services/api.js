@@ -70,16 +70,21 @@ const logEndpointError = (endpoint, error) => {
   console.error(`${endpoint} failed`, error?.response?.status, error?.response?.data || error);
 };
 
-const toStockFormData = (payload = {}) => {
+const toStockFormData = (payload = {}, { partial = false } = {}) => {
   const formData = new FormData();
-  const entries = {
+  const entries = partial ? {} : {
     name: payload.name || "",
-    price: payload.price || 0,
+    price: payload.price ?? 0,
     stock_qty: payload.stock_qty ?? payload.stock ?? 0,
     category: payload.category || payload.category_name || "",
     description: payload.description || "",
     is_active: payload.is_active !== false,
   };
+  if (partial) {
+    ["name", "price", "stock_qty", "stock", "category", "category_name", "description", "contents", "pack_info", "serving_estimate", "freshness_note", "delivery_note", "is_active", "active"].forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(payload, key) && payload[key] !== undefined && payload[key] !== null) entries[key] = payload[key];
+    });
+  }
   Object.entries(entries).forEach(([key, value]) => formData.append(key, value));
   if (payload.items !== undefined) formData.append("items", Array.isArray(payload.items) ? JSON.stringify(payload.items) : payload.items || "[]");
   if (payload.variants !== undefined) formData.append("variants", JSON.stringify(payload.variants || []));
@@ -322,7 +327,7 @@ export const adminAPI = {
     }
   },
   createProduct: async (payload) => (await api.post("/admin/products", toStockFormData(payload), multipartConfig)).data,
-  updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
+  updateProduct: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload, { partial: true }), multipartConfig)).data,
   updateStock: async (id, payload) => (await api.patch(`/admin/products/${id}`, toStockFormData(payload), multipartConfig)).data,
   deleteProduct: async (id) => (await api.delete(`/admin/products/${id}`)).data,
   restoreProduct: async (id) => (await api.post(`/admin/products/${id}/restore`)).data,

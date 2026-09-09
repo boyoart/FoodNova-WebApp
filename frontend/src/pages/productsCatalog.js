@@ -60,7 +60,11 @@ export const galleryImagesFor = (item) => {
     item?.effective_image_url,
     ...(item?.variants || []).map((variant) => variant?.image_url || variant?.image),
   ]
-  return [...new Set(images.map((image) => String(image || '').trim()).filter(Boolean))]
+  const isPlaceholder = (image) => {
+    const value = String(image || '').trim().toLowerCase()
+    return !value || value === '/placeholder.png' || value.includes('placeholder') || value.includes('default-product')
+  }
+  return [...new Set(images.map((image) => String(image || '').trim()).filter((image) => !isPlaceholder(image)))]
 }
 
 export const selectedVariantFor = (item, selections = {}) => {

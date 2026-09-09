@@ -204,6 +204,7 @@ export default function ProductsPage() {
     ? selectedVariantFor(modalItem, selectedVariants)
     : null
   const modalImages = galleryImagesFor(modalItem)
+  const modalGallery = modalImages.length ? modalImages : ['/placeholder.png']
   const modalOutOfStock = Boolean(modalItem) && (
     modalUnavailable
     || modalItem.is_available === false
@@ -354,14 +355,14 @@ export default function ProductsPage() {
             <div className="product-modal-media">
               <div className="product-modal-main-image">
                 <img
-                  src={resolveMediaUrl(modalImage) || getImageUrl(modalItem)}
+                  src={resolveMediaUrl(modalImage) || resolveMediaUrl(modalGallery[0])}
                   alt={modalItem.name}
                   onError={handleImageError}
                 />
               </div>
-              {modalImages.length > 1 && (
+              {modalGallery.length > 1 && (
                 <div className="product-thumbnails" aria-label={`${modalItem.name} images`}>
-                  {modalImages.map((image, index) => (
+                  {modalGallery.map((image, index) => (
                     <button
                       type="button"
                       key={image}
