@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck } from 'lucide-react'
+import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck, ShieldCheck, PackageCheck } from 'lucide-react'
 import api, { resolveMediaUrl } from '../services/api'
 import './HomePage.css'
 
@@ -37,6 +37,8 @@ const heroSlides = [
 export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [managedSlides, setManagedSlides] = useState([])
+  const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const slides = managedSlides.length ? managedSlides : heroSlides
   const slide = slides[Math.min(activeSlide, slides.length - 1)]
 
@@ -53,6 +55,15 @@ export default function HomePage() {
         image: resolveMediaUrl(item.image_url),
       }))
       if (banners.length) { setManagedSlides(banners); setActiveSlide(0) }
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    Promise.all([api.get('/products?page=1&page_size=8'), api.get('/categories')]).then(([productRes, categoryRes]) => {
+      const list = productRes.data?.products || productRes.data?.items || productRes.data?.data || []
+      setProducts(Array.isArray(list) ? list : [])
+      const cats = categoryRes.data?.categories || categoryRes.data?.data || categoryRes.data || []
+      setCategories(Array.isArray(cats) ? cats.filter((c) => c?.is_active !== false) : [])
     }).catch(() => {})
   }, [])
 
@@ -140,6 +151,23 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <section className="home-merchandising">
+        <div className="home-section-heading"><p className="hero-kicker">Fresh picks for your kitchen</p><h2>Shop Popular Essentials</h2><Link to="/products">View all products</Link></div>
+        <div className="home-product-grid">
+          {products.slice(0, 8).map((product) => {
+            const available = product.is_available !== false && product.stock_status !== 'out_of_stock'
+            return <Link className="home-product-card" to={`/products?search=${encodeURIComponent(product.name || '')}`} key={product.id}>
+              <img src={resolveMediaUrl(product.image_url || product.image || '/placeholder.png')} alt={product.name} />
+              <span>{product.category || 'Food essentials'}</span><h3>{product.name}</h3><strong>₦{Number(product.price || 0).toLocaleString()}</strong><em>{available ? 'In stock' : 'Out of stock'}</em>
+            </Link>
+          })}
+        </div>
+      </section>
+
+      <section className="home-categories"><div className="home-section-heading"><p className="hero-kicker">Browse with ease</p><h2>Shop by Category</h2></div><div className="category-card-grid">{categories.slice(0, 6).map((category) => <Link key={category.id || category.name} to={`/products?category=${encodeURIComponent(category.name)}`} className="category-card"><h3>{category.name}</h3><span>Explore selection →</span></Link>)}</div></section>
+
+      <section className="home-trust"><div><ShieldCheck size={26}/><h3>Secure Ordering</h3><p>Your checkout is protected.</p></div><div><PackageCheck size={26}/><h3>Quality Products</h3><p>Everyday essentials, carefully selected.</p></div><div><Truck size={26}/><h3>Reliable Delivery</h3><p>Delivery or pickup where supported.</p></div></section>
 
       <section className="cta">
         <h2>Ready to Restock with FoodNova?</h2>
