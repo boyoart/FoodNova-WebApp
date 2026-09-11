@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, ShoppingCart, Sun, User, Users, X } from 'lucide-react'
+import { Bell, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Search, ShoppingCart, Sun, User, Users, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI, resolveMediaUrl } from '../services/api'
@@ -28,6 +28,7 @@ export default function Navbar() {
   const [theme, setTheme] = useState(() => localStorage.getItem('foodnova_theme') || 'light')
   const [logoSrc, setLogoSrc] = useState('/foodnova-logo.png')
   const [logoFailed, setLogoFailed] = useState(false)
+  const [catalogSearch, setCatalogSearch] = useState('')
   const notificationRef = useRef(null)
   const avatarRef = useRef(null)
   const adminMenuRef = useRef(null)
@@ -185,6 +186,13 @@ export default function Navbar() {
     navigate(wasAdmin ? '/admin/login' : '/')
   }
 
+  const handleCatalogSearch = (event) => {
+    event.preventDefault()
+    const query = catalogSearch.trim()
+    navigate(query ? `/products?search=${encodeURIComponent(query)}` : '/products')
+    setMobileMenuOpen(false)
+  }
+
   const handleMarkAllRead = async () => {
     try {
       await notificationsAPI.markAllRead().catch(() => null)
@@ -298,6 +306,12 @@ export default function Navbar() {
           {!logoFailed && <img src={logoSrc} alt="FoodNova" className="logo-image" onError={handleLogoError} />}
           <span className={logoFailed ? 'logo-wordmark visible' : 'logo-wordmark'}>FoodNova</span>
         </Link>
+
+        {!isAdmin && <form className="navbar-search" role="search" onSubmit={handleCatalogSearch}>
+          <label className="sr-only" htmlFor="navbar-product-search">Search products</label>
+          <input id="navbar-product-search" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search products or categories…" />
+          <button type="submit" aria-label="Search products"><Search size={18} /></button>
+        </form>}
 
         <button type="button" className="menu-toggle" onClick={() => setMobileMenuOpen((value) => !value)} aria-label="Toggle navigation menu">
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}

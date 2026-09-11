@@ -4,7 +4,6 @@ import { FOODNOVA_CONTACT, FOODNOVA_SOCIAL_LINKS } from '../utils/contactUtils'
 import './Footer.css'
 
 export default function Footer() {
-  const currentYear = new Date().getFullYear()
   const handleLogoError = (event) => {
     if (event.currentTarget.dataset.fallback !== 'true') {
       event.currentTarget.dataset.fallback = 'true'
@@ -41,8 +40,15 @@ export default function Footer() {
               <li><Link to="/">Home</Link></li>
               <li><Link to="/products">Products</Link></li>
               <li><Link to="/contact">Contact</Link></li>
-              <li><Link to="/privacy">Privacy Policy</Link></li>
-              <li><Link to="/terms">Terms of Service</Link></li>
+            </ul>
+          </div>
+
+          <div className="footer-section">
+            <h5>Help &amp; Support</h5>
+            <ul>
+              <li><Link to="/orders">Track Order</Link></li>
+              <li><Link to="/contact">Customer Support</Link></li>
+              <li><a href={`mailto:${FOODNOVA_CONTACT.email}`}>Report Issue</a></li>
             </ul>
           </div>
 
@@ -51,7 +57,6 @@ export default function Footer() {
             <ul>
               <li><Link to="/privacy">Privacy Policy</Link></li>
               <li><Link to="/terms">Terms of Service</Link></li>
-              <li><a href={`mailto:${FOODNOVA_CONTACT.email}`}>Report Issue</a></li>
             </ul>
           </div>
 
@@ -81,8 +86,7 @@ export default function Footer() {
         </div>
 
         <div className="footer-bottom">
-          <p>&copy; {currentYear} FoodNova. All rights reserved.</p>
-          <p>Powered by React + Vite | FastAPI | PostgreSQL</p>
+          <p>&copy; 2026 FoodNova. All rights reserved.</p>
         </div>
       </div>
     </footer>

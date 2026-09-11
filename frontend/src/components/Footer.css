@@ -1,5 +1,5 @@
 .footer {
-  background-color: var(--fn-footer-bg);
+  background: linear-gradient(135deg, #021f12, #03351e);
   color: var(--fn-footer-text);
   padding: 3rem 1rem 1rem;
   margin-top: 4rem;
@@ -13,7 +13,7 @@
 
 .footer-content {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  grid-template-columns: minmax(240px, 1.35fr) repeat(4, minmax(135px, 1fr));
   gap: 2.25rem;
   margin-bottom: 2rem;
 }
@@ -125,6 +125,10 @@
     padding: 2rem 1rem 1rem;
     margin-top: 2rem;
   }
+}
+
+@media (max-width: 980px) {
+  .footer-content { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 480px) {
