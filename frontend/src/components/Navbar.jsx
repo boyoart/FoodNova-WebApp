@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Search, ShoppingCart, Sun, User, Users, X } from 'lucide-react'
+import { Bell, Download, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Search, ShoppingCart, Sun, User, Users, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI, resolveMediaUrl } from '../services/api'
@@ -320,6 +320,7 @@ export default function Navbar() {
         <ul className={`nav-menu ${mobileMenuOpen ? 'active' : ''}`}>
           <li className="nav-item"><Link to="/" className={navLinkClass('/')}><Home size={18} /><span>Home</span></Link></li>
           <li className="nav-item"><Link to="/products" className={navLinkClass('/products')}><Package size={18} /><span>Products</span></Link></li>
+          {!isAdmin && <li className="nav-item"><Link to="/app" className={navLinkClass('/app')}><Download size={18} /><span>Download App</span></Link></li>}
 
           {isAuthenticated && !isAdmin && (
             <>

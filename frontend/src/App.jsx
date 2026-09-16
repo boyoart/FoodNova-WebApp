@@ -30,6 +30,7 @@ import NotFoundPage from './pages/NotFoundPage'
 import ProfilePage from './pages/ProfilePage'
 import InboxPage from './pages/InboxPage'
 import InvoicePage from './pages/InvoicePage'
+import AppLandingPage from './pages/AppLandingPage'
 import './modal-scroll-fix.css'
 
 function App() {
@@ -42,6 +43,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/products" element={<ProductsPage />} />
+              <Route path="/app" element={<AppLandingPage />} />
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/login" element={<LoginPage />} />
