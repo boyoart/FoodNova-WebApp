@@ -238,6 +238,34 @@ def send_admin_email(subject, html, text=None):
     return send_email(ADMIN_NOTIFICATION_EMAIL, subject, html, text=text, event_type="admin_notification")
 
 
+def send_customer_password_reset_email(user, reset_token, expires_minutes):
+        customer_name = escape(str(getattr(user, "full_name", "FoodNova Customer") or "FoodNova Customer"))
+        reset_url = f"{FRONTEND_URL}/reset-password?token={escape(str(reset_token))}"
+        subject = "Reset your FoodNova password"
+        message = f"Use the button below to create a new FoodNova password. This link expires in {int(expires_minutes)} minutes and can be used only once."
+        html = f"""
+        <!doctype html>
+        <html><body style="margin:0;background:#f8faf7;color:#103820;font-family:Arial,sans-serif;">
+            <div style="max-width:620px;margin:0 auto;padding:24px;">
+                <div style="background:#087A34;color:#fff;border-radius:18px 18px 0 0;padding:24px;">
+                    <h1 style="margin:0;font-size:28px;">FoodNova</h1>
+                    <p style="margin:6px 0 0;color:#f8fafc;">Quality Foodstuff. Reliable Supply.</p>
+                </div>
+                <div style="background:#fff;border:1px solid #dde8dd;border-top:0;border-radius:0 0 18px 18px;padding:24px;">
+                    <h2 style="margin:0 0 12px;color:#103820;">Reset your password</h2>
+                    <p style="font-size:16px;line-height:1.55;color:#111827;">Hello {customer_name},</p>
+                    <p style="font-size:16px;line-height:1.55;color:#111827;">{message}</p>
+                    <p style="margin:24px 0;"><a href="{reset_url}" style="display:inline-block;background:#087A34;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:800;">Create a new password</a></p>
+                    <p style="font-size:14px;line-height:1.55;color:#64748b;">If you did not request this, you can safely ignore this message. Your password will not change.</p>
+                    <p style="font-size:12px;line-height:1.5;color:#64748b;margin:20px 0 0;">FoodNova · {FOODNOVA_EMAIL} · {FOODNOVA_PHONE}</p>
+                </div>
+            </div>
+        </body></html>
+        """
+        text = f"{subject}\n\nHello {getattr(user, 'full_name', 'FoodNova Customer') or 'FoodNova Customer'},\n\n{message}\n\nReset: {FRONTEND_URL}/reset-password?token={reset_token}\n\nIf you did not request this, ignore this email."
+        return send_email(user.email, subject, html, text=text, event_type="customer_password_reset")
+
+
 def render_admin_order_email(order, title, message, extra_html=""):
     order_code = escape(str(_order_code(order)))
     customer_name = escape(str(order.get("customer_name") or "Unknown"))

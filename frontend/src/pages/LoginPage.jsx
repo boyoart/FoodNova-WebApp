@@ -78,6 +78,8 @@ export default function LoginPage() {
             </button>
           </form>
 
+          <p className="auth-footer"><Link to="/reset-password">Forgot Password?</Link></p>
+
           <p className="auth-footer">
             Don't have an account? <Link to="/register">Register here</Link>
           </p>

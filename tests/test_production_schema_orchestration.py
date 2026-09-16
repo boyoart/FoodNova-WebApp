@@ -9,6 +9,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from scripts import apply_product_images_migration as images  # noqa: E402
 from scripts import apply_production_schema_migrations as orchestration  # noqa: E402
+from scripts import apply_password_reset_migration as password_reset  # noqa: E402
 
 
 def test_product_image_migration_is_idempotent_and_preserves_catalog_fields():
@@ -33,14 +34,31 @@ def test_orchestration_runs_known_migrations_before_final_verification():
          patch.object(orchestration.order_schema, "validate_definitions_match_models"), \
          patch.object(orchestration.legacy_indexes, "validate_expected_indexes_match_models"), \
          patch.object(orchestration.product_images, "validate_definition_matches_models"), \
+         patch.object(orchestration.password_reset, "validate_definition_matches_models"), \
          patch.object(orchestration.order_schema, "require_postgresql"), \
          patch.object(orchestration.order_schema, "run_migration") as order_run, \
          patch.object(orchestration.product_images, "run_migration") as image_run, \
+         patch.object(orchestration.password_reset, "run_migration") as password_reset_run, \
          patch.object(orchestration.legacy_indexes, "missing_indexes", return_value=[]), \
          patch.object(sys, "argv", ["migration", "--confirm-production-schema-migration", "--confirm-recent-backup"]):
         assert orchestration.main() == 0
         order_run.assert_called_once_with()
         image_run.assert_called_once_with()
+        password_reset_run.assert_called_once_with()
+
+
+def test_password_reset_migration_is_idempotent_and_data_safe():
+    assert "ADD COLUMN IF NOT EXISTS session_version" in password_reset.ADD_SESSION_VERSION_SQL
+    assert "CREATE TABLE IF NOT EXISTS password_reset_tokens" in password_reset.CREATE_TABLE_SQL
+    assert "WHERE session_version IS NULL" in password_reset.BACKFILL_SESSION_VERSION_SQL
+    combined = " ".join((
+        password_reset.ADD_SESSION_VERSION_SQL,
+        password_reset.BACKFILL_SESSION_VERSION_SQL,
+        password_reset.CREATE_TABLE_SQL,
+        *password_reset.INDEX_SQL,
+    )).lower()
+    for forbidden in ("delete from users", "update products", "stock_qty", "product price"):
+        assert forbidden not in combined
 
 
 def test_orchestration_fails_when_genuine_drift_remains():

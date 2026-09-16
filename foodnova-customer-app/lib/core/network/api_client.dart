@@ -29,7 +29,7 @@ final dioProvider = Provider<Dio>((ref) {
         }
         _log('request ${options.method} ${options.uri}');
         _log('headers=${_safeHeaders(options.headers)}');
-        _log('body=${options.data}');
+        _log('body=${_safeBody(options.data)}');
         handler.next(options);
       },
       onResponse: (response, handler) {
@@ -117,6 +117,21 @@ Map<String, dynamic> _safeHeaders(Map<String, dynamic> headers) {
     }
     return MapEntry(key, value);
   });
+}
+
+dynamic _safeBody(dynamic value) {
+  if (value is Map) {
+    return value.map((key, item) {
+      final normalized = key.toString().toLowerCase();
+      final sensitive = normalized.contains('password') ||
+          normalized.contains('token') ||
+          normalized.contains('secret') ||
+          normalized.contains('credential');
+      return MapEntry(key, sensitive ? '***' : _safeBody(item));
+    });
+  }
+  if (value is Iterable) return value.map(_safeBody).toList();
+  return value;
 }
 
 String apiMessage(Object error) {

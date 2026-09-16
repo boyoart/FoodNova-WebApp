@@ -52,9 +52,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
-      GoRoute(
-          path: '/forgot-password',
-          builder: (_, __) => const ForgotPasswordScreen()),
+        GoRoute(path: '/forgot-password', builder: (_, state) => ForgotPasswordScreen(token: state.uri.queryParameters['token'] ?? '')),
       GoRoute(path: '/otp', builder: (_, __) => const OtpScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
       GoRoute(path: '/categories', redirect: (_, __) => '/discover'),

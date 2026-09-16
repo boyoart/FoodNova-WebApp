@@ -37,6 +37,7 @@ from email_service import (
     send_admin_order_email,
     send_customer_order_email,
     send_low_stock_alert,
+    send_customer_password_reset_email,
 )
 from services.ninbvnportal_service import NINBVNPortalError, check_balance, check_provider_connectivity, ninbvnportal_config, current_nin_auth_mode, validate_ninbvnportal_config, verify_nin
 
@@ -79,6 +80,7 @@ from models import (
     AdminReview as DBAdminReview,
     OperationalZone as DBOperationalZone,
     User as DBUser,
+    PasswordResetToken as DBPasswordResetToken,
 )
 
 try:
@@ -766,6 +768,23 @@ class ChangePasswordPayload(BaseModel):
     confirm_password: str
 
 
+class PasswordResetRequestPayload(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirmPayload(BaseModel):
+    token: str
+    new_password: str
+    confirm_password: str
+
+
+PASSWORD_RESET_GENERIC_MESSAGE = "If an account exists for this email, password reset instructions have been sent."
+PASSWORD_RESET_TTL_MINUTES = 30
+PASSWORD_RESET_RATE_LIMIT_SECONDS = 60
+PASSWORD_RESET_RATE_LIMIT_MAX_REQUESTS = 3
+PASSWORD_RESET_RATE_LIMIT = {}
+
+
 class OrderPayload(BaseModel):
     items: Optional[list] = []
     total: Optional[float] = 0
@@ -1259,6 +1278,7 @@ def create_access_token(user) -> str:
     user_id = getattr(user, "id", None) if not isinstance(user, dict) else user.get("id")
     role = getattr(user, "role", None) if not isinstance(user, dict) else user.get("role")
     admin_role = getattr(user, "admin_role", None) if not isinstance(user, dict) else user.get("admin_role")
+    session_version = getattr(user, "session_version", 0) if not isinstance(user, dict) else user.get("session_version", 0)
     full_name = (
         getattr(user, "full_name", None)
         if not isinstance(user, dict)
@@ -1271,6 +1291,7 @@ def create_access_token(user) -> str:
         "role": role or "customer",
         "admin_role": normalize_admin_role(admin_role) if (role or "") == "admin" else "",
         "permissions": get_admin_permissions(user) if (role or "") == "admin" else [],
+        "session_version": int(session_version or 0),
         "name": full_name or "",
         "iat": int(datetime.utcnow().timestamp()),
         "exp": expiry,
@@ -1459,6 +1480,8 @@ def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
         if not user:
             return None
         if not getattr(user, "is_active", True):
+            return None
+        if int((payload or {}).get("session_version", 0)) != int(getattr(user, "session_version", 0) or 0):
             return None
         if (user.role or "") in ["rider", "messenger"]:
             worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.id).first()
@@ -1701,6 +1724,40 @@ def _hash_new_password(password: str) -> str:
         base64.b64encode(salt).decode("utf-8"),
         base64.b64encode(digest).decode("utf-8"),
     )
+
+
+def _password_reset_rate_limited(request: Request, email: str) -> bool:
+    now = datetime.utcnow().timestamp()
+    ip_key = get_request_ip(request) or "unknown"
+    key = f"{ip_key}:{hashlib.sha256(email.encode('utf-8')).hexdigest()}"
+    recent = [timestamp for timestamp in PASSWORD_RESET_RATE_LIMIT.get(key, []) if now - timestamp < PASSWORD_RESET_RATE_LIMIT_SECONDS]
+    recent.append(now)
+    PASSWORD_RESET_RATE_LIMIT[key] = recent[-PASSWORD_RESET_RATE_LIMIT_MAX_REQUESTS:]
+    return len(recent) > PASSWORD_RESET_RATE_LIMIT_MAX_REQUESTS
+
+
+def _issue_customer_password_reset(db, user: DBUser, requested_by: str) -> str:
+    now = datetime.utcnow()
+    for active_token in db.query(DBPasswordResetToken).filter(
+        DBPasswordResetToken.user_id == user.id,
+        DBPasswordResetToken.used_at.is_(None),
+        DBPasswordResetToken.expires_at > now,
+    ).all():
+        active_token.used_at = now
+    raw_token = secrets.token_urlsafe(32)
+    db.add(DBPasswordResetToken(
+        user_id=user.id,
+        token_hash=_token_hash(raw_token),
+        expires_at=now + timedelta(minutes=PASSWORD_RESET_TTL_MINUTES),
+        requested_by=requested_by,
+    ))
+    db.commit()
+    return raw_token
+    return len(recent) > 3
+
+
+def _new_password_is_valid(password: str) -> bool:
+    return bool(password and len(password) >= 6)
 
 
 def auth_response(message: str, user: dict, token: str) -> dict:
@@ -10492,6 +10549,50 @@ def login(payload: LoginPayload, request: Request):
         db.close()
 
 
+@app.post("/auth/password-reset/request")
+def request_password_reset(payload: PasswordResetRequestPayload, request: Request):
+    email = payload.email.lower().strip()
+    if _password_reset_rate_limited(request, email):
+        return {"success": True, "message": PASSWORD_RESET_GENERIC_MESSAGE}
+
+    db = SessionLocal()
+    try:
+        user = get_db_user_by_email(db, email)
+        if user and user.role == "customer" and getattr(user, "is_active", True):
+            raw_token = _issue_customer_password_reset(db, user, "customer")
+            send_customer_password_reset_email(user, raw_token, PASSWORD_RESET_TTL_MINUTES)
+        return {"success": True, "message": PASSWORD_RESET_GENERIC_MESSAGE}
+    finally:
+        db.close()
+
+
+@app.post("/auth/password-reset/confirm")
+def confirm_password_reset(payload: PasswordResetConfirmPayload):
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="Passwords do not match")
+    if not _new_password_is_valid(payload.new_password):
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+
+    db = SessionLocal()
+    try:
+        reset = db.query(DBPasswordResetToken).filter(
+            DBPasswordResetToken.token_hash == _token_hash(payload.token),
+            DBPasswordResetToken.used_at.is_(None),
+            DBPasswordResetToken.expires_at > datetime.utcnow(),
+        ).first()
+        if not reset or not reset.user or reset.user.role != "customer" or not reset.user.is_active:
+            raise HTTPException(status_code=400, detail="This password reset link is invalid or expired.")
+        user = reset.user
+        user.password = _hash_new_password(payload.new_password)
+        user.session_version = int(user.session_version or 0) + 1
+        user.updated_at = datetime.utcnow()
+        reset.used_at = datetime.utcnow()
+        db.commit()
+        return {"success": True, "message": "Password changed successfully"}
+    finally:
+        db.close()
+
+
 @app.post("/auth/admin/login")
 @app.post("/api/admin/login")
 def admin_login(payload: LoginPayload, request: Request):
@@ -15284,6 +15385,32 @@ def admin_customers(request: Request):
     except Exception as error:
         print("ADMIN CUSTOMERS LOAD ERROR:", repr(error))
         return {"success": True, "customers": [], "data": []}
+    finally:
+        db.close()
+
+
+@app.post("/admin/customers/{customer_id}/password-reset")
+def admin_customer_password_reset(customer_id: int, request: Request):
+    admin = require_permission(request, "customers:view")
+    db = SessionLocal()
+    try:
+        user = db.query(DBUser).filter(DBUser.id == customer_id, DBUser.role == "customer").first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=404, detail="Customer not found")
+        raw_token = _issue_customer_password_reset(db, user, "admin")
+        email_result = send_customer_password_reset_email(user, raw_token, PASSWORD_RESET_TTL_MINUTES)
+        if email_result.get("status") not in {"sent", "skipped"}:
+            raise HTTPException(status_code=503, detail="Unable to send password reset instructions")
+        create_admin_audit_log(
+            request,
+            admin,
+            "customer_password_reset_requested",
+            "customer",
+            user.id,
+            f"Admin requested password reset instructions for customer {user.email}",
+            {"customer_email": user.email, "delivery_status": email_result.get("status")},
+        )
+        return {"success": True, "message": "Password reset instructions sent."}
     finally:
         db.close()
 

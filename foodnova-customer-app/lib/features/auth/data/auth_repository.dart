@@ -162,6 +162,26 @@ class AuthRepository {
   Future<void> logout() =>
       _ref.read(sessionControllerProvider.notifier).clear();
 
+  Future<void> requestPasswordReset(String email) async {
+    try {
+      await _dio.post('/auth/password-reset/request', data: {'email': email.trim().toLowerCase()});
+    } catch (error) {
+      throw ApiFailure(apiMessage(error));
+    }
+  }
+
+  Future<void> confirmPasswordReset({required String token, required String password, required String confirmPassword}) async {
+    try {
+      await _dio.post('/auth/password-reset/confirm', data: {
+        'token': token,
+        'new_password': password,
+        'confirm_password': confirmPassword,
+      });
+    } catch (error) {
+      throw ApiFailure(apiMessage(error));
+    }
+  }
+
   Future<bool> hasBiometricLogin() =>
       _ref.read(appSecurityServiceProvider).hasBiometricCredential;
 

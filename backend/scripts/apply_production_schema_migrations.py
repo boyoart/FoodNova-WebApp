@@ -17,16 +17,19 @@ from scripts.check_schema import build_schema_report  # noqa: E402
 from scripts import apply_production_order_schema_migration as order_schema  # noqa: E402
 from scripts import apply_production_index_migration as legacy_indexes  # noqa: E402
 from scripts import apply_product_images_migration as product_images  # noqa: E402
+from scripts import apply_password_reset_migration as password_reset  # noqa: E402
 
 
 def run_all() -> None:
     order_schema.validate_definitions_match_models()
     legacy_indexes.validate_expected_indexes_match_models()
     product_images.validate_definition_matches_models()
+    password_reset.validate_definition_matches_models()
     order_schema.require_postgresql()
 
     order_schema.run_migration()
     product_images.run_migration()
+    password_reset.run_migration()
 
     # Indexes on existing large tables are created outside a transaction.
     with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
@@ -45,7 +48,7 @@ def main() -> int:
     parser.add_argument("--confirm-recent-backup", action="store_true")
     args = parser.parse_args()
     if args.dry_run:
-        print(json.dumps({"mode": "dry_run", "order_schema": True, "legacy_indexes": True, "product_images": True}, sort_keys=True))
+        print(json.dumps({"mode": "dry_run", "order_schema": True, "legacy_indexes": True, "product_images": True, "password_reset": True}, sort_keys=True))
         return 0
     if not args.confirm_production_schema_migration or not args.confirm_recent_backup:
         print("Refusing to run without migration and recent-backup confirmations", file=sys.stderr)

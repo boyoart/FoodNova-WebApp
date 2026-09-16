@@ -223,6 +223,8 @@ export const authAPI = {
   login: async (payload) => await api.post("/auth/login", payload),
   adminLogin: async (payload) => await api.post("/auth/admin/login", payload),
   register: async (payload) => await api.post("/auth/register", payload),
+  requestPasswordReset: async (payload) => await api.post("/auth/password-reset/request", payload),
+  confirmPasswordReset: async (payload) => await api.post("/auth/password-reset/confirm", payload),
   me: async () => await api.get("/auth/me"),
   changePassword: async (payload) => {
     const endpoints = [
@@ -281,6 +283,7 @@ export const ordersAPI = {
 };
 
 export const adminAPI = {
+  sendCustomerPasswordReset: async (customerId) => (await api.post(`/admin/customers/${customerId}/password-reset`)).data,
   getOrders: async (params = {}) => {
     try {
       const response = await api.get("/admin/orders", { params });

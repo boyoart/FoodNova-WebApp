@@ -64,6 +64,18 @@ export default function AdminCustomers() {
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [source, setSource] = useState('orders')
   const [loadError, setLoadError] = useState('')
+  const [resettingId, setResettingId] = useState(null)
+
+  const sendPasswordReset = async (customer) => {
+    if (!customer?.id || !window.confirm(`Send password reset instructions to ${customer.email}?`)) return
+    try {
+      setResettingId(customer.id)
+      await adminAPI.sendCustomerPasswordReset(customer.id)
+      toast.success('Password reset instructions sent.')
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Unable to send password reset instructions.')
+    } finally { setResettingId(null) }
+  }
 
   const loadCustomers = async () => {
     try {
@@ -175,6 +187,7 @@ export default function AdminCustomers() {
               <p className="customer-email"><Mail size={15} /> {selectedCustomer.email}</p>
               <p><Phone size={15} /> {selectedCustomer.phone || 'No phone saved'}</p>
               <p><MapPin size={15} /> {formatAddress(selectedCustomer.address || selectedCustomer.delivery_address)}</p>
+              <button type="button" className="customers-refresh" disabled={resettingId === selectedCustomer.id} onClick={() => sendPasswordReset(selectedCustomer)}>{resettingId === selectedCustomer.id ? 'Sending...' : 'Send Password Reset'}</button>
 
               <div className="customer-metrics">
                 <div><ShoppingBag size={16} /><strong>{selectedCustomer.orders_count || selectedCustomer.total_orders || selectedCustomer.orders?.length || 0}</strong><span>Orders</span></div>

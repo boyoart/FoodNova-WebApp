@@ -10,6 +10,7 @@ import ProductsPage from './pages/ProductsPage'
 import CartPage from './pages/CartPage'
 import CheckoutPage from './pages/CheckoutPage'
 import LoginPage from './pages/LoginPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import RegisterPage from './pages/RegisterPage'
 import OrderHistoryPage from './pages/OrderHistoryPage'
 import AdminLoginPage from './pages/AdminLoginPage'
@@ -48,6 +49,7 @@ function App() {
               <Route path="/cart" element={<CartPage />} />
               <Route path="/checkout" element={<CheckoutPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/orders" element={<OrderHistoryPage />} />
               <Route path="/orders/:orderId/invoice" element={<InvoicePage />} />
