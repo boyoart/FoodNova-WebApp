@@ -399,9 +399,9 @@ class _LiveTrackingView extends StatelessWidget {
               ),
             ),
             DraggableScrollableSheet(
-              initialChildSize: .27,
-              minChildSize: .2,
-              maxChildSize: .48,
+              initialChildSize: .22,
+              minChildSize: .18,
+              maxChildSize: .42,
               builder: (context, controller) => _TrackingBottomSheet(
                 controller: controller,
                 riderArrived: order.riderArrived,
@@ -555,7 +555,7 @@ class _OrderDetailsView extends StatelessWidget {
           ),
         const SizedBox(height: 14),
         if (showTracking) ...[
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _RiderTrackingCard(
             order: order,
             location: riderLocation,
@@ -1588,7 +1588,7 @@ class _TrackingBottomSheet extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: .18),
@@ -1599,19 +1599,19 @@ class _TrackingBottomSheet extends StatelessWidget {
       ),
       child: ListView(
         controller: controller,
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
         children: [
           Center(
             child: Container(
-              width: 44,
-              height: 5,
+              width: 36,
+              height: 4,
               decoration: BoxDecoration(
                 color: scheme.outlineVariant,
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -1632,7 +1632,7 @@ class _TrackingBottomSheet extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Row(
             children: [
               Expanded(
@@ -1654,10 +1654,10 @@ class _TrackingBottomSheet extends StatelessWidget {
           const SizedBox(height: 14),
           if (riderArrived) ...[
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 color: scheme.primary.withValues(alpha: .1),
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Text(
                 'Rider has arrived. Meet your rider and only share your delivery PIN after receiving your items.',
@@ -1668,7 +1668,7 @@ class _TrackingBottomSheet extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
           ],
           Text(
             'Updated $lastUpdated',
@@ -1802,7 +1802,7 @@ class _RiderActionButton extends StatelessWidget {
           onPressed: onPressed,
           icon: Icon(icon),
           style: IconButton.styleFrom(
-            fixedSize: const Size(48, 48),
+            fixedSize: const Size(44, 44),
             backgroundColor: scheme.primaryContainer.withValues(alpha: .42),
             foregroundColor: scheme.primary,
           ),
@@ -3278,18 +3278,18 @@ double _markerOrientationOffset(RiderMarkerKind kind) {
 }
 
 Future<BitmapDescriptor> _buildRiderMarkerIcon(RiderMarkerKind kind) async {
-  const size = 104.0;
+  const size = 80.0;
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
   final center = const Offset(size / 2, size / 2);
   canvas.drawCircle(
     center,
-    46,
+    36,
     Paint()..color = const Color(0xFFFFFFFF),
   );
   canvas.drawCircle(
     center,
-    42,
+    33,
     Paint()..color = FoodNovaColors.primary,
   );
   final icon = switch (kind) {
@@ -3301,7 +3301,7 @@ Future<BitmapDescriptor> _buildRiderMarkerIcon(RiderMarkerKind kind) async {
     text: TextSpan(
       text: String.fromCharCode(icon.codePoint),
       style: TextStyle(
-        fontSize: 56,
+        fontSize: 42,
         fontFamily: icon.fontFamily,
         package: icon.fontPackage,
         color: Colors.white,
@@ -3323,24 +3323,24 @@ Future<BitmapDescriptor> _buildDestinationMarkerIcon(
   IconData icon,
   Color color,
 ) async {
-  const width = 104.0;
-  const height = 124.0;
+  const width = 80.0;
+  const height = 96.0;
   final recorder = ui.PictureRecorder();
   final canvas = Canvas(recorder);
-  final center = const Offset(width / 2, 50);
+  final center = const Offset(width / 2, 39);
   final path = Path()
-    ..moveTo(32, 82)
-    ..lineTo(width / 2, 118)
-    ..lineTo(72, 82)
+    ..moveTo(25, 64)
+    ..lineTo(width / 2, 91)
+    ..lineTo(55, 64)
     ..close();
   canvas.drawPath(path, Paint()..color = color);
-  canvas.drawCircle(center, 46, Paint()..color = Colors.white);
-  canvas.drawCircle(center, 41, Paint()..color = color);
+  canvas.drawCircle(center, 36, Paint()..color = Colors.white);
+  canvas.drawCircle(center, 32, Paint()..color = color);
   final painter = TextPainter(
     text: TextSpan(
       text: String.fromCharCode(icon.codePoint),
       style: TextStyle(
-        fontSize: 50,
+        fontSize: 38,
         fontFamily: icon.fontFamily,
         package: icon.fontPackage,
         color: Colors.white,
@@ -3500,7 +3500,7 @@ class _CancelRequestSheetState extends ConsumerState<_CancelRequestSheet> {
                 .titleLarge
                 ?.copyWith(fontWeight: FontWeight.w900),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           SegmentedButton<String>(
             segments: const [
               ButtonSegment(value: 'cancellation', label: Text('Cancellation')),
