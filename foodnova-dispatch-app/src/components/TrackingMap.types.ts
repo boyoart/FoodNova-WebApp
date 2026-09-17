@@ -13,5 +13,9 @@ export type TrackingMapProps = {
   customer?: LatLng | null;
   status?: string | null;
   vehicleType?: string | null;
+  routePoints?: LatLng[];
+  routeDistanceMeters?: number | null;
+  routeEtaMinutes?: number | null;
+  routeStatus?: string | null;
   style?: ViewStyle;
 };

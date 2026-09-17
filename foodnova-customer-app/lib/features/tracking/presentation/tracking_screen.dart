@@ -39,10 +39,15 @@ final riderLocationProvider =
   return ref.watch(ordersRepositoryProvider).riderLocation(id);
 });
 
+String customerLiveTrackingRoute(int orderId) =>
+    '/orders/$orderId/live-tracking';
+
 class TrackingScreen extends ConsumerStatefulWidget {
-  const TrackingScreen({required this.orderId, super.key});
+  const TrackingScreen(
+      {required this.orderId, this.liveOnly = false, super.key});
 
   final int orderId;
+  final bool liveOnly;
 
   @override
   ConsumerState<TrackingScreen> createState() => _TrackingScreenState();
@@ -218,6 +223,26 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(orderDetailProvider(widget.orderId));
+    if (widget.liveOnly) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Live Delivery')),
+        body: state.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, __) => _LiveTrackingUnavailable(
+            onRetry: _refreshLiveOrder,
+            message:
+                'Live tracking is temporarily unavailable. Your delivery is still in progress.',
+          ),
+          data: (order) => _LiveTrackingView(
+            order: order,
+            location: ref.watch(riderLocationProvider(order.id)),
+            onRetry: _refreshLiveOrder,
+            onCallRider: () => _callRider(order),
+            onMessageRider: () => _messageRider(order),
+          ),
+        ),
+      );
+    }
     return Scaffold(
       appBar: AppBar(
         title: const Text('Order details'),
@@ -229,7 +254,9 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
                 order: order,
                 onCallRider: () => _callRider(order),
                 onMessageRider: () => _messageRider(order),
-                onTrackOrder: _refreshLiveOrder,
+                onTrackOrder: () => context.push(
+                  customerLiveTrackingRoute(order.id),
+                ),
               ),
         orElse: () => null,
       ),
@@ -269,6 +296,161 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _LiveTrackingView extends StatelessWidget {
+  const _LiveTrackingView({
+    required this.order,
+    required this.location,
+    required this.onRetry,
+    required this.onCallRider,
+    required this.onMessageRider,
+  });
+
+  final OrderSummary order;
+  final AsyncValue<RiderLocation?> location;
+  final VoidCallback onRetry;
+  final VoidCallback onCallRider;
+  final VoidCallback onMessageRider;
+
+  @override
+  Widget build(BuildContext context) {
+    return location.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => _LiveTrackingUnavailable(
+        onRetry: onRetry,
+        message:
+            'Live tracking is temporarily unavailable. Your delivery is still in progress.',
+      ),
+      data: (data) {
+        if (data == null || !data.hasRiderCoordinates) {
+          return _LiveTrackingUnavailable(
+            onRetry: onRetry,
+            message:
+                'Waiting for the rider’s latest location. Your delivery is still in progress.',
+          );
+        }
+        final rider = LatLng(data.riderLatitude!, data.riderLongitude!);
+        final pickup = RiderLocation.validCoordinates(
+          data.pickupLatitude,
+          data.pickupLongitude,
+        )
+            ? LatLng(data.pickupLatitude!, data.pickupLongitude!)
+            : null;
+        final customer = data.hasCustomerCoordinates
+            ? LatLng(data.customerLatitude!, data.customerLongitude!)
+            : null;
+        final destination = RiderLocation.validCoordinates(
+          data.routeDestinationLatitude,
+          data.routeDestinationLongitude,
+        )
+            ? LatLng(
+                data.routeDestinationLatitude!,
+                data.routeDestinationLongitude!,
+              )
+            : customer;
+        final route = data.routePolyline
+            .map((point) => LatLng(point['latitude']!, point['longitude']!))
+            .toList(growable: false);
+        final eta = data.etaMinutes == null
+            ? 'ETA unavailable'
+            : '${data.etaMinutes} min';
+        final distance = data.distanceMeters == null
+            ? 'Route unavailable'
+            : _formatDistance(data.distanceMeters);
+        final updated = data.isStale
+            ? 'Location updating'
+            : _formatRelativeTime(data.lastUpdatedAt);
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: _TrackingMap(
+                riderPoint: rider,
+                pickupPoint: pickup,
+                customerPoint: customer,
+                routeDestinationPoint: destination,
+                routePoints: route,
+                riderName: data.riderName,
+                vehicleType: data.vehicleType,
+                workerType: data.workerType,
+                serverHeading: data.heading,
+                speedMetersPerSecond: data.speedMetersPerSecond,
+              ),
+            ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: _LiveTrackingBadge(
+                label: data.isStale ? 'Updating rider location' : 'Live',
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: _MapMetricChip(
+                icon: Icons.receipt_long_rounded,
+                label: order.orderCode.isEmpty
+                    ? 'Order ${order.id}'
+                    : order.orderCode,
+              ),
+            ),
+            DraggableScrollableSheet(
+              initialChildSize: .27,
+              minChildSize: .2,
+              maxChildSize: .48,
+              builder: (context, controller) => _TrackingBottomSheet(
+                controller: controller,
+                riderArrived: order.riderArrived,
+                deliveryStatus: order.canonicalDeliveryStatus,
+                eta: eta,
+                distance: distance,
+                lastUpdated: updated,
+                riderName: data.riderName,
+                onCallRider:
+                    order.riderPhone.trim().isEmpty ? null : onCallRider,
+                onMessageRider:
+                    order.riderPhone.trim().isEmpty ? null : onMessageRider,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _LiveTrackingUnavailable extends StatelessWidget {
+  const _LiveTrackingUnavailable({
+    required this.onRetry,
+    required this.message,
+  });
+
+  final VoidCallback onRetry;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_searching_rounded, size: 42),
+            const SizedBox(height: 14),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 18),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try again'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -481,7 +663,7 @@ class _CompactTrackingSummaryCard extends StatelessWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: () => GoRouter.of(context)
-                    .push('/orders/${order.id}/live-tracking'),
+                    .push(customerLiveTrackingRoute(order.id)),
                 icon: const Icon(Icons.navigation_rounded),
                 label: const Text('Track Live'),
               ),
@@ -1138,53 +1320,6 @@ class _PaymentConfirmedReceiptCard extends StatelessWidget {
   }
 }
 
-class _RiderInformationCard extends StatelessWidget {
-  const _RiderInformationCard({
-    required this.order,
-    required this.onCallRider,
-    required this.onMessageRider,
-  });
-
-  final OrderSummary order;
-  final VoidCallback onCallRider;
-  final VoidCallback onMessageRider;
-
-  @override
-  Widget build(BuildContext context) {
-    const legacyVisible = false;
-    if (legacyVisible) {
-      return _Card(
-        title: 'Rider information',
-        icon: Icons.delivery_dining_rounded,
-        child: Column(
-          children: [
-            if (order.hasAssignedRider)
-              _RiderProfileTile(
-                name: order.riderName,
-                phone: order.riderPhone,
-                photoUrl: order.riderPhotoUrl,
-                vehicleType: order.riderVehicleType,
-                riderId: order.riderDisplayId,
-                rating: order.riderRatingText,
-                onCallRider: onCallRider,
-                onMessageRider: onMessageRider,
-              )
-            else
-              const _MutedText(
-                'Looking for an available rider...',
-              ),
-            if (order.deliveryNotes.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              _InfoRow(label: 'Notes', value: order.deliveryNotes),
-            ],
-          ],
-        ),
-      );
-    }
-    return const SizedBox.shrink();
-  }
-}
-
 class _RiderTrackingCard extends StatelessWidget {
   const _RiderTrackingCard({
     required this.order,
@@ -1432,6 +1567,9 @@ class _TrackingBottomSheet extends StatelessWidget {
     required this.eta,
     required this.distance,
     required this.lastUpdated,
+    required this.riderName,
+    required this.onCallRider,
+    required this.onMessageRider,
   });
 
   final ScrollController controller;
@@ -1440,6 +1578,9 @@ class _TrackingBottomSheet extends StatelessWidget {
   final String eta;
   final String distance;
   final String lastUpdated;
+  final String riderName;
+  final VoidCallback? onCallRider;
+  final VoidCallback? onMessageRider;
 
   @override
   Widget build(BuildContext context) {
@@ -1471,6 +1612,27 @@ class _TrackingBottomSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  riderName.trim().isEmpty ? 'FoodNova rider' : riderName,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Call rider',
+                onPressed: onCallRider,
+                icon: const Icon(Icons.call_rounded),
+              ),
+              IconButton(
+                tooltip: 'Message rider',
+                onPressed: onMessageRider,
+                icon: const Icon(Icons.chat_bubble_outline_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -3087,11 +3249,6 @@ String _formatDistance(double? meters) {
   if (meters == null) return 'Route unavailable';
   if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
   return '${math.max(0, meters).round()} m';
-}
-
-String _formatEta(int? minutes) {
-  if (minutes == null) return 'ETA unavailable';
-  return '$minutes min';
 }
 
 String _normalizeTrackingStatus(String status) {

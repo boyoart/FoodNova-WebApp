@@ -20,38 +20,6 @@ function mapsKey(): string | null {
   );
 }
 
-function decodePolyline(encoded: string): LatLng[] {
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-  const coordinates: LatLng[] = [];
-
-  while (index < encoded.length) {
-    let shift = 0;
-    let result = 0;
-    let byte = 0;
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-    lat += result & 1 ? ~(result >> 1) : result >> 1;
-
-    shift = 0;
-    result = 0;
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-    lng += result & 1 ? ~(result >> 1) : result >> 1;
-
-    coordinates.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
-  }
-
-  return coordinates;
-}
-
 function routeEndpoints(status: string | null | undefined, rider?: LatLng | null, pickup?: LatLng | null, customer?: LatLng | null) {
   const s = String(status || "").toLowerCase();
   const hasPickup = ["picked_up", "picked", "collected", "en_route", "enroute", "in_transit", "out_for_delivery", "arrived", "delivered"].includes(s);
@@ -107,46 +75,6 @@ function formatEta(minutes: number) {
   return `${Math.ceil(minutes)} min`;
 }
 
-type RouteResult = { points: LatLng[]; distanceMeters: number; durationMinutes: number };
-
-async function fetchRoute(origin: LatLng, destination: LatLng): Promise<RouteResult | null> {
-  const key = mapsKey();
-  if (!key) return null;
-  console.log("DISPATCH_ROUTE_REQUEST_STARTED", { originPresent: true, destinationPresent: true });
-  const url =
-    "https://maps.googleapis.com/maps/api/directions/json" +
-    `?origin=${origin.latitude},${origin.longitude}` +
-    `&destination=${destination.latitude},${destination.longitude}` +
-    `&mode=driving&departure_time=now&key=${encodeURIComponent(key)}`;
-  const response = await fetch(url);
-  const json = await response.json();
-  const encoded = json?.routes?.[0]?.overview_polyline?.points;
-  if (!response.ok || !encoded) {
-    console.log("TRACKING_ROUTE_ERROR", {
-      status: response.status,
-      providerStatus: json?.status,
-      error: json?.error_message || json?.status || "route_unavailable",
-    });
-    console.log("DISPATCH_ROUTE_REQUEST_FAILED", { providerStatus: json?.status || response.status });
-    return null;
-  }
-  const decoded = decodePolyline(encoded);
-  const leg = json?.routes?.[0]?.legs?.[0];
-  const distance = Number(leg?.distance?.value);
-  const durationSeconds = Number(leg?.duration_in_traffic?.value ?? leg?.duration?.value);
-  if (decoded.length < 2 || !Number.isFinite(distance) || !Number.isFinite(durationSeconds)) {
-    console.log("DISPATCH_ROUTE_REQUEST_FAILED", { reason: "invalid_route_response" });
-    return null;
-  }
-  console.log("DISPATCH_ROUTE_REQUEST_SUCCEEDED", { points: decoded.length, distanceMeters: distance, durationSeconds });
-  return { points: decoded, distanceMeters: distance, durationMinutes: durationSeconds / 60 };
-}
-
-function distanceToPath(point: LatLng, points: LatLng[]): number {
-  if (!points.length) return Number.POSITIVE_INFINITY;
-  return points.reduce((nearest, candidate) => Math.min(nearest, distanceMeters(point, candidate)), Number.POSITIVE_INFINITY);
-}
-
 function vehicleIcon(vehicleType?: string | null): React.ComponentProps<typeof Ionicons>["name"] {
   const value = String(vehicleType || "").trim().toLowerCase();
   if (value.includes("bicycle") || value.includes("bike")) return "bicycle";
@@ -158,17 +86,25 @@ function vehicleIcon(vehicleType?: string | null): React.ComponentProps<typeof I
 }
 
 // Native map. Google Maps requires a real dev build + API key in app.json.
-export function TrackingMap({ rider, pickup, customer, status, vehicleType, style }: TrackingMapProps) {
+export function TrackingMap({
+  rider,
+  pickup,
+  customer,
+  status,
+  vehicleType,
+  routePoints = [],
+  routeDistanceMeters = null,
+  routeEtaMinutes = null,
+  routeStatus,
+  style,
+}: TrackingMapProps) {
   const configuredMapsKey = mapsKey();
   const ref = useRef<MapView | null>(null);
-  const [route, setRoute] = useState<LatLng[]>([]);
-  const [routeMetrics, setRouteMetrics] = useState<{ distanceMeters: number; durationMinutes: number } | null>(null);
   const [heading, setHeading] = useState(0);
   const [followMode, setFollowMode] = useState(true);
   const headingRef = useRef(0);
   const previousRider = useRef<LatLng | null>(null);
   const fittedOnce = useRef(false);
-  const lastRouteRequest = useRef<{ origin: LatLng; destination: LatLng; at: number } | null>(null);
   const initial = rider || pickup || customer || LAGOS;
   const riderRegion = useRef(
     new AnimatedRegion({
@@ -183,41 +119,40 @@ export function TrackingMap({ rider, pickup, customer, status, vehicleType, styl
     () => routeEndpoints(status, rider, pickup, customer),
     [status, rider, pickup, customer]
   );
-  const displayPath = useMemo(() => (route.length >= 2 ? route : []), [route]);
+  const displayPath = useMemo(() => (routePoints.length >= 2 ? routePoints : []), [routePoints]);
   const destination = endpoints.length >= 2 ? endpoints[endpoints.length - 1] : null;
   const remainingMeters = useMemo(() => {
-    if (!rider || !destination || route.length < 2 || !routeMetrics) return null;
-    if (route.length >= 2) {
+    if (!rider || !destination || displayPath.length < 2 || routeDistanceMeters == null) return null;
+    if (displayPath.length >= 2) {
       let nearestIndex = 0;
       let nearestDistance = Number.POSITIVE_INFINITY;
-      route.forEach((point, index) => {
+      displayPath.forEach((point, index) => {
         const distance = distanceMeters(rider, point);
         if (distance < nearestDistance) {
           nearestDistance = distance;
           nearestIndex = index;
         }
       });
-      return nearestDistance + pathDistance(route.slice(nearestIndex));
+      return nearestDistance + pathDistance(displayPath.slice(nearestIndex));
     }
     return null;
-  }, [destination, rider, route, routeMetrics]);
+  }, [destination, displayPath, rider, routeDistanceMeters]);
   const totalMeters = useMemo(() => {
     if (!destination) return null;
-    return routeMetrics?.distanceMeters ?? null;
-  }, [destination, routeMetrics]);
+    return routeDistanceMeters;
+  }, [destination, routeDistanceMeters]);
   const progress = useMemo(() => {
     if (!remainingMeters || !totalMeters || totalMeters <= 0) return 0;
     return Math.max(0, Math.min(1, 1 - remainingMeters / totalMeters));
   }, [remainingMeters, totalMeters]);
   const etaMinutes = useMemo(() => {
-    if (!remainingMeters || !routeMetrics || !totalMeters) return null;
-    return routeMetrics.durationMinutes * (remainingMeters / totalMeters);
-  }, [remainingMeters, routeMetrics, totalMeters]);
+    if (!remainingMeters || routeEtaMinutes == null || !totalMeters) return null;
+    return routeEtaMinutes * (remainingMeters / totalMeters);
+  }, [remainingMeters, routeEtaMinutes, totalMeters]);
   const fitPoints: LatLng[] = useMemo(
     () => (displayPath.length >= 2 ? displayPath : ([rider, pickup, customer].filter(Boolean) as LatLng[])),
     [displayPath, rider, pickup, customer]
   );
-  const stageKey = `${String(status || "").toLowerCase()}|${destination?.latitude || ""},${destination?.longitude || ""}`;
 
   useEffect(() => {
     console.log("TRACKING_MAP_INIT", {
@@ -256,54 +191,18 @@ export function TrackingMap({ rider, pickup, customer, status, vehicleType, styl
   }, [rider, riderRegion, pickup, customer, vehicleType]);
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadRoute() {
-      if (endpoints.length < 2) {
-        setRoute([]);
-        return;
-      }
-      const origin = endpoints[0];
-      const routeDestination = endpoints[endpoints.length - 1];
-      const previous = lastRouteRequest.current;
-      const destinationChanged = !previous || distanceMeters(previous.destination, routeDestination) > 25;
-      const moved = !previous || distanceMeters(previous.origin, origin) > 50;
-      const offRoute = route.length >= 2 && distanceToPath(origin, route) > 75;
-      const stale = !previous || Date.now() - previous.at > 60000;
-      const throttled = !!previous && Date.now() - previous.at < 15000;
-      if (!destinationChanged && !offRoute && !stale && !moved && route.length >= 2) return;
-      if (throttled && !destinationChanged) return;
-      if (offRoute) console.log("DISPATCH_ROUTE_DEVIATION_DETECTED", { thresholdMeters: 75 });
-      console.log("DISPATCH_ROUTE_RECALCULATION_STARTED", {
-        reason: destinationChanged ? "destination_changed" : offRoute ? "off_route" : stale ? "stale" : "movement",
+    if (displayPath.length >= 2) {
+      console.log("DISPATCH_ROUTE_CONTRACT_RENDERED", {
+        points: displayPath.length,
+        status: routeStatus || "available",
       });
-      lastRouteRequest.current = { origin, destination: routeDestination, at: Date.now() };
-      const next = await fetchRoute(origin, routeDestination).catch((error) => {
-        console.log("TRACKING_ROUTE_ERROR", { error: String(error?.message || error) });
-        console.log("DISPATCH_ROUTE_REQUEST_FAILED", { reason: "request_exception" });
-        return null;
+    } else {
+      console.log("DISPATCH_MAP_FALLBACK_SHOWN", {
+        fallback: "markers_only",
+        status: routeStatus || "unavailable",
       });
-      if (!cancelled) {
-        setRoute(next?.points || []);
-        setRouteMetrics(next ? { distanceMeters: next.distanceMeters, durationMinutes: next.durationMinutes } : null);
-        if (next) {
-          console.log("DISPATCH_ROUTE_RECALCULATION_SUCCEEDED", { points: next.points.length });
-          console.log("DISPATCH_ROUTE_REPLACED", { points: next.points.length });
-          console.log("DISPATCH_ETA_UPDATED", { durationMinutes: next.durationMinutes, distanceMeters: next.distanceMeters });
-        }
-        else console.log("DISPATCH_MAP_FALLBACK_SHOWN", { fallback: "markers_only" });
-      }
     }
-    loadRoute();
-    return () => {
-      cancelled = true;
-    };
-  }, [endpoints, route]);
-
-  useEffect(() => {
-    fittedOnce.current = false;
-    setRouteMetrics(null);
-    lastRouteRequest.current = null;
-  }, [stageKey]);
+  }, [displayPath.length, routeStatus]);
 
   useEffect(() => {
     if (ref.current && fitPoints.length >= 2 && !fittedOnce.current) {
@@ -380,7 +279,7 @@ export function TrackingMap({ rider, pickup, customer, status, vehicleType, styl
         </TouchableOpacity>
       )}
       <View style={styles.metricsCard} pointerEvents="none">
-        {route.length < 2 && <Text style={styles.routeUnavailable}>Driving route temporarily unavailable</Text>}
+        {displayPath.length < 2 && <Text style={styles.routeUnavailable}>Driving route temporarily unavailable</Text>}
         <View style={styles.metricRow}>
           <Text style={styles.metricLabel}>ETA</Text>
           <Text style={styles.metricValue}>{etaMinutes == null ? "--" : formatEta(etaMinutes)}</Text>

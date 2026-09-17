@@ -4245,7 +4245,8 @@ def tracking_route_service(rider_lat: float, rider_lng: float, customer_lat: flo
                 "error_message": body.get("error_message", ""),
             }))
             print("DIRECTIONS_FAILED", json_dump({"provider": "google_directions", "status": body.get("status") or "NO_ROUTE"}))
-            return {"route_provider": "google_directions", "route_status": body.get("status") or "NO_ROUTE"}
+            # A restricted/disabled Google web-service key must not prevent the
+            # existing marker/route fallback from keeping delivery operational.
         except Exception as error:
             print("TRACKING_ROUTE_FAILED", json_dump({"provider": "google_directions", "error_type": type(error).__name__}))
             print("TRACKING_ROUTE_ERROR", json_dump({"provider": "google_directions", "error_type": type(error).__name__}))

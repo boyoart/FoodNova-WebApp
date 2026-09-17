@@ -108,4 +108,39 @@ void main() {
       RiderMarkerKind.messenger,
     );
   });
+
+  test('authorized route payload parses route, distance and ETA', () {
+    final location = RiderLocation.fromJson({
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'rider': {'latitude': 6.5, 'longitude': 3.3},
+      'customer': {'latitude': 6.6, 'longitude': 3.4},
+      'distance_meters': 1800,
+      'eta_minutes': 7,
+      'route_polyline': [
+        {'latitude': 6.5, 'longitude': 3.3},
+        {'latitude': 6.6, 'longitude': 3.4},
+      ],
+    });
+    expect(location.hasRiderCoordinates, isTrue);
+    expect(location.routePolyline, hasLength(2));
+    expect(location.distanceMeters, 1800);
+    expect(location.etaMinutes, 7);
+    expect(location.isStale, isFalse);
+  });
+
+  test('missing or stale rider location is detected safely', () {
+    final missing = RiderLocation.fromJson({'rider': {}});
+    expect(missing.hasRiderCoordinates, isFalse);
+    expect(missing.isStale, isTrue);
+
+    final stale = RiderLocation.fromJson({
+      'updated_at': DateTime.now()
+          .toUtc()
+          .subtract(const Duration(minutes: 5))
+          .toIso8601String(),
+      'rider': {'latitude': 6.5, 'longitude': 3.3},
+    });
+    expect(stale.hasRiderCoordinates, isTrue);
+    expect(stale.isStale, isTrue);
+  });
 }

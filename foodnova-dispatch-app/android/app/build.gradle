@@ -3,7 +3,11 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
-def googleMapsApiKey = findProperty('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY') ?: System.getenv('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY') ?: ''
+def googleMapsApiKey = findProperty('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY') ?:
+    System.getenv('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY') ?:
+    findProperty('GOOGLE_MAPS_API_KEY') ?:
+    System.getenv('GOOGLE_MAPS_API_KEY') ?:
+    ''
 def googleServicesSource = file("${projectRoot}/google-services.json")
 def googleServicesTarget = file("${projectDir}/google-services.json")
 def keystoreProperties = new Properties()

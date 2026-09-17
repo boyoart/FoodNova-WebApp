@@ -146,6 +146,8 @@ export const RiderApi = {
   orders: (status?: string) =>
     api(`/delivery/orders${status ? `?status=${encodeURIComponent(status)}` : ""}`),
 
+  orderTracking: (orderId: string) => api(`/orders/${orderId}/rider-location`),
+
   updateOrderStatus: (orderId: string, status: string, note?: string) =>
     api(`/delivery/orders/${orderId}/status`, {
       method: "PATCH",

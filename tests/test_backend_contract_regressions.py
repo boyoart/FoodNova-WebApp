@@ -1,6 +1,7 @@
 import os
 import sys
 import unittest
+import json
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -61,6 +62,43 @@ def tracking_order(status: str, pin: str = "1604") -> SimpleNamespace:
 
 
 class BackendContractRegressionTests(unittest.TestCase):
+    def test_google_route_denial_falls_through_to_osrm(self):
+        class Response:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            def read(self):
+                return json.dumps(self.payload).encode("utf-8")
+
+        google_denied = Response({
+            "status": "REQUEST_DENIED",
+            "error_message": "API project is not authorized for this service",
+            "routes": [],
+        })
+        osrm_route = Response({
+            "code": "Ok",
+            "routes": [{
+                "distance": 1800,
+                "duration": 420,
+                "geometry": {"coordinates": [[3.3, 6.5], [3.4, 6.6]]},
+            }],
+        })
+        with patch.dict(os.environ, {"GOOGLE_DIRECTIONS_API_KEY": "configured"}), patch.object(
+            main.urllib.request, "urlopen", side_effect=[google_denied, osrm_route]
+        ):
+            route = main.tracking_route_service(6.5, 3.3, 6.6, 3.4)
+
+        self.assertEqual(route["route_provider"], "osrm")
+        self.assertEqual(route["distance_meters"], 1800)
+        self.assertEqual(route["eta_minutes"], 7)
+        self.assertEqual(len(route["route_polyline"]), 2)
+
     def test_push_diagnostics_never_log_fcm_token_fragments(self):
         source = (BACKEND / "main.py").read_text(encoding="utf-8")
         self.assertNotIn("token_suffix", source)

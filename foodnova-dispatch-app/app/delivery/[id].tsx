@@ -23,6 +23,7 @@ import { TrackingMap } from "@/src/components/TrackingMap";
 import { asList, pick } from "@/src/lib/normalize";
 import { deliveryOrderId } from "@/src/lib/order";
 import { getCurrentCoords } from "@/src/lib/location";
+import { parseOrderTrackingRoute, type OrderTrackingRoute } from "@/src/lib/tracking-route";
 import { useLocationTracking } from "@/src/context/LocationTrackingContext";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
@@ -57,6 +58,7 @@ export default function DeliveryDetail() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [riderCoords, setRiderCoords] = useState<{ latitude: number; longitude: number; heading?: number | null; speed?: number | null } | null>(null);
+  const [trackingRoute, setTrackingRoute] = useState<OrderTrackingRoute | null>(null);
   const [pinMode, setPinMode] = useState(false);
   const [pin, setPin] = useState("");
 
@@ -75,10 +77,34 @@ export default function DeliveryDetail() {
     if (c) setRiderCoords({ latitude: c.latitude, longitude: c.longitude, heading: c.heading, speed: c.speed });
   }, [id]);
 
+  const loadTrackingRoute = useCallback(async () => {
+    if (!id) return;
+    try {
+      const response = await RiderApi.orderTracking(String(id));
+      const next = parseOrderTrackingRoute(response);
+      setTrackingRoute(next);
+      console.log("DISPATCH_ROUTE_CONTRACT_UPDATED", {
+        provider: next.provider,
+        status: next.status,
+        points: next.points.length,
+        hasDistance: next.distanceMeters != null,
+        hasEta: next.etaMinutes != null,
+      });
+    } catch (error) {
+      setTrackingRoute(null);
+      console.log("DISPATCH_ROUTE_CONTRACT_FAILED", {
+        errorType: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  }, [id]);
+
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load])
+      loadTrackingRoute();
+      const timer = setInterval(loadTrackingRoute, 10000);
+      return () => clearInterval(timer);
+    }, [load, loadTrackingRoute])
   );
 
   useEffect(() => {
@@ -251,6 +277,10 @@ export default function DeliveryDetail() {
           customer={customer}
           status={String(currentStatus)}
           vehicleType={String(pick(order, ["rider_vehicle_type", "vehicle_type", "worker_type"], ""))}
+          routePoints={trackingRoute?.points || []}
+          routeDistanceMeters={trackingRoute?.distanceMeters}
+          routeEtaMinutes={trackingRoute?.etaMinutes}
+          routeStatus={trackingRoute?.status}
           style={{ flex: 1 }}
         />
         <TouchableOpacity testID="delivery-close" style={[styles.floatBtn, { top: insets.top + spacing.sm, left: spacing.lg }]} onPress={() => router.back()}>
