@@ -14,6 +14,7 @@ import '../../../widgets/mobile_app_scaffold.dart';
 import '../../../widgets/skeleton_box.dart';
 import '../../../widgets/status_badge.dart';
 import '../data/orders_repository.dart';
+import '../../tracking/presentation/tracking_screen.dart';
 
 class OrdersScreen extends ConsumerStatefulWidget {
   const OrdersScreen({super.key});
@@ -131,8 +132,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
                         amount:
                             currency.format(sections.active[index].totalAmount),
                         featured: index == 0,
-                        onTap: () => context
-                            .push('/orders/${sections.active[index].id}/live-tracking'),
+                        onTap: () => context.push(
+                          customerOrderDetailsRoute(sections.active[index].id),
+                        ),
                       ),
                       const SizedBox(height: 14),
                     ],
@@ -151,7 +153,9 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen>
                       _OrderCard(
                         order: order,
                         amount: currency.format(order.totalAmount),
-                        onTap: () => context.push('/orders/${order.id}/live-tracking'),
+                        onTap: () => context.push(
+                          customerOrderDetailsRoute(order.id),
+                        ),
                       ),
                       const SizedBox(height: 14),
                     ],
@@ -200,6 +204,7 @@ class _OrderCard extends StatelessWidget {
     final status = _friendlyStatus(order.status, order.paymentStatus);
     final scheme = Theme.of(context).colorScheme;
     return InkWell(
+      key: Key('order-card-${order.id}'),
       borderRadius: BorderRadius.circular(24),
       onTap: onTap,
       child: Container(

@@ -3988,6 +3988,35 @@ def get_active_operational_zone(db) -> Optional[DBOperationalZone]:
     return db.query(DBOperationalZone).filter(DBOperationalZone.is_active == True).order_by(DBOperationalZone.updated_at.desc(), DBOperationalZone.id.desc()).first()
 
 
+def validate_delivery_destination_for_zone(db, delivery_method: str, snapshot: Optional[dict]) -> None:
+    """Reject known out-of-zone delivery coordinates before order side effects."""
+    if str(delivery_method or "delivery").strip().lower() != "delivery":
+        return
+    source = snapshot or {}
+    if isinstance(source.get("address"), dict):
+        source = {**source, **source["address"]}
+    lat = source.get("latitude") if source.get("latitude") is not None else source.get("lat")
+    lng = source.get("longitude") if source.get("longitude") is not None else source.get("lng")
+    if lng is None:
+        lng = source.get("lon")
+    try:
+        latitude = float(lat)
+        longitude = float(lng)
+    except (TypeError, ValueError):
+        return
+    if not valid_tracking_coordinate(latitude, longitude):
+        raise HTTPException(status_code=422, detail="Delivery address coordinates are invalid.")
+    zone = get_active_operational_zone(db)
+    if not zone or not zone.is_active:
+        return
+    distance = distance_meters(latitude, longitude, zone.center_latitude, zone.center_longitude)
+    if distance > float(zone.radius_meters or 0):
+        raise HTTPException(
+            status_code=422,
+            detail=f"This delivery address is outside the configured {zone.zone_name} service area. Choose pickup or a supported delivery address.",
+        )
+
+
 def ensure_default_operational_zone(db) -> DBOperationalZone:
     zone = get_active_operational_zone(db)
     if zone:
@@ -4320,6 +4349,21 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
     route_provider = "none"
     route_status = "WAITING_FOR_COORDINATES"
     dispatch_status = canonical_dispatch_status(order)
+    if not worker_id:
+        location_state = "waiting_for_assignment"
+        location_reason = "order_has_no_assigned_rider"
+    elif not worker:
+        location_state = "temporarily_unavailable"
+        location_reason = "assigned_rider_record_not_found"
+    elif not rider_valid:
+        location_state = "waiting_for_location"
+        location_reason = "assigned_rider_has_no_persisted_gps"
+    elif not worker_has_recent_gps(worker):
+        location_state = "temporarily_unavailable"
+        location_reason = "assigned_rider_gps_is_stale"
+    else:
+        location_state = "available"
+        location_reason = "rider_gps_available"
     route_stage = "rider_to_customer"
     origin_lat, origin_lng = rider_lat, rider_lng
     destination_lat, destination_lng = customer_lat, customer_lng
@@ -4379,6 +4423,8 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
         "route_stage": route_stage,
         "dispatch_status": dispatch_status,
         "delivery_status": getattr(order, "delivery_status", ""),
+        "location_state": location_state,
+        "location_reason": location_reason,
     }))
     print("TRACKING_ORDER_FOUND", json_dump({
         "order_id": order.id,
@@ -4403,6 +4449,8 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
         "rider_id": worker_id,
         "tracking_visible": tracking_visible,
         "tracking_available": tracking_available,
+        "location_state": location_state,
+        "location_reason": location_reason,
         "dispatch_status": dispatch_status,
         "rider_coordinates": {"latitude": rider_lat, "longitude": rider_lng, "valid": rider_valid},
         "customer_coordinates": {"latitude": customer_lat, "longitude": customer_lng, "valid": customer_valid},
@@ -4416,6 +4464,8 @@ def order_rider_location_payload(order: DBOrder, db) -> dict:
         "order_id": order.id,
         "tracking_visible": tracking_visible,
         "tracking_available": tracking_available,
+        "location_state": location_state,
+        "location_reason": location_reason,
         "route_provider": route_provider,
         "route_status": route_status,
         "route_stage": route_stage,
@@ -5053,6 +5103,11 @@ def start_delivery_matching(db, order: DBOrder, request: Request = None) -> Opti
         print("ORDER_MATCHING_BLOCKED", json_dump({"order_id": order.id, "reason": "needs_admin_review"}))
         print("ORDER_MATCHING_REASON", json_dump({"order_id": order.id, "reason": "needs_admin_review"}))
         print("DISPATCH_MATCHING_SKIPPED", json_dump({"order_id": order.id, "reason": "needs_admin_review"}))
+        return None
+    if order.delivery_type == "long_distance":
+        print("ORDER_MATCHING_BLOCKED", json_dump({"order_id": order.id, "reason": "outside_operational_zone"}))
+        print("ORDER_MATCHING_REASON", json_dump({"order_id": order.id, "reason": "outside_operational_zone"}))
+        print("DISPATCH_MATCHING_SKIPPED", json_dump({"order_id": order.id, "reason": "outside_operational_zone"}))
         return None
     existing = db.query(DBDeliveryOffer).filter(
         DBDeliveryOffer.order_id == order.id,
@@ -11858,6 +11913,11 @@ def create_order(payload: OrderPayload, request: Request):
 
     db = SessionLocal()
     try:
+        validate_delivery_destination_for_zone(
+            db,
+            delivery_method,
+            payload.delivery_address_snapshot,
+        )
         order, inventory_deductions = persist_order_transaction(
             db,
             normalized_items,
@@ -12026,6 +12086,7 @@ def create_manual_order(payload: ManualOrderPayload, request: Request):
                 saved_address.address_line or saved_address.street, saved_address.area,
                 saved_address.city or saved_address.lga, saved_address.state, saved_address.country,
             ]))
+        validate_delivery_destination_for_zone(db, fulfillment, address_snapshot)
         normalized_items = authoritative_manual_order_items(db, payload.items)
         subtotal = round(sum(float(item["line_total"]) for item in normalized_items), 2)
         percentage_discount = subtotal * max(0, min(float(payload.discount_percentage or 0), 100)) / 100
@@ -13352,6 +13413,74 @@ def update_delivery_zone(payload: OperationalZonePayload, request: Request):
         db.close()
 
 
+def permanent_order_delete_blockers(db, order: DBOrder) -> list[str]:
+    # The current schema has no explicit test-order marker. Without one,
+    # an unpaid order is not sufficient evidence that permanent deletion is safe.
+    blockers = ["not_explicitly_marked_test_order"]
+    if str(order.payment_status or "").lower() not in {"", "pending_payment", "payment_rejected", "cancelled"}:
+        blockers.append("financial_history")
+    if order.receipt:
+        blockers.append("receipt")
+    if order.delivery_worker_id or order.rider_id or canonical_dispatch_status(order) in DISPATCH_ACTIVE_DELIVERY_STATUSES:
+        blockers.append("delivery_history")
+    related = [
+        (DBDeliveryOffer, "delivery_offers"),
+        (DBDeliveryAssignmentLog, "delivery_assignments"),
+        (DBCancellationRequest, "cancellation_history"),
+        (DBPaymentApprovalLog, "payment_audit"),
+    ]
+    for model, label in related:
+        if db.query(model).filter(model.order_id == order.id).first():
+            blockers.append(label)
+    return sorted(set(blockers))
+
+
+def archive_order_record(order: DBOrder, admin: dict) -> None:
+    order.is_deleted = True
+    order.deleted_at = datetime.utcnow()
+    order.deleted_by_admin_id = admin.get("id")
+    order.deleted_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
+    order.updated_at = datetime.utcnow()
+
+
+@app.post("/admin/orders/{order_id}/archive")
+def archive_admin_order(order_id: int, request: Request):
+    admin = require_permission(request, "orders:delete")
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if canonical_dispatch_status(order) in DISPATCH_ACTIVE_DELIVERY_STATUSES:
+            raise HTTPException(status_code=409, detail="Cancel or complete the active delivery before archiving this order.")
+        archive_order_record(order, admin)
+        db.commit()
+        create_admin_audit_log(request, admin, "order_archived", "order", order.id, f"Admin archived order {order.order_code}", {"order_id": order.id})
+        return {"success": True, "message": "Order archived successfully", "action": "archived"}
+    finally:
+        db.close()
+
+
+@app.post("/admin/orders/{order_id}/restore")
+def restore_admin_order(order_id: int, request: Request):
+    admin = require_permission(request, "orders:delete")
+    db = SessionLocal()
+    try:
+        order = db.query(DBOrder).filter(DBOrder.id == order_id, DBOrder.is_deleted == True).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Archived order not found")
+        order.is_deleted = False
+        order.deleted_at = None
+        order.deleted_by_admin_id = None
+        order.deleted_by_admin_name = None
+        order.updated_at = datetime.utcnow()
+        db.commit()
+        create_admin_audit_log(request, admin, "order_restored", "order", order.id, f"Admin restored order {order.order_code}", {"order_id": order.id})
+        return {"success": True, "message": "Order restored successfully", "action": "restored"}
+    finally:
+        db.close()
+
+
 @app.delete("/admin/orders/{order_id}")
 def delete_admin_order(order_id: int, request: Request):
     admin = require_permission(request, "orders:delete")
@@ -13360,54 +13489,19 @@ def delete_admin_order(order_id: int, request: Request):
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
-        if canonical_dispatch_status(order) in DISPATCH_ACTIVE_DELIVERY_STATUSES:
-            raise HTTPException(status_code=409, detail="Cancel the active delivery before deleting this order.")
+        blockers = permanent_order_delete_blockers(db, order)
+        if blockers:
+            raise HTTPException(
+                status_code=409,
+                detail="This order contains financial/delivery history and cannot be permanently deleted. Archive it instead.",
+            )
         old_data = order_to_dict(order)
-        worker_ids = {value for value in (order.delivery_worker_id, order.rider_id) if value}
-        offers = db.query(DBDeliveryOffer).filter(DBDeliveryOffer.order_id == order.id).all()
-        for offer in offers:
-            if offer.status in {"PENDING", "ACCEPTED", "ASSIGNED"}:
-                offer.status = "WITHDRAWN"
-                offer.assignment_status = "WITHDRAWN"
-                offer.updated_at = datetime.utcnow()
-        for assignment in db.query(DBDeliveryAssignmentLog).filter(DBDeliveryAssignmentLog.order_id == order.id).all():
-            assignment.status = "deleted"
-            assignment.released_at = datetime.utcnow()
-            assignment.updated_at = datetime.utcnow()
         restock_order_inventory(db, order)
-        order.is_deleted = True
-        order.deleted_at = datetime.utcnow()
-        order.deleted_by_admin_id = admin.get("id")
-        order.deleted_by_admin_name = admin.get("full_name") or admin.get("email") or "Admin"
-        order.updated_at = datetime.utcnow()
-        for worker_id in worker_ids:
-            worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.id == worker_id).first()
-            if worker and not active_order_filter(db.query(DBOrder)).filter(
-                DBOrder.id != order.id,
-                or_(DBOrder.delivery_worker_id == worker.id, DBOrder.rider_id == worker.id),
-                DBOrder.delivery_status.in_(DISPATCH_ACTIVE_DELIVERY_STATUSES),
-            ).first():
-                worker.operational_status = "ONLINE"
-                worker.updated_at = datetime.utcnow()
+        db.query(DBNotification).filter(DBNotification.order_id == order.id).delete(synchronize_session=False)
+        db.delete(order)
         db.commit()
-        db.refresh(order)
-        create_admin_audit_log(
-            request,
-            admin,
-            "order_deleted",
-            "order",
-            order.id,
-            f"Admin deleted order {order.order_code}",
-            {"order_id": order.id, "order_code": order.order_code, "before": old_data, "after": order_to_dict(order)},
-        )
-        _create_order_notification(
-            old_data,
-            "Order Deleted",
-            f"Order #{old_data.get('order_number') or old_data.get('order_code')} was deleted by FoodNova Admin.",
-            "order_deleted",
-            "order",
-        )
-        return {"success": True, "message": "Order deleted successfully"}
+        create_admin_audit_log(request, admin, "order_permanently_deleted", "order", order_id, f"Admin permanently deleted safe test order {old_data.get('order_code')}", {"order_id": order_id, "safety_blockers": []})
+        return {"success": True, "message": "Safe test order permanently deleted", "action": "permanently_deleted"}
     finally:
         db.close()
 

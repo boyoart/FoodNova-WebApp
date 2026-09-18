@@ -1,3 +1,18 @@
+const { execFileSync } = require("node:child_process");
+
+function buildCommit() {
+  if (process.env.EXPO_PUBLIC_BUILD_COMMIT) return process.env.EXPO_PUBLIC_BUILD_COMMIT;
+  try {
+    return execFileSync("git", ["rev-parse", "--short=8", "HEAD"], {
+      cwd: __dirname,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 module.exports = ({ config }) => {
   const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
   return {
@@ -17,7 +32,7 @@ module.exports = ({ config }) => {
     extra: {
       ...config.extra,
       buildIdentity: {
-        commit: process.env.EXPO_PUBLIC_BUILD_COMMIT || "unknown",
+        commit: buildCommit(),
         date: process.env.EXPO_PUBLIC_BUILD_DATE || new Date().toISOString(),
         environment: process.env.EXPO_PUBLIC_BUILD_ENV || process.env.NODE_ENV || "production",
         apiBaseUrl:

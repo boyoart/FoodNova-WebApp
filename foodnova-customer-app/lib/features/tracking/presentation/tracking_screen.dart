@@ -42,6 +42,8 @@ final riderLocationProvider =
 String customerLiveTrackingRoute(int orderId) =>
     '/orders/$orderId/live-tracking';
 
+String customerOrderDetailsRoute(int orderId) => '/orders/$orderId';
+
 class TrackingScreen extends ConsumerStatefulWidget {
   const TrackingScreen(
       {required this.orderId, this.liveOnly = false, super.key});
@@ -245,7 +247,7 @@ class _TrackingScreenState extends ConsumerState<TrackingScreen>
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Order details'),
+        title: const Text('Order Details', key: Key('order-details-title')),
       ),
       bottomNavigationBar: state.maybeWhen(
         data: (order) => order.isPickup || order.isFulfillmentComplete
@@ -327,10 +329,10 @@ class _LiveTrackingView extends StatelessWidget {
       ),
       data: (data) {
         if (data == null || !data.hasRiderCoordinates) {
-          return _LiveTrackingUnavailable(
+          return _WaitingTrackingContext(
+            order: order,
+            location: data,
             onRetry: onRetry,
-            message:
-                'Waiting for the rider’s latest location. Your delivery is still in progress.',
           );
         }
         final rider = LatLng(data.riderLatitude!, data.riderLongitude!);
@@ -399,8 +401,8 @@ class _LiveTrackingView extends StatelessWidget {
               ),
             ),
             DraggableScrollableSheet(
-              initialChildSize: .22,
-              minChildSize: .18,
+              initialChildSize: .32,
+              minChildSize: .28,
               maxChildSize: .42,
               builder: (context, controller) => _TrackingBottomSheet(
                 controller: controller,
@@ -419,6 +421,124 @@ class _LiveTrackingView extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _WaitingTrackingContext extends StatelessWidget {
+  const _WaitingTrackingContext({
+    required this.order,
+    required this.location,
+    required this.onRetry,
+  });
+
+  final OrderSummary order;
+  final RiderLocation? location;
+  final VoidCallback onRetry;
+
+  String get _message {
+    final state = location?.locationState;
+    if (state == 'waiting_for_assignment' || !order.hasAssignedRider) {
+      return 'Waiting for rider assignment';
+    }
+    if (state == 'temporarily_unavailable') {
+      return 'Location temporarily unavailable';
+    }
+    return 'Waiting for rider location';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final customer = location?.hasCustomerCoordinates == true
+        ? LatLng(location!.customerLatitude!, location!.customerLongitude!)
+        : null;
+    final pickup = RiderLocation.validCoordinates(
+      location?.pickupLatitude,
+      location?.pickupLongitude,
+    )
+        ? LatLng(location!.pickupLatitude!, location!.pickupLongitude!)
+        : null;
+    final center = customer ?? pickup;
+    return Column(
+      children: [
+        Expanded(
+          flex: 2,
+          child: center == null
+              ? ColoredBox(
+                  color: scheme.surfaceContainerHighest,
+                  child: const Center(
+                    child: Icon(Icons.map_outlined, size: 46),
+                  ),
+                )
+              : GoogleMap(
+                  key: const Key('live-delivery-context-map'),
+                  initialCameraPosition:
+                      CameraPosition(target: center, zoom: 13),
+                  zoomControlsEnabled: false,
+                  myLocationButtonEnabled: false,
+                  markers: {
+                    if (pickup != null)
+                      Marker(
+                        markerId: const MarkerId('pickup'),
+                        position: pickup,
+                        infoWindow: const InfoWindow(title: 'FoodNova pickup'),
+                      ),
+                    if (customer != null)
+                      Marker(
+                        markerId: const MarkerId('customer'),
+                        position: customer,
+                        infoWindow: const InfoWindow(title: 'Delivery address'),
+                      ),
+                  },
+                ),
+        ),
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+            decoration: BoxDecoration(
+              color: scheme.surface,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .12),
+                  blurRadius: 20,
+                  offset: const Offset(0, -8),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Rider is on the way',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _message,
+                  key: const Key('live-location-state'),
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Refresh location'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2952,6 +3072,7 @@ class _BottomActionBar extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.icon(
+                  key: const Key('track-live-button'),
                   onPressed: onTrackOrder,
                   icon: const Icon(Icons.near_me_rounded),
                   label: const FittedBox(child: Text('Track Live')),

@@ -35,6 +35,8 @@ class RiderLocation {
     required this.deliveryStatus,
     required this.trackingVisible,
     required this.trackingAvailable,
+    required this.locationState,
+    required this.locationReason,
     required this.riderName,
     required this.riderPhone,
     required this.riderPhotoUrl,
@@ -60,6 +62,8 @@ class RiderLocation {
   final String deliveryStatus;
   final bool trackingVisible;
   final bool trackingAvailable;
+  final String locationState;
+  final String locationReason;
   final String riderName;
   final String riderPhone;
   final String riderPhotoUrl;
@@ -153,6 +157,9 @@ class RiderLocation {
           )),
       trackingAvailable: json['tracking_available'] == true ||
           json['trackingAvailable'] == true,
+      locationState: '${json['location_state'] ?? json['locationState'] ?? ''}',
+      locationReason:
+          '${json['location_reason'] ?? json['locationReason'] ?? ''}',
       riderName: '${rider['name'] ?? ''}',
       riderPhone: '${rider['phone'] ?? ''}',
       riderPhotoUrl:
@@ -424,15 +431,24 @@ class OrdersRepository {
     final body = response.data is Map
         ? Map<String, dynamic>.from(response.data)
         : <String, dynamic>{};
-    developer.log('TRACK_RIDER_API_RESPONSE order=$orderId body=$body');
+    developer.log(
+      'TRACK_RIDER_API_RESPONSE order=$orderId '
+      'status=${body['success'] == true ? 'ok' : 'unexpected'}',
+    );
     final data = body['tracking'] is Map
         ? Map<String, dynamic>.from(body['tracking'])
         : body['data'] is Map
             ? Map<String, dynamic>.from(body['data'])
             : body;
     if (data.isEmpty) return null;
-    developer.log('TRACKING_PAYLOAD_PATH order=$orderId data=$data');
-    return RiderLocation.fromJson(data);
+    final parsed = RiderLocation.fromJson(data);
+    developer.log(
+      'TRACKING_STATE order=$orderId state=${parsed.locationState} '
+      'reason=${parsed.locationReason} assigned=${parsed.riderName.isNotEmpty} '
+      'riderCoordinates=${parsed.hasRiderCoordinates} '
+      'customerCoordinates=${parsed.hasCustomerCoordinates} stale=${parsed.isStale}',
+    );
+    return parsed;
   }
 
   Future<OrderSummary> requestCancellation({

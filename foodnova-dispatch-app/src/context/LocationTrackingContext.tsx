@@ -48,7 +48,12 @@ export function LocationTrackingProvider({ children }: { children: React.ReactNo
             timestamp: new Date(location.timestamp).toISOString(),
           };
           setLatestCoords(coords);
-          RiderApi.locationPing(coords).catch(() => {});
+          RiderApi.locationPing(coords).catch((error) => {
+            console.log("DISPATCH_LOCATION_HEARTBEAT_FAILED", {
+              errorType: error instanceof Error ? error.name : "unknown",
+              message: error instanceof Error ? error.message : "Location update failed",
+            });
+          });
         }
       );
       const sendStationaryHeartbeat = async () => {
@@ -65,6 +70,12 @@ export function LocationTrackingProvider({ children }: { children: React.ReactNo
         setLatestCoords(coords);
         await RiderApi.locationPing(coords);
       };
+      await sendStationaryHeartbeat().catch((error) => {
+        console.log("DISPATCH_LOCATION_HEARTBEAT_FAILED", {
+          errorType: error instanceof Error ? error.name : "unknown",
+          message: error instanceof Error ? error.message : "Location update failed",
+        });
+      });
       heartbeat = setInterval(() => {
         sendStationaryHeartbeat().catch((error) => {
           console.log("DISPATCH_LOCATION_HEARTBEAT_FAILED", {

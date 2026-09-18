@@ -157,8 +157,14 @@ void main() {
       'screen': 'order_tracking',
       'order_id': 25,
     });
-    expect(order.route, '/orders/25/live-tracking');
+    expect(order.route, '/orders/25');
+    final explicitLive = resolveCustomerNotification({
+      'screen': 'live_tracking',
+      'order_id': 25,
+    });
+    expect(explicitLive.route, '/orders/25/live-tracking');
     expect(liveTrackingRoute(25), '/orders/25/live-tracking');
+    expect(customerOrderDetailsRoute(25), '/orders/25');
   });
 
   test('track live is shown only for active delivery orders with a rider', () {

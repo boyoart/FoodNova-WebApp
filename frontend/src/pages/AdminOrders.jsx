@@ -42,6 +42,7 @@ export default function AdminOrders() {
   const [pickupPin, setPickupPin] = useState('')
   const [confirmingPickup, setConfirmingPickup] = useState(false)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
+  const [archivingOrderId, setArchivingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
   const [manualOrderOpen, setManualOrderOpen] = useState(false)
   const adminPermissions = admin?.admin_role === 'super_admin' ? ['*'] : (admin?.permissions || [])
@@ -65,7 +66,9 @@ export default function AdminOrders() {
     try {
       setLoading(true)
       setLoadError('')
-      const params = filter !== 'all' ? { status: filter } : {}
+      const params = filter === 'archived'
+        ? { include_deleted: true }
+        : filter !== 'all' ? { status: filter } : {}
       const res = await adminAPI.getOrders(params)
       setOrders(normalizeOrderResponse(res))
     } catch (error) {
@@ -148,7 +151,7 @@ export default function AdminOrders() {
 
   const handleDeleteOrder = async (order) => {
     const publicNumber = order.order_number || order.order_code || order.id
-    if (!window.confirm(`Delete Order #${publicNumber}?\n\nThis action cannot be undone.`)) return
+    if (!window.confirm(`Permanently delete safe test Order #${publicNumber}?\n\nOnly orders without payment or delivery history can be deleted. This action cannot be undone.`)) return
     try {
       setDeletingOrderId(order.id)
       await adminAPI.deleteOrder(order.id)
@@ -159,6 +162,35 @@ export default function AdminOrders() {
       toast.error(error?.response?.data?.detail || 'Failed to delete order')
     } finally {
       setDeletingOrderId(null)
+    }
+  }
+
+  const handleArchiveOrder = async (order) => {
+    const publicNumber = order.order_number || order.order_code || order.id
+    if (!window.confirm(`Archive Order #${publicNumber}?`)) return
+    try {
+      setArchivingOrderId(order.id)
+      await adminAPI.archiveOrder(order.id)
+      setOrders((current) => current.filter((item) => item.id !== order.id))
+      if (selectedOrder?.id === order.id) handleCloseOrder()
+      toast.success(`Order #${publicNumber} archived`)
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to archive order')
+    } finally {
+      setArchivingOrderId(null)
+    }
+  }
+
+  const handleRestoreOrder = async (order) => {
+    try {
+      setArchivingOrderId(order.id)
+      await adminAPI.restoreOrder(order.id)
+      setOrders((current) => current.filter((item) => item.id !== order.id))
+      toast.success(`Order #${order.order_number || order.order_code || order.id} restored`)
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Failed to restore order')
+    } finally {
+      setArchivingOrderId(null)
     }
   }
 
@@ -297,6 +329,7 @@ export default function AdminOrders() {
           'ready_for_pickup',
           'out_for_delivery',
           'delivered',
+          'archived',
         ].map(status => (
           <button
             key={status}
@@ -385,14 +418,17 @@ export default function AdminOrders() {
                       >
                         Details
                       </button>
-                      <button
-                        type="button"
-                        className="btn-delete"
-                        disabled={deletingOrderId === order.id}
-                        onClick={() => handleDeleteOrder(order)}
-                      >
-                        {deletingOrderId === order.id ? 'Deleting...' : 'Delete Order'}
-                      </button>
+                      {filter === 'archived' ? (
+                        <button type="button" className="btn-view" disabled={archivingOrderId === order.id} onClick={() => handleRestoreOrder(order)}>
+                          {archivingOrderId === order.id ? 'Restoring...' : 'Restore'}
+                        </button>
+                      ) : (
+                        <>
+                          <button type="button" className="btn-view" disabled={archivingOrderId === order.id} onClick={() => handleArchiveOrder(order)}>
+                            {archivingOrderId === order.id ? 'Archiving...' : 'Archive'}
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 )

@@ -72,7 +72,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       if (orderId == null || '$orderId'.trim().isEmpty) {
         throw Exception('Order created, but tracking reference was missing.');
       }
-      context.pushReplacement('/orders/$orderId/live-tracking');
+      context.pushReplacement('/orders/$orderId');
     } catch (error) {
       final message = error.toString().replaceFirst('Exception: ', '');
       if (!mounted) return;

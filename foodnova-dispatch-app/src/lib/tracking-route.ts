@@ -47,3 +47,17 @@ export function parseOrderTrackingRoute(payload: unknown): OrderTrackingRoute {
     status: raw.route_status == null ? null : String(raw.route_status),
   };
 }
+
+export function cleanDisplayAddress(value: unknown): string {
+  const parts = String(value || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const seen = new Set<string>();
+  return parts.filter((part) => {
+    const key = part.toLocaleLowerCase().replace(/[.\s]+$/g, "");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).join(", ");
+}

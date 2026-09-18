@@ -38,7 +38,12 @@ NotificationDestination resolveCustomerNotification(
           type.contains('delivery') ||
           type.contains('tracking'));
   if (concernsOrder) {
-    return NotificationDestination('/orders/$orderId/live-tracking',
+    final explicitLiveTracking = explicit.contains('live_tracking') ||
+        explicit.contains('live-tracking');
+    return NotificationDestination(
+        explicitLiveTracking
+            ? '/orders/$orderId/live-tracking'
+            : '/orders/$orderId',
         notificationId: notificationId);
   }
   return NotificationDestination('/notifications',

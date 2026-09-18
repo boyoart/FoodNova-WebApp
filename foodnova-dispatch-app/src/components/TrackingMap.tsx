@@ -4,7 +4,7 @@ import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import MapView, { AnimatedRegion, Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 
-import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
+import { colors, fonts, spacing, type } from "@/src/theme/tokens";
 import type { LatLng, TrackingMapProps } from "./TrackingMap.types";
 
 const LAGOS: LatLng = { latitude: 6.5244, longitude: 3.3792 };
@@ -18,16 +18,6 @@ function mapsKey(): string | null {
     cfg?.ios?.config?.googleMapsApiKey ||
     null
   );
-}
-
-function routeEndpoints(status: string | null | undefined, rider?: LatLng | null, pickup?: LatLng | null, customer?: LatLng | null) {
-  const s = String(status || "").toLowerCase();
-  const hasPickup = ["picked_up", "picked", "collected", "en_route", "enroute", "in_transit", "out_for_delivery", "arrived", "delivered"].includes(s);
-  if (rider && customer && hasPickup) return [rider, customer];
-  if (rider && pickup) return [rider, pickup];
-  if (rider && customer) return [rider, customer];
-  if (pickup && customer) return [pickup, customer];
-  return [rider, pickup, customer].filter(Boolean) as LatLng[];
 }
 
 function toRad(value: number) {
@@ -50,10 +40,6 @@ function distanceMeters(a: LatLng, b: LatLng): number {
   return 2 * radius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-function pathDistance(points: LatLng[]): number {
-  return points.slice(1).reduce((sum, point, index) => sum + distanceMeters(points[index], point), 0);
-}
-
 function bearing(from: LatLng, to: LatLng): number {
   const lat1 = toRad(from.latitude);
   const lat2 = toRad(to.latitude);
@@ -61,18 +47,6 @@ function bearing(from: LatLng, to: LatLng): number {
   const y = Math.sin(dLng) * Math.cos(lat2);
   const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
-
-function formatDistance(meters: number) {
-  if (!Number.isFinite(meters)) return "--";
-  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
-  return `${Math.max(0, Math.round(meters))} m`;
-}
-
-function formatEta(minutes: number) {
-  if (!Number.isFinite(minutes)) return "--";
-  if (minutes < 1) return "<1 min";
-  return `${Math.ceil(minutes)} min`;
 }
 
 function vehicleIcon(vehicleType?: string | null): React.ComponentProps<typeof Ionicons>["name"] {
@@ -93,8 +67,6 @@ export function TrackingMap({
   status,
   vehicleType,
   routePoints = [],
-  routeDistanceMeters = null,
-  routeEtaMinutes = null,
   routeStatus,
   style,
 }: TrackingMapProps) {
@@ -115,40 +87,7 @@ export function TrackingMap({
     })
   ).current;
 
-  const endpoints = useMemo(
-    () => routeEndpoints(status, rider, pickup, customer),
-    [status, rider, pickup, customer]
-  );
   const displayPath = useMemo(() => (routePoints.length >= 2 ? routePoints : []), [routePoints]);
-  const destination = endpoints.length >= 2 ? endpoints[endpoints.length - 1] : null;
-  const remainingMeters = useMemo(() => {
-    if (!rider || !destination || displayPath.length < 2 || routeDistanceMeters == null) return null;
-    if (displayPath.length >= 2) {
-      let nearestIndex = 0;
-      let nearestDistance = Number.POSITIVE_INFINITY;
-      displayPath.forEach((point, index) => {
-        const distance = distanceMeters(rider, point);
-        if (distance < nearestDistance) {
-          nearestDistance = distance;
-          nearestIndex = index;
-        }
-      });
-      return nearestDistance + pathDistance(displayPath.slice(nearestIndex));
-    }
-    return null;
-  }, [destination, displayPath, rider, routeDistanceMeters]);
-  const totalMeters = useMemo(() => {
-    if (!destination) return null;
-    return routeDistanceMeters;
-  }, [destination, routeDistanceMeters]);
-  const progress = useMemo(() => {
-    if (!remainingMeters || !totalMeters || totalMeters <= 0) return 0;
-    return Math.max(0, Math.min(1, 1 - remainingMeters / totalMeters));
-  }, [remainingMeters, totalMeters]);
-  const etaMinutes = useMemo(() => {
-    if (!remainingMeters || routeEtaMinutes == null || !totalMeters) return null;
-    return routeEtaMinutes * (remainingMeters / totalMeters);
-  }, [remainingMeters, routeEtaMinutes, totalMeters]);
   const fitPoints: LatLng[] = useMemo(
     () => (displayPath.length >= 2 ? displayPath : ([rider, pickup, customer].filter(Boolean) as LatLng[])),
     [displayPath, rider, pickup, customer]
@@ -278,21 +217,6 @@ export function TrackingMap({
           <Ionicons name="locate" size={22} color={colors.brandPrimary} />
         </TouchableOpacity>
       )}
-      <View style={styles.metricsCard} pointerEvents="none">
-        {displayPath.length < 2 && <Text style={styles.routeUnavailable}>Driving route temporarily unavailable</Text>}
-        <View style={styles.metricRow}>
-          <Text style={styles.metricLabel}>ETA</Text>
-          <Text style={styles.metricValue}>{etaMinutes == null ? "--" : formatEta(etaMinutes)}</Text>
-        </View>
-        <View style={styles.metricDivider} />
-        <View style={styles.metricRow}>
-          <Text style={styles.metricLabel}>Remaining</Text>
-          <Text style={styles.metricValue}>{remainingMeters == null ? "--" : formatDistance(remainingMeters)}</Text>
-        </View>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
-        </View>
-      </View>
     </View>
   );
 }
@@ -343,24 +267,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     elevation: 5,
   },
-  metricsCard: {
-    position: "absolute",
-    left: spacing.lg,
-    right: spacing.lg,
-    bottom: spacing.lg,
-    backgroundColor: "rgba(255,255,255,0.94)",
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    shadowColor: "#000",
-    shadowOpacity: 0.14,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  metricRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  metricLabel: { fontFamily: fonts.text, fontSize: type.sm, color: colors.muted, fontWeight: "700" },
-  metricValue: { fontFamily: fonts.display, fontSize: type.base, color: colors.onSurface, fontWeight: "700" },
-  routeUnavailable: { fontFamily: fonts.text, fontSize: type.sm, color: colors.error, textAlign: "center", marginBottom: spacing.sm },
-  metricDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.sm },
-  progressTrack: { height: 5, backgroundColor: colors.surfaceTertiary, borderRadius: radius.pill, overflow: "hidden", marginTop: spacing.sm },
-  progressFill: { height: 5, backgroundColor: colors.brandPrimary, borderRadius: radius.pill },
 });

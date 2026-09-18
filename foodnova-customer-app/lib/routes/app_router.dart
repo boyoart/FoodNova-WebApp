@@ -18,6 +18,7 @@ import '../features/products/presentation/categories_screen.dart';
 import '../features/products/presentation/product_detail_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
 import '../features/tracking/presentation/live_tracking_screen.dart';
+import '../features/tracking/presentation/tracking_screen.dart';
 import '../core/state/session_controller.dart';
 
 final _routerRefreshProvider = Provider<_RouterRefresh>((ref) {
@@ -52,7 +53,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           path: '/onboarding', builder: (_, __) => const OnboardingScreen()),
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (_, __) => const SignUpScreen()),
-        GoRoute(path: '/forgot-password', builder: (_, state) => ForgotPasswordScreen(token: state.uri.queryParameters['token'] ?? '')),
+      GoRoute(
+          path: '/forgot-password',
+          builder: (_, state) => ForgotPasswordScreen(
+              token: state.uri.queryParameters['token'] ?? '')),
       GoRoute(path: '/otp', builder: (_, __) => const OtpScreen()),
       GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
       GoRoute(path: '/categories', redirect: (_, __) => '/discover'),
@@ -73,7 +77,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/orders', builder: (_, __) => const OrdersScreen()),
       GoRoute(
         path: '/tracking/:id',
-        builder: (_, state) => LiveTrackingScreen(
+        redirect: (_, state) => '/orders/${state.pathParameters['id'] ?? ''}',
+      ),
+      GoRoute(
+        path: '/orders/:id',
+        builder: (_, state) => TrackingScreen(
             orderId: int.tryParse(state.pathParameters['id'] ?? '') ?? 0),
       ),
       GoRoute(

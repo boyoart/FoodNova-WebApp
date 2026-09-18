@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseOrderTrackingRoute } from "./tracking-route.ts";
+import { cleanDisplayAddress, parseOrderTrackingRoute } from "./tracking-route.ts";
 
 test("parses the authorized order route contract", () => {
   const route = parseOrderTrackingRoute({
@@ -21,6 +21,13 @@ test("parses the authorized order route contract", () => {
   assert.equal(route.distanceMeters, 1840);
   assert.equal(route.etaMinutes, 7);
   assert.equal(route.points.length, 2);
+});
+
+test("removes duplicated address segments without truncating the address", () => {
+  assert.equal(
+    cleanDisplayAddress("45 Silent Pond Crescent, Brampton, Ontario, Canada, 45 Silent Pond Crescent, Brampton, Ontario, Canada"),
+    "45 Silent Pond Crescent, Brampton, Ontario, Canada"
+  );
 });
 
 test("invalid or missing route data degrades to markers-only safely", () => {

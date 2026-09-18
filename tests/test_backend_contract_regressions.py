@@ -62,6 +62,55 @@ def tracking_order(status: str, pin: str = "1604") -> SimpleNamespace:
 
 
 class BackendContractRegressionTests(unittest.TestCase):
+    def test_cross_continent_delivery_is_rejected_by_configured_zone(self):
+        db = MagicMock()
+        zone = SimpleNamespace(
+            zone_name="FoodNova Local Zone",
+            center_latitude=6.5244,
+            center_longitude=3.3792,
+            radius_meters=5000,
+            is_active=True,
+        )
+        with patch.object(main, "get_active_operational_zone", return_value=zone):
+            with self.assertRaises(HTTPException) as context:
+                main.validate_delivery_destination_for_zone(db, "delivery", {
+                    "latitude": 43.7315,
+                    "longitude": -79.7624,
+                })
+        self.assertEqual(context.exception.status_code, 422)
+        self.assertIn("outside the configured", context.exception.detail)
+
+    def test_pickup_bypasses_delivery_zone_validation(self):
+        main.validate_delivery_destination_for_zone(
+            MagicMock(), "pickup", {"latitude": 43.7315, "longitude": -79.7624}
+        )
+
+    def test_unmarked_order_is_protected_from_permanent_delete(self):
+        order = main.DBOrder(
+            id=700,
+            payment_status="pending_payment",
+            delivery_status="",
+            receipt=None,
+            rider_id=None,
+            delivery_worker_id=None,
+        )
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        self.assertIn("not_explicitly_marked_test_order", main.permanent_order_delete_blockers(db, order))
+
+    def test_financial_order_is_protected_from_permanent_delete(self):
+        order = main.DBOrder(
+            id=701,
+            payment_status="payment_confirmed",
+            delivery_status="DELIVERED",
+            receipt=json.dumps({"filename": "receipt.pdf"}),
+        )
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = None
+        blockers = main.permanent_order_delete_blockers(db, order)
+        self.assertIn("financial_history", blockers)
+        self.assertIn("receipt", blockers)
+
     def test_google_route_denial_falls_through_to_osrm(self):
         class Response:
             def __init__(self, payload):

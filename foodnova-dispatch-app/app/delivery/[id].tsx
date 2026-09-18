@@ -23,7 +23,7 @@ import { TrackingMap } from "@/src/components/TrackingMap";
 import { asList, pick } from "@/src/lib/normalize";
 import { deliveryOrderId } from "@/src/lib/order";
 import { getCurrentCoords } from "@/src/lib/location";
-import { parseOrderTrackingRoute, type OrderTrackingRoute } from "@/src/lib/tracking-route";
+import { cleanDisplayAddress, parseOrderTrackingRoute, type OrderTrackingRoute } from "@/src/lib/tracking-route";
 import { useLocationTracking } from "@/src/context/LocationTrackingContext";
 import { colors, fonts, radius, spacing, type } from "@/src/theme/tokens";
 
@@ -153,8 +153,8 @@ export default function DeliveryDetail() {
   );
   const customerName = pick(order, ["customer_name", "delivery_address_snapshot.recipient_name", "recipient_name"], "Customer");
   const customerPhone = pick(order, ["customer_phone", "delivery_address_snapshot.phone", "recipient_phone", "phone"], null);
-  const dropoff = pick(order, ["dropoff_address", "customer_address", "delivery_address"], "Delivery address");
-  const pickupAddr = pick(order, ["pickup_address", "restaurant_address", "vendor_address"], "Pickup location");
+  const dropoff = cleanDisplayAddress(pick(order, ["dropoff_address", "customer_address", "delivery_address"], "Delivery address"));
+  const pickupAddr = cleanDisplayAddress(pick(order, ["pickup_address", "restaurant_address", "vendor_address"], "Pickup location"));
   const isDelivered = String(currentStatus).toLowerCase() === "delivered";
 
   async function advance() {
@@ -300,6 +300,20 @@ export default function DeliveryDetail() {
               <StatusPill status={currentStatus} testID="delivery-status-pill" />
             </View>
 
+            <View style={styles.deliveryMetrics}>
+              {trackingRoute?.points.length && trackingRoute.distanceMeters != null && trackingRoute.etaMinutes != null ? (
+                <>
+                  <Text style={styles.etaValue}>{Math.max(1, Math.ceil(trackingRoute.etaMinutes))} min</Text>
+                  <Text style={styles.remainingValue}>{trackingRoute.distanceMeters >= 1000 ? `${(trackingRoute.distanceMeters / 1000).toFixed(1)} km` : `${Math.round(trackingRoute.distanceMeters)} m`} remaining</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.routeUnavailable}>Route unavailable</Text>
+                  <Text style={styles.remainingValue}>A supported local driving route could not be calculated.</Text>
+                </>
+              )}
+            </View>
+
             {/* Step tracker */}
             <View style={styles.tracker}>
               {FLOW.map((f, i) => {
@@ -413,12 +427,16 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surfaceInverse },
   center: { alignItems: "center", justifyContent: "center", gap: spacing.md },
   muted: { fontFamily: fonts.text, fontSize: type.base, color: colors.muted },
-  mapWrap: { flex: 1, minHeight: 280 },
+  mapWrap: { height: "58%", minHeight: 280 },
   floatBtn: { position: "absolute", width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 6, elevation: 4 },
   panic: { backgroundColor: colors.error },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, maxHeight: "58%" },
+  sheet: { flex: 1, backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg },
   sheetHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   orderNo: { flex: 1, fontFamily: fonts.text, fontSize: type.xl, fontWeight: "700", color: colors.onSurface, marginRight: spacing.sm },
+  deliveryMetrics: { gap: 2 },
+  etaValue: { fontFamily: fonts.display, fontSize: 28, fontWeight: "800", color: colors.onSurface },
+  remainingValue: { fontFamily: fonts.text, fontSize: type.sm, fontWeight: "700", color: colors.muted },
+  routeUnavailable: { fontFamily: fonts.display, fontSize: type.xl, fontWeight: "800", color: colors.error },
   tracker: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm },
   trackStep: { flexDirection: "row", alignItems: "center", flex: 1 },
   trackDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" },
