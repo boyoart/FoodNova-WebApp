@@ -407,6 +407,75 @@ class BackendContractRegressionTests(unittest.TestCase):
         with self.assertRaises(HTTPException):
             main.validate_pickup_status_transition("READY_FOR_PICKUP", "DELIVERED")
 
+    def test_invalid_pickup_transition_returns_clear_admin_error(self):
+        for current, target in (
+            ("payment_confirmed", "processing"),
+            ("preparing", "picked_up"),
+            ("ready_for_pickup", "preparing"),
+            ("picked_up_by_customer", "ready_for_pickup"),
+        ):
+            with self.subTest(current=current, target=target), self.assertRaises(HTTPException) as context:
+                main.validate_pickup_status_transition(current, target)
+            self.assertEqual(context.exception.status_code, 409)
+            self.assertIn(target.upper(), context.exception.detail)
+            self.assertIn(current.upper(), context.exception.detail)
+
+    def test_admin_patch_moves_pickup_through_permitted_statuses(self):
+        order = main.DBOrder(
+            id=70, order_code="FN-070", delivery_method="pickup",
+            payment_status="payment_confirmed", status="payment_confirmed",
+            order_status="payment_confirmed", fulfillment_status="payment_confirmed",
+        )
+        db = self._pickup_confirmation_db(order)
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ), patch.object(main, "generate_delivery_pin", return_value="8471"), patch.object(
+            main, "create_admin_audit_log"
+        ):
+            main.update_order(70, {"order_status": "preparing", "fulfillment_status": "preparing", "status": "preparing"}, MagicMock())
+            self.assertEqual(order.order_status, "preparing")
+            main.update_order(70, {"order_status": "ready_for_pickup", "fulfillment_status": "ready_for_pickup", "status": "ready_for_pickup"}, MagicMock())
+        self.assertEqual(order.order_status, "ready_for_pickup")
+        self.assertEqual(order.delivery_code, "8471")
+
+    def test_admin_patch_rejects_invalid_pickup_transition_without_changing_order(self):
+        order = main.DBOrder(
+            id=71, order_code="FN-071", delivery_method="pickup",
+            payment_status="payment_confirmed", status="payment_confirmed",
+            order_status="payment_confirmed", fulfillment_status="payment_confirmed",
+        )
+        db = self._pickup_confirmation_db(order)
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ):
+            with self.assertRaises(HTTPException) as context:
+                main.update_order(71, {"order_status": "processing", "fulfillment_status": "processing", "status": "processing"}, MagicMock())
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertIn("Invalid pickup transition", context.exception.detail)
+
+    def test_verified_pickup_is_persisted_for_customer_after_reload(self):
+        order = main.DBOrder(
+            id=72, order_code="FN-072", delivery_method="pickup",
+            delivery_code="1604", payment_status="payment_confirmed",
+            order_status="ready_for_pickup", fulfillment_status="ready_for_pickup",
+            status="ready_for_pickup",
+        )
+        db = self._pickup_confirmation_db(order)
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ), patch.object(main, "_create_order_notification"), patch.object(
+            main, "create_admin_audit_log"
+        ):
+            result = main.admin_confirm_customer_pickup(72, {"pin": "1604"}, MagicMock())
+        for field in ("status", "order_status", "fulfillment_status"):
+            self.assertEqual(getattr(order, field), "picked_up_by_customer")
+            self.assertEqual(result["order"][field], "picked_up_by_customer")
+        self.assertIsNotNone(order.delivery_confirmed_at)
+        self.assertIsNotNone(order.delivery_completed_at)
+        customer_view = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(customer_view["order_status"], "picked_up_by_customer")
+        self.assertEqual(customer_view["delivery_pin"], "")
+
     def test_new_pickup_ready_transition_receives_secure_collection_pin(self):
         db = main.SessionLocal()
         try:

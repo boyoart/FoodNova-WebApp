@@ -7,7 +7,16 @@ import { normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
 import { MessageCircle } from 'lucide-react'
 import ManualOrderModal from '../components/ManualOrderModal'
+import {
+  adminOrderStatusOptions,
+  apiErrorMessage,
+  canonicalOrderStatus,
+  isPickupOrder,
+} from '../utils/orderStatusModel'
 import './AdminPages.css'
+
+const orderStatusSelectValue = (order) =>
+  order?.order_status || order?.fulfillment_status || order?.status || 'order_placed'
 
 const PAYMENT_STATUS_OPTIONS = [
   { value: 'pending_payment', label: 'Pending Payment' },
@@ -126,10 +135,14 @@ export default function AdminOrders() {
       const response = await adminAPI.updateFulfillmentStatus(orderId, { order_status: newStatus, fulfillment_status: newStatus })
       const updatedOrder = response.order || response.data
       toast.success('Order status updated')
-      if (selectedOrder?.id === orderId && updatedOrder?.id) setSelectedOrder(updatedOrder)
-      fetchOrders()
+      if (updatedOrder?.id) {
+        setOrders((current) => current.map((order) => order.id === updatedOrder.id ? updatedOrder : order))
+        if (selectedOrder?.id === orderId) setSelectedOrder(updatedOrder)
+      }
     } catch (error) {
-      toast.error('Failed to update order status')
+      toast.error(apiErrorMessage(error, 'Failed to update order status'))
+    } finally {
+      fetchOrders()
     }
   }
 
@@ -235,7 +248,7 @@ export default function AdminOrders() {
       toast.success('Pickup confirmed')
       fetchOrders()
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Could not confirm pickup')
+      toast.error(apiErrorMessage(error, 'Could not confirm pickup'))
     } finally {
       setConfirmingPickup(false)
     }
@@ -427,8 +440,9 @@ export default function AdminOrders() {
                         value={orderStatus}
                         onChange={(e) => handleOrderStatusUpdate(order.id, e.target.value)}
                         className="status-select"
+                        disabled={['picked_up_by_customer', 'cancelled'].includes(canonicalOrderStatus(order)) && isPickupOrder(order)}
                       >
-                        {ORDER_STATUS_OPTIONS.map(opt => (
+                        {adminOrderStatusOptions(order, ORDER_STATUS_OPTIONS).map(opt => (
                           <option key={opt.value} value={opt.value}>
                             {opt.label}
                           </option>
@@ -671,23 +685,12 @@ export default function AdminOrders() {
                 <div className="status-control-group">
                   <label>Order Status:</label>
                   <select
-                    value={selectedOrder.order_status || selectedOrder.fulfillment_status || selectedOrder.status || 'order_placed'}
+                    value={orderStatusSelectValue(selectedOrder)}
+                    disabled={isPickupOrder(selectedOrder) && ['picked_up_by_customer', 'cancelled'].includes(canonicalOrderStatus(selectedOrder))}
                     onChange={(e) => handleOrderStatusUpdate(selectedOrder.id, e.target.value)}
                     className="status-select"
                   >
-                    {(selectedOrder.delivery_method === 'pickup'
-                      ? [
-                          { value: selectedOrder.order_status || 'order_placed', label: (selectedOrder.order_status || 'order_placed').replace(/_/g, ' ') },
-                          ...(selectedOrder.order_status === 'preparing' || selectedOrder.fulfillment_status === 'preparing'
-                            ? [{ value: 'ready_for_pickup', label: 'Ready for Pickup' }]
-                            : selectedOrder.order_status === 'ready_for_pickup' || selectedOrder.order_status === 'picked_up_by_customer'
-                              ? []
-                              : [{ value: 'preparing', label: 'Preparing' }]),
-                          ...(!['picked_up_by_customer', 'cancelled'].includes(selectedOrder.order_status)
-                            ? [{ value: 'cancelled', label: 'Cancelled' }]
-                            : []),
-                        ].filter((option, index, all) => all.findIndex((item) => item.value === option.value) === index)
-                      : ORDER_STATUS_OPTIONS).map(opt => (
+                    {adminOrderStatusOptions(selectedOrder, ORDER_STATUS_OPTIONS).map(opt => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>

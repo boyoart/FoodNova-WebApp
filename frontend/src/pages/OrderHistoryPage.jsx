@@ -9,6 +9,12 @@ import {
   customerVisibleOrderPin,
   pickupOrderReadyForPin,
 } from '../utils/orderPinVisibility'
+import {
+  canonicalOrderStatus,
+  isPickupOrder,
+  orderStatusLabel,
+  pickupTimelineSteps,
+} from '../utils/orderStatusModel'
 import './OrderHistoryPage.css'
 
 export default function OrderHistoryPage() {
@@ -29,6 +35,26 @@ export default function OrderHistoryPage() {
     }
   }, [isAuthenticated])
 
+  // Keep the list and open order current (e.g. after Admin verifies a pickup PIN).
+  useEffect(() => {
+    if (!isAuthenticated) return undefined
+    const refreshSilently = async () => {
+      if (document.visibilityState === 'hidden') return
+      try {
+        const res = await ordersAPI.getCustomerOrders()
+        if (!Array.isArray(res?.data)) return
+        setOrders(res.data)
+        setSelectedOrder((current) => (
+          current ? res.data.find((order) => String(order.id) === String(current.id)) || current : current
+        ))
+      } catch (error) {
+        console.error('Order refresh failed:', error)
+      }
+    }
+    const timer = setInterval(refreshSilently, 20000)
+    return () => clearInterval(timer)
+  }, [isAuthenticated])
+
   const normalizePaymentStatusValue = (order) => {
     const paymentStatus = order?.payment_status || ''
     const status = order?.status || ''
@@ -45,20 +71,7 @@ export default function OrderHistoryPage() {
     return 'pending_payment'
   }
 
-  const normalizeOrderStatusValue = (order) => {
-    const fulfillment = order?.order_status || order?.fulfillment_status || ''
-    const status = order?.status || ''
-
-    if (['order_placed', 'processing', 'ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'].includes(fulfillment)) {
-      return fulfillment
-    }
-
-    if (['processing', 'ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered', 'cancelled'].includes(status)) {
-      return status
-    }
-
-    return 'order_placed'
-  }
+  const normalizeOrderStatusValue = canonicalOrderStatus
 
   const mergeSelectedOrder = (freshOrders) => {
     if (!selectedOrder) return
@@ -114,9 +127,19 @@ export default function OrderHistoryPage() {
     return (order?.items || []).reduce((sum, item) => sum + getItemPrice(item) * getItemQty(item), 0)
   }
 
-  const handleViewOrder = (order) => {
+  const handleViewOrder = async (order) => {
     setSelectedOrder(order)
     setReceiptFile(null)
+    try {
+      const res = await ordersAPI.getById(order.id)
+      const fresh = res?.order || res?.data || res
+      if (fresh?.id) {
+        setSelectedOrder((current) => (current && String(current.id) === String(fresh.id) ? fresh : current))
+        setOrders((prev) => prev.map((item) => String(item.id) === String(fresh.id) ? fresh : item))
+      }
+    } catch (error) {
+      console.error('Order detail refresh failed:', error)
+    }
   }
 
   const handleCloseOrder = () => {
@@ -217,31 +240,14 @@ export default function OrderHistoryPage() {
     }
   }
 
-  const getOrderStatus = (order) => {
-    const status = normalizeOrderStatusValue(order)
-    switch (status) {
-      case 'processing':
-        return 'Processing'
-      case 'ready_for_pickup':
-        return 'Ready for Pickup'
-      case 'picked_up':
-        return 'Picked Up'
-      case 'out_for_delivery':
-        return 'Out for Delivery'
-      case 'delivered':
-        return 'Delivered'
-      case 'cancelled':
-        return 'Cancelled'
-      default:
-        return 'Order Placed'
-    }
-  }
+  const getOrderStatus = (order) => orderStatusLabel(normalizeOrderStatusValue(order))
 
   const getTimelineSteps = (order) => {
-    const isPickup = order.delivery_method === 'pickup'
+    const isPickup = isPickupOrder(order)
     const paymentStatusValue = normalizePaymentStatusValue(order)
     const orderStatusValue = normalizeOrderStatusValue(order)
     const paymentConfirmed = ['payment_confirmed', 'confirmed'].includes(paymentStatusValue)
+    if (isPickup) return pickupTimelineSteps(order, paymentConfirmed)
 
     const baseSteps = [
       { label: 'Order Placed', completed: true },
@@ -249,17 +255,10 @@ export default function OrderHistoryPage() {
       { label: 'Processing', completed: ['processing', 'ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered'].includes(orderStatusValue) },
     ]
 
-    if (isPickup) {
-      baseSteps.push(
-        { label: 'Ready for Pickup', completed: ['ready_for_pickup', 'picked_up'].includes(orderStatusValue) },
-        { label: 'Picked Up', completed: orderStatusValue === 'picked_up' }
-      )
-    } else {
-      baseSteps.push(
-        { label: 'Out for Delivery', completed: ['out_for_delivery', 'delivered'].includes(orderStatusValue) },
-        { label: 'Delivered', completed: orderStatusValue === 'delivered' }
-      )
-    }
+    baseSteps.push(
+      { label: 'Out for Delivery', completed: ['out_for_delivery', 'delivered'].includes(orderStatusValue) },
+      { label: 'Delivered', completed: orderStatusValue === 'delivered' }
+    )
 
     return baseSteps
   }
