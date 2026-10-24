@@ -568,6 +568,8 @@ class Order(Base):
     fulfillment_status = Column(String(80), default="order_placed", index=True)
     delivery_code = Column(String(20), nullable=True)
     delivery_code_created_at = Column(DateTime, nullable=True)
+    pin_failed_attempts = Column(Integer, default=0)
+    pin_locked_until = Column(DateTime, nullable=True)
     delivery_confirmed_at = Column(DateTime, nullable=True)
     rider_id = Column(Integer, nullable=True, index=True)
     rider_name = Column(String(150), default="")

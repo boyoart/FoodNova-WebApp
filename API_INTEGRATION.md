@@ -50,6 +50,24 @@ Rider routes are **un-prefixed** (NOT under `/api`).
 | PATCH | `/delivery/orders/{id}/status` | `{delivery_status,status,note}` |
 | POST | `/delivery/orders/{id}/proof` | `{delivery_code(PIN), photo_url, note}` |
 
+Delivery completion is accepted only for the assigned worker after canonical `ARRIVED`; the PIN is
+verified on the backend, invalidated on success, and never included in Dispatch or Admin order
+responses. Admin status updates and bulk actions cannot mark an order delivered.
+
+Authenticated customer order reads (`GET /orders/my` and `GET /orders/{id}`) return a pickup PIN
+only for a payment-confirmed, ready-for-pickup order, and a delivery PIN only after canonical
+`ARRIVED`. Public `POST /track-order` never returns a PIN. Admin staff verify pickup with
+`POST /admin/orders/{id}/confirm-pickup` and `{pin}`; pickup requires confirmed payment and
+readiness, expires 72 hours after issuance, and can be reissued without exposing it to Admin using
+`POST /admin/orders/{id}/pickup-pin/reissue`. Both PIN flows lock for one hour after six failed
+attempts. The backend's startup schema-compatibility migration adds the failed-attempt and lockout
+columns to existing `orders` tables in environments where startup schema mutations are enabled.
+For Render production, add `orders.pin_failed_attempts` and `orders.pin_locked_until` through the
+reviewed additive migration in `backend/scripts/apply_production_order_schema_migration.py` after
+staging validation and a recent backup. Vercel can deploy the updated customer web UI normally.
+The Customer Flutter Android build version is `0.1.0+15`; produce a fresh standalone APK after
+the Flutter tests/analyze pass.
+
 ## GPS / Safety / Notifications
 | Method | Path | Notes |
 |---|---|---|

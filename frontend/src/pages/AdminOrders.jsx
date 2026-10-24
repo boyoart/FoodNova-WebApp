@@ -22,9 +22,24 @@ const ORDER_STATUS_OPTIONS = [
   { value: 'ready_for_pickup', label: 'Ready for Pickup' },
   { value: 'picked_up', label: 'Picked Up' },
   { value: 'out_for_delivery', label: 'Out for Delivery' },
-  { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
 ]
+
+const pickupPinExpired = (order) => {
+  const createdAt = Date.parse(order?.delivery_code_created_at || '')
+  return !Number.isFinite(createdAt) || Date.now() - createdAt >= 72 * 60 * 60 * 1000
+}
+
+const pickupReadyForVerification = (order) => {
+  const statuses = [order?.status, order?.order_status, order?.fulfillment_status]
+    .map((status) => String(status || '').trim().toLowerCase())
+  const paymentConfirmed = ['payment_confirmed', 'confirmed', 'paid']
+    .includes(String(order?.payment_status || '').trim().toLowerCase())
+  return String(order?.delivery_method || '').trim().toLowerCase() === 'pickup' &&
+    paymentConfirmed &&
+    statuses.includes('ready_for_pickup') &&
+    !statuses.includes('picked_up_by_customer')
+}
 
 export default function AdminOrders() {
   const { isAdmin, admin } = useAuthStore()
@@ -41,6 +56,7 @@ export default function AdminOrders() {
   const [assigningRider, setAssigningRider] = useState(false)
   const [pickupPin, setPickupPin] = useState('')
   const [confirmingPickup, setConfirmingPickup] = useState(false)
+  const [reissuingPickupPin, setReissuingPickupPin] = useState(false)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [archivingOrderId, setArchivingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
@@ -225,6 +241,25 @@ export default function AdminOrders() {
     }
   }
 
+  const handleReissuePickupPin = async () => {
+    try {
+      setReissuingPickupPin(true)
+      const response = await adminAPI.reissuePickupPin(selectedOrder.id)
+      const updated = response.order || response.data
+      if (updated?.id) {
+        setSelectedOrder(updated)
+        setOrders((current) => current.map((order) => order.id === updated.id ? updated : order))
+      }
+      setPickupPin('')
+      toast.success('A new pickup PIN is available to the customer')
+      fetchOrders()
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || 'Could not reissue pickup PIN')
+    } finally {
+      setReissuingPickupPin(false)
+    }
+  }
+
   const loadPaymentAudit = async (orderId) => {
     try {
       const response = await adminAPI.getOrderPaymentAudit(orderId)
@@ -359,7 +394,6 @@ export default function AdminOrders() {
                 <th>Amount</th>
                 <th>Payment</th>
                 <th>Status</th>
-                <th>Code</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -367,7 +401,6 @@ export default function AdminOrders() {
               {orders.map(order => {
                 const paymentStatus = order.payment_status || order.status || 'pending_payment'
                 const orderStatus = order.order_status || order.fulfillment_status || order.status || 'order_placed'
-                const deliveryCode = order.delivery_code
 
                 return (
                   <tr key={order.id}>
@@ -401,15 +434,6 @@ export default function AdminOrders() {
                           </option>
                         ))}
                       </select>
-                    </td>
-                    <td>
-                      {deliveryCode ? (
-                        <span className="delivery-code-badge">{deliveryCode}</span>
-                      ) : order.delivery_method === 'delivery' && orderStatus === 'out_for_delivery' ? (
-                        <span className="code-generating">Generating...</span>
-                      ) : (
-                        <span className="code-none">-</span>
-                      )}
                     </td>
                     <td>
                       <button
@@ -672,9 +696,9 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              {selectedOrder.delivery_method === 'pickup' && selectedOrder.order_status === 'ready_for_pickup' && (
+              {pickupReadyForVerification(selectedOrder) && (
                 <div className="admin-order-section">
-                  <h4>Confirm Customer Pickup</h4>
+                  <h4>Verify Pickup PIN</h4>
                   <p className="muted">Enter the PIN shown in the customer app. This permanently marks the order Picked Up by Customer.</p>
                   <div className="status-control-group">
                     <label htmlFor="pickup-pin">Pickup PIN:</label>
@@ -690,34 +714,10 @@ export default function AdminOrders() {
                       {confirmingPickup ? 'Confirming...' : 'Confirm Pickup with PIN'}
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* Delivery Code */}
-              {selectedOrder.delivery_method === 'delivery' && (selectedOrder.order_status === 'out_for_delivery' || selectedOrder.fulfillment_status === 'out_for_delivery') && (
-                <div className="admin-order-section">
-                  <h4>🔐 Delivery Confirmation Code</h4>
-                  {selectedOrder.delivery_code ? (
-                    <>
-                      <div className="delivery-code-display">
-                        <div className="delivery-code-box">
-                          {selectedOrder.delivery_code}
-                        </div>
-                      </div>
-                      <p className="delivery-code-info">
-                        ✓ Code generated on {selectedOrder.delivery_code_created_at ? new Date(selectedOrder.delivery_code_created_at).toLocaleString() : 'N/A'}
-                      </p>
-                      <p className="delivery-code-instruction">
-                        📌 Instructions: Give this code to the dispatcher/rider. The customer will enter it in the app to confirm delivery.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="delivery-code-note">Code will be generated when order is marked "Out for Delivery"</p>
-                  )}
-                  {selectedOrder.delivery_confirmed_at && (
-                    <div className="delivery-confirmed-section">
-                      <p className="confirmed-message">✓ Delivery confirmed by customer on {new Date(selectedOrder.delivery_confirmed_at).toLocaleString()}</p>
-                    </div>
+                  {pickupPinExpired(selectedOrder) && (
+                    <button type="button" className="btn-view" disabled={reissuingPickupPin} onClick={handleReissuePickupPin}>
+                      {reissuingPickupPin ? 'Reissuing...' : 'Reissue expired Pickup PIN'}
+                    </button>
                   )}
                 </div>
               )}

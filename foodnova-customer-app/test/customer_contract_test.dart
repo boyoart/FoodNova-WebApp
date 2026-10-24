@@ -302,6 +302,63 @@ void main() {
     expect(find.text('Mon-Sat 9-5'), findsOneWidget);
   });
 
+  testWidgets('pickup PIN stays hidden before confirmed payment',
+      (tester) async {
+    final order = OrderSummary.fromJson({
+      'id': 61,
+      'delivery_method': 'pickup',
+      'payment_status': 'pending_payment',
+      'order_status': 'ready_for_pickup',
+      'pickup_pin': '8471',
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: buildPickupFulfillmentCardForTest(order),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Pickup PIN'), findsNothing);
+    expect(order.canRevealPickupPin, isFalse);
+  });
+
+  test('pickup PIN model hides expired codes', () {
+    final order = OrderSummary.fromJson({
+      'id': 64,
+      'delivery_method': 'pickup',
+      'payment_status': 'payment_confirmed',
+      'order_status': 'ready_for_pickup',
+      'pickup_pin': '8471',
+      'delivery_code_created_at': '2020-01-01T00:00:00Z',
+    });
+    expect(order.canRevealPickupPin, isFalse);
+  });
+
+  test('delivery PIN model requires canonical arrival and confirmed payment',
+      () {
+    final arrived = OrderSummary.fromJson({
+      'id': 62,
+      'delivery_method': 'delivery',
+      'payment_status': 'payment_confirmed',
+      'dispatch_status': 'ARRIVED',
+      'delivery_pin': '1604',
+    });
+    expect(arrived.canRevealDeliveryPin, isTrue);
+
+    final inTransit = OrderSummary.fromJson({
+      'id': 63,
+      'delivery_method': 'delivery',
+      'payment_status': 'payment_confirmed',
+      'dispatch_status': 'IN_TRANSIT',
+      'delivery_pin': '1604',
+    });
+    expect(inTransit.canRevealDeliveryPin, isFalse);
+  });
+
   testWidgets('completed pickup hides obsolete collection details', (
     tester,
   ) async {

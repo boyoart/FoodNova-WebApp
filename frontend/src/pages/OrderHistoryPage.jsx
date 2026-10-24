@@ -5,6 +5,10 @@ import { ordersAPI, notificationsAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Package, Clock, CheckCircle, AlertCircle, RotateCw, MessageCircle } from 'lucide-react'
 import { buildWhatsAppLink, normalizePhoneForWhatsApp } from '../utils/contactUtils'
+import {
+  customerVisibleOrderPin,
+  pickupOrderReadyForPin,
+} from '../utils/orderPinVisibility'
 import './OrderHistoryPage.css'
 
 export default function OrderHistoryPage() {
@@ -14,8 +18,6 @@ export default function OrderHistoryPage() {
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [receiptFile, setReceiptFile] = useState(null)
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
-  const [deliveryCode, setDeliveryCode] = useState('')
-  const [confirmingDelivery, setConfirmingDelivery] = useState(false)
   const [refreshingOrder, setRefreshingOrder] = useState(false)
   const [loadError, setLoadError] = useState('')
 
@@ -120,7 +122,6 @@ export default function OrderHistoryPage() {
   const handleCloseOrder = () => {
     setSelectedOrder(null)
     setReceiptFile(null)
-    setDeliveryCode('')
   }
 
 
@@ -170,29 +171,6 @@ export default function OrderHistoryPage() {
     const orderCode = order?.order_code || (order?.id ? `FN-${order.id}` : 'N/A')
     const message = `Hello, this is regarding my FoodNova order ${orderCode}.`
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
-  }
-
-  const handleDeliveryConfirmation = async (e) => {
-    e.preventDefault()
-    if (!deliveryCode.trim()) {
-      toast.error('Please enter the delivery confirmation code')
-      return
-    }
-
-    try {
-      setConfirmingDelivery(true)
-      const response = await ordersAPI.confirmDelivery(selectedOrder.id, deliveryCode)
-      const updatedOrder = response?.order || response?.data || response
-      toast.success('Delivery confirmed successfully!')
-      await fetchOrders()
-      if (updatedOrder?.id) setSelectedOrder(updatedOrder)
-      setDeliveryCode('')
-    } catch (error) {
-      console.error('Delivery confirmation error:', error)
-      toast.error(error.response?.data?.detail || error.message || 'Failed to confirm delivery')
-    } finally {
-      setConfirmingDelivery(false)
-    }
   }
 
   const handleFileChange = (e) => setReceiptFile(e.target.files?.[0] || null)
@@ -411,6 +389,27 @@ export default function OrderHistoryPage() {
                 </div>
               </div>
 
+              {customerVisibleOrderPin(selectedOrder) && (
+                <div className="delivery-confirmation-section customer-pin-section">
+                  <h4>{selectedOrder.delivery_method === 'pickup' ? 'Pickup PIN' : 'Delivery PIN'}</h4>
+                  <p className="confirmation-instruction">
+                    {selectedOrder.delivery_method === 'pickup'
+                      ? 'Show this PIN to FoodNova staff when collecting your ready order.'
+                      : 'Your rider has arrived. Share this PIN only after receiving your order.'}
+                  </p>
+                  <div className="customer-pin-display" aria-label={`${selectedOrder.delivery_method === 'pickup' ? 'Pickup' : 'Delivery'} PIN`}>
+                    {customerVisibleOrderPin(selectedOrder).split('').join(' ')}
+                  </div>
+                </div>
+              )}
+              {pickupOrderReadyForPin(selectedOrder) && !customerVisibleOrderPin(selectedOrder) && (
+                <div className="delivery-confirmation-section customer-pin-section">
+                  <p className="confirmation-instruction">
+                    Your pickup PIN has expired or is unavailable. Contact FoodNova support for a replacement.
+                  </p>
+                </div>
+              )}
+
               <div className="timeline-section">
                 <h4>Order Tracking</h4>
                 <div className="timeline">
@@ -473,7 +472,7 @@ export default function OrderHistoryPage() {
                     <p className="delivery-fee-notice">Delivery fee is paid directly to the rider after delivery.</p>
                   </div>
                 ) : (
-                  <p>✓ You selected pickup. We will contact you when your order is ready for pickup.</p>
+                  <p>✓ You selected pickup. Check your order status and Pickup PIN here when your order is ready.</p>
                 )}
               </div>
 
@@ -483,21 +482,6 @@ export default function OrderHistoryPage() {
                   <p style={{ margin: '8px 0', color: '#333' }}>
                     {selectedOrder.service_note || selectedOrder.admin_note}
                   </p>
-                </div>
-              )}
-
-              {selectedOrder.delivery_method === 'delivery' && normalizeOrderStatusValue(selectedOrder) === 'out_for_delivery' && !selectedOrder.delivery_confirmed_at && (
-                <div className="delivery-confirmation-section">
-                  <h4>Confirm Delivery</h4>
-                  <p className="confirmation-instruction">✓ Your order is out for delivery! Enter the confirmation code provided by the rider to confirm delivery.</p>
-                  <form onSubmit={handleDeliveryConfirmation}>
-                    <div className="form-group">
-                      <label>Delivery Confirmation Code</label>
-                      <input type="text" value={deliveryCode} onChange={(e) => setDeliveryCode(e.target.value)} placeholder="Enter 6-digit code" maxLength="6" inputMode="numeric" required disabled={confirmingDelivery} />
-                      <p className="code-format-hint">6-digit numeric code</p>
-                    </div>
-                    <button type="submit" className="btn btn-primary" disabled={confirmingDelivery}>{confirmingDelivery ? 'Confirming...' : 'Confirm Delivery'}</button>
-                  </form>
                 </div>
               )}
 

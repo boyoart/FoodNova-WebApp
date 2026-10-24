@@ -67,6 +67,8 @@ EXPECTED_COLUMNS: tuple[ExpectedColumn, ...] = (
     ExpectedColumn("orders", "manual_idempotency_key", "VARCHAR(120)"),
     ExpectedColumn("orders", "order_source", "VARCHAR(40)", python_default="customer_app"),
     ExpectedColumn("orders", "payment_reference", "VARCHAR(150)", python_default=""),
+    ExpectedColumn("orders", "pin_failed_attempts", "INTEGER", python_default=0),
+    ExpectedColumn("orders", "pin_locked_until", "TIMESTAMP WITHOUT TIME ZONE"),
     ExpectedColumn("orders", "stock_override_reason", "TEXT", python_default=""),
     ExpectedColumn("orders", "subtotal_amount", "FLOAT", python_default=0),
     ExpectedColumn("orders", "tax_amount", "FLOAT", python_default=0),

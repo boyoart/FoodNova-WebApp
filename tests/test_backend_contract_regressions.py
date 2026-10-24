@@ -183,6 +183,26 @@ class BackendContractRegressionTests(unittest.TestCase):
             main.validate_delivery_status_transition("IN_TRANSIT", "PICKED_UP")
         self.assertEqual(context.exception.status_code, 409)
 
+    def test_admin_status_field_cannot_skip_pickup_payment_gate(self):
+        order = main.DBOrder(
+            id=57,
+            delivery_method="pickup",
+            payment_status="pending_payment",
+            status="preparing",
+            order_status="preparing",
+            fulfillment_status="preparing",
+        )
+        db = MagicMock()
+        active_query = MagicMock()
+        db.query.return_value.filter.return_value = active_query
+        active_query.filter.return_value.first.return_value = order
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ):
+            with self.assertRaises(HTTPException) as context:
+                main.update_order(57, {"status": "ready_for_pickup"}, MagicMock())
+        self.assertEqual(context.exception.status_code, 409)
+
     def test_google_directions_polyline_is_decoded(self):
         points = main.decode_google_polyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@")
         self.assertEqual(len(points), 3)
@@ -229,12 +249,36 @@ class BackendContractRegressionTests(unittest.TestCase):
         for status in ("ACCEPTED", "PICKED_UP", "IN_TRANSIT", "DELIVERED"):
             with self.subTest(status=status):
                 data = main.public_tracking_order_to_dict(tracking_order(status))
-                self.assertEqual(data["delivery_pin"], "")
-                self.assertEqual(data["delivery_code"], "")
+                self.assertNotIn("delivery_pin", data)
+                self.assertNotIn("delivery_code", data)
 
         arrived = main.public_tracking_order_to_dict(tracking_order("ARRIVED"))
-        self.assertEqual(arrived["delivery_pin"], "1604")
-        self.assertEqual(arrived["delivery_code"], "1604")
+        self.assertNotIn("delivery_pin", arrived)
+        self.assertNotIn("delivery_code", arrived)
+
+    def test_authenticated_customer_pin_is_only_visible_at_canonical_arrival(self):
+        order = main.DBOrder(
+            id=25,
+            delivery_method="delivery",
+            delivery_code="1604",
+            payment_status="payment_confirmed",
+            order_status="out_for_delivery",
+            fulfillment_status="out_for_delivery",
+            status="out_for_delivery",
+            delivery_status="IN_TRANSIT",
+        )
+        hidden = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(hidden["delivery_pin"], "")
+        order.delivery_status = "ARRIVED"
+        visible = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(visible["delivery_pin"], "1604")
+        admin = main.order_to_dict_for_context(order, context="admin")
+        self.assertEqual(admin["delivery_pin"], "")
+        order.payment_status = "pending_payment"
+        self.assertEqual(
+            main.order_to_dict_for_context(order, context="customer")["delivery_pin"],
+            "",
+        )
 
     def test_notification_contract_includes_navigation_data(self):
         notification = SimpleNamespace(
@@ -277,6 +321,86 @@ class BackendContractRegressionTests(unittest.TestCase):
         self.assertFalse(ready)
         self.assertEqual(reason, "not_delivery")
 
+    def test_dispatch_assignment_rejects_pickup_without_mutating_order(self):
+        pickup = main.DBOrder(id=45, delivery_method="pickup")
+        db = MagicMock()
+        with self.assertRaises(HTTPException) as context:
+            main.apply_dispatch_assignment_to_order(
+                db, pickup, SimpleNamespace(id=9), delivery_status="ACCEPTED"
+            )
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertIsNone(pickup.rider_id)
+        self.assertIsNone(pickup.delivery_worker_id)
+        db.flush.assert_not_called()
+
+    def test_bulk_out_for_delivery_rejects_pickup(self):
+        pickup = main.DBOrder(
+            delivery_method="pickup",
+            status="ready_for_pickup",
+            order_status="ready_for_pickup",
+            fulfillment_status="ready_for_pickup",
+        )
+        with self.assertRaises(HTTPException) as context:
+            main.apply_bulk_order_status(pickup, "out_for_delivery", MagicMock())
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertEqual(pickup.order_status, "ready_for_pickup")
+
+    def test_dispatch_auto_assign_rejects_pickup_before_pin_generation(self):
+        pickup = main.DBOrder(id=46, delivery_method="pickup")
+        db = MagicMock()
+        query = MagicMock()
+        query.filter.return_value.first.return_value = pickup
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "active_order_filter", return_value=query
+        ), patch.object(
+            main, "require_any_permission", return_value={"id": 7, "role": "admin"}
+        ), patch.object(main, "ensure_order_delivery_pin") as ensure_pin, patch.object(
+            main, "classify_and_save_order_delivery"
+        ) as classify:
+            with self.assertRaises(HTTPException) as context:
+                main.admin_dispatch_auto_assign(46, MagicMock())
+        self.assertEqual(context.exception.status_code, 409)
+        ensure_pin.assert_not_called()
+        classify.assert_not_called()
+
+    def test_pickup_rider_assignment_is_rejected_before_rider_lookup(self):
+        pickup = main.DBOrder(id=47, delivery_method="pickup")
+        db = MagicMock()
+        query = MagicMock()
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "active_order_filter", return_value=query
+        ), patch.object(
+            main, "require_any_permission", return_value={"id": 7, "role": "admin"}
+        ):
+            query.filter.return_value.first.return_value = pickup
+            with self.assertRaises(HTTPException) as context:
+                main.assign_rider_to_order(
+                    47, SimpleNamespace(rider_id=9, delivery_note=""),
+                    MagicMock(),
+                )
+        self.assertEqual(context.exception.status_code, 409)
+        db.query.assert_called_once_with(main.DBOrder)
+
+    def test_bulk_pickup_assignment_does_not_require_a_rider(self):
+        pickup = main.DBOrder(id=48, delivery_method="pickup")
+        db = MagicMock()
+        query = MagicMock()
+        query.filter.return_value.all.return_value = [pickup]
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "active_order_filter", return_value=query
+        ), patch.object(
+            main, "require_any_permission", return_value={"id": 7, "role": "admin"}
+        ):
+            result = main.bulk_assign_rider_to_orders(
+                main.BulkAssignRiderPayload(orderIds=[48], rider_id=9),
+                MagicMock(),
+            )
+        self.assertEqual(result["processed"], 0)
+        self.assertEqual(result["failed"], 1)
+        self.assertEqual(result["invalidOrderIds"], [48])
+        self.assertIsNone(result["rider"])
+        db.query.assert_called_once_with(main.DBOrder)
+
     def test_pickup_state_machine_is_separate_from_delivery(self):
         main.validate_pickup_status_transition("ORDER_PLACED", "PREPARING")
         main.validate_pickup_status_transition("PREPARING", "READY_FOR_PICKUP")
@@ -317,6 +441,19 @@ class BackendContractRegressionTests(unittest.TestCase):
         ready = main.order_to_dict_for_context(order, context="customer")
         self.assertEqual(ready["delivery_pin"], "1604")
         self.assertEqual(ready["pickup_pin"], "1604")
+
+    def test_pickup_pin_requires_confirmed_payment(self):
+        order = main.DBOrder(
+            id=441,
+            delivery_method="pickup",
+            delivery_code="1604",
+            order_status="ready_for_pickup",
+            fulfillment_status="ready_for_pickup",
+            payment_status="pending_payment",
+        )
+        data = main.order_to_dict_for_context(order, context="customer")
+        self.assertEqual(data["delivery_pin"], "")
+        self.assertNotIn("pickup_pin", data)
 
     def test_delivery_order_never_exposes_pickup_pin(self):
         order = main.DBOrder(
@@ -453,6 +590,7 @@ class BackendContractRegressionTests(unittest.TestCase):
     def _pickup_confirmation_db(self, order):
         db = MagicMock()
         active_query = MagicMock()
+        active_query.with_for_update.return_value = active_query
         db.query.return_value.filter.return_value = active_query
         active_query.filter.return_value.first.return_value = order
         return db
@@ -470,6 +608,7 @@ class BackendContractRegressionTests(unittest.TestCase):
                 main.admin_confirm_customer_pickup(49, {"pin": "9999"}, MagicMock())
         self.assertEqual(context.exception.status_code, 400)
         self.assertEqual(order.order_status, "ready_for_pickup")
+        self.assertEqual(order.pin_failed_attempts, 1)
 
     def test_correct_admin_pickup_pin_completes_and_invalidates_pin(self):
         order = main.DBOrder(
@@ -495,8 +634,159 @@ class BackendContractRegressionTests(unittest.TestCase):
         self.assertEqual(order.fulfillment_status, "picked_up_by_customer")
         self.assertEqual(order.delivery_code, "")
         self.assertIsNotNone(order.delivery_completed_at)
+        self.assertIsNone(order.rider_id)
         notify.assert_called_once()
         audit.assert_called_once()
+
+    def test_expired_pickup_pin_is_rejected(self):
+        order = main.DBOrder(
+            id=52,
+            delivery_method="pickup",
+            delivery_code="1604",
+            delivery_code_created_at=datetime.utcnow() - main.PICKUP_PIN_TTL - main.timedelta(seconds=1),
+            payment_status="payment_confirmed",
+            order_status="ready_for_pickup",
+        )
+        db = self._pickup_confirmation_db(order)
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ):
+            with self.assertRaises(HTTPException) as context:
+                main.admin_confirm_customer_pickup(52, {"pin": "1604"}, MagicMock())
+        self.assertEqual(context.exception.status_code, 410)
+        self.assertEqual(order.order_status, "ready_for_pickup")
+
+    def test_order_pin_locks_after_six_incorrect_attempts(self):
+        order = main.DBOrder(id=53, delivery_code="1604", pin_failed_attempts=0)
+        db = MagicMock()
+        for attempt in range(1, main.ORDER_PIN_MAX_FAILED_ATTEMPTS + 1):
+            with self.subTest(attempt=attempt), self.assertRaises(HTTPException) as context:
+                main.verify_order_pin(db, order, "9999")
+            self.assertEqual(context.exception.status_code, 429 if attempt == 6 else 400)
+        self.assertEqual(order.pin_failed_attempts, main.ORDER_PIN_MAX_FAILED_ATTEMPTS)
+        self.assertGreater(order.pin_locked_until, datetime.utcnow())
+
+    def test_delivery_completion_requires_arrived_state(self):
+        order = tracking_order("IN_TRANSIT")
+        with self.assertRaises(HTTPException) as context:
+            main._complete_delivery_with_pin(
+                MagicMock(), MagicMock(), {}, SimpleNamespace(), order, "1604"
+            )
+        self.assertEqual(context.exception.status_code, 409)
+        self.assertEqual(order.order_status, "in_transit")
+
+    def test_incorrect_delivery_pin_is_rejected_and_counted(self):
+        order = main.DBOrder(
+            id=58,
+            delivery_method="delivery",
+            delivery_code="1604",
+            payment_status="payment_confirmed",
+            status="out_for_delivery",
+            order_status="out_for_delivery",
+            fulfillment_status="out_for_delivery",
+            delivery_status="ARRIVED",
+        )
+        with self.assertRaises(HTTPException) as context:
+            main._complete_delivery_with_pin(
+                MagicMock(), MagicMock(), {}, SimpleNamespace(), order, "9999"
+            )
+        self.assertEqual(context.exception.status_code, 400)
+        self.assertEqual(order.order_status, "out_for_delivery")
+        self.assertEqual(order.pin_failed_attempts, 1)
+
+    def test_admin_cannot_mark_order_delivered_without_pin(self):
+        with patch.object(main, "require_permission", return_value={"id": 7, "role": "admin"}):
+            with self.assertRaises(HTTPException) as context:
+                main.update_order(54, {"order_status": "delivered"}, MagicMock())
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_admin_cannot_mark_pickup_complete_through_status_field(self):
+        with patch.object(main, "require_permission", return_value={"id": 7, "role": "admin"}):
+            with self.assertRaises(HTTPException) as context:
+                main.update_order(54, {"status": "picked_up_by_customer"}, MagicMock())
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_bulk_admin_cannot_mark_orders_delivered_without_pin(self):
+        with patch.object(main, "require_permission", return_value={"id": 7, "role": "admin"}):
+            with self.assertRaises(HTTPException) as context:
+                main.bulk_update_admin_order_status(
+                    SimpleNamespace(orderIds=[54], status="delivered"), MagicMock()
+                )
+        self.assertEqual(context.exception.status_code, 409)
+
+    def test_pickup_pin_reissue_never_returns_pin_to_admin(self):
+        order = main.DBOrder(
+            id=55,
+            order_code="FN-055",
+            delivery_method="pickup",
+            delivery_code="1604",
+            payment_status="payment_confirmed",
+            order_status="ready_for_pickup",
+        )
+        db = self._pickup_confirmation_db(order)
+        with patch.object(main, "SessionLocal", return_value=db), patch.object(
+            main, "require_permission", return_value={"id": 7, "role": "admin"}
+        ), patch.object(main, "generate_delivery_pin", return_value="8471"), patch.object(
+            main, "create_admin_audit_log"
+        ):
+            result = main.admin_reissue_pickup_pin(55, MagicMock())
+        self.assertEqual(order.delivery_code, "8471")
+        self.assertEqual(result["order"]["delivery_pin"], "")
+        self.assertNotIn("pickup_pin", result["order"])
+
+    def test_delivery_completion_verifies_pin_and_invalidates_without_persisting_plaintext(self):
+        order = main.DBOrder(
+            id=56,
+            order_code="FN-056",
+            delivery_method="delivery",
+            delivery_code="1604",
+            payment_status="payment_confirmed",
+            status="out_for_delivery",
+            order_status="out_for_delivery",
+            fulfillment_status="out_for_delivery",
+            delivery_status="ARRIVED",
+            delivery_worker_id=9,
+            rider_id=9,
+        )
+        worker = SimpleNamespace(
+            id=9,
+            worker_type="rider",
+            full_name="Test Rider",
+            phone="",
+            email="rider@example.com",
+            operational_status="BUSY",
+            completed_deliveries=0,
+            updated_at=None,
+            user_id=10,
+        )
+        db = MagicMock()
+        assignment_query = MagicMock()
+        assignment_query.filter.return_value.order_by.return_value.first.return_value = None
+
+        def query_side_effect(model):
+            if model is main.DBDeliveryAssignmentLog:
+                return assignment_query
+            return MagicMock()
+
+        db.query.side_effect = query_side_effect
+        proof = {"signature_present": False, "note": "Delivered"}
+        with patch.object(main, "_create_order_notification"), patch.object(
+            main, "_create_user_notification"
+        ), patch.object(main, "_create_admin_notifications"), patch.object(
+            main, "socket_emit"
+        ), patch.object(main, "create_admin_audit_log") as audit, patch.object(
+            main, "safe_email_call"
+        ):
+            result = main._complete_delivery_with_pin(
+                db, MagicMock(), {"id": 10}, worker, order, "1604", proof
+            )
+
+        assignment = db.add.call_args.args[0]
+        self.assertEqual(assignment.delivery_code_entered, "verified")
+        self.assertEqual(order.delivery_code, "")
+        self.assertEqual(order.order_status, "delivered")
+        self.assertEqual(result["order_status"], "delivered")
+        self.assertNotIn("1604", repr(audit.call_args))
 
     def test_pickup_pin_cannot_be_reused(self):
         order = main.DBOrder(

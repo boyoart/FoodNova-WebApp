@@ -2338,7 +2338,9 @@ class _PickupFulfillmentCard extends StatelessWidget {
       '${order.raw['order_status'] ?? ''}',
       '${order.raw['fulfillment_status'] ?? ''}',
     }.map((value) => value.trim().toLowerCase());
-    final ready = !collected && statuses.contains('ready_for_pickup');
+    final ready = !collected &&
+        order.paymentConfirmed &&
+        statuses.contains('ready_for_pickup');
     final title = collected
         ? 'Picked up by Customer'
         : ready
@@ -2349,7 +2351,9 @@ class _PickupFulfillmentCard extends StatelessWidget {
     final message = collected
         ? 'Pickup completed successfully.'
         : ready
-            ? 'Give this PIN to the FoodNova Admin when collecting your order.'
+            ? order.canRevealPickupPin
+                ? 'Give this PIN to FoodNova staff when collecting your order.'
+                : 'Your pickup PIN has expired or is unavailable. Contact FoodNova for a replacement.'
             : order.paymentConfirmed
                 ? 'Payment confirmed. FoodNova is preparing your pickup order.'
                 : 'Awaiting payment confirmation';
@@ -2372,7 +2376,7 @@ class _PickupFulfillmentCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (ready && order.deliveryPin.trim().isNotEmpty) ...[
+          if (ready && order.canRevealPickupPin) ...[
             Text('Pickup PIN', style: Theme.of(context).textTheme.labelLarge),
             const SizedBox(height: 6),
             SelectableText(
@@ -2531,7 +2535,7 @@ class _VerificationCard extends StatelessWidget {
                 fontWeight: FontWeight.w900,
               ),
             ),
-            if (order.deliveryPin.trim().isNotEmpty) ...[
+            if (order.canRevealDeliveryPin) ...[
               const SizedBox(height: 14),
               _PinDisplay(pin: order.deliveryPin.trim()),
               const SizedBox(height: 14),

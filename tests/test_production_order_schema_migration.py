@@ -37,7 +37,8 @@ class ProductionOrderSchemaMigrationTests(unittest.TestCase):
                     "customer_rated_at", "customer_rating", "customer_user_id",
                     "delivery_fee", "delivery_service_level", "discount_amount",
                     "manual_discount_reason", "manual_idempotency_key", "order_source",
-                    "payment_reference", "stock_override_reason", "subtotal_amount", "tax_amount",
+                    "payment_reference", "pin_failed_attempts", "pin_locked_until",
+                    "stock_override_reason", "subtotal_amount", "tax_amount",
                 )},
             },
         )
@@ -56,7 +57,7 @@ class ProductionOrderSchemaMigrationTests(unittest.TestCase):
     def test_sql_is_idempotent_and_non_destructive(self):
         module = load_script_module()
         sql = "\n".join(module.iter_sql()).upper()
-        self.assertEqual(sql.count("ADD COLUMN IF NOT EXISTS"), 17)
+        self.assertEqual(sql.count("ADD COLUMN IF NOT EXISTS"), 19)
         self.assertEqual(sql.count("INDEX CONCURRENTLY IF NOT EXISTS"), 5)
         self.assertNotIn("DROP ", sql)
         self.assertNotIn("DELETE ", sql)

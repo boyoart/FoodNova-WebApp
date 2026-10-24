@@ -279,7 +279,6 @@ export const ordersAPI = {
     if (!response.ok) throw { response: { status: response.status, data }, message: data?.detail || "Receipt upload failed" };
     return data;
   },
-  confirmDelivery: async (orderId, code) => (await api.post(`/orders/${orderId}/confirm-delivery`, { delivery_code: code })).data,
 };
 
 export const adminAPI = {
@@ -296,6 +295,7 @@ export const adminAPI = {
   },
   getOrder: async (id) => (await api.get(`/admin/orders/${id}`)).data,
   updateOrder: async (id, payload) => (await api.patch(`/admin/orders/${id}`, payload)).data,
+  reissuePickupPin: async (id) => (await api.post(`/admin/orders/${id}/pickup-pin/reissue`)).data,
   deleteOrder: async (id) => (await api.delete(`/admin/orders/${id}`)).data,
   archiveOrder: async (id) => (await api.post(`/admin/orders/${id}/archive`)).data,
   restoreOrder: async (id) => (await api.post(`/admin/orders/${id}/restore`)).data,

@@ -651,35 +651,30 @@
   margin: 0 0 1rem 0;
 }
 
-.delivery-confirmation-section .form-group,
+.customer-pin-section {
+  text-align: center;
+}
+
+.customer-pin-display {
+  padding: 0.75rem;
+  border: 1px solid rgba(6, 168, 125, 0.3);
+  border-radius: 0.5rem;
+  background: var(--fn-surface);
+  color: var(--fn-heading);
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: 0.45rem;
+}
+
 .payment-pending .form-group {
   margin-bottom: 1rem;
 }
 
-.delivery-confirmation-section label,
 .payment-pending label {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
   color: var(--fn-heading);
-}
-
-.delivery-confirmation-section input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid var(--fn-border);
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  text-align: center;
-  letter-spacing: 0.2rem;
-  font-weight: 700;
-}
-
-.code-format-hint {
-  font-size: 0.85rem;
-  color: var(--fn-muted);
-  margin-top: 0.25rem;
-  margin-bottom: 0;
 }
 
 .delivery-confirmed-banner {

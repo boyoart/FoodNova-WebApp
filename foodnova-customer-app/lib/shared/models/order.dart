@@ -97,6 +97,26 @@ class OrderSummary {
 
   String get deliveryPin =>
       '${_pickup['pin'] ?? raw['pickup_pin'] ?? raw['delivery_pin'] ?? raw['delivery_code'] ?? raw['deliveryCode'] ?? ''}';
+  bool get canRevealPickupPin {
+    final createdAt =
+        DateTime.tryParse('${raw['delivery_code_created_at'] ?? ''}');
+    final expired = createdAt != null &&
+        DateTime.now().difference(createdAt) >= const Duration(hours: 72);
+    return isPickup &&
+        paymentConfirmed &&
+        !isPickedUpByCustomer &&
+        !expired &&
+        canonicalOrderStatuses.contains('READY_FOR_PICKUP') &&
+        deliveryPin.trim().isNotEmpty;
+  }
+
+  bool get canRevealDeliveryPin {
+    return !isPickup &&
+        paymentConfirmed &&
+        riderArrived &&
+        deliveryPin.trim().isNotEmpty;
+  }
+
   String get confirmedAt =>
       '${raw['confirmed_at'] ?? raw['payment_confirmed_at'] ?? ''}';
   String get preparingAt =>

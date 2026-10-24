@@ -796,83 +796,6 @@ tbody tr:hover {
   cursor: pointer;
 }
 
-.delivery-code-badge {
-  background-color: var(--primary);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-weight: 700;
-  font-size: 1rem;
-  display: inline-block;
-}
-
-.code-generating {
-  background-color: var(--warning);
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  font-weight: 600;
-  display: inline-block;
-  animation: pulse 1.5s infinite;
-}
-
-.code-none {
-  color: var(--text-light);
-  font-weight: 600;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
-
-.delivery-code-display {
-  text-align: center;
-  margin: 1rem 0;
-}
-
-.delivery-code-box {
-  background: linear-gradient(135deg, var(--primary), var(--primary-dark, #006b4d));
-  color: white;
-  padding: 2rem;
-  border-radius: 1rem;
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: 0.3rem;
-  font-family: 'Courier New', monospace;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  margin: 1rem 0;
-}
-
-.delivery-code-info {
-  color: var(--success);
-  font-size: 0.9rem;
-  margin: 0.5rem 0;
-}
-
-.delivery-code-instruction {
-  background-color: color-mix(in srgb, var(--warning) 12%, var(--fn-surface));
-  border-left: 4px solid var(--warning);
-  padding: 1rem;
-  border-radius: 0.5rem;
-  color: var(--dark);
-  margin: 1rem 0;
-  font-size: 0.95rem;
-}
-
-.delivery-code-note {
-  background-color: #f0f0f0;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  color: var(--text-light);
-  text-align: center;
-  margin: 1rem 0;
-}
-
 .delivery-confirmed-section {
   background-color: #e8f5e9;
   border: 1px solid #4caf50;
@@ -901,8 +824,7 @@ tbody tr:hover {
 .theme-dark .admin-order-section h4,
 .theme-dark .info-item strong,
 .theme-dark .order-total,
-.theme-dark .status-control-group label,
-.theme-dark .delivery-code-instruction {
+.theme-dark .status-control-group label {
   color: var(--fn-heading);
 }
 
@@ -927,9 +849,7 @@ tbody tr:hover {
 .theme-dark .modal-header,
 .theme-dark .empty-state,
 .theme-dark .loading,
-.theme-dark .admin-order-section,
-.theme-dark .delivery-code-note,
-.theme-dark .delivery-code-instruction {
+.theme-dark .admin-order-section {
   background: var(--fn-surface-2);
   color: var(--fn-text);
   border-color: var(--fn-border);
@@ -945,8 +865,7 @@ tbody tr:hover {
 }
 
 .theme-dark .stat-label,
-.theme-dark .tabs .tab,
-.theme-dark .code-none {
+.theme-dark .tabs .tab {
   color: var(--fn-muted);
 }
 
@@ -997,10 +916,6 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .delivery-code-box {
-    font-size: 1.5rem;
-    padding: 1.5rem;
-  }
 }
 
 @media (max-width: 720px) {

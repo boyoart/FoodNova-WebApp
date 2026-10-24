@@ -40,6 +40,9 @@ python scripts/check_schema.py
 The apply command prints sanitized target information, the complete before
 report, every applied idempotent statement, the after report, and confirms
 `has_drift=false`. It does not drop tables/columns or update application rows.
+The reviewed order migration also adds the nullable `orders.pin_failed_attempts`
+and `orders.pin_locked_until` columns required for PIN lockout. Apply it after a
+recent backup and staging validation; do not rely on startup schema mutation.
 
 Recommended:
 

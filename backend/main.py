@@ -3895,7 +3895,12 @@ def order_to_dict_for_context(order: DBOrder, db=None, context: str = "") -> dic
     data = order_to_dict(order)
     assignment = order_assignment_snapshot(order, db)
     data.update(assignment)
-    if context == "customer" and canonical_dispatch_status(order) == "ARRIVED":
+    if (
+        context == "customer"
+        and str(order.delivery_method or "").strip().lower() == "delivery"
+        and str(order.payment_status or "").strip().lower() in DELIVERY_MATCH_CONFIRMED_PAYMENTS
+        and canonical_dispatch_status(order) == "ARRIVED"
+    ):
         data["delivery_code"] = order.delivery_code or ""
         data["delivery_pin"] = order.delivery_code or ""
     if (
@@ -4055,6 +4060,9 @@ def delivery_area_for_order(order: DBOrder) -> str:
 
 DELIVERY_PIN_LENGTH = 4
 LEGACY_DELIVERY_PIN_LENGTHS = {6}
+ORDER_PIN_MAX_FAILED_ATTEMPTS = 6
+ORDER_PIN_LOCKOUT = timedelta(hours=1)
+PICKUP_PIN_TTL = timedelta(hours=72)
 
 
 def generate_delivery_pin(db) -> str:
@@ -4091,17 +4099,53 @@ def ensure_order_delivery_pin(db, order: DBOrder) -> str:
     return order.delivery_code or ""
 
 
+def verify_order_pin(db, order: DBOrder, submitted_code: str) -> str:
+    now = datetime.utcnow()
+    locked_until = getattr(order, "pin_locked_until", None)
+    if locked_until and locked_until > now:
+        raise HTTPException(status_code=429, detail="Too many incorrect PIN attempts. Try again later.")
+    if locked_until:
+        order.pin_failed_attempts = 0
+        order.pin_locked_until = None
+
+    stored_code = str(order.delivery_code or "").strip()
+    if not stored_code:
+        raise HTTPException(status_code=409, detail="No active verification PIN exists for this order.")
+    try:
+        validated = validate_delivery_pin_input(submitted_code, stored_code)
+    except HTTPException:
+        validated = ""
+    if not validated or not secrets.compare_digest(validated, stored_code):
+        failed_attempts = int(getattr(order, "pin_failed_attempts", 0) or 0) + 1
+        order.pin_failed_attempts = failed_attempts
+        if failed_attempts >= ORDER_PIN_MAX_FAILED_ATTEMPTS:
+            order.pin_locked_until = now + ORDER_PIN_LOCKOUT
+            db.commit()
+            raise HTTPException(status_code=429, detail="Too many incorrect PIN attempts. Try again later.")
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid verification PIN.")
+
+    order.pin_failed_attempts = 0
+    order.pin_locked_until = None
+    return validated
+
+
 def pickup_pin_is_customer_visible(order: DBOrder) -> bool:
     statuses = {
         str(getattr(order, field, "") or "").strip().lower()
         for field in ("status", "order_status", "fulfillment_status")
     }
+    created_at = getattr(order, "delivery_code_created_at", None)
     return (
         str(getattr(order, "delivery_method", "") or "").strip().lower() == "pickup"
         and str(getattr(order, "payment_status", "") or "").strip().lower()
         in DELIVERY_MATCH_CONFIRMED_PAYMENTS
         and "ready_for_pickup" in statuses
         and "picked_up_by_customer" not in statuses
+        and not (
+            created_at
+            and datetime.utcnow() - created_at >= PICKUP_PIN_TTL
+        )
     )
 
 
@@ -5499,6 +5543,8 @@ def apply_dispatch_assignment_to_order(
     mark_out_for_delivery: bool = False,
 ) -> dict:
     """Single write path for assigning an order to a dispatch worker."""
+    if str(order.delivery_method or "delivery").strip().lower() != "delivery":
+        raise HTTPException(status_code=409, detail="Pickup orders do not use riders")
     ensure_order_delivery_pin(db, order)
     order.delivery_worker_id = worker.id
     order.delivery_worker_type = worker.worker_type or ""
@@ -5671,7 +5717,6 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
         items = []
 
     receipt = json_load(order.receipt, None)
-    visible_delivery_pin = (order.delivery_code or "") if canonical_dispatch_status(order) == "ARRIVED" else ""
     return {
         "id": order.id,
         "order_code": order.order_code,
@@ -5681,8 +5726,6 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
         "fulfillment_status": order.fulfillment_status or "order_placed",
         "dispatch_status": canonical_dispatch_status(order),
         "delivery_status": getattr(order, "delivery_status", "") or "",
-        "delivery_code": visible_delivery_pin,
-        "delivery_pin": visible_delivery_pin,
         "delivery_method": order.delivery_method or "delivery",
         "total_amount": order.total_amount or 0,
         "created_at": iso(order.created_at),
@@ -7633,6 +7676,8 @@ def ensure_database_compatibility():
             "fulfillment_status": "VARCHAR(80) DEFAULT 'order_placed'",
             "delivery_code": "VARCHAR(20)",
             "delivery_code_created_at": "TIMESTAMP",
+            "pin_failed_attempts": "INTEGER DEFAULT 0",
+            "pin_locked_until": "TIMESTAMP",
             "delivery_confirmed_at": "TIMESTAMP",
             "rider_id": "INTEGER",
             "rider_name": "VARCHAR(150) DEFAULT ''",
@@ -11884,7 +11929,8 @@ def persist_order_transaction(db, normalized_items: list, fields: dict, allow_st
     db.add(order)
     db.flush()
     classify_and_save_order_delivery(order, db)
-    ensure_order_delivery_pin(db, order)
+    if str(order.delivery_method or "delivery").strip().lower() == "delivery":
+        ensure_order_delivery_pin(db, order)
     for item in normalized_items:
         db.add(DBOrderItem(
             order_id=order.id,
@@ -12790,6 +12836,8 @@ def admin_dispatch_auto_assign(order_id: int, request: Request):
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
+        if str(order.delivery_method or "delivery").strip().lower() != "delivery":
+            raise HTTPException(status_code=409, detail="Pickup orders do not use Dispatch")
         classify_and_save_order_delivery(order, db)
         ensure_order_delivery_pin(db, order)
         offer = start_delivery_matching(db, order, request)
@@ -13529,6 +13577,8 @@ def apply_bulk_order_status(order: DBOrder, status: str, db) -> bool:
         if (order.delivery_method or "delivery") == "delivery":
             classify_and_save_order_delivery(order, db)
     elif status == "out_for_delivery":
+        if str(order.delivery_method or "delivery").strip().lower() != "delivery":
+            raise HTTPException(status_code=409, detail="Pickup orders do not use Dispatch")
         order.status = "out_for_delivery"
         order.order_status = "out_for_delivery"
         order.fulfillment_status = "out_for_delivery"
@@ -13536,10 +13586,7 @@ def apply_bulk_order_status(order: DBOrder, status: str, db) -> bool:
             ensure_order_delivery_pin(db, order)
         order.delivery_started_at = order.delivery_started_at or datetime.utcnow()
     elif status == "delivered":
-        order.status = "delivered"
-        order.order_status = "delivered"
-        order.fulfillment_status = "delivered"
-        order.delivery_completed_at = order.delivery_completed_at or datetime.utcnow()
+        raise HTTPException(status_code=409, detail="Delivery completion requires the customer's PIN.")
     else:
         raise HTTPException(status_code=400, detail="Invalid bulk status")
     order.updated_at = datetime.utcnow()
@@ -13603,6 +13650,8 @@ def bulk_update_admin_order_status(payload: BulkOrderStatusPayload, request: Req
     status = status_map.get(status_input, status_input)
     if status not in {"processing", "out_for_delivery", "delivered"}:
         raise HTTPException(status_code=400, detail="Invalid bulk status")
+    if status == "delivered":
+        raise HTTPException(status_code=409, detail="Delivery completion requires PIN verification.")
     db = SessionLocal()
     try:
         if not order_ids:
@@ -13614,6 +13663,9 @@ def bulk_update_admin_order_status(payload: BulkOrderStatusPayload, request: Req
         changed_ids = []
         now = datetime.utcnow()
         for order in orders:
+            if status == "out_for_delivery" and str(order.delivery_method or "delivery").strip().lower() != "delivery":
+                invalid_ids.append(order.id)
+                continue
             if apply_bulk_order_status(order, status, db):
                 changed_ids.append(order.id)
             processed_ids.append(order.id)
@@ -13644,6 +13696,28 @@ def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Reques
     order_ids = normalized_bulk_order_ids(payload.orderIds)
     db = SessionLocal()
     try:
+        if not order_ids:
+            return {"success": True, "processed": 0, "failed": 0, "invalidOrderIds": []}
+        orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.id.in_(order_ids)).all()
+        found_ids = {order.id for order in orders}
+        invalid_ids = [order_id for order_id in order_ids if order_id not in found_ids]
+        delivery_orders = [
+            order for order in orders
+            if str(order.delivery_method or "delivery").strip().lower() == "delivery"
+        ]
+        invalid_ids.extend(
+            order.id for order in orders
+            if str(order.delivery_method or "delivery").strip().lower() != "delivery"
+        )
+        if not delivery_orders:
+            return {
+                "success": True,
+                "processed": 0,
+                "failed": len(invalid_ids),
+                "orderIds": [],
+                "invalidOrderIds": invalid_ids,
+                "rider": None,
+            }
         rider = db.query(DBDeliveryWorker).filter(
             DBDeliveryWorker.id == payload.rider_id,
             DBDeliveryWorker.deleted_at.is_(None),
@@ -13663,13 +13737,9 @@ def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Reques
         lifecycle_status = "ACTIVE" if (rider.kyc_status or "").upper() == "ACTIVE" else rider_lifecycle_status(rider, (linked_rider.status if linked_rider else "") or "")
         if lifecycle_status != "ACTIVE":
             raise HTTPException(status_code=400, detail="Rider must be ACTIVE before assignment")
-        if not order_ids:
-            return {"success": True, "processed": 0, "failed": 0, "invalidOrderIds": []}
-        orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.id.in_(order_ids)).all()
-        found_ids = {order.id for order in orders}
-        invalid_ids = [order_id for order_id in order_ids if order_id not in found_ids]
         processed_ids = []
-        for order in orders:
+        now = datetime.utcnow()
+        for order in delivery_orders:
             apply_dispatch_assignment_to_order(
                 db,
                 order,
@@ -13686,7 +13756,7 @@ def bulk_assign_rider_to_orders(payload: BulkAssignRiderPayload, request: Reques
                 f"{len(processed_ids)} FoodNova order{'s' if len(processed_ids) != 1 else ''} assigned to you.",
                 "delivery_assigned",
                 "delivery",
-                order_to_dict(orders[0]) if orders else None,
+                order_to_dict(delivery_orders[0]),
             )
         db.commit()
         rider_data = worker_to_dict(rider)
@@ -14070,6 +14140,8 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
+        if str(order.delivery_method or "delivery").strip().lower() != "delivery":
+            raise HTTPException(status_code=409, detail="Pickup orders do not use riders")
         rider = db.query(DBDeliveryWorker).filter(
             DBDeliveryWorker.id == payload.rider_id,
             DBDeliveryWorker.deleted_at.is_(None),
@@ -14103,8 +14175,6 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
         if lifecycle_status != "ACTIVE":
             raise HTTPException(status_code=400, detail="Rider must be ACTIVE before assignment")
 
-        if (order.delivery_method or "delivery") != "delivery":
-            raise HTTPException(status_code=409, detail="Pickup orders do not use riders")
         if getattr(order, "delivery_worker_id", None) or getattr(order, "rider_id", None):
             raise HTTPException(status_code=409, detail="This order already has an accepted rider")
         db.query(DBDeliveryOffer).filter(
@@ -14147,6 +14217,10 @@ def assign_rider_to_order(order_id: int, payload: AssignRiderPayload, request: R
 
 @app.patch("/admin/orders/{order_id}")
 def update_order(order_id: int, payload: dict, request: Request):
+    requested_statuses = [
+        str(payload.get(field) or "").strip().lower()
+        for field in ("status", "order_status", "fulfillment_status")
+    ]
     payment_update_requested = any(key in payload for key in ["payment_status", "status"]) and (
         payload.get("payment_status") in ["payment_confirmed", "payment_rejected", "receipt_submitted"]
         or payload.get("status") in ["payment_confirmed", "payment_rejected", "receipt_submitted"]
@@ -14158,6 +14232,8 @@ def update_order(order_id: int, payload: dict, request: Request):
         admin = require_permission(request, "orders:update")
     else:
         admin = require_permission(request, "orders:update")
+    if "delivered" in requested_statuses or "picked_up_by_customer" in requested_statuses:
+        raise HTTPException(status_code=409, detail="Order completion requires PIN verification.")
     db = SessionLocal()
     try:
         order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
@@ -14214,8 +14290,19 @@ def update_order(order_id: int, payload: dict, request: Request):
         if requested_payment_status:
             order.payment_status = requested_payment_status
         is_pickup_order = str(order.delivery_method or "").strip().lower() == "pickup"
+        raw_status_field = str(payload.get("status") or "").strip().lower()
         requested_order_status = str(
-            payload.get("order_status") or payload.get("fulfillment_status") or ""
+            payload.get("order_status")
+            or payload.get("fulfillment_status")
+            or (
+                raw_status_field
+                if raw_status_field not in {
+                    "payment_confirmed",
+                    "payment_rejected",
+                    "receipt_submitted",
+                }
+                else ""
+            )
         ).strip().lower()
         current_pickup_status = str(
             old_order_status or old_fulfillment_status or old_status or "order_placed"
@@ -14230,7 +14317,12 @@ def update_order(order_id: int, payload: dict, request: Request):
                     status_code=409,
                     detail="Payment must be confirmed before preparing a pickup order",
                 )
+            order.status = requested_order_status
+            order.order_status = requested_order_status
+            order.fulfillment_status = requested_order_status
             if requested_order_status == "ready_for_pickup":
+                if order.delivery_code and current_pickup_status != "ready_for_pickup":
+                    order.delivery_code_created_at = datetime.utcnow()
                 ensure_order_delivery_pin(db, order)
         if (
             is_pickup_order
@@ -14489,25 +14581,25 @@ def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request
     admin = require_permission(request, "orders:update")
     db = SessionLocal()
     try:
-        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+        order = active_order_filter(db.query(DBOrder)).with_for_update().filter(DBOrder.id == order_id).first()
         if not order:
             raise HTTPException(status_code=404, detail="Order not found")
         if str(order.delivery_method or "").strip().lower() != "pickup":
             raise HTTPException(status_code=409, detail="This action is only available for pickup orders")
-        current = str(order.order_status or order.fulfillment_status or order.status or "").strip().lower()
+        statuses = {
+            str(getattr(order, field, "") or "").strip().lower()
+            for field in ("status", "order_status", "fulfillment_status")
+        }
         if str(order.payment_status or "").strip().lower() not in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
             raise HTTPException(status_code=409, detail="Payment must be confirmed before pickup")
-        if current not in {"ready_for_pickup", "picked_up_by_customer"}:
-            raise HTTPException(status_code=409, detail="Order must be ready for pickup before collection can be confirmed")
-        if current == "picked_up_by_customer":
+        if "picked_up_by_customer" in statuses:
             raise HTTPException(status_code=409, detail="Pickup has already been confirmed")
-        submitted = str(payload.get("pin") or payload.get("pickup_pin") or payload.get("delivery_pin") or "").strip()
-        try:
-            validated = validate_delivery_pin_input(submitted, str(order.delivery_code or ""))
-        except HTTPException:
-            raise HTTPException(status_code=400, detail="Invalid pickup PIN")
-        if not secrets.compare_digest(validated, str(order.delivery_code or "")):
-            raise HTTPException(status_code=400, detail="Invalid pickup PIN")
+        if "ready_for_pickup" not in statuses:
+            raise HTTPException(status_code=409, detail="Order must be ready for pickup before collection can be confirmed")
+        if order.delivery_code_created_at and datetime.utcnow() - order.delivery_code_created_at >= PICKUP_PIN_TTL:
+            raise HTTPException(status_code=410, detail="Pickup PIN expired. Contact FoodNova support.")
+        submitted = payload.get("pin") or payload.get("pickup_pin") or payload.get("delivery_pin") or ""
+        verify_order_pin(db, order, submitted)
 
         now = datetime.utcnow()
         order.status = "picked_up_by_customer"
@@ -14517,6 +14609,8 @@ def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request
         order.delivery_confirmed_at = order.delivery_confirmed_at or now
         order.delivery_completed_at = order.delivery_completed_at or now
         order.delivery_code = ""
+        order.pin_failed_attempts = 0
+        order.pin_locked_until = None
         order.updated_at = now
         db.commit()
         db.refresh(order)
@@ -14542,8 +14636,49 @@ def admin_confirm_customer_pickup(order_id: int, payload: dict, request: Request
         db.close()
 
 
+@app.post("/admin/orders/{order_id}/pickup-pin/reissue")
+def admin_reissue_pickup_pin(order_id: int, request: Request):
+    admin = require_permission(request, "orders:update")
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).with_for_update().filter(DBOrder.id == order_id).first()
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if str(order.delivery_method or "").strip().lower() != "pickup":
+            raise HTTPException(status_code=409, detail="This action is only available for pickup orders")
+        statuses = {
+            str(getattr(order, field, "") or "").strip().lower()
+            for field in ("status", "order_status", "fulfillment_status")
+        }
+        if str(order.payment_status or "").strip().lower() not in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
+            raise HTTPException(status_code=409, detail="Payment must be confirmed before issuing a pickup PIN")
+        if "ready_for_pickup" not in statuses or "picked_up_by_customer" in statuses:
+            raise HTTPException(status_code=409, detail="Order must be awaiting pickup before issuing a PIN")
+
+        order.delivery_code = generate_delivery_pin(db)
+        order.delivery_code_created_at = datetime.utcnow()
+        order.pin_failed_attempts = 0
+        order.pin_locked_until = None
+        order.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(order)
+        data = order_to_dict_for_context(order, db, "admin")
+        create_admin_audit_log(
+            request,
+            admin,
+            "pickup_pin_reissued",
+            "order",
+            order.id,
+            f"Pickup PIN reissued for {order.order_code}",
+            {"order_code": order.order_code},
+        )
+        return {"success": True, "message": "A new pickup PIN is available to the customer.", "order": data, "data": data}
+    finally:
+        db.close()
+
+
 def _delivery_worker_order_or_404(db, worker: DBDeliveryWorker, order_id: int) -> DBOrder:
-    order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == order_id).first()
+    order = active_order_filter(db.query(DBOrder)).with_for_update().filter(DBOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     if getattr(order, "delivery_worker_id", None) != worker.id and getattr(order, "rider_id", None) != worker.id:
@@ -14560,21 +14695,16 @@ def _complete_delivery_with_pin(
     entered_pin: str,
     proof: dict = None,
 ) -> dict:
+    if str(order.delivery_method or "").strip().lower() != "delivery":
+        raise HTTPException(status_code=409, detail="Only delivery orders can be completed by a rider.")
+    if str(order.payment_status or "").strip().lower() not in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
+        raise HTTPException(status_code=409, detail="Payment must be confirmed before delivery.")
+    if canonical_dispatch_status(order) != "ARRIVED":
+        raise HTTPException(status_code=409, detail="The rider must arrive before PIN verification.")
     stored_code = str(order.delivery_code or "").strip()
     if not stored_code:
         raise HTTPException(status_code=400, detail="No delivery code generated for this order")
-    try:
-        delivery_code = validate_delivery_pin_input(entered_pin, stored_code)
-    except HTTPException:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid delivery PIN. Please ask the customer for the correct PIN.",
-        )
-    if delivery_code != stored_code:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid delivery PIN. Please ask the customer for the correct PIN.",
-        )
+    delivery_code = verify_order_pin(db, order, entered_pin)
 
     completed_at = datetime.utcnow()
     already_delivered = canonical_dispatch_status(order) == "DELIVERED"
@@ -14584,6 +14714,9 @@ def _complete_delivery_with_pin(
     order.delivery_status = "DELIVERED"
     order.delivery_confirmed_at = order.delivery_confirmed_at or completed_at
     order.delivery_completed_at = order.delivery_completed_at or completed_at
+    order.delivery_code = ""
+    order.pin_failed_attempts = 0
+    order.pin_locked_until = None
     order.updated_at = completed_at
     if proof is not None:
         order.service_note = f"{order.service_note or ''}\nDelivery proof: {json_dump(proof)}".strip()
@@ -14606,7 +14739,7 @@ def _complete_delivery_with_pin(
     if assignment_log:
         assignment_log.status = "completed"
         assignment_log.completion_time = assignment_log.completion_time or completed_at
-        assignment_log.delivery_code_entered = delivery_code
+        assignment_log.delivery_code_entered = "verified"
         assignment_log.updated_at = completed_at
     else:
         db.add(DBDeliveryAssignmentLog(
@@ -14618,7 +14751,7 @@ def _complete_delivery_with_pin(
             worker_phone=worker.phone or "",
             status="completed",
             completion_time=completed_at,
-            delivery_code_entered=delivery_code,
+            delivery_code_entered="verified",
         ))
 
     db.commit()
