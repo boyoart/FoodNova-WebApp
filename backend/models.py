@@ -1,7 +1,7 @@
 from datetime import datetime
 import enum
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -104,6 +104,7 @@ class Product(Base):
     price = Column(Float, default=0)
     stock_qty = Column(Integer, default=0)
     stock = Column(Integer, default=0)
+    stock_unit = Column(String(40), default="unit", nullable=False)
     category = Column(String(100), default="", index=True)
     category_name = Column(String(100), default="")
     image_url = Column(Text, default="")
@@ -147,6 +148,27 @@ class Pack(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    components = relationship("ComboPackComponent", back_populates="pack", cascade="all, delete-orphan")
+
+
+class ComboPackComponent(Base):
+    __tablename__ = "combo_pack_components"
+    __table_args__ = (
+        CheckConstraint("quantity_per_pack > 0", name="ck_combo_pack_components_quantity_positive"),
+        UniqueConstraint("pack_id", "product_id", "variant_id", name="uq_combo_pack_component_target"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    pack_id = Column(Integer, ForeignKey("packs.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="RESTRICT"), nullable=False, index=True)
+    variant_id = Column(Integer, ForeignKey("product_variants.id", ondelete="RESTRICT"), nullable=True, index=True)
+    quantity_per_pack = Column(Integer, nullable=False)
+    unit = Column(String(40), nullable=False)
+
+    pack = relationship("Pack", back_populates="components")
+    product = relationship("Product")
+    variant = relationship("ProductVariant")
 
 
 class DeliveryRider(Base):
@@ -615,6 +637,9 @@ class OrderItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
     product_id = Column(Integer, nullable=True)
+    pack_id = Column(Integer, ForeignKey("packs.id", ondelete="SET NULL"), nullable=True, index=True)
+    item_type = Column(String(20), default="product", nullable=False)
+    combo_components_snapshot = Column(Text, nullable=True)
     variant_id = Column(Integer, nullable=True, index=True)
     variant_weight = Column(String(40), default="")
     sku = Column(String(120), default="")

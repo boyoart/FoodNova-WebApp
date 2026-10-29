@@ -44,6 +44,36 @@ The reviewed order migration also adds the nullable `orders.pin_failed_attempts`
 and `orders.pin_locked_until` columns required for PIN lockout. Apply it after a
 recent backup and staging validation; do not rely on startup schema mutation.
 
+## Inventory-linked Combo Packs
+
+Deploy the normalized Combo Pack inventory schema before deploying the backend
+and frontend code. Against a restored/staging PostgreSQL database, review the
+orchestrated migration dry run and schema report first:
+
+```bash
+python scripts/apply_production_schema_migrations.py --dry-run
+python scripts/check_schema.py
+```
+
+After confirming a recent restorable backup and validating on staging, apply
+the reviewed, idempotent migrations using both required confirmations:
+
+```bash
+python scripts/apply_production_schema_migrations.py --confirm-production-schema-migration --confirm-recent-backup
+python scripts/check_schema.py
+```
+
+The orchestration adds the `combo_pack_components` relationship, product
+inventory-unit labels, and immutable order-item component snapshots. It does
+not fabricate component records or change stock quantities. Existing product
+units are initialized as `unit`; an administrator must review and set the
+correct unit for any product whose stock is measured in kg, litres, packs, or
+another indivisible unit. Existing packs remain without linked contents and
+are unavailable for purchase until an administrator enters and verifies their
+real components, quantities, units, and active variants in Stock Management.
+Enable those packs only after that catalog review. Never run this migration
+against production without an independently verified backup.
+
 Recommended:
 
 - `FOODNOVA_BUILD_COMMIT` set to the deployed Git SHA during staging/release validation.

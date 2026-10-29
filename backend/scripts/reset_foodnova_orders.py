@@ -5,6 +5,7 @@ Production execution requires both the unmistakable reset flag and backup confir
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -88,6 +89,29 @@ def restore_inventory(db, orders):
         for item in order.items or []:
             quantity = int(item.quantity or item.qty or 0)
             if quantity <= 0:
+                continue
+            if getattr(item, "item_type", "product") == "pack":
+                try:
+                    snapshot = json.loads(item.combo_components_snapshot or "[]")
+                    components = [
+                        (int(c["product_id"]), int(c["variant_id"]) if c.get("variant_id") else None, int(c["quantity_per_pack"]) * quantity)
+                        for c in snapshot
+                    ]
+                except (ValueError, TypeError, KeyError):
+                    components = []
+                if not components:
+                    raise RuntimeError(f"Order {order.id} has a Combo Pack without a valid inventory snapshot; reset aborted.")
+                for product_id, variant_id, restore_quantity in components:
+                    if variant_id:
+                        stock_row = db.query(ProductVariant).filter(ProductVariant.id == variant_id).with_for_update().first()
+                    else:
+                        stock_row = db.query(Product).filter(Product.id == product_id).with_for_update().first()
+                    if not stock_row:
+                        raise RuntimeError(f"Order {order.id} Combo Pack component no longer exists; reset aborted.")
+                    current = stock_row.stock_qty if stock_row.stock_qty is not None else (stock_row.stock or 0)
+                    stock_row.stock_qty = current + restore_quantity
+                    stock_row.stock = stock_row.stock_qty
+                    restored_units += restore_quantity
                 continue
             if item.variant_id:
                 variant = db.query(ProductVariant).filter(ProductVariant.id == item.variant_id).with_for_update().first()

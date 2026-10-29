@@ -409,6 +409,28 @@ export default function ProductsPage() {
               {modalTab === 'details' && (
                 <div id="product-modal-details" role="tabpanel" aria-labelledby="product-modal-details-tab" className="product-modal-panel">
                   <p>{modalItem.description || 'Quality FoodNova grocery item prepared for your order.'}</p>
+                  {modalItem.type === 'pack' && (
+                    <section className="pack-contents">
+                      <h3>What's Inside This Pack</h3>
+                      {(modalItem.components || []).length ? (
+                        <ul>
+                          {modalItem.components.map((component) => (
+                            <li key={`${component.product_id}:${component.variant_id || ''}`}>
+                              <img
+                                src={resolveMediaUrl(component.image_url) || '/placeholder.png'}
+                                alt=""
+                                onError={handleImageError}
+                              />
+                              <span>{component.name}{component.variant_weight ? ` — ${component.variant_weight}` : ''}</span>
+                              <strong>{component.quantity_per_pack} {component.unit}</strong>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>Contents for this pack have not been set up yet.</p>
+                      )}
+                    </section>
+                  )}
                 </div>
               )}
               {modalTab === 'sizes' && modalVariants.length > 0 && (

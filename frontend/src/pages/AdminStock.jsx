@@ -5,14 +5,16 @@ import { formatPrice } from '../utils/formatters'
 import toast from 'react-hot-toast'
 import './AdminPages.css'
 
-const emptyProduct = { name: '', description: '', price: '', stock_qty: '', category: '', is_active: true, image_url: '', images: [], image_files: [], remove_image_ids: [] }
-const emptyPack = { name: '', price: '', description: '', items: [], is_active: true, image_url: '' }
+const emptyProduct = { name: '', description: '', price: '', stock_qty: '', stock_unit: 'unit', category: '', is_active: true, image_url: '', images: [], image_files: [], remove_image_ids: [] }
+const emptyPack = { name: '', price: '', description: '', items: [], components: [], is_active: true, image_url: '' }
 
 export default function AdminStock() {
   const { isAdmin } = useAuthStore()
   const [activeTab, setActiveTab] = useState('products')
   const [products, setProducts] = useState([])
   const [packs, setPacks] = useState([])
+  const [stockMovements, setStockMovements] = useState([])
+  const [movementError, setMovementError] = useState('')
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState(null)
   const [formData, setFormData] = useState(emptyProduct)
@@ -22,6 +24,7 @@ export default function AdminStock() {
   const [stockFilter, setStockFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedRows, setSelectedRows] = useState([])
+  const [packSearch, setPackSearch] = useState('')
   const isProduct = activeTab === 'products'
 
   useEffect(() => {
@@ -35,6 +38,13 @@ export default function AdminStock() {
       const [productsRes, packsRes] = await Promise.all([adminAPI.getProducts(), adminAPI.getPacks()])
       setProducts(productsRes.data || [])
       setPacks(packsRes.data || [])
+      try {
+        setStockMovements(await adminAPI.getStockMovements())
+        setMovementError('')
+      } catch (error) {
+        setMovementError('Stock movement history could not be loaded.')
+        console.error(error)
+      }
     } catch (error) {
       const message = [401, 403].includes(error?.response?.status)
         ? 'Session expired. Please log in again.'
@@ -110,7 +120,7 @@ export default function AdminStock() {
       if (isProduct) {
         if (editingId) {
           const patch = {}
-          const fields = ['name', 'price', 'stock_qty', 'category', 'description', 'contents', 'pack_info', 'serving_estimate', 'freshness_note', 'delivery_note', 'is_active', 'variants']
+          const fields = ['name', 'price', 'stock_qty', 'stock_unit', 'category', 'description', 'contents', 'pack_info', 'serving_estimate', 'freshness_note', 'delivery_note', 'is_active', 'variants']
           fields.forEach((field) => {
             const before = initialFormData?.[field]
             const after = formData?.[field]
@@ -126,9 +136,17 @@ export default function AdminStock() {
           toast.success('Product created successfully')
         }
       } else if (editingId) {
+        if (formData.is_active !== false && !(formData.components || []).length) {
+          toast.error('Add at least one Combo Pack component before activating this pack.')
+          return
+        }
         await adminAPI.updatePack(editingId, formData)
         toast.success('Pack updated successfully')
       } else {
+        if (formData.is_active !== false && !(formData.components || []).length) {
+          toast.error('Add at least one Combo Pack component before activating this pack.')
+          return
+        }
         await adminAPI.createPack(formData)
         toast.success('Pack created successfully')
       }
@@ -208,6 +226,11 @@ export default function AdminStock() {
         <input type="number" min="0" value={formData.stock_qty ?? formData.stock ?? ''} onChange={(event) => setFormData({ ...formData, stock_qty: Number(event.target.value) || 0, stock: Number(event.target.value) || 0 })} required />
       </div>
       <div className="stock-form-field">
+        <label>Inventory Unit</label>
+        <input value={formData.stock_unit || 'unit'} onChange={(event) => setFormData({ ...formData, stock_unit: event.target.value })} maxLength="40" required />
+        <small>Stock quantities and combo components use this unit; no conversions are applied.</small>
+      </div>
+      <div className="stock-form-field">
         <label>Category</label>
         <input value={formData.category || ''} onChange={(event) => setFormData({ ...formData, category: event.target.value, category_name: event.target.value })} />
       </div>
@@ -238,6 +261,48 @@ export default function AdminStock() {
     </>
   )
 
+  const packComponentOptions = products
+    .filter((product) => product.is_active !== false && !product.is_combo_product)
+    .flatMap((product) => {
+      const activeVariants = (product.variants || []).filter((variant) => variant.is_active !== false)
+      if (activeVariants.length) {
+        return activeVariants.map((variant) => ({
+          product_id: product.id,
+          variant_id: variant.id,
+          name: product.name,
+          variant_weight: variant.weight || '',
+          unit: variant.weight || product.stock_unit || 'unit',
+          stock_qty: Number(variant.stock_qty ?? variant.stock ?? 0),
+          image_url: variant.image_url || product.image_url,
+        }))
+      }
+      return [{
+        product_id: product.id,
+        variant_id: null,
+        name: product.name,
+        variant_weight: '',
+        unit: product.stock_unit || 'unit',
+        stock_qty: Number(product.stock_qty ?? product.stock ?? 0),
+        image_url: product.image_url,
+      }]
+    })
+  const componentKey = (component) => `${component.product_id}:${component.variant_id || ''}`
+  const visibleComponentOptions = packComponentOptions.filter((option) => (
+    `${option.name} ${option.variant_weight}`.toLowerCase().includes(packSearch.trim().toLowerCase())
+  ))
+  const togglePackComponent = (option) => {
+    setFormData((current) => {
+      const components = current.components || []
+      const key = componentKey(option)
+      if (components.some((component) => componentKey(component) === key)) {
+        return { ...current, components: components.filter((component) => componentKey(component) !== key) }
+      }
+      return {
+        ...current,
+        components: [...components, { ...option, quantity_per_pack: 1 }],
+      }
+    })
+  }
   const renderPackForm = () => (
     <>
     <div className="stock-form-grid">
@@ -253,15 +318,61 @@ export default function AdminStock() {
         <label>Description</label>
         <textarea value={formData.description || ''} onChange={(event) => setFormData({ ...formData, description: event.target.value })} rows="3" />
       </div>
-      <div className="stock-form-field stock-form-field-wide">
-        <label>Items (comma-separated)</label>
-        <input value={Array.isArray(formData.items) ? formData.items.join(', ') : formData.items || ''} onChange={(event) => setFormData({ ...formData, items: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} placeholder="Rice, Beans, Oil" />
-      </div>
       <label className="stock-toggle">
         <input type="checkbox" checked={formData.is_active !== false} onChange={(event) => setFormData({ ...formData, is_active: event.target.checked })} />
         <span>Active pack</span>
       </label>
     </div>
+    <section className="combo-pack-editor">
+      <h3>Combo Pack Contents</h3>
+      <p className="stock-image-upload-help">Choose active inventory products. Quantities must be whole stock units; selected variants retain their existing unit and stock record.</p>
+      <label className="stock-form-field">
+        <span>Search products</span>
+        <input type="search" value={packSearch} onChange={(event) => setPackSearch(event.target.value)} placeholder="Search products or sizes..." />
+      </label>
+      <div className="combo-pack-options" role="group" aria-label="Available inventory products">
+        {visibleComponentOptions.map((option) => {
+          const selected = (formData.components || []).some((component) => componentKey(component) === componentKey(option))
+          return (
+            <label className="combo-pack-option" key={componentKey(option)}>
+              <input type="checkbox" checked={selected} onChange={() => togglePackComponent(option)} />
+              <span>{option.name}{option.variant_weight ? ` — ${option.variant_weight}` : ''}</span>
+              <small>{option.stock_qty} {option.unit} available</small>
+            </label>
+          )
+        })}
+        {!visibleComponentOptions.length && <p>No eligible active stock products found.</p>}
+      </div>
+      <div className="combo-pack-selected">
+        <h4>Selected components</h4>
+        {(formData.components || []).map((component) => (
+          <div className="combo-pack-selected-row" key={componentKey(component)}>
+            <div>
+              <strong>{component.name}{component.variant_weight ? ` — ${component.variant_weight}` : ''}</strong>
+              <small>{component.stock_qty ?? 0} {component.unit} available</small>
+            </div>
+            <label>
+              <span>Quantity per pack ({component.unit})</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={component.quantity_per_pack ?? 1}
+                onChange={(event) => setFormData((current) => ({
+                  ...current,
+                  components: current.components.map((entry) => componentKey(entry) === componentKey(component)
+                    ? { ...entry, quantity_per_pack: Number(event.target.value) }
+                    : entry),
+                }))}
+                required
+              />
+            </label>
+            <button type="button" className="stock-secondary-button" onClick={() => togglePackComponent(component)}>Remove</button>
+          </div>
+        ))}
+        {!(formData.components || []).length && <p>No components selected. Active packs must contain at least one component.</p>}
+      </div>
+    </section>
     {renderImageUpload('Pack Image')}
     </>
   )
@@ -413,6 +524,37 @@ export default function AdminStock() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {isProduct && !loading && !loadError && (
+        <section className="stock-movement-history">
+          <h2>Inventory Movement History</h2>
+          <p>Product stock changes are recorded using the existing order audit history.</p>
+          {movementError ? <p role="alert">{movementError}</p> : stockMovements.length ? (
+            <div className="stock-table">
+              <table>
+                <thead>
+                  <tr><th>Product</th><th>Movement</th><th>Source</th><th>Quantity</th><th>Stock</th><th>Order</th><th>Date</th></tr>
+                </thead>
+                <tbody>
+                  {stockMovements.map((movement) => (
+                    <tr key={movement.id}>
+                      <td>{movement.name}{movement.unit ? ` (${movement.unit})` : ''}</td>
+                      <td>{movement.direction === 'in' ? 'Restocked' : 'Deducted'}</td>
+                      <td>{movement.combo_pack_names?.length
+                        ? `Combo Pack: ${movement.combo_pack_names.join(', ')}`
+                        : 'Individual product sale'}</td>
+                      <td>{movement.direction === 'in' ? '+' : '-'}{movement.quantity} {movement.unit}</td>
+                      <td>{movement.previous_stock ?? '—'} → {movement.new_stock ?? '—'}</td>
+                      <td>{movement.order_code || '—'}</td>
+                      <td>{movement.created_at ? new Date(movement.created_at).toLocaleString() : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : <p>No inventory movements recorded yet.</p>}
+        </section>
       )}
 
       {showModal && (

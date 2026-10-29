@@ -79,6 +79,24 @@ test('gallery uses existing parent and variant images without duplicates', () =>
   assert.match(source, /setModalImage\(image\)/)
 })
 
+test('Combo Pack details render backend-saved contents and component images', () => {
+  assert.match(source, /modalItem\.components\.map\(\(component\) =>/)
+  assert.match(source, /What's Inside This Pack/)
+  assert.match(source, /component\.quantity_per_pack/)
+  assert.match(source, /component\.unit/)
+  assert.match(source, /resolveMediaUrl\(component\.image_url\)/)
+  assert.doesNotMatch(source, /Starter Pack.*Rice|Gift Combo.*Beans|Full Package.*Oil/i)
+})
+
+test('Admin Combo Pack editor supports searchable multi-select and saved component quantities', () => {
+  assert.match(adminSource, /Combo Pack Contents/)
+  assert.match(adminSource, /type="search" value=\{packSearch\}/)
+  assert.match(adminSource, /type="checkbox" checked=\{selected\}/)
+  assert.match(adminSource, /quantity_per_pack/)
+  assert.match(adminSource, /stock_qty.*available/)
+  assert.match(apiSource, /payload\.components !== undefined.*append\("components", JSON\.stringify/s)
+})
+
 test('modal cart submission carries selected variant and quantity', () => {
   assert.match(source, /selectedVariant: modalSelectedVariant/)
   assert.match(source, /quantity: modalQuantity/)

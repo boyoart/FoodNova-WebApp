@@ -57,6 +57,7 @@ from models import (
     Broadcast as DBBroadcast,
     CancellationRequest as DBCancellationRequest,
     ComingSoonSubscriber as DBComingSoonSubscriber,
+    ComboPackComponent as DBComboPackComponent,
     Notification as DBNotification,
     Order as DBOrder,
     OrderItem as DBOrderItem,
@@ -2588,21 +2589,107 @@ def find_order_product_for_stock(db, item: dict) -> Optional[DBProduct]:
 
 
 def validate_and_deduct_inventory(db, items: list, allow_override: bool = False) -> list:
+    if engine.url.get_backend_name().startswith("postgres"):
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext('foodnova_inventory_commit'))"))
     deductions = []
     requested_by_variant = {}
     requested_by_product = {}
 
+    def add_request(targets, key, stock_item, quantity, source):
+        entry = targets.setdefault(key, {"stock_item": stock_item, "quantity": 0, "sources": []})
+        entry["quantity"] += quantity
+        entry["sources"].append(source)
+
     for item in items:
+        quantity = int(item.get("quantity") or item.get("qty") or 1)
+        if quantity <= 0:
+            continue
+        if str(item.get("item_type") or "").lower() == "pack":
+            pack_id = int(item.get("pack_id") or item.get("product_id") or item.get("id") or 0)
+            pack = db.query(DBPack).filter(DBPack.id == pack_id).with_for_update().first()
+            if not pack or not pack.is_active:
+                raise HTTPException(status_code=400, detail="Selected Combo Pack is currently unavailable.")
+            components = db.query(DBComboPackComponent).filter(
+                DBComboPackComponent.pack_id == pack.id,
+            ).order_by(DBComboPackComponent.id.asc()).with_for_update().all()
+            if not components:
+                raise HTTPException(status_code=400, detail="This Combo Pack is not available until its contents are configured.")
+
+            snapshot = []
+            for component in components:
+                product = db.query(DBProduct).filter(
+                    DBProduct.id == component.product_id,
+                ).with_for_update().first()
+                if not product or not product.is_active or is_combo_product(product):
+                    raise HTTPException(status_code=400, detail="A Combo Pack component is currently unavailable.")
+                variant = None
+                if component.variant_id:
+                    variant = db.query(DBProductVariant).filter(
+                        DBProductVariant.id == component.variant_id,
+                        DBProductVariant.product_id == product.id,
+                    ).with_for_update().first()
+                    if not variant or not variant.is_active:
+                        raise HTTPException(status_code=400, detail="A Combo Pack product option is currently unavailable.")
+                    expected_unit = (variant.weight or product.stock_unit or "unit").strip()
+                else:
+                    if any(option.is_active for option in (product.variants or [])):
+                        raise HTTPException(status_code=400, detail=f"Select an available size for {product.name} in this Combo Pack.")
+                    expected_unit = (product.stock_unit or "unit").strip()
+                if (component.unit or "").strip().casefold() != expected_unit.casefold():
+                    raise HTTPException(status_code=409, detail=f"The inventory unit for {product.name} changed. Update the Combo Pack contents.")
+                component_quantity = int(component.quantity_per_pack or 0)
+                if component_quantity <= 0:
+                    raise HTTPException(status_code=409, detail="A Combo Pack contains an invalid component quantity.")
+
+                source = {
+                    "type": "combo_pack",
+                    "pack_id": pack.id,
+                    "pack_name": pack.name,
+                    "combo_quantity": quantity,
+                    "quantity_per_pack": component_quantity,
+                    "quantity": component_quantity * quantity,
+                }
+                if variant:
+                    add_request(
+                        requested_by_variant,
+                        variant.id,
+                        variant,
+                        component_quantity * quantity,
+                        source,
+                    )
+                else:
+                    add_request(
+                        requested_by_product,
+                        product.id,
+                        product,
+                        component_quantity * quantity,
+                        source,
+                    )
+                snapshot.append({
+                    "product_id": product.id,
+                    "product_name": product.name,
+                    "variant_id": variant.id if variant else None,
+                    "variant_weight": variant.weight if variant else "",
+                    "sku": variant.sku if variant else product_default_sku(product),
+                    "quantity_per_pack": component_quantity,
+                    "unit": component.unit,
+                    "image_url": variant.image_url if variant and variant.image_url else product.image_url or "",
+                })
+            item["_combo_components_snapshot"] = snapshot
+            continue
+
         requested_variant_id = item.get("variant_id") or item.get("product_variant_id")
         variant = find_order_variant_for_stock(db, item)
         if variant:
             if not variant.is_active or not variant.product or not variant.product.is_active:
                 raise HTTPException(status_code=400, detail="Selected product option is currently unavailable.")
-            quantity = int(item.get("quantity") or item.get("qty") or 1)
-            if quantity > 0:
-                current = requested_by_variant.get(variant.id, {"variant": variant, "quantity": 0})
-                current["quantity"] += quantity
-                requested_by_variant[variant.id] = current
+            add_request(
+                requested_by_variant,
+                variant.id,
+                variant,
+                quantity,
+                {"type": "individual", "quantity": quantity},
+            )
             continue
         if requested_variant_id:
             raise HTTPException(status_code=400, detail="Selected product option is currently unavailable.")
@@ -2613,15 +2700,16 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
             raise HTTPException(status_code=400, detail="Selected product is currently unavailable.")
         if any(variant.is_active for variant in (product.variants or [])):
             raise HTTPException(status_code=400, detail="Please select an available product size.")
-        quantity = int(item.get("quantity") or item.get("qty") or 1)
-        if quantity <= 0:
-            continue
-        current = requested_by_product.get(product.id, {"product": product, "quantity": 0})
-        current["quantity"] += quantity
-        requested_by_product[product.id] = current
+        add_request(
+            requested_by_product,
+            product.id,
+            product,
+            quantity,
+            {"type": "individual", "quantity": quantity},
+        )
 
     for entry in requested_by_variant.values():
-        variant = entry["variant"]
+        variant = entry["stock_item"]
         requested = entry["quantity"]
         available = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
         product_name = variant.product.name if variant.product else "Product"
@@ -2632,7 +2720,7 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
             )
 
     for entry in requested_by_product.values():
-        product = entry["product"]
+        product = entry["stock_item"]
         requested = entry["quantity"]
         available = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
         if available < requested and not allow_override:
@@ -2642,7 +2730,7 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
             )
 
     for entry in requested_by_variant.values():
-        variant = entry["variant"]
+        variant = entry["stock_item"]
         requested = entry["quantity"]
         available = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
         next_stock = max(0, available - requested)
@@ -2659,6 +2747,9 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
             "sku": variant.sku,
             "name": f"{variant.product.name if variant.product else 'Product'} - {variant.weight}" if variant.weight else (variant.product.name if variant.product else "Product"),
             "quantity": requested,
+            "unit": variant.weight or (variant.product.stock_unit if variant.product else "unit"),
+            "sources": entry["sources"],
+            "combo_pack_names": sorted({source["pack_name"] for source in entry["sources"] if source["type"] == "combo_pack"}),
             "previous_stock": available,
             "new_stock": next_stock,
             "low_stock": 0 < next_stock <= 5,
@@ -2667,7 +2758,7 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
         })
 
     for entry in requested_by_product.values():
-        product = entry["product"]
+        product = entry["stock_item"]
         requested = entry["quantity"]
         available = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
         next_stock = max(0, available - requested)
@@ -2678,6 +2769,9 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
             "product_id": product.id,
             "name": product.name,
             "quantity": requested,
+            "unit": product.stock_unit or "unit",
+            "sources": entry["sources"],
+            "combo_pack_names": sorted({source["pack_name"] for source in entry["sources"] if source["type"] == "combo_pack"}),
             "previous_stock": available,
             "new_stock": next_stock,
             "low_stock": 0 < next_stock <= 5,
@@ -2689,42 +2783,112 @@ def validate_and_deduct_inventory(db, items: list, allow_override: bool = False)
 
 
 def restock_order_inventory(db, order: DBOrder) -> list:
-    if getattr(order, "inventory_restocked_at", None):
+    order = db.query(DBOrder).filter(
+        DBOrder.id == order.id,
+        DBOrder.inventory_restocked_at.is_(None),
+    ).with_for_update().first()
+    if not order:
         return []
-    restocked = []
+    requested_by_variant = {}
+    requested_by_product = {}
+
+    def add_request(targets, key, stock_item, quantity, source):
+        entry = targets.setdefault(key, {"stock_item": stock_item, "quantity": 0, "sources": []})
+        entry["quantity"] += quantity
+        entry["sources"].append(source)
+
     for item in order.items or []:
-        variant_id = getattr(item, "variant_id", None)
-        if variant_id:
-            variant = db.query(DBProductVariant).filter(DBProductVariant.id == variant_id).first()
-            if variant:
-                quantity = int(item.quantity or item.qty or 0)
-                if quantity <= 0:
-                    continue
-                previous = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
-                variant.stock_qty = previous + quantity
-                variant.stock = variant.stock_qty
-                variant.updated_at = datetime.utcnow()
-                if variant.product:
-                    variant.product.stock_qty = sum(v.stock_qty if v.stock_qty is not None else (v.stock or 0) for v in variant.product.variants if v.is_active)
-                    variant.product.stock = variant.product.stock_qty
-                    variant.product.updated_at = datetime.utcnow()
-                restocked.append({
-                    "product_id": variant.product_id,
-                    "variant_id": variant.id,
-                    "name": f"{variant.product.name if variant.product else 'Product'} - {variant.weight}" if variant.weight else (variant.product.name if variant.product else "Product"),
-                    "quantity": quantity,
-                    "previous_stock": previous,
-                    "new_stock": variant.stock_qty,
-                })
-                continue
-        if not item.product_id:
-            continue
-        product = db.query(DBProduct).filter(DBProduct.id == item.product_id).first()
-        if not product:
-            continue
         quantity = int(item.quantity or item.qty or 0)
         if quantity <= 0:
             continue
+        if getattr(item, "item_type", "product") == "pack":
+            snapshot = json_load(getattr(item, "combo_components_snapshot", None), None)
+            if not isinstance(snapshot, list) or not snapshot:
+                raise HTTPException(status_code=409, detail="Combo Pack inventory snapshot is missing; inventory was not restored.")
+            for component in snapshot:
+                try:
+                    product_id = int(component["product_id"])
+                    component_quantity = int(component["quantity_per_pack"])
+                    variant_id = int(component["variant_id"]) if component.get("variant_id") else None
+                except (KeyError, TypeError, ValueError, OverflowError):
+                    raise HTTPException(status_code=409, detail="Combo Pack inventory snapshot is invalid; inventory was not restored.")
+                restore_quantity = component_quantity * quantity
+                if restore_quantity <= 0:
+                    raise HTTPException(status_code=409, detail="Combo Pack inventory snapshot has an invalid quantity.")
+                source = {
+                    "type": "combo_pack",
+                    "pack_id": getattr(item, "pack_id", None),
+                    "pack_name": item.name or item.product_name or "Combo Pack",
+                    "quantity": restore_quantity,
+                }
+                if variant_id:
+                    variant = db.query(DBProductVariant).filter(
+                        DBProductVariant.id == variant_id,
+                        DBProductVariant.product_id == product_id,
+                    ).with_for_update().first()
+                    if not variant:
+                        raise HTTPException(status_code=409, detail="A Combo Pack inventory item no longer exists; inventory was not restored.")
+                    add_request(requested_by_variant, variant.id, variant, restore_quantity, source)
+                else:
+                    product = db.query(DBProduct).filter(
+                        DBProduct.id == product_id,
+                    ).with_for_update().first()
+                    if not product:
+                        raise HTTPException(status_code=409, detail="A Combo Pack inventory item no longer exists; inventory was not restored.")
+                    add_request(requested_by_product, product.id, product, restore_quantity, source)
+            continue
+
+        variant_id = getattr(item, "variant_id", None)
+        if variant_id:
+            variant = db.query(DBProductVariant).filter(DBProductVariant.id == variant_id).with_for_update().first()
+            if variant:
+                add_request(
+                    requested_by_variant,
+                    variant.id,
+                    variant,
+                    quantity,
+                    {"type": "individual", "quantity": quantity},
+                )
+                continue
+        if not item.product_id:
+            continue
+        product = db.query(DBProduct).filter(DBProduct.id == item.product_id).with_for_update().first()
+        if not product:
+            continue
+        add_request(
+            requested_by_product,
+            product.id,
+            product,
+            quantity,
+            {"type": "individual", "quantity": quantity},
+        )
+
+    restocked = []
+    for entry in requested_by_variant.values():
+        variant = entry["stock_item"]
+        quantity = entry["quantity"]
+        previous = variant.stock_qty if variant.stock_qty is not None else (variant.stock or 0)
+        variant.stock_qty = previous + quantity
+        variant.stock = variant.stock_qty
+        variant.updated_at = datetime.utcnow()
+        if variant.product:
+            variant.product.stock_qty = sum(v.stock_qty if v.stock_qty is not None else (v.stock or 0) for v in variant.product.variants if v.is_active)
+            variant.product.stock = variant.product.stock_qty
+            variant.product.updated_at = datetime.utcnow()
+        restocked.append({
+            "product_id": variant.product_id,
+            "variant_id": variant.id,
+            "name": f"{variant.product.name if variant.product else 'Product'} - {variant.weight}" if variant.weight else (variant.product.name if variant.product else "Product"),
+            "quantity": quantity,
+            "unit": variant.weight or (variant.product.stock_unit if variant.product else "unit"),
+            "previous_stock": previous,
+            "new_stock": variant.stock_qty,
+            "sources": entry["sources"],
+            "combo_pack_names": sorted({source["pack_name"] for source in entry["sources"] if source["type"] == "combo_pack"}),
+        })
+    for entry in requested_by_product.values():
+        product = entry["stock_item"]
+        quantity = entry["quantity"]
         previous = product.stock_qty if product.stock_qty is not None else (product.stock or 0)
         product.stock_qty = previous + quantity
         product.stock = product.stock_qty
@@ -2733,8 +2897,11 @@ def restock_order_inventory(db, order: DBOrder) -> list:
             "product_id": product.id,
             "name": product.name,
             "quantity": quantity,
+            "unit": product.stock_unit or "unit",
             "previous_stock": previous,
             "new_stock": product.stock_qty,
+            "sources": entry["sources"],
+            "combo_pack_names": sorted({source["pack_name"] for source in entry["sources"] if source["type"] == "combo_pack"}),
         })
     if restocked:
         order.inventory_restocked_at = datetime.utcnow()
@@ -3294,8 +3461,10 @@ def product_to_dict(product: DBProduct, include_inactive_variants: bool = False)
         "base_price": product.price or 0,
         "stock_qty": stock_qty,
         "stock": product.stock if product.stock is not None else stock_qty,
+        "stock_unit": getattr(product, "stock_unit", "unit") or "unit",
         "category": product.category or "",
         "category_name": product.category_name or product.category or "",
+        "is_combo_product": is_combo_product(product),
         "category_image_url": FOODNOVA_CATEGORY_IMAGES.get(product.category or product.category_name or "", ""),
         "image_url": primary_image or "",
         "images": images,
@@ -3350,8 +3519,53 @@ def ensure_product_image_primary(product: DBProduct) -> None:
     product.image_url = primary.image_url
 
 
-def pack_to_dict(pack: DBPack) -> dict:
+def pack_to_dict(pack: DBPack, include_component_stock: bool = False) -> dict:
     items = parse_content_list(pack.items)
+    components = []
+    available_counts = []
+    components_available = bool(pack.components)
+    for component in sorted(pack.components or [], key=lambda entry: (entry.id or 0)):
+        product = component.product
+        variant = component.variant
+        if not product:
+            components_available = False
+            continue
+        stock = (
+            variant.stock_qty if variant and variant.stock_qty is not None
+            else (variant.stock or 0) if variant
+            else product.stock_qty if product.stock_qty is not None
+            else (product.stock or 0)
+        )
+        expected_unit = (variant.weight if variant and variant.weight else product.stock_unit or "unit").strip()
+        unit = (component.unit or expected_unit).strip()
+        component_available = (
+            bool(product.is_active)
+            and (variant is None or bool(variant.is_active))
+            and (variant is not None or not any(option.is_active for option in (product.variants or [])))
+            and int(component.quantity_per_pack or 0) > 0
+            and unit.casefold() == expected_unit.casefold()
+        )
+        if not component_available:
+            components_available = False
+        else:
+            available_counts.append(max(0, int(stock)) // int(component.quantity_per_pack))
+        entry = {
+            "id": component.id,
+            "product_id": product.id,
+            "variant_id": variant.id if variant else None,
+            "name": product.name,
+            "variant_weight": variant.weight if variant else "",
+            "quantity_per_pack": component.quantity_per_pack,
+            "unit": unit,
+            "image_url": variant.image_url if variant and variant.image_url else product.image_url or "",
+            "available": component_available and stock > 0,
+        }
+        if include_component_stock:
+            entry["stock_qty"] = stock
+            entry["stock_unit"] = unit
+        components.append(entry)
+    available_combo_quantity = min(available_counts) if components_available and available_counts else 0
+    has_contents = bool(components)
     return {
         "id": pack.id,
         "name": pack.name,
@@ -3359,8 +3573,12 @@ def pack_to_dict(pack: DBPack) -> dict:
         "price": pack.price or 0,
         "is_active": bool(pack.is_active),
         "items": items,
-        "contents": items,
-        "included_items": items,
+        "components": components,
+        "contents": components,
+        "included_items": components,
+        "available_combo_quantity": available_combo_quantity,
+        "is_available": bool(pack.is_active) and has_contents and available_combo_quantity > 0,
+        "is_out_of_stock": not (bool(pack.is_active) and has_contents and available_combo_quantity > 0),
         "pack_info": "Curated FoodNova pack",
         "serving_estimate": "Sized for household restocking",
         "freshness_note": "Packed from current FoodNova inventory before dispatch",
@@ -3370,6 +3588,59 @@ def pack_to_dict(pack: DBPack) -> dict:
         "active": bool(pack.is_active),
         "updated_at": iso(pack.updated_at),
     }
+
+
+def save_combo_pack_components(db, pack: DBPack, submitted_components: list) -> None:
+    if not isinstance(submitted_components, list):
+        raise HTTPException(status_code=422, detail="Combo Pack contents must be a list.")
+    seen_targets = set()
+    components = []
+    for submitted in submitted_components:
+        if not isinstance(submitted, dict):
+            raise HTTPException(status_code=422, detail="Each Combo Pack component must be an object.")
+        try:
+            product_id = int(submitted.get("product_id"))
+            variant_id = int(submitted["variant_id"]) if submitted.get("variant_id") else None
+            raw_quantity = submitted.get("quantity_per_pack")
+            quantity = int(raw_quantity)
+        except (TypeError, ValueError, OverflowError):
+            raise HTTPException(status_code=422, detail="Each component needs a product and a whole-number quantity.")
+        if isinstance(raw_quantity, bool) or str(raw_quantity).strip() != str(quantity) or quantity <= 0:
+            raise HTTPException(status_code=422, detail="Component quantities must be positive whole numbers.")
+        target = (product_id, variant_id)
+        if target in seen_targets:
+            raise HTTPException(status_code=422, detail="A product option can only be included once.")
+        seen_targets.add(target)
+
+        product = db.query(DBProduct).filter(DBProduct.id == product_id).with_for_update().first()
+        if not product or not product.is_active or is_combo_product(product):
+            raise HTTPException(status_code=422, detail="Combo Pack components must be active catalog products.")
+        if variant_id:
+            variant = db.query(DBProductVariant).filter(
+                DBProductVariant.id == variant_id,
+                DBProductVariant.product_id == product.id,
+            ).with_for_update().first()
+            if not variant or not variant.is_active:
+                raise HTTPException(status_code=422, detail=f"Selected option for {product.name} is unavailable.")
+            expected_unit = (variant.weight or product.stock_unit or "unit").strip()
+        else:
+            variant = None
+            if any(option.is_active for option in (product.variants or [])):
+                raise HTTPException(status_code=422, detail=f"Select an active size for {product.name}.")
+            expected_unit = (product.stock_unit or "unit").strip()
+        supplied_unit = str(submitted.get("unit") or "").strip()
+        if not supplied_unit or supplied_unit.casefold() != expected_unit.casefold():
+            raise HTTPException(status_code=422, detail=f"Use the existing inventory unit ({expected_unit}) for {product.name}.")
+        components.append(DBComboPackComponent(
+            product_id=product.id,
+            variant_id=variant.id if variant else None,
+            quantity_per_pack=quantity,
+            unit=expected_unit,
+        ))
+
+    pack.components.clear()
+    db.flush()
+    pack.components.extend(components)
 
 
 def profile_to_dict(profile: DBProfile, user: DBUser = None) -> dict:
@@ -3712,6 +3983,9 @@ def order_item_to_dict(item: DBOrderItem) -> dict:
     return {
         "id": item.id,
         "product_id": item.product_id,
+        "pack_id": getattr(item, "pack_id", None),
+        "item_type": getattr(item, "item_type", "product") or "product",
+        "combo_components_snapshot": json_load(getattr(item, "combo_components_snapshot", None), []),
         "variant_id": getattr(item, "variant_id", None),
         "variant_weight": getattr(item, "variant_weight", "") or "",
         "sku": getattr(item, "sku", "") or "",
@@ -7633,6 +7907,7 @@ def ensure_database_compatibility():
         "products": {
             "stock_qty": "INTEGER DEFAULT 0",
             "stock": "INTEGER DEFAULT 0",
+            "stock_unit": "VARCHAR(40) DEFAULT 'unit'",
             "category_name": "VARCHAR(100) DEFAULT ''",
             "image_url": "TEXT DEFAULT ''",
             "description": "TEXT DEFAULT ''",
@@ -7715,6 +7990,9 @@ def ensure_database_compatibility():
         },
         "order_items": {
             "product_id": "INTEGER",
+            "pack_id": "INTEGER",
+            "item_type": "VARCHAR(20) DEFAULT 'product'",
+            "combo_components_snapshot": "TEXT",
             "variant_id": "INTEGER",
             "variant_weight": "VARCHAR(40) DEFAULT ''",
             "sku": "VARCHAR(120) DEFAULT ''",
@@ -11934,7 +12212,11 @@ def persist_order_transaction(db, normalized_items: list, fields: dict, allow_st
     for item in normalized_items:
         db.add(DBOrderItem(
             order_id=order.id,
-            product_id=item.get("product_id"), variant_id=item.get("variant_id"),
+            product_id=None if item.get("item_type") == "pack" else item.get("product_id"),
+            pack_id=item.get("product_id") if item.get("item_type") == "pack" else None,
+            item_type=item.get("item_type") or "product",
+            combo_components_snapshot=json_dump(item.get("_combo_components_snapshot")) if item.get("item_type") == "pack" else None,
+            variant_id=item.get("variant_id"),
             variant_weight=item.get("variant_weight", ""), sku=item.get("sku", ""),
             name=item.get("name", ""), product_name=item.get("product_name", ""),
             price=item.get("price", 0), unit_price=item.get("unit_price", item.get("price", 0)),
@@ -14971,6 +15253,7 @@ async def admin_create_product(
     name: str = Form(""),
     price: float = Form(0),
     stock_qty: int = Form(0),
+    stock_unit: str = Form("unit"),
     category: str = Form(""),
     is_active: bool = Form(True),
     active: Optional[bool] = Form(None),
@@ -14989,6 +15272,7 @@ async def admin_create_product(
     name = payload.get("name", name)
     price = payload.get("price", price)
     stock_qty = payload.get("stock_qty", payload.get("stock", stock_qty))
+    stock_unit = payload.get("stock_unit", stock_unit)
     category = payload.get("category", category)
     is_active = payload.get("is_active", payload.get("active", is_active))
     description = payload.get("description", description)
@@ -14999,6 +15283,9 @@ async def admin_create_product(
     delivery_note = payload.get("delivery_note", delivery_note)
     variants_payload = payload.get("variants") if "variants" in payload else json_load(variants, None)
     image_url = ""
+    stock_unit = str(stock_unit or "unit").strip() or "unit"
+    if len(stock_unit) > 40:
+        raise HTTPException(status_code=422, detail="Inventory unit must be 40 characters or fewer.")
     if not math.isfinite(float(price or 0)) or float(price or 0) < 0:
         raise HTTPException(status_code=422, detail="Price must be a non-negative number")
     db = SessionLocal()
@@ -15008,6 +15295,7 @@ async def admin_create_product(
             price=float(price or 0),
             stock_qty=stock_qty,
             stock=stock_qty,
+            stock_unit=stock_unit,
             category=category,
             category_name=category,
             image_url=image_url,
@@ -15052,6 +15340,7 @@ async def admin_update_product(
     name: Optional[str] = Form(None),
     price: Optional[float] = Form(None),
     stock_qty: Optional[int] = Form(None),
+    stock_unit: Optional[str] = Form(None),
     category: Optional[str] = Form(None),
     is_active: Optional[bool] = Form(None),
     active: Optional[bool] = Form(None),
@@ -15072,6 +15361,7 @@ async def admin_update_product(
     name = payload.get("name", name)
     price = payload.get("price", price)
     stock_qty = payload.get("stock_qty", payload.get("stock", stock_qty))
+    stock_unit = payload.get("stock_unit", stock_unit)
     category = payload.get("category", category)
     is_active = payload.get("is_active", is_active)
     active = payload.get("active", active)
@@ -15111,6 +15401,13 @@ async def admin_update_product(
             if stock_qty is not None:
                 product.stock_qty = int(stock_qty or 0)
                 product.stock = int(stock_qty or 0)
+            if stock_unit is not None:
+                stock_unit = str(stock_unit).strip() or "unit"
+                if len(stock_unit) > 40:
+                    raise HTTPException(status_code=422, detail="Inventory unit must be 40 characters or fewer.")
+                product.stock_unit = stock_unit
+            if stock_unit is not None:
+                product.stock_unit = str(stock_unit).strip() or "unit"
             if is_active is not None or active is not None:
                 product.is_active = is_active if active is None else active
             uploads = list(images or [])
@@ -15426,11 +15723,56 @@ async def admin_bulk_update_product_pricing(request: Request):
         db.close()
 
 
+@app.get("/admin/stock/movements")
+def admin_stock_movements(request: Request, limit: int = 200):
+    require_permission(request, "stock:view")
+    if limit < 1 or limit > 1000:
+        raise HTTPException(status_code=422, detail="limit must be between 1 and 1000")
+    db = SessionLocal()
+    try:
+        logs = db.query(DBAdminAuditLog).filter(
+            DBAdminAuditLog.action.in_(["inventory_deducted", "inventory_restocked"]),
+        ).order_by(DBAdminAuditLog.created_at.desc(), DBAdminAuditLog.id.desc()).limit(limit).all()
+        movements = []
+        for log in logs:
+            metadata = json_load(log.metadata_json, {})
+            field = "deductions" if log.action == "inventory_deducted" else "restocked"
+            entries = metadata.get(field, []) if isinstance(metadata, dict) else []
+            for entry in entries:
+                combo_pack_names = entry.get("combo_pack_names") or []
+                movements.append({
+                    "id": f"{log.id}:{entry.get('product_id')}:{entry.get('variant_id') or 0}",
+                    "product_id": entry.get("product_id"),
+                    "variant_id": entry.get("variant_id"),
+                    "name": entry.get("name") or "Product",
+                    "unit": entry.get("unit") or "unit",
+                    "action": log.action,
+                    "direction": "in" if log.action == "inventory_restocked" else "out",
+                    "quantity": entry.get("quantity", 0),
+                    "previous_stock": entry.get("previous_stock"),
+                    "new_stock": entry.get("new_stock"),
+                    "order_code": metadata.get("order_code", ""),
+                    "combo_pack_names": combo_pack_names,
+                    "sources": entry.get("sources") or [],
+                    "created_at": iso(log.created_at),
+                })
+        return {"success": True, "movements": movements, "data": movements}
+    finally:
+        db.close()
+
+
 @app.get("/admin/packs")
 def admin_packs(request: Request):
     require_any_permission(request, ["stock:view", "orders:manual_create"])
-    packs = list_packs()
-    return {"success": True, "packs": packs, "data": packs}
+    db = SessionLocal()
+    try:
+        packs = [
+            pack_to_dict(pack, include_component_stock=True)
+            for pack in db.query(DBPack).order_by(DBPack.name.asc(), DBPack.id.asc()).all()
+        ]
+        return {"success": True, "packs": packs, "data": packs}
+    finally:
+        db.close()
 
 
 @app.post("/admin/packs")
@@ -15440,6 +15782,7 @@ async def admin_create_pack(
     price: float = Form(0),
     description: str = Form(""),
     items: str = Form("[]"),
+    components: Optional[str] = Form(None),
     is_active: bool = Form(True),
     active: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
@@ -15449,6 +15792,13 @@ async def admin_create_pack(
     parsed_items = json_load(items, None)
     if parsed_items is None:
         parsed_items = [item.strip() for item in str(items).split(",") if item.strip()]
+    parsed_components = json_load(components, None)
+    if components is not None and parsed_components is None:
+        raise HTTPException(status_code=422, detail="Combo Pack contents must be valid JSON.")
+    if parsed_components is None:
+        parsed_components = []
+    if (is_active if active is None else active) and not parsed_components:
+        raise HTTPException(status_code=422, detail="Add at least one Combo Pack component before activating this pack.")
     db = SessionLocal()
     try:
         pack = DBPack(
@@ -15460,9 +15810,11 @@ async def admin_create_pack(
             image_url=image_url,
         )
         db.add(pack)
+        db.flush()
+        save_combo_pack_components(db, pack, parsed_components)
         db.commit()
         db.refresh(pack)
-        data = pack_to_dict(pack)
+        data = pack_to_dict(pack, include_component_stock=True)
         create_admin_audit_log(request, admin, "pack_created", "pack", pack.id, f"Admin created pack {pack.name}", {"pack": data})
         return {
             "success": True,
@@ -15482,6 +15834,7 @@ async def admin_update_pack(
     price: Optional[float] = Form(None),
     description: Optional[str] = Form(None),
     items: Optional[str] = Form(None),
+    components: Optional[str] = Form(None),
     is_active: Optional[bool] = Form(None),
     active: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
@@ -15492,6 +15845,16 @@ async def admin_update_pack(
         pack = db.query(DBPack).filter(DBPack.id == pack_id).first()
         if pack:
             old_data = pack_to_dict(pack)
+            next_active = is_active if active is None else active
+            parsed_components = json_load(components, None) if components is not None else None
+            if components is not None and parsed_components is None:
+                raise HTTPException(status_code=422, detail="Combo Pack contents must be valid JSON.")
+            if next_active is None:
+                next_active = pack.is_active
+            if next_active and parsed_components is not None and not parsed_components:
+                raise HTTPException(status_code=422, detail="Add at least one Combo Pack component before activating this pack.")
+            if next_active and parsed_components is None and not pack.components:
+                raise HTTPException(status_code=422, detail="Add at least one Combo Pack component before activating this pack.")
             if name is not None:
                 pack.name = name
             if description is not None:
@@ -15503,6 +15866,8 @@ async def admin_update_pack(
                 if parsed_items is None:
                     parsed_items = [item.strip() for item in str(items).split(",") if item.strip()]
                 pack.items = json_dump(parsed_items)
+            if parsed_components is not None:
+                save_combo_pack_components(db, pack, parsed_components)
             if is_active is not None or active is not None:
                 pack.is_active = is_active if active is None else active
             if image:
@@ -15510,7 +15875,7 @@ async def admin_update_pack(
             pack.updated_at = datetime.utcnow()
             db.commit()
             db.refresh(pack)
-            data = pack_to_dict(pack)
+            data = pack_to_dict(pack, include_component_stock=True)
             create_admin_audit_log(request, admin, "pack_updated", "pack", pack.id, f"Admin updated pack {pack.name}", {"before": old_data, "after": data})
             return {
                 "success": True,

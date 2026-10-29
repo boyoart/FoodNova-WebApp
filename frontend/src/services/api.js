@@ -76,17 +76,19 @@ const toStockFormData = (payload = {}, { partial = false } = {}) => {
     name: payload.name || "",
     price: payload.price ?? 0,
     stock_qty: payload.stock_qty ?? payload.stock ?? 0,
+    stock_unit: payload.stock_unit || "unit",
     category: payload.category || payload.category_name || "",
     description: payload.description || "",
     is_active: payload.is_active !== false,
   };
   if (partial) {
-    ["name", "price", "stock_qty", "stock", "category", "category_name", "description", "contents", "pack_info", "serving_estimate", "freshness_note", "delivery_note", "is_active", "active"].forEach((key) => {
+    ["name", "price", "stock_qty", "stock", "stock_unit", "category", "category_name", "description", "contents", "pack_info", "serving_estimate", "freshness_note", "delivery_note", "is_active", "active"].forEach((key) => {
       if (Object.prototype.hasOwnProperty.call(payload, key) && payload[key] !== undefined && payload[key] !== null) entries[key] = payload[key];
     });
   }
   Object.entries(entries).forEach(([key, value]) => formData.append(key, value));
   if (payload.items !== undefined) formData.append("items", Array.isArray(payload.items) ? JSON.stringify(payload.items) : payload.items || "[]");
+  if (payload.components !== undefined) formData.append("components", JSON.stringify(payload.components || []));
   if (payload.variants !== undefined) formData.append("variants", JSON.stringify(payload.variants || []));
   if (payload.image_file) formData.append("image", payload.image_file);
   (payload.image_files || []).forEach((file) => formData.append("images", file));
@@ -361,6 +363,10 @@ export const adminAPI = {
       logEndpointError("GET /admin/packs", error);
       throw error;
     }
+  },
+  getStockMovements: async () => {
+    const response = await api.get("/admin/stock/movements");
+    return normalizeList(response.data, ["movements"]);
   },
   createPack: async (payload) => (await api.post("/admin/packs", toStockFormData(payload), multipartConfig)).data,
   updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toStockFormData(payload), multipartConfig)).data,
