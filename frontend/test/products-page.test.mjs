@@ -6,6 +6,7 @@ import {
   CATALOG_PAGE_SIZE,
   displayVariantsFor,
   displayedPriceFor,
+  formatPackContents,
   galleryImagesFor,
   normalizeStoreItem,
   selectedVariantFor,
@@ -79,22 +80,53 @@ test('gallery uses existing parent and variant images without duplicates', () =>
   assert.match(source, /setModalImage\(image\)/)
 })
 
-test('Combo Pack details render backend-saved contents and component images', () => {
-  assert.match(source, /modalItem\.components\.map\(\(component\) =>/)
+test('Food Pack details render a comma-separated list from backend-saved contents', () => {
+  assert.match(source, /formatPackContents\(modalItem\.components\)/)
   assert.match(source, /What's Inside This Pack/)
-  assert.match(source, /component\.quantity_per_pack/)
-  assert.match(source, /component\.unit/)
-  assert.match(source, /resolveMediaUrl\(component\.image_url\)/)
+  assert.match(source, /modalItem\.description/)
+  assert.doesNotMatch(source, /component\.(stock_qty|available|product_id|variant_id)/)
   assert.doesNotMatch(source, /Starter Pack.*Rice|Gift Combo.*Beans|Full Package.*Oil/i)
+  assert.equal(formatPackContents([
+    { name: 'Rice', quantity_per_pack: 2, unit: 'kg' },
+    { name: 'Garri Ijebu', variant_weight: '2kg', quantity_per_pack: 1, unit: '2kg' },
+  ]), 'Rice (2 kg), Garri Ijebu (1 × 2kg)')
 })
 
 test('Admin Combo Pack editor supports searchable multi-select and saved component quantities', () => {
   assert.match(adminSource, /Combo Pack Contents/)
   assert.match(adminSource, /type="search" value=\{packSearch\}/)
   assert.match(adminSource, /type="checkbox" checked=\{selected\}/)
+  assert.match(adminSource, /products\s*\n\s*\.filter\(\(product\) => product\.is_active !== false && !product\.is_combo_product\)/)
+  assert.match(adminSource, /\.flatMap\(\(product\) =>/)
+  assert.match(adminSource, /unavailable until restocked/)
   assert.match(adminSource, /quantity_per_pack/)
-  assert.match(adminSource, /stock_qty.*available/)
+  assert.match(adminSource, /stock_qty[\s\S]*available/)
   assert.match(apiSource, /payload\.components !== undefined.*append\("components", JSON\.stringify/s)
+})
+
+test('Food Packs without available component inventory cannot be added to cart', () => {
+  assert.equal(normalizeStoreItem({ type: 'pack', is_available: true, components: [] }, 'pack').is_available, false)
+  assert.equal(normalizeStoreItem({
+    type: 'pack',
+    is_available: false,
+    components: [{ name: 'Rice', quantity_per_pack: 2, unit: 'kg' }],
+  }, 'pack').is_out_of_stock, true)
+  assert.match(source, /const unavailableLabel = isFoodPack \? 'Temporarily unavailable' : 'Out of stock'/)
+  assert.match(source, /disabled=\{unavailable\}/)
+  assert.match(source, /modalItem\.type === 'pack' \? 'Temporarily unavailable' : 'Out of stock'/)
+})
+
+test('ordinary product stock status and purchase labels remain unchanged', () => {
+  const unavailableProduct = normalizeStoreItem({ type: 'product', is_available: false }, 'product')
+  assert.equal(unavailableProduct.is_out_of_stock, true)
+  assert.match(source, /unavailableLabel = isFoodPack \? 'Temporarily unavailable' : 'Out of stock'/)
+  assert.match(source, /This item is out of stock/)
+  assert.match(source, /Out of stock/)
+})
+
+test('food pack contents text wraps on narrow screens without stock or inventory fields', () => {
+  assert.match(styles, /\.pack-contents-list\s*\{[^}]*overflow-wrap:\s*anywhere;/s)
+  assert.doesNotMatch(source, /available_combo_quantity|component\.stock_qty|component\.product_id|component\.variant_id/)
 })
 
 test('modal cart submission carries selected variant and quantity', () => {

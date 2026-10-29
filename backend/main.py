@@ -670,7 +670,6 @@ FOODNOVA_PRODUCT_CATALOG = [
 WEIGHT_VARIANT_PRODUCTS = {"Foreign Rice", "Honey Beans", "Garri Ijebu"}
 WEIGHT_VARIANTS = ["1kg", "2kg", "3kg", "5kg"]
 CATALOG_PRODUCT_NAMES = {item["name"] for item in FOODNOVA_PRODUCT_CATALOG}
-COMBO_KEYWORDS = ("pack", "combo", "package", "bundle")
 
 
 class RegisterPayload(BaseModel):
@@ -3042,9 +3041,8 @@ def is_combo_product(product: DBProduct) -> bool:
         product.category or "",
         product.category_name or "",
         product.pack_info or "",
-        product.description or "",
     ]).lower()
-    return any(keyword in haystack for keyword in COMBO_KEYWORDS)
+    return bool(re.search(r"\b(?:pack|combo|package|bundle)\b", haystack))
 
 
 def make_placeholder_svg(title: str, subtitle: str, accent: str = "#0B7A3B") -> str:
@@ -3549,36 +3547,42 @@ def pack_to_dict(pack: DBPack, include_component_stock: bool = False) -> dict:
             components_available = False
         else:
             available_counts.append(max(0, int(stock)) // int(component.quantity_per_pack))
-        entry = {
-            "id": component.id,
-            "product_id": product.id,
-            "variant_id": variant.id if variant else None,
-            "name": product.name,
-            "variant_weight": variant.weight if variant else "",
-            "quantity_per_pack": component.quantity_per_pack,
-            "unit": unit,
-            "image_url": variant.image_url if variant and variant.image_url else product.image_url or "",
-            "available": component_available and stock > 0,
-        }
         if include_component_stock:
+            entry = {
+                "id": component.id,
+                "product_id": product.id,
+                "variant_id": variant.id if variant else None,
+                "name": product.name,
+                "variant_weight": variant.weight if variant else "",
+                "quantity_per_pack": component.quantity_per_pack,
+                "unit": unit,
+                "image_url": variant.image_url if variant and variant.image_url else product.image_url or "",
+                "available": component_available and stock > 0,
+            }
             entry["stock_qty"] = stock
             entry["stock_unit"] = unit
+        else:
+            entry = {
+                "name": product.name,
+                "variant_weight": variant.weight if variant else "",
+                "quantity_per_pack": component.quantity_per_pack,
+                "unit": unit,
+            }
         components.append(entry)
     available_combo_quantity = min(available_counts) if components_available and available_counts else 0
     has_contents = bool(components)
-    return {
+    payload = {
         "id": pack.id,
         "name": pack.name,
         "description": pack.description or "",
         "price": pack.price or 0,
+        "discount": 0,
         "is_active": bool(pack.is_active),
         "items": items,
         "components": components,
         "contents": components,
         "included_items": components,
-        "available_combo_quantity": available_combo_quantity,
         "is_available": bool(pack.is_active) and has_contents and available_combo_quantity > 0,
-        "is_out_of_stock": not (bool(pack.is_active) and has_contents and available_combo_quantity > 0),
         "pack_info": "Curated FoodNova pack",
         "serving_estimate": "Sized for household restocking",
         "freshness_note": "Packed from current FoodNova inventory before dispatch",
@@ -3588,6 +3592,10 @@ def pack_to_dict(pack: DBPack, include_component_stock: bool = False) -> dict:
         "active": bool(pack.is_active),
         "updated_at": iso(pack.updated_at),
     }
+    if include_component_stock:
+        payload["available_combo_quantity"] = available_combo_quantity
+        payload["is_out_of_stock"] = not payload["is_available"]
+    return payload
 
 
 def save_combo_pack_components(db, pack: DBPack, submitted_components: list) -> None:

@@ -10,6 +10,7 @@ import {
   CATALOG_PAGE_SIZE,
   displayVariantsFor,
   displayedPriceFor,
+  formatPackContents,
   galleryImagesFor,
   getPageNumber,
   normalizeStoreItem,
@@ -127,7 +128,7 @@ export default function ProductsPage() {
       quantity: Math.max(1, Number(options.quantity || 1)),
     }, itemType)
     if (normalized.is_out_of_stock || options.unavailable) {
-      toast.error('This item is out of stock')
+      toast.error(itemType === 'pack' ? 'This Food Pack is temporarily unavailable' : 'This item is out of stock')
       return
     }
     addItem(normalized)
@@ -273,11 +274,13 @@ export default function ProductsPage() {
       ) : (
         <div className="products-grid">
           {items.map((item) => {
+            const isFoodPack = activeTab === 'packs'
             const purchasableVariants = activeTab === 'products' ? (item.variants || []) : []
             const selected = selectedVariantFor(item, selectedVariants)
             const unavailable = activeTab === 'products'
               ? (purchasableVariants.length ? !selected : item.is_out_of_stock)
-              : item.is_out_of_stock
+              : !item.is_available
+            const unavailableLabel = isFoodPack ? 'Temporarily unavailable' : 'Out of stock'
             const cardKey = `${activeTab}-${item.id}`
 
             return (
@@ -299,7 +302,7 @@ export default function ProductsPage() {
               >
                 <div className="product-image">
                   <img src={getImageUrl(item)} alt={item.name} onError={handleImageError} />
-                  {unavailable && <div className="out-of-stock">Out of stock</div>}
+                  {unavailable && <div className="out-of-stock">{unavailableLabel}</div>}
                 </div>
                 <div className="product-info">
                   {item.category && <span className="category">{item.category}</span>}
@@ -323,7 +326,7 @@ export default function ProductsPage() {
                       onClick={() => handleAddToCart(item)}
                       disabled={unavailable}
                     >
-                      {unavailable ? 'Out of stock' : 'Add to Cart'}
+                      {unavailable ? unavailableLabel : 'Add to Cart'}
                     </button>
                   </div>
                 </div>
@@ -379,6 +382,7 @@ export default function ProductsPage() {
 
             <div className="product-modal-content">
               {modalItem.category && <span className="category">{modalItem.category}</span>}
+              {modalItem.type === 'pack' && <p className="pack-details-eyebrow">Food Pack</p>}
               <h2 id="product-modal-title">{modalItem.name}</h2>
 
               <div className="product-modal-tabs" role="tablist" aria-label={`${modalItem.name} information`}>
@@ -408,26 +412,14 @@ export default function ProductsPage() {
 
               {modalTab === 'details' && (
                 <div id="product-modal-details" role="tabpanel" aria-labelledby="product-modal-details-tab" className="product-modal-panel">
-                  <p>{modalItem.description || 'Quality FoodNova grocery item prepared for your order.'}</p>
+                  <p>{modalItem.description || (modalItem.type === 'pack' ? 'Food Pack description coming soon.' : 'Quality FoodNova grocery item prepared for your order.')}</p>
                   {modalItem.type === 'pack' && (
                     <section className="pack-contents">
                       <h3>What's Inside This Pack</h3>
                       {(modalItem.components || []).length ? (
-                        <ul>
-                          {modalItem.components.map((component) => (
-                            <li key={`${component.product_id}:${component.variant_id || ''}`}>
-                              <img
-                                src={resolveMediaUrl(component.image_url) || '/placeholder.png'}
-                                alt=""
-                                onError={handleImageError}
-                              />
-                              <span>{component.name}{component.variant_weight ? ` — ${component.variant_weight}` : ''}</span>
-                              <strong>{component.quantity_per_pack} {component.unit}</strong>
-                            </li>
-                          ))}
-                        </ul>
+                        <p className="pack-contents-list">{formatPackContents(modalItem.components)}</p>
                       ) : (
-                        <p>Contents for this pack have not been set up yet.</p>
+                        <p>Food Pack contents are being prepared. This pack is temporarily unavailable.</p>
                       )}
                     </section>
                   )}
@@ -457,9 +449,11 @@ export default function ProductsPage() {
               <div className="product-modal-purchase">
                 <div>
                   <span className="price">{formatPrice(displayedPriceFor(modalItem, selectedVariants))}</span>
-                  {modalOutOfStock
-                    ? <span className="out-of-stock-text">Out of stock</span>
-                    : <span className="in-stock">In stock</span>}
+                  {modalOutOfStock && (
+                    <span className="out-of-stock-text">
+                      {modalItem.type === 'pack' ? 'Temporarily unavailable' : 'Out of stock'}
+                    </span>
+                  )}
                 </div>
                 <div className="product-quantity" aria-label="Quantity selector">
                   <button type="button" aria-label="Decrease quantity" onClick={() => setModalQuantity((current) => Math.max(1, current - 1))} disabled={modalQuantity === 1}>
@@ -480,10 +474,18 @@ export default function ProductsPage() {
                     unavailable: modalOutOfStock,
                   })}
                 >
-                  {modalOutOfStock ? 'Out of stock' : 'Add to Cart'}
+                  {modalOutOfStock
+                    ? modalItem.type === 'pack' ? 'Temporarily unavailable' : 'Out of stock'
+                    : 'Add to Cart'}
                 </button>
               </div>
-              {modalUnavailable && <p className="product-modal-unavailable">This product is no longer available in the active catalog.</p>}
+              {modalUnavailable && (
+                <p className="product-modal-unavailable">
+                  {modalItem.type === 'pack'
+                    ? 'This Food Pack is temporarily unavailable.'
+                    : 'This product is no longer available in the active catalog.'}
+                </p>
+              )}
             </div>
           </section>
         </div>

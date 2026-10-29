@@ -30,7 +30,9 @@ export const normalizeStoreItem = (item, itemType = 'product') => {
     .map(normalizeVariant)
   const available = itemType === 'product' && variants.length
     ? item?.is_active !== false && item?.active !== false && variants.some((variant) => variant.is_available)
-    : contractAvailability(item)
+    : itemType === 'pack'
+      ? Array.isArray(item?.components) && item.components.length > 0 && contractAvailability(item)
+      : contractAvailability(item)
 
   return {
     ...item,
@@ -52,6 +54,17 @@ export const normalizeStoreItem = (item, itemType = 'product') => {
     category: item?.category || item?.category_name || '',
   }
 }
+
+export const formatPackContents = (components = []) => components.map((component) => {
+  const name = String(component?.name || 'Food item').trim()
+  const quantity = Number(component?.quantity_per_pack || 0)
+  const variantWeight = String(component?.variant_weight || '').trim()
+  const unit = String(component?.unit || '').trim()
+  const includedAmount = variantWeight
+    ? `${quantity} × ${variantWeight}`
+    : `${quantity} ${unit}`.trim()
+  return `${name} (${includedAmount})`
+}).join(', ')
 
 export const galleryImagesFor = (item) => {
   const images = [

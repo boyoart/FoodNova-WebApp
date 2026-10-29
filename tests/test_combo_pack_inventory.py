@@ -27,6 +27,8 @@ class ComboPackInventoryTests(unittest.TestCase):
         self.beans = main.DBProduct(name="Inventory Beans", stock_qty=10, stock=10, stock_unit="kg", is_active=True)
         self.db.add_all([self.rice, self.beans])
         self.db.flush()
+        self.session_patch = patch.object(main, "SessionLocal", self.Session)
+        self.session_patch.start()
         self.first_pack = self.make_pack(
             "Starter Combo",
             [(self.rice, 2, "kg"), (self.beans, 1, "kg")],
@@ -35,6 +37,7 @@ class ComboPackInventoryTests(unittest.TestCase):
         self.db.commit()
 
     def tearDown(self):
+        self.session_patch.stop()
         self.db.close()
 
     def make_pack(self, name, components):
@@ -57,14 +60,102 @@ class ComboPackInventoryTests(unittest.TestCase):
         self.db.flush()
 
         payload = main.pack_to_dict(self.first_pack)
+        admin_payload = main.pack_to_dict(self.first_pack, include_component_stock=True)
 
-        self.assertEqual(payload["available_combo_quantity"], 3)
+        self.assertNotIn("available_combo_quantity", payload)
+        self.assertEqual(admin_payload["available_combo_quantity"], 3)
         self.assertTrue(payload["is_available"])
+        self.assertEqual(payload["discount"], 0)
         self.assertEqual(
             {(item["name"], item["quantity_per_pack"], item["unit"]) for item in payload["components"]},
             {("Inventory Rice", 2, "kg"), ("Inventory Beans", 1, "kg")},
         )
         self.assertNotIn("stock_qty", payload["components"][0])
+        self.assertNotIn("product_id", payload["components"][0])
+        self.assertNotIn("variant_id", payload["components"][0])
+        self.assertIn("stock_qty", admin_payload["components"][0])
+
+    def test_garri_ijebu_is_eligible_even_when_description_says_packed(self):
+        garri = main.DBProduct(
+            name="Garri Ijebu",
+            description="Carefully packed for freshness and household use.",
+            pack_info="Weight variants available",
+            category="Food Staples",
+            stock_qty=360,
+            stock=360,
+            stock_unit="unit",
+            is_active=True,
+        )
+        self.db.add(garri)
+        self.db.flush()
+        self.db.add_all([
+            main.DBProductVariant(product_id=garri.id, sku="GARRI-1KG", weight="1kg", stock_qty=0, stock=0, is_active=True),
+            main.DBProductVariant(product_id=garri.id, sku="GARRI-2KG", weight="2kg", stock_qty=5, stock=5, is_active=True),
+        ])
+        self.db.flush()
+
+        payload = main.product_to_dict(garri, include_inactive_variants=True)
+
+        self.assertFalse(main.is_combo_product(garri))
+        self.assertFalse(payload["is_combo_product"])
+        self.assertEqual([variant["weight"] for variant in payload["variants"]], ["1kg", "2kg"])
+        self.assertEqual(payload["variants"][0]["stock_qty"], 0)
+
+    def test_admin_catalog_selection_source_contains_every_eligible_inventory_product(self):
+        zero_stock = main.DBProduct(name="Zero Stock Flour", stock_qty=0, stock=0, is_active=True)
+        archived = main.DBProduct(name="Archived Flour", stock_qty=3, stock=3, is_active=False)
+        nested_bundle = main.DBProduct(name="Family Combo Product", stock_qty=3, stock=3, is_active=True)
+        additional = [
+            main.DBProduct(name=f"Catalog Item {index:03d}", stock_qty=index, stock=index, is_active=True)
+            for index in range(105)
+        ]
+        self.db.add_all([zero_stock, archived, nested_bundle, *additional])
+        self.db.flush()
+        self.db.add(main.DBProductVariant(
+            product_id=additional[0].id,
+            sku="CATALOG-000-5KG",
+            weight="5kg",
+            stock_qty=0,
+            stock=0,
+            is_active=True,
+        ))
+        self.db.commit()
+
+        catalog = main._list_products(include_inactive=True, admin_view=True)
+        eligible = [product for product in catalog if product["is_active"] and not product["is_combo_product"]]
+
+        self.assertGreater(len(catalog), 100)
+        self.assertIn("Zero Stock Flour", {product["name"] for product in eligible})
+        self.assertNotIn("Archived Flour", {product["name"] for product in eligible})
+        self.assertNotIn("Family Combo Product", {product["name"] for product in eligible})
+        self.assertIn("Catalog Item 000", {product["name"] for product in eligible})
+
+    def test_saved_description_and_components_reload_in_customer_and_admin_contracts(self):
+        pack = main.DBPack(name="Configured Food Pack", price=4500, description="A family grocery selection.", is_active=True)
+        self.db.add(pack)
+        self.db.flush()
+        main.save_combo_pack_components(self.db, pack, [{
+            "product_id": self.rice.id,
+            "quantity_per_pack": 2,
+            "unit": "kg",
+        }])
+        self.db.commit()
+        pack_id = pack.id
+        self.db.expire_all()
+
+        customer_payload = main.get_pack(pack_id)
+        admin_payload = main.pack_to_dict(self.db.query(main.DBPack).get(pack_id), include_component_stock=True)
+
+        self.assertEqual(customer_payload["description"], "A family grocery selection.")
+        self.assertEqual(customer_payload["price"], 4500)
+        self.assertEqual(customer_payload["components"][0]["name"], "Inventory Rice")
+        self.assertEqual(customer_payload["components"][0]["quantity_per_pack"], 2)
+        self.assertEqual(customer_payload["components"][0]["unit"], "kg")
+        self.assertNotIn("available_combo_quantity", customer_payload)
+        self.assertNotIn("stock_qty", customer_payload["components"][0])
+        self.assertNotIn("product_id", customer_payload["components"][0])
+        self.assertEqual(admin_payload["components"][0]["product_id"], self.rice.id)
+        self.assertEqual(admin_payload["components"][0]["stock_qty"], self.rice.stock_qty)
 
     def test_single_and_multiple_packs_deduct_component_quantities(self):
         single_item = {"item_type": "pack", "product_id": self.first_pack.id, "quantity": 1}

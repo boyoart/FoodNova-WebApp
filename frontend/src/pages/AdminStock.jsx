@@ -202,7 +202,15 @@ export default function AdminStock() {
   }
 
   const renderStockStatus = (item) => {
-    if (!isProduct) return <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
+    if (!isProduct) {
+      return (
+        <div className="combo-pack-admin-status">
+          <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
+          {!(item.components || []).length && <span className="stock-badge out">Needs contents</span>}
+          {(item.components || []).length > 0 && !item.is_available && <span className="stock-badge low">Insufficient stock</span>}
+        </div>
+      )
+    }
     const state = getStockState(item)
     if (state === 'archived') return <span className="stock-badge archived">Archived</span>
     if (state === 'out') return <span className="stock-badge out">Out of Stock</span>
@@ -325,7 +333,7 @@ export default function AdminStock() {
     </div>
     <section className="combo-pack-editor">
       <h3>Combo Pack Contents</h3>
-      <p className="stock-image-upload-help">Choose active inventory products. Quantities must be whole stock units; selected variants retain their existing unit and stock record.</p>
+      <p className="stock-image-upload-help">Choose active catalog products from any category. Zero-stock items remain configurable and are marked unavailable until restocked. Quantities must be whole stock units; variants retain their existing unit and stock record.</p>
       <label className="stock-form-field">
         <span>Search products</span>
         <input type="search" value={packSearch} onChange={(event) => setPackSearch(event.target.value)} placeholder="Search products or sizes..." />
@@ -337,11 +345,13 @@ export default function AdminStock() {
             <label className="combo-pack-option" key={componentKey(option)}>
               <input type="checkbox" checked={selected} onChange={() => togglePackComponent(option)} />
               <span>{option.name}{option.variant_weight ? ` — ${option.variant_weight}` : ''}</span>
-              <small>{option.stock_qty} {option.unit} available</small>
+              <small>{option.stock_qty > 0
+                ? `${option.stock_qty} ${option.unit} available`
+                : `0 ${option.unit} in stock — unavailable until restocked`}</small>
             </label>
           )
         })}
-        {!visibleComponentOptions.length && <p>No eligible active stock products found.</p>}
+        {!visibleComponentOptions.length && <p>No eligible active products found.</p>}
       </div>
       <div className="combo-pack-selected">
         <h4>Selected components</h4>
@@ -349,7 +359,9 @@ export default function AdminStock() {
           <div className="combo-pack-selected-row" key={componentKey(component)}>
             <div>
               <strong>{component.name}{component.variant_weight ? ` — ${component.variant_weight}` : ''}</strong>
-              <small>{component.stock_qty ?? 0} {component.unit} available</small>
+              <small>{Number(component.stock_qty ?? 0) > 0
+                ? `${component.stock_qty} ${component.unit} available`
+                : `0 ${component.unit} in stock — unavailable until restocked`}</small>
             </div>
             <label>
               <span>Quantity per pack ({component.unit})</span>
@@ -485,7 +497,7 @@ export default function AdminStock() {
                 <th>ID</th>
                 <th>Image</th>
                 <th>Name</th>
-                {isProduct ? <><th>Category</th><th>Stock</th></> : <><th>Description</th><th>Items</th></>}
+                {isProduct ? <><th>Category</th><th>Stock</th></> : <><th>Description</th><th>Contents</th></>}
                 <th>Price</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -506,7 +518,9 @@ export default function AdminStock() {
                   ) : (
                     <>
                       <td>{item.description?.substring(0, 50)}{item.description?.length > 50 ? '...' : ''}</td>
-                      <td>{Array.isArray(item.items) ? item.items.join(', ') : item.items}</td>
+                      <td>{(item.components || []).length
+                        ? item.components.map((component) => `${component.name} (${component.quantity_per_pack} ${component.unit})`).join(', ')
+                        : 'Needs contents configuration'}</td>
                     </>
                   )}
                   <td>{formatPrice(row.price)}</td>

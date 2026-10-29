@@ -1254,6 +1254,17 @@ tbody tr:hover {
   color: var(--fn-muted);
 }
 
+.combo-pack-option small {
+  max-width: 220px;
+  text-align: right;
+}
+
+.combo-pack-admin-status {
+  display: grid;
+  justify-items: start;
+  gap: 0.3rem;
+}
+
 .combo-pack-selected-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(180px, 0.8fr) auto;
