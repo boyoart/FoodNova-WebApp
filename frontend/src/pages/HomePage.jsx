@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck, ShieldCheck, PackageCheck } from 'lucide-react'
-import api, { resolveMediaUrl } from '../services/api'
+import api, { packsAPI, resolveMediaUrl } from '../services/api'
+import { formatPrice } from '../utils/formatters'
+import { hasConfirmedFivePercentDiscount, selectFeaturedComboPacks } from './homepageComboPacks'
 import './HomePage.css'
 
 const heroSlides = [
@@ -70,6 +72,7 @@ export default function HomePage() {
   const [activeSlide, setActiveSlide] = useState(0)
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
+  const [comboPacks, setComboPacks] = useState([])
   const [isHeroPaused, setIsHeroPaused] = useState(false)
   const resumeTimer = useRef(null)
   const slides = useMemo(() => heroSlides.map((item) => ({
@@ -85,6 +88,12 @@ export default function HomePage() {
       const cats = categoryRes.data?.categories || categoryRes.data?.data || categoryRes.data || []
       setCategories(Array.isArray(cats) ? cats.filter((c) => c?.is_active !== false) : [])
     }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    packsAPI.getAll({ page: 1, page_size: 100 })
+      .then((response) => setComboPacks(selectFeaturedComboPacks(response.data)))
+      .catch(() => setComboPacks([]))
   }, [])
 
   useEffect(() => {
@@ -172,6 +181,30 @@ export default function HomePage() {
             ><span /></button>
           ))}
         </div>
+      </section>
+
+      <section className="home-combo-packs" aria-labelledby="home-combo-packs-title">
+        <div className="home-combo-packs-intro">
+          <p className="home-combo-packs-kicker">Curated for your kitchen</p>
+          <h2 id="home-combo-packs-title">Combo Food Packs</h2>
+          <p className="home-combo-packs-subtitle">Everyday food essentials. Better value.</p>
+        </div>
+        <div className="home-combo-pack-prices" aria-label="Featured Combo Pack prices">
+          {comboPacks.map((pack) => {
+            const available = pack.is_available !== false
+            return (
+              <article className="home-combo-pack-price" key={pack.id}>
+                <h3>{pack.name}</h3>
+                <strong>{formatPrice(pack.price)}</strong>
+                {hasConfirmedFivePercentDiscount(pack) && <span className="home-combo-pack-discount">5% OFF</span>}
+                {!available && <span className="home-combo-pack-unavailable">Temporarily unavailable</span>}
+              </article>
+            )
+          })}
+        </div>
+        <Link className="home-combo-packs-cta" to="/products?tab=packs">
+          Explore Combo Packs <span aria-hidden="true">→</span>
+        </Link>
       </section>
 
       <section className="features">
