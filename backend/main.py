@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from jose import JWTError, jwt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ValidationError
 from sqlalchemy import and_, false, func, inspect, or_, text
 from sqlalchemy.exc import IntegrityError
 
@@ -36,6 +36,7 @@ from email_service import (
     send_email,
     send_admin_order_email,
     send_customer_order_email,
+    send_customer_fulfillment_pin_email,
     send_low_stock_alert,
     send_customer_password_reset_email,
 )
@@ -830,6 +831,10 @@ class ManualOrderPayload(BaseModel):
     order_source: Optional[str] = "admin_manual"
     stock_override: bool = False
     stock_override_reason: Optional[str] = ""
+
+
+class ManualCustomerEmailPayload(BaseModel):
+    email: EmailStr
 
 
 class TrackOrderPayload(BaseModel):
@@ -4431,6 +4436,181 @@ def pickup_pin_is_customer_visible(order: DBOrder) -> bool:
     )
 
 
+MANUAL_ORDER_SOURCES = {"admin_manual", "phone", "whatsapp", "walk_in"}
+
+
+def send_eligible_fulfillment_pin_email(
+    order_id: int,
+    fulfillment: str = "",
+    *,
+    force_resend: bool = False,
+    admin: Optional[dict] = None,
+) -> dict:
+    db = SessionLocal()
+    try:
+        order = db.query(DBOrder).filter(DBOrder.id == order_id).with_for_update().first()
+        if not order:
+            return {"sent": False, "reason": "order_not_found"}
+
+        purpose = str(fulfillment or order.delivery_method or "").strip().lower()
+        source = str(order.order_source or "").strip().lower()
+        statuses = {
+            str(getattr(order, field, "") or "").strip().lower()
+            for field in ("status", "order_status", "fulfillment_status")
+        }
+        cancelled = (
+            "cancelled" in statuses
+            or str(order.cancellation_status or "").strip().lower() in {"approved", "cancelled"}
+            or bool(order.is_deleted)
+        )
+        if source not in MANUAL_ORDER_SOURCES:
+            return {"sent": False, "reason": "not_a_manual_order"}
+        if cancelled:
+            return {"sent": False, "reason": "order_cancelled"}
+        if str(order.payment_status or "").strip().lower() not in DELIVERY_MATCH_CONFIRMED_PAYMENTS:
+            return {"sent": False, "reason": "payment_not_confirmed"}
+        if not str(order.delivery_code or "").strip() or not order.delivery_code_created_at:
+            return {"sent": False, "reason": "pin_not_issued"}
+        if purpose == "pickup":
+            if not pickup_pin_is_customer_visible(order):
+                return {"sent": False, "reason": "pickup_pin_not_eligible_or_expired"}
+            expires_at = order.delivery_code_created_at + PICKUP_PIN_TTL
+        elif purpose == "delivery":
+            if canonical_dispatch_status(order) != "ARRIVED" or order.delivery_confirmed_at:
+                return {"sent": False, "reason": "delivery_pin_not_eligible"}
+            expires_at = None
+        else:
+            return {"sent": False, "reason": "unsupported_fulfillment"}
+
+        try:
+            recipient = str(ManualCustomerEmailPayload(email=order.customer_email).email)
+        except ValidationError:
+            return {"sent": False, "reason": "valid_customer_email_required"}
+
+        issued_at = iso(order.delivery_code_created_at)
+        sent_action = f"{purpose}_pin_email_sent"
+        previous_successes = db.query(DBAdminAuditLog).filter(
+            DBAdminAuditLog.entity_type == "order",
+            DBAdminAuditLog.entity_id == str(order.id),
+            DBAdminAuditLog.action == sent_action,
+        ).all()
+        already_sent = any(
+            (json_load(entry.metadata_json, {}) or {}).get("pin_issued_at") == issued_at
+            for entry in previous_successes
+        )
+        if already_sent and not force_resend:
+            return {"sent": True, "duplicate": True}
+
+        previous_attempts = db.query(DBAdminAuditLog).filter(
+            DBAdminAuditLog.entity_type == "order",
+            DBAdminAuditLog.entity_id == str(order.id),
+            DBAdminAuditLog.action == "fulfillment_pin_email_attempt",
+        ).all()
+        attempted_for_pin = any(
+            (metadata := json_load(entry.metadata_json, {}) or {}).get("pin_issued_at") == issued_at
+            and metadata.get("fulfillment") == purpose
+            for entry in previous_attempts
+        )
+        if attempted_for_pin and not force_resend:
+            return {"sent": False, "reason": "email_attempt_already_made"}
+
+        resend_cutoff = datetime.utcnow() - timedelta(minutes=1)
+        if force_resend:
+            recent_attempt = db.query(DBAdminAuditLog).filter(
+                DBAdminAuditLog.entity_type == "order",
+                DBAdminAuditLog.entity_id == str(order.id),
+                DBAdminAuditLog.action == "fulfillment_pin_email_resend_attempt",
+                DBAdminAuditLog.created_at >= resend_cutoff,
+            ).first()
+            if recent_attempt:
+                return {"sent": False, "reason": "resend_rate_limited"}
+            db.add(DBAdminAuditLog(
+                admin_id=(admin or {}).get("id"),
+                admin_name=(admin or {}).get("full_name") or (admin or {}).get("name") or "FoodNova Admin",
+                admin_email=(admin or {}).get("email") or "",
+                action="fulfillment_pin_email_resend_attempt",
+                entity_type="order",
+                entity_id=str(order.id),
+                description=f"{purpose.title()} PIN email resend requested for order {order.order_code or order.id}",
+                metadata_json=json_dump({"fulfillment": purpose, "pin_issued_at": issued_at}),
+            ))
+
+        db.add(DBAdminAuditLog(
+            admin_id=(admin or {}).get("id"),
+            admin_name=(admin or {}).get("full_name") or (admin or {}).get("name") or "FoodNova System",
+            admin_email=(admin or {}).get("email") or "system@foodnova.com.ng",
+            action="fulfillment_pin_email_attempt",
+            entity_type="order",
+            entity_id=str(order.id),
+            description=f"{purpose.title()} PIN email {'resend ' if force_resend else ''}attempt for order {order.order_code or order.id}",
+            metadata_json=json_dump({"fulfillment": purpose, "pin_issued_at": issued_at}),
+        ))
+        db.commit()
+
+        result = send_customer_fulfillment_pin_email(
+            recipient,
+            order.order_code or f"FN-{order.id}",
+            order.customer_name or "FoodNova Customer",
+            order.delivery_code,
+            purpose,
+            expires_at=expires_at,
+        )
+        sent = isinstance(result, dict) and result.get("status") == "sent"
+        db.add(DBAdminAuditLog(
+            admin_id=None,
+            admin_name="FoodNova System",
+            admin_email="system@foodnova.com.ng",
+            action=sent_action if sent else f"{purpose}_pin_email_failed",
+            entity_type="order",
+            entity_id=str(order.id),
+            description=f"{purpose.title()} PIN email {'sent' if sent else 'failed'} for order {order.order_code or order.id}",
+            metadata_json=json_dump({
+                "fulfillment": purpose,
+                "pin_issued_at": issued_at,
+                "email_status": result.get("status", "failed") if isinstance(result, dict) else "failed",
+                "reason": result.get("reason", "") if isinstance(result, dict) else "",
+            }),
+        ))
+        db.commit()
+        if not sent:
+            print("FULFILLMENT_PIN_EMAIL_FAILED", json_dump({
+                "order_id": order.id,
+                "fulfillment": purpose,
+                "reason": result.get("reason", "provider_error") if isinstance(result, dict) else "provider_error",
+            }))
+        return {"sent": sent, "reason": "" if sent else "email_delivery_failed"}
+    except Exception as error:
+        db.rollback()
+        print("FULFILLMENT_PIN_EMAIL_ERROR", json_dump({
+            "order_id": order_id,
+            "error_type": type(error).__name__,
+        }))
+        return {"sent": False, "reason": "email_delivery_failed"}
+    finally:
+        db.close()
+
+
+@app.post("/admin/orders/{order_id}/fulfillment-pin/email")
+def admin_resend_fulfillment_pin_email(order_id: int, request: Request):
+    admin = require_permission(request, "orders:update")
+    result = send_eligible_fulfillment_pin_email(
+        order_id,
+        force_resend=True,
+        admin=admin,
+    )
+    if result.get("sent"):
+        return {"success": True, "message": "The eligible fulfillment PIN was emailed to the customer."}
+
+    reason = result.get("reason")
+    if reason == "order_not_found":
+        raise HTTPException(status_code=404, detail="Order not found")
+    if reason == "resend_rate_limited":
+        raise HTTPException(status_code=429, detail="A PIN email was just requested. Please wait one minute before trying again.")
+    if reason == "email_delivery_failed":
+        raise HTTPException(status_code=502, detail="The PIN email could not be sent. The order remains eligible for a later retry.")
+    raise HTTPException(status_code=409, detail="This order is not currently eligible for a fulfillment PIN email.")
+
+
 def provision_legacy_ready_pickup_pin(db, order: DBOrder) -> str:
     """Atomically provision the canonical PIN for an eligible legacy pickup."""
     existing = str(getattr(order, "delivery_code", "") or "").strip()
@@ -4466,7 +4646,10 @@ def provision_legacy_ready_pickup_pin(db, order: DBOrder) -> str:
     )
     db.commit()
     db.refresh(order)
-    return str(order.delivery_code or "")
+    code = str(order.delivery_code or "")
+    if str(getattr(order, "order_source", "") or "").strip().lower() in MANUAL_ORDER_SOURCES:
+        send_eligible_fulfillment_pin_email(order.id, "pickup")
+    return code
 
 
 def canonical_dispatch_status(order: DBOrder) -> str:
@@ -12407,6 +12590,13 @@ def create_manual_order(payload: ManualOrderPayload, request: Request):
             ).first()
         customer_name = (linked_customer.full_name if linked_customer else payload.customer_name or "Walk-in Customer").strip()
         customer_email = (linked_customer.email if linked_customer else payload.customer_email or "").strip().lower()
+        try:
+            customer_email = str(ManualCustomerEmailPayload(email=customer_email).email)
+        except ValidationError:
+            raise HTTPException(
+                status_code=422,
+                detail="A valid customer email address is required for manual orders so fulfillment PINs can be sent.",
+            )
         customer_phone = (linked_customer.phone if linked_customer else payload.customer_phone or "").strip()
         address_snapshot = payload.delivery_address_snapshot
         address_id = payload.delivery_address_id
@@ -14631,6 +14821,14 @@ def update_order(order_id: int, payload: dict, request: Request):
         db.commit()
         db.refresh(order)
         order_data = order_to_dict(order)
+        if (
+            str(order.delivery_method or "").strip().lower() == "pickup"
+            and "ready_for_pickup" in {
+                str(getattr(order, field, "") or "").strip().lower()
+                for field in ("status", "order_status", "fulfillment_status")
+            }
+        ):
+            send_eligible_fulfillment_pin_email(order.id, "pickup")
         print("ORDER_STATUS_AFTER", json_dump({
             "order_id": order.id,
             "status": order.status,
@@ -14962,6 +15160,7 @@ def admin_reissue_pickup_pin(order_id: int, request: Request):
             f"Pickup PIN reissued for {order.order_code}",
             {"order_code": order.order_code},
         )
+        send_eligible_fulfillment_pin_email(order.id, "pickup")
         return {"success": True, "message": "A new pickup PIN is available to the customer.", "order": data, "data": data}
     finally:
         db.close()
@@ -15169,6 +15368,8 @@ def delivery_worker_update_order_status(order_id: int, payload: DeliveryOrderSta
         worker.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(order)
+        if next_delivery_status == "ARRIVED":
+            send_eligible_fulfillment_pin_email(order.id, "delivery")
         data = dispatch_order_to_dict(order)
         print("DELIVERY_STATUS_CHANGED", json_dump({
             "worker_id": worker.id,

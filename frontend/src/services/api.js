@@ -298,6 +298,7 @@ export const adminAPI = {
   getOrder: async (id) => (await api.get(`/admin/orders/${id}`)).data,
   updateOrder: async (id, payload) => (await api.patch(`/admin/orders/${id}`, payload)).data,
   reissuePickupPin: async (id) => (await api.post(`/admin/orders/${id}/pickup-pin/reissue`)).data,
+  resendFulfillmentPinEmail: async (id) => (await api.post(`/admin/orders/${id}/fulfillment-pin/email`)).data,
   deleteOrder: async (id) => (await api.delete(`/admin/orders/${id}`)).data,
   archiveOrder: async (id) => (await api.post(`/admin/orders/${id}/archive`)).data,
   restoreOrder: async (id) => (await api.post(`/admin/orders/${id}/restore`)).data,

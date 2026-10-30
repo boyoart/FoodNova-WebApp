@@ -154,6 +154,10 @@ def send_email(to, subject, html, text=None, event_type="", order=None):
         print(f"Email sent: {event_type or subject} -> {recipient}")
         return {"status": "sent", "response": response}
     except Exception as error:
+        error_type = type(error).__name__
+        if event_type in {"pickup_fulfillment_pin", "delivery_fulfillment_pin"}:
+            print("EMAIL SEND ERROR:", error_type)
+            return {"status": "failed", "error": error_type}
         print("EMAIL SEND ERROR:", repr(error))
         return {"status": "failed", "error": str(error)}
 
@@ -232,6 +236,82 @@ def send_customer_order_email(order, event_type, extra=None):
     html = render_order_email_template(order, subject, message, cta_text, cta_url, extra_html)
     text = f"{subject}\n\n{message}\n\nOrder Code: {order_code}\nTotal: {format_naira(order.get('total_amount') or order.get('total') or 0)}\n\n{_order_summary_text(order)}"
     return send_email(customer_email, subject, html, text=text, event_type=event_type, order=order)
+
+
+def send_customer_fulfillment_pin_email(
+    customer_email,
+    order_code,
+    customer_name,
+    pin,
+    fulfillment,
+    expires_at=None,
+):
+    purpose = str(fulfillment or "").strip().lower()
+    if purpose not in {"pickup", "delivery"}:
+        return {"status": "skipped", "reason": "unsupported_fulfillment"}
+
+    safe_order_code = escape(str(order_code or "N/A"))
+    safe_customer_name = escape(str(customer_name or "FoodNova Customer"))
+    safe_pin = escape(str(pin or ""))
+    label = "Pickup" if purpose == "pickup" else "Delivery"
+    subject = f"FoodNova Order #{order_code} — Your {label} PIN"
+    expiry_line = (
+        f"Your Pickup PIN expires on {expires_at.strftime('%d %b %Y at %H:%M UTC')}."
+        if purpose == "pickup" and expires_at
+        else ""
+    )
+    instruction = (
+        "Show this PIN to FoodNova staff when collecting your order."
+        if purpose == "pickup"
+        else "Give this PIN to your rider only when you are receiving your order."
+    )
+    message = (
+        f"Your {label.lower()} PIN is {pin}. {instruction} "
+        "Do not share this PIN until you are receiving the order."
+    )
+    if expiry_line:
+        message = f"{message} {expiry_line}"
+
+    html = f"""
+    <!doctype html>
+    <html>
+      <body style="margin:0;background:#f8faf7;color:#103820;font-family:Arial,sans-serif;">
+        <div style="max-width:620px;margin:0 auto;padding:24px;">
+          <div style="background:#087A34;color:#fff;border-radius:16px 16px 0 0;padding:22px;">
+            <h1 style="margin:0;font-size:26px;">FoodNova</h1>
+            <p style="margin:6px 0 0;color:#f8fafc;">Quality Foodstuff. Reliable Supply.</p>
+          </div>
+          <div style="background:#fff;border:1px solid #dde8dd;border-top:0;border-radius:0 0 16px 16px;padding:24px;">
+            <h2 style="margin:0 0 12px;color:#103820;">Your {label} PIN</h2>
+            <p style="font-size:16px;line-height:1.55;">Hello {safe_customer_name},</p>
+            <p style="font-size:16px;line-height:1.55;">Order reference: <strong>{safe_order_code}</strong></p>
+            <div style="margin:20px 0;padding:20px;border-radius:12px;background:#fff7d6;text-align:center;">
+              <span style="display:block;color:#38513e;font-size:13px;font-weight:700;">{label.upper()} PIN</span>
+              <strong style="display:block;margin-top:8px;color:#103820;font-size:34px;letter-spacing:8px;">{safe_pin}</strong>
+            </div>
+            <p style="font-size:16px;line-height:1.55;">{escape(instruction)}</p>
+            <p style="font-size:15px;line-height:1.55;color:#8a5a00;font-weight:700;">Do not share this PIN until you are receiving the order.</p>
+            {f"<p style='font-size:14px;line-height:1.55;'>{escape(expiry_line)}</p>" if expiry_line else ""}
+            <p style="margin-top:24px;color:#64748b;font-size:13px;">For support, contact {FOODNOVA_EMAIL} or {FOODNOVA_PHONE}.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+    """
+    text = (
+        f"{subject}\n\nHello {customer_name or 'FoodNova Customer'},\n"
+        f"Order reference: {order_code}\n{label} PIN: {pin}\n\n"
+        f"{instruction} Do not share this PIN until you are receiving the order."
+        f"{f' {expiry_line}' if expiry_line else ''}\n\n"
+        f"FoodNova support: {FOODNOVA_EMAIL} · {FOODNOVA_PHONE}"
+    )
+    return send_email(
+        customer_email,
+        subject,
+        html,
+        text=text,
+        event_type=f"{purpose}_fulfillment_pin",
+    )
 
 
 def send_admin_email(subject, html, text=None):

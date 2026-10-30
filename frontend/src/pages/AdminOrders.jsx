@@ -50,6 +50,24 @@ const pickupReadyForVerification = (order) => {
     !statuses.includes('picked_up_by_customer')
 }
 
+const fulfillmentPinEmailEligible = (order) => {
+  const manualSources = ['admin_manual', 'phone', 'whatsapp', 'walk_in']
+  const source = String(order?.order_source || '').trim().toLowerCase()
+  const paymentConfirmed = ['payment_confirmed', 'confirmed', 'paid']
+    .includes(String(order?.payment_status || '').trim().toLowerCase())
+  const statuses = [order?.status, order?.order_status, order?.fulfillment_status, order?.delivery_status, order?.dispatch_status]
+    .map((status) => String(status || '').trim().toLowerCase())
+  const cancelled = Boolean(order?.is_deleted) ||
+    ['approved', 'cancelled'].includes(String(order?.cancellation_status || '').trim().toLowerCase()) ||
+    statuses.some((status) => ['cancelled', 'delivered', 'picked_up_by_customer'].includes(status))
+  if (!manualSources.includes(source) || !paymentConfirmed || cancelled || !order?.customer_email) return false
+  if (String(order?.delivery_method || '').trim().toLowerCase() === 'pickup') {
+    return pickupReadyForVerification(order) && !pickupPinExpired(order)
+  }
+  return String(order?.delivery_method || '').trim().toLowerCase() === 'delivery' &&
+    statuses.some((status) => status === 'arrived')
+}
+
 export default function AdminOrders() {
   const { isAdmin, admin } = useAuthStore()
   const [orders, setOrders] = useState([])
@@ -66,12 +84,14 @@ export default function AdminOrders() {
   const [pickupPin, setPickupPin] = useState('')
   const [confirmingPickup, setConfirmingPickup] = useState(false)
   const [reissuingPickupPin, setReissuingPickupPin] = useState(false)
+  const [resendingFulfillmentPinEmail, setResendingFulfillmentPinEmail] = useState(false)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [archivingOrderId, setArchivingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
   const [manualOrderOpen, setManualOrderOpen] = useState(false)
   const adminPermissions = admin?.admin_role === 'super_admin' ? ['*'] : (admin?.permissions || [])
   const canCreateManualOrder = adminPermissions.includes('*') || adminPermissions.includes('orders:manual_create')
+  const canUpdateOrders = adminPermissions.includes('*') || adminPermissions.includes('orders:update')
 
   useEffect(() => {
     if (isAdmin) {
@@ -270,6 +290,18 @@ export default function AdminOrders() {
       toast.error(error?.response?.data?.detail || 'Could not reissue pickup PIN')
     } finally {
       setReissuingPickupPin(false)
+    }
+  }
+
+  const handleResendFulfillmentPinEmail = async () => {
+    try {
+      setResendingFulfillmentPinEmail(true)
+      const response = await adminAPI.resendFulfillmentPinEmail(selectedOrder.id)
+      toast.success(response.message || 'Fulfillment PIN emailed to the customer')
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Could not email the fulfillment PIN'))
+    } finally {
+      setResendingFulfillmentPinEmail(false)
     }
   }
 
@@ -698,6 +730,21 @@ export default function AdminOrders() {
                   </select>
                 </div>
               </div>
+
+              {canUpdateOrders && fulfillmentPinEmailEligible(selectedOrder) && (
+                <div className="admin-order-section">
+                  <h4>Fulfillment PIN email</h4>
+                  <p className="muted">Resend the existing eligible PIN to {selectedOrder.customer_email}. A new PIN will not be generated.</p>
+                  <button
+                    type="button"
+                    className="btn-view"
+                    disabled={resendingFulfillmentPinEmail}
+                    onClick={handleResendFulfillmentPinEmail}
+                  >
+                    {resendingFulfillmentPinEmail ? 'Sending...' : 'Email PIN to Customer'}
+                  </button>
+                </div>
+              )}
 
               {pickupReadyForVerification(selectedOrder) && (
                 <div className="admin-order-section">

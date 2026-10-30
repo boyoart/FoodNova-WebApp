@@ -80,6 +80,12 @@ export default function ManualOrderModal({ permissions, onClose, onCreated }) {
   function validateStep() {
     if (step === 0 && customerMode === 'existing' && !customerId) return 'Select a customer'
     if (step === 0 && customerMode === 'guest' && !guest.name.trim()) return 'Guest name is required'
+    if (step === 0) {
+      const email = customerMode === 'existing' ? selectedCustomer?.email : guest.email
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return 'A valid customer email address is required to send fulfillment PINs'
+      }
+    }
     if (step === 1 && !cart.length) return 'Add at least one product'
     if (step === 2 && fulfillment === 'delivery' && !addressId && !address.trim()) return 'Delivery address is required'
     return ''
@@ -146,8 +152,8 @@ export default function ManualOrderModal({ permissions, onClose, onCreated }) {
             </> : <>
               <label><span>Name *</span><input value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} /></label>
               <label><span>Phone</span><input value={guest.phone} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} /></label>
-              <label className="full"><span>Email</span><input type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} /></label>
-              <p className="manual-note full">A guest order remains usable without creating a customer account.</p>
+              <label className="full"><span>Email *</span><input type="email" required value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} /></label>
+              <p className="manual-note full">A guest order remains usable without creating a customer account. The email is used for eligible Pickup or Delivery PINs.</p>
             </>}
           </section>}
 
