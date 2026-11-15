@@ -66,6 +66,10 @@ export const formatPackContents = (components = []) => components.map((component
   return `${name} (${includedAmount})`
 }).join(', ')
 
+export const packEnquiryUrl = (packName) => (
+  `https://wa.me/2348025801125?text=${encodeURIComponent(`Hello FoodNova, I would like to enquire about ${packName}.`)}`
+)
+
 export const galleryImagesFor = (item) => {
   const images = [
     ...(item?.images || []).map((image) => typeof image === 'string' ? image : image?.image_url),

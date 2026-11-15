@@ -9,6 +9,7 @@ import {
   formatPackContents,
   galleryImagesFor,
   normalizeStoreItem,
+  packEnquiryUrl,
   selectedVariantFor,
   updateCatalogQuery,
 } from '../src/pages/productsCatalog.js'
@@ -104,22 +105,25 @@ test('Admin Combo Pack editor supports searchable multi-select and saved compone
   assert.match(apiSource, /payload\.components !== undefined.*append\("components", JSON\.stringify/s)
 })
 
-test('Food Packs without available component inventory cannot be added to cart', () => {
+test('Food Packs stay visible without stock messaging and block checkout when ineligible', () => {
   assert.equal(normalizeStoreItem({ type: 'pack', is_available: true, components: [] }, 'pack').is_available, false)
   assert.equal(normalizeStoreItem({
     type: 'pack',
     is_available: false,
     components: [{ name: 'Rice', quantity_per_pack: 2, unit: 'kg' }],
   }, 'pack').is_out_of_stock, true)
-  assert.match(source, /const unavailableLabel = isFoodPack \? 'Temporarily unavailable' : 'Out of stock'/)
   assert.match(source, /disabled=\{unavailable\}/)
-  assert.match(source, /modalItem\.type === 'pack' \? 'Temporarily unavailable' : 'Out of stock'/)
+  assert.match(source, /isFoodPack && unavailable && \(/)
+  assert.match(source, /Online checkout is disabled for this pack\./)
+  assert.doesNotMatch(source, /Temporarily unavailable|Food Pack contents are being prepared/)
+  assert.equal(packEnquiryUrl('Starter Pack'), 'https://wa.me/2348025801125?text=Hello%20FoodNova%2C%20I%20would%20like%20to%20enquire%20about%20Starter%20Pack.')
+  assert.match(source, /modalOutOfStock && modalItem\.type === 'pack'/)
 })
 
 test('ordinary product stock status and purchase labels remain unchanged', () => {
   const unavailableProduct = normalizeStoreItem({ type: 'product', is_available: false }, 'product')
   assert.equal(unavailableProduct.is_out_of_stock, true)
-  assert.match(source, /unavailableLabel = isFoodPack \? 'Temporarily unavailable' : 'Out of stock'/)
+  assert.match(source, /const unavailableLabel = 'Out of stock'/)
   assert.match(source, /This item is out of stock/)
   assert.match(source, /Out of stock/)
 })

@@ -73,13 +73,40 @@ export default function HomePage() {
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
   const [comboPacks, setComboPacks] = useState([])
+  const [managedSlides, setManagedSlides] = useState([])
   const [isHeroPaused, setIsHeroPaused] = useState(false)
   const resumeTimer = useRef(null)
-  const slides = useMemo(() => heroSlides.map((item) => ({
-    ...item,
-    products: (item.productRefs || []).slice(0, 3).map((reference) => resolveHeroProduct(products, reference)).filter(Boolean),
-  })), [products])
+  const slides = useMemo(() => {
+    const fallbackSlides = heroSlides.map((item) => ({
+      ...item,
+      products: (item.productRefs || []).slice(0, 3).map((reference) => resolveHeroProduct(products, reference)).filter(Boolean),
+    }))
+    if (managedSlides.length) return managedSlides
+    return fallbackSlides
+  }, [managedSlides, products])
   const slide = slides[Math.min(activeSlide, slides.length - 1)]
+
+  useEffect(() => {
+    api.get('/announcements/active').then(({ data }) => {
+      const items = data?.announcements || data?.data || []
+      const banners = items.filter((item) => item.display_type === 'hero_banner').map((item) => ({
+        id: item.id || item.slug || item.title,
+        eyebrow: 'FoodNova marketplace',
+        headline: item.title || 'Fresh essentials for your kitchen',
+        highlight: '',
+        subtext: item.message || 'Everyday staples, food packs and trusted essentials from FoodNova.',
+        primary: item.button_text || 'Shop Products',
+        primaryTo: item.button_link || '/products',
+        secondary: undefined,
+        promotionalImage: resolveMediaUrl(item.image_url) || undefined,
+        products: [],
+      }))
+      if (banners.length) {
+        setManagedSlides(banners)
+        setActiveSlide(0)
+      }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     Promise.all([api.get('/products?page=1&page_size=100'), api.get('/categories')]).then(([productRes, categoryRes]) => {
@@ -190,17 +217,13 @@ export default function HomePage() {
           <p className="home-combo-packs-subtitle">Everyday food essentials. Better value.</p>
         </div>
         <div className="home-combo-pack-prices" aria-label="Featured Combo Pack prices">
-          {comboPacks.map((pack) => {
-            const available = pack.is_available !== false
-            return (
-              <article className="home-combo-pack-price" key={pack.id}>
-                <h3>{pack.name}</h3>
-                <strong>{formatPrice(pack.price)}</strong>
-                {hasConfirmedFivePercentDiscount(pack) && <span className="home-combo-pack-discount">5% OFF</span>}
-                {!available && <span className="home-combo-pack-unavailable">Temporarily unavailable</span>}
-              </article>
-            )
-          })}
+          {comboPacks.map((pack) => (
+            <article className="home-combo-pack-price" key={pack.id}>
+              <h3>{pack.name}</h3>
+              <strong>{formatPrice(pack.price)}</strong>
+              {hasConfirmedFivePercentDiscount(pack) && <span className="home-combo-pack-discount">5% OFF</span>}
+            </article>
+          ))}
         </div>
         <Link className="home-combo-packs-cta" to="/products?tab=packs">
           Explore Combo Packs <span aria-hidden="true">→</span>

@@ -75,6 +75,22 @@ class ComboPackInventoryTests(unittest.TestCase):
         self.assertNotIn("variant_id", payload["components"][0])
         self.assertIn("stock_qty", admin_payload["components"][0])
 
+    def test_public_pack_list_keeps_active_zero_stock_and_unconfigured_packs_visible(self):
+        self.rice.stock_qty = self.rice.stock = 0
+        self.beans.stock_qty = self.beans.stock = 0
+        unconfigured = main.DBPack(name="Unconfigured Active Pack", price=3000, is_active=True)
+        inactive = main.DBPack(name="Inactive Pack", price=1000, is_active=False)
+        self.db.add_all([unconfigured, inactive])
+        self.db.commit()
+
+        listed = {pack["name"]: pack for pack in main.list_packs()}
+
+        self.assertIn(self.first_pack.name, listed)
+        self.assertFalse(listed[self.first_pack.name]["is_available"])
+        self.assertIn(unconfigured.name, listed)
+        self.assertFalse(listed[unconfigured.name]["is_available"])
+        self.assertNotIn(inactive.name, listed)
+
     def test_garri_ijebu_is_eligible_even_when_description_says_packed(self):
         garri = main.DBProduct(
             name="Garri Ijebu",

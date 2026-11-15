@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -15,6 +15,7 @@ import RegisterPage from './pages/RegisterPage'
 import OrderHistoryPage from './pages/OrderHistoryPage'
 import AdminLoginPage from './pages/AdminLoginPage'
 import AdminDashboard from './pages/AdminDashboard'
+import AdminLayout from './pages/AdminLayout'
 import AdminOrders from './pages/AdminOrders'
 import AdminStock from './pages/AdminStock'
 import AdminPayments from './pages/AdminPayments'
@@ -35,13 +36,14 @@ import InvoicePage from './pages/InvoicePage'
 import AppLandingPage from './pages/AppLandingPage'
 import './modal-scroll-fix.css'
 
-function App() {
+function AppLayout() {
+  const location = useLocation()
+  const isAdminRoute = location.pathname.startsWith('/admin')
+
   return (
-    <BrowserRouter>
-      <ErrorBoundary>
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <Navbar />
-          <main style={{ flex: 1, paddingTop: '60px' }}>
+    <div className={isAdminRoute ? 'admin-app-frame' : 'public-app-frame'} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      {!isAdminRoute && <Navbar />}
+      <main style={{ flex: 1, paddingTop: isAdminRoute ? 0 : '60px' }}>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/products" element={<ProductsPage />} />
@@ -59,38 +61,42 @@ function App() {
               <Route path="/notifications" element={<InboxPage />} />
               <Route path="/customer/inbox" element={<InboxPage />} />
               <Route path="/admin/login" element={<AdminLoginPage />} />
-              <Route path="/admin/dashboard" element={<AdminDashboard />} />
-              <Route path="/admin/orders" element={<AdminOrders />} />
-              <Route path="/admin/riders" element={<AdminRiders />} />
-              <Route path="/admin/riders/:riderId" element={<AdminRiderKycDetail />} />
-              <Route path="/admin/orders/:orderId/invoice" element={<InvoicePage />} />
-              <Route path="/admin/stock" element={<AdminStock />} />
-              <Route path="/admin/payments" element={<AdminPayments />} />
-              <Route path="/admin/broadcasts" element={<AdminBroadcasts />} />
-              <Route path="/admin/customers" element={<AdminCustomers />} />
-              <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
-              <Route path="/admin/users" element={<AdminUsers />} />
-              <Route path="/admin/reports" element={<AdminReports />} />
-              <Route path="/admin/banners" element={<AdminBanners />} />
-              <Route path="/admin/announcements" element={<AdminAnnouncements />} />
-              <Route path="/admin/delivery-zones" element={<AdminDeliveryZones />} />
-              <Route path="/admin/website-settings" element={<AdminWebsiteSettings />} />
-              <Route path="/admin/coming-soon-subscribers" element={<AdminComingSoonSubscribers />} />
-              <Route path="/admin/categories" element={<AdminCategories />} />
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="orders" element={<AdminOrders />} />
+                <Route path="orders/:orderId/invoice" element={<InvoicePage />} />
+                <Route path="riders" element={<AdminRiders />} />
+                <Route path="riders/:riderId" element={<AdminRiderKycDetail />} />
+                <Route path="stock" element={<AdminStock />} />
+                <Route path="payments" element={<AdminPayments />} />
+                <Route path="broadcasts" element={<AdminBroadcasts />} />
+                <Route path="customers" element={<AdminCustomers />} />
+                <Route path="audit-logs" element={<AdminAuditLogs />} />
+                <Route path="users" element={<AdminUsers />} />
+                <Route path="reports" element={<AdminReports />} />
+                <Route path="banners" element={<AdminBanners />} />
+                <Route path="announcements" element={<AdminAnnouncements />} />
+                <Route path="delivery-zones" element={<AdminDeliveryZones />} />
+                <Route path="website-settings" element={<AdminWebsiteSettings />} />
+                <Route path="coming-soon-subscribers" element={<AdminComingSoonSubscribers />} />
+                <Route path="categories" element={<AdminCategories />} />
+              </Route>
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/contact" element={<ContactPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
-          </main>
-          <Footer />
-          <FloatingCartButton />
-          <BackToTopButton />
-          <Toaster position="bottom-right" />
-        </div>
-      </ErrorBoundary>
-    </BrowserRouter>
+      </main>
+      {!isAdminRoute && <Footer />}
+      {!isAdminRoute && <FloatingCartButton />}
+      {!isAdminRoute && <BackToTopButton />}
+      <Toaster position="bottom-right" />
+    </div>
   )
+}
+
+function App() {
+  return <BrowserRouter><ErrorBoundary><AppLayout /></ErrorBoundary></BrowserRouter>
 }
 
 export default App

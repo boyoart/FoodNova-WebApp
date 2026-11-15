@@ -1,4 +1,5 @@
 import axios from "axios";
+import { summarizeBusinessIntelligence, summarizeDashboardOrders, summarizeDashboardProducts } from "../utils/adminDashboardMetrics.js";
 
 const RENDER_API_BASE_URL = "https://foodnova-webapp.onrender.com";
 const normalizeApiBaseUrl = (value) => {
@@ -372,22 +373,20 @@ export const adminAPI = {
   createPack: async (payload) => (await api.post("/admin/packs", toStockFormData(payload), multipartConfig)).data,
   updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toStockFormData(payload), multipartConfig)).data,
   deletePack: async (id) => (await api.delete(`/admin/packs/${id}`)).data,
-  getDashboardStats: async () => {
-    const fallback = { total_orders: 0, total_revenue: 0, total_products: 0, pending_payments: 0, receipt_submitted: 0, delivered_orders: 0, low_stock_products: 0, out_of_stock_products: 0 };
-    try {
-      const [ordersRes, productsRes] = await Promise.allSettled([api.get("/admin/orders"), api.get("/admin/products")]);
-      const orders = ordersRes.status === "fulfilled" ? normalizeList(ordersRes.value.data, ["orders"]) : [];
-      const products = productsRes.status === "fulfilled" ? normalizeList(productsRes.value.data, ["products"]) : [];
-      const getPaymentStatus = (order) => String(order.payment_status || order.status || "").toLowerCase();
-      const getOrderStatus = (order) => String(order.order_status || order.fulfillment_status || order.status || "").toLowerCase();
-      const getStock = (product) => Number(product.stock_qty ?? product.stock ?? 0);
-      const isLowStock = (product) => product.low_stock === true || (getStock(product) > 0 && getStock(product) <= Number(product.low_stock_threshold || 5));
-      const isOutOfStock = (product) => product.is_out_of_stock === true || getStock(product) <= 0;
-      return { data: { total_orders: orders.length, total_revenue: orders.reduce((sum, order) => sum + Number(order.total_amount || order.total || 0), 0), total_products: products.length, pending_payments: orders.filter((order) => getPaymentStatus(order) === "pending_payment").length, receipt_submitted: orders.filter((order) => getPaymentStatus(order) === "receipt_submitted").length, delivered_orders: orders.filter((order) => getOrderStatus(order) === "delivered").length, low_stock_products: products.filter(isLowStock).length, out_of_stock_products: products.filter(isOutOfStock).length } };
-    } catch (error) {
-      console.warn("Failed to calculate dashboard stats. Using fallback.", error);
-      return { data: fallback };
-    }
+  getDashboardStats: async ({ includeOrders = true, includeProducts = true } = {}) => {
+    const [ordersRes, productsRes, ridersRes] = await Promise.all([
+      includeOrders ? api.get("/admin/orders") : Promise.resolve(null),
+      includeProducts ? api.get("/admin/products") : Promise.resolve(null),
+      api.get("/admin/riders").catch(() => null),
+    ]);
+    const orders = ordersRes ? normalizeList(ordersRes.data, ["orders"]) : [];
+    const products = productsRes ? normalizeList(productsRes.data, ["products"]) : [];
+    const riders = ridersRes ? normalizeList(ridersRes.data, ["riders"]) : [];
+    const stats = {};
+    if (includeOrders) Object.assign(stats, summarizeDashboardOrders(orders));
+    if (includeProducts) Object.assign(stats, summarizeDashboardProducts(products));
+    Object.assign(stats, { smart_operations: summarizeBusinessIntelligence({ orders, products, riders }) });
+    return { data: stats };
   },
   getPendingPayments: async () => {
     const response = await api.get("/admin/orders");

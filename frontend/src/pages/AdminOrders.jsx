@@ -85,7 +85,7 @@ export default function AdminOrders() {
   const [confirmingPickup, setConfirmingPickup] = useState(false)
   const [reissuingPickupPin, setReissuingPickupPin] = useState(false)
   const [resendingFulfillmentPinEmail, setResendingFulfillmentPinEmail] = useState(false)
-  const [deletingOrderId, setDeletingOrderId] = useState(null)
+  const [_deletingOrderId, setDeletingOrderId] = useState(null)
   const [archivingOrderId, setArchivingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
   const [manualOrderOpen, setManualOrderOpen] = useState(false)
@@ -198,7 +198,7 @@ export default function AdminOrders() {
     loadRiders()
   }
 
-  const handleDeleteOrder = async (order) => {
+  const _handleDeleteOrder = async (order) => {
     const publicNumber = order.order_number || order.order_code || order.id
     if (!window.confirm(`Permanently delete safe test Order #${publicNumber}?\n\nOnly orders without payment or delivery history can be deleted. This action cannot be undone.`)) return
     try {

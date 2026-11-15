@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore'
 import { ordersAPI, profileAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
 import { buildWhatsAppLink } from '../utils/contactUtils'
+import { isComboPackInventoryError } from '../utils/checkoutErrors'
 import toast from 'react-hot-toast'
 import { Home, MapPin, Mail, Phone, Truck, MessageCircle } from 'lucide-react'
 import AddressAutocomplete from '../components/AddressAutocomplete'
@@ -124,7 +125,9 @@ export default function CheckoutPage() {
       clearCart(); toast.success('Order placed successfully. Use your Order Code as payment narration, then upload your receipt.'); navigate('/orders')
     } catch (error) {
       console.error('Checkout error:', error)
-      toast.error(getFriendlyErrorMessage(error, 'Failed to place order'))
+      toast.error(isComboPackInventoryError(error, items)
+        ? 'We could not place this order. Please review your cart and contact FoodNova for help.'
+        : getFriendlyErrorMessage(error, 'Failed to place order'))
     } finally { setLoading(false) }
   }
 

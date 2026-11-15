@@ -39,18 +39,21 @@ class AdminExpansionContractTests(unittest.TestCase):
 
     def test_browser_routes_are_registered_and_permission_guarded(self):
         app_source = (ROOT / "frontend/src/App.jsx").read_text(encoding="utf-8")
+        layout_source = (ROOT / "frontend/src/pages/AdminLayout.jsx").read_text(encoding="utf-8")
         page_source = (ROOT / "frontend/src/pages/AdminExpansion.jsx").read_text(encoding="utf-8")
+        self.assertIn('path="/admin" element={<AdminLayout />}', app_source)
         for route in (
-            "/admin/reports", "/admin/banners", "/admin/announcements",
-            "/admin/delivery-zones", "/admin/website-settings",
-            "/admin/coming-soon-subscribers", "/admin/categories",
+            'path="reports"', 'path="banners"', 'path="announcements"',
+            'path="delivery-zones"', 'path="website-settings"',
+            'path="coming-soon-subscribers"', 'path="categories"',
         ):
             self.assertIn(route, app_source)
+        self.assertIn("activeTool && !isAdminToolAllowed(activeTool, can)", layout_source)
         self.assertIn("function AdminGate", page_source)
         self.assertIn("You do not have permission", page_source)
 
     def test_existing_eight_dashboard_modules_remain(self):
-        source = (ROOT / "frontend/src/pages/AdminDashboard.jsx").read_text(encoding="utf-8")
+        source = (ROOT / "frontend/src/pages/adminNavigation.js").read_text(encoding="utf-8")
         for title in (
             "Manage Orders", "Delivery Riders", "Stock Management", "Payment Approvals",
             "Broadcasts", "Customers", "Activity Logs", "Admin Users",
@@ -77,7 +80,7 @@ class AdminExpansionContractTests(unittest.TestCase):
         rider_source = (ROOT / "frontend/src/pages/AdminRiders.jsx").read_text(encoding="utf-8")
         detail_source = (ROOT / "frontend/src/pages/AdminRiderKycDetail.jsx").read_text(encoding="utf-8")
         api_source = (ROOT / "frontend/src/services/api.js").read_text(encoding="utf-8")
-        self.assertIn('/admin/riders/:riderId', app_source)
+        self.assertIn('path="riders/:riderId"', app_source)
         self.assertIn('Pending KYC Review', rider_source)
         self.assertIn('/admin/rider-verification-queue', api_source)
         self.assertIn("You do not have permission to view rider KYC records", detail_source)

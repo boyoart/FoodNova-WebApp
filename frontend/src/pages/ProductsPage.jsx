@@ -14,6 +14,7 @@ import {
   galleryImagesFor,
   getPageNumber,
   normalizeStoreItem,
+  packEnquiryUrl,
   selectedVariantFor,
   updateCatalogQuery,
 } from './productsCatalog'
@@ -128,7 +129,7 @@ export default function ProductsPage() {
       quantity: Math.max(1, Number(options.quantity || 1)),
     }, itemType)
     if (normalized.is_out_of_stock || options.unavailable) {
-      toast.error(itemType === 'pack' ? 'This Food Pack is temporarily unavailable' : 'This item is out of stock')
+      toast.error(itemType === 'pack' ? 'Online checkout is disabled for this pack' : 'This item is out of stock')
       return
     }
     addItem(normalized)
@@ -280,7 +281,7 @@ export default function ProductsPage() {
             const unavailable = activeTab === 'products'
               ? (purchasableVariants.length ? !selected : item.is_out_of_stock)
               : !item.is_available
-            const unavailableLabel = isFoodPack ? 'Temporarily unavailable' : 'Out of stock'
+            const unavailableLabel = 'Out of stock'
             const cardKey = `${activeTab}-${item.id}`
 
             return (
@@ -302,7 +303,7 @@ export default function ProductsPage() {
               >
                 <div className="product-image">
                   <img src={getImageUrl(item)} alt={item.name} onError={handleImageError} />
-                  {unavailable && <div className="out-of-stock">{unavailableLabel}</div>}
+                  {!isFoodPack && unavailable && <div className="out-of-stock">{unavailableLabel}</div>}
                 </div>
                 <div className="product-info">
                   {item.category && <span className="category">{item.category}</span>}
@@ -325,10 +326,17 @@ export default function ProductsPage() {
                       className="btn-add"
                       onClick={() => handleAddToCart(item)}
                       disabled={unavailable}
+                      aria-describedby={isFoodPack && unavailable ? `pack-enquiry-${item.id}` : undefined}
                     >
-                      {unavailable ? unavailableLabel : 'Add to Cart'}
+                      {isFoodPack || !unavailable ? 'Add to Cart' : unavailableLabel}
                     </button>
                   </div>
+                  {isFoodPack && unavailable && (
+                    <div className="pack-enquiry" id={`pack-enquiry-${item.id}`}>
+                      <span>Online checkout is disabled for this pack.</span>
+                      <a href={packEnquiryUrl(item.name)} target="_blank" rel="noreferrer">Enquire on WhatsApp</a>
+                    </div>
+                  )}
                 </div>
               </article>
             )
@@ -419,7 +427,7 @@ export default function ProductsPage() {
                       {(modalItem.components || []).length ? (
                         <p className="pack-contents-list">{formatPackContents(modalItem.components)}</p>
                       ) : (
-                        <p>Food Pack contents are being prepared. This pack is temporarily unavailable.</p>
+                        <p>Pack contents will be shared by our team.</p>
                       )}
                     </section>
                   )}
@@ -449,9 +457,9 @@ export default function ProductsPage() {
               <div className="product-modal-purchase">
                 <div>
                   <span className="price">{formatPrice(displayedPriceFor(modalItem, selectedVariants))}</span>
-                  {modalOutOfStock && (
+                  {modalOutOfStock && modalItem.type !== 'pack' && (
                     <span className="out-of-stock-text">
-                      {modalItem.type === 'pack' ? 'Temporarily unavailable' : 'Out of stock'}
+                      Out of stock
                     </span>
                   )}
                 </div>
@@ -468,22 +476,25 @@ export default function ProductsPage() {
                   type="button"
                   className="btn-add product-modal-add"
                   disabled={modalOutOfStock}
+                  aria-describedby={modalOutOfStock && modalItem.type === 'pack' ? 'pack-modal-enquiry' : undefined}
                   onClick={() => handleAddToCart(modalItem, {
                     selectedVariant: modalSelectedVariant,
                     quantity: modalQuantity,
                     unavailable: modalOutOfStock,
                   })}
                 >
-                  {modalOutOfStock
-                    ? modalItem.type === 'pack' ? 'Temporarily unavailable' : 'Out of stock'
-                    : 'Add to Cart'}
+                  {modalOutOfStock && modalItem.type !== 'pack' ? 'Out of stock' : 'Add to Cart'}
                 </button>
               </div>
-              {modalUnavailable && (
+              {modalOutOfStock && modalItem.type === 'pack' && (
+                <div className="pack-enquiry" id="pack-modal-enquiry">
+                  <span>Online checkout is disabled for this pack.</span>
+                  <a href={packEnquiryUrl(modalItem.name)} target="_blank" rel="noreferrer">Enquire on WhatsApp</a>
+                </div>
+              )}
+              {modalUnavailable && modalItem.type !== 'pack' && (
                 <p className="product-modal-unavailable">
-                  {modalItem.type === 'pack'
-                    ? 'This Food Pack is temporarily unavailable.'
-                    : 'This product is no longer available in the active catalog.'}
+                  This product is no longer available in the active catalog.
                 </p>
               )}
             </div>

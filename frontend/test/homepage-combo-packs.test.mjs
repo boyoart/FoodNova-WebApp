@@ -47,9 +47,9 @@ test('promo section follows the existing hero and links to the existing pack lis
   assert.match(source, /className="home-categories"/)
 })
 
-test('unavailable packs remain visible but have no purchase action or stock details', () => {
-  assert.match(promoSection, /pack\.is_available !== false/)
-  assert.match(promoSection, /Temporarily unavailable/)
+test('active packs remain visible in the homepage promotion without stock messaging', () => {
+  assert.match(source, /selectFeaturedComboPacks\(response\.data\)/)
+  assert.doesNotMatch(promoSection, /is_available|Temporarily unavailable|Sold Out|Out of Stock|Out of stock|Low Stock|Low stock/)
   assert.doesNotMatch(promoSection, /Out of Stock|Out of stock|stock_qty|available_combo_quantity|Add to Cart/)
 })
 
