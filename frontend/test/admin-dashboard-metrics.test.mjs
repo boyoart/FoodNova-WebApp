@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { summarizeDashboardOrders, summarizeDashboardProducts, summarizeBusinessIntelligence, buildSmartOperationsSummary } from '../src/utils/adminDashboardMetrics.js'
+import { summarizeDashboardOrders, summarizeDashboardProducts, summarizeBusinessIntelligence, buildSmartOperationsSummary, normalizeSmartOperations, normalizeDashboardListResponse, classifyDashboardRequestError } from '../src/utils/adminDashboardMetrics.js'
 
 test('revenue includes only explicitly paid orders and queues payment reviews', () => {
   const summary = summarizeDashboardOrders([
@@ -96,4 +96,43 @@ test('smart operations intelligence turns live order and stock data into actiona
   assert.equal(smart.inventory.low_stock, 1)
   assert.equal(smart.riders.available, 2)
   assert.equal(smart.alerts.length, 2)
+})
+
+test('missing and null revenue metrics remain unavailable while valid zero stays zero', () => {
+  const missing = normalizeSmartOperations({ operational_health: { score: 0 }, alerts: [] })
+  const nullRevenue = normalizeSmartOperations({ revenue: { total: null, average: null, paid_orders: null } })
+  const valid = normalizeSmartOperations({ revenue: { total: 0, average: 0, paid_orders: 0 } })
+
+  assert.equal(missing.revenue.total, null)
+  assert.equal(missing.revenue.average, null)
+  assert.equal(nullRevenue.revenue.average, null)
+  assert.equal(valid.revenue.total, 0)
+  assert.equal(valid.revenue.average, 0)
+})
+
+test('empty and partial dashboard responses preserve unavailable source state', () => {
+  assert.deepEqual(normalizeDashboardListResponse(null, ['orders']), { available: false, data: null })
+  assert.deepEqual(normalizeDashboardListResponse({}, ['orders']), { available: false, data: null })
+  assert.deepEqual(normalizeDashboardListResponse({ orders: [] }, ['orders']), { available: true, data: [] })
+  assert.deepEqual(normalizeDashboardListResponse({ success: true, data: [{ id: 1 }] }, ['orders']), { available: true, data: [{ id: 1 }] })
+
+  const partial = buildSmartOperationsSummary({ orders: [{ payment_status: 'payment_confirmed', total_amount: 500 }], products: null, riders: null })
+  assert.equal(partial.revenue.total, 500)
+  assert.equal(partial.revenue.average, 500)
+  assert.equal(partial.inventory.low_stock, null)
+  assert.equal(partial.riders.available, null)
+  assert.equal(partial.operational_health.score, null)
+  const unavailable = buildSmartOperationsSummary({ orders: null, products: null, riders: null })
+  assert.equal(unavailable.revenue.paid_orders, null)
+  assert.equal(unavailable.fulfillment.delivered, null)
+  assert.equal(unavailable.riders.busy, null)
+  assert.equal(buildSmartOperationsSummary({}).revenue.average, null)
+  assert.equal(buildSmartOperationsSummary({ orders: [], products: [], riders: [] }).revenue.average, 0)
+})
+
+test('dashboard request failures distinguish unauthorized from unavailable backends', () => {
+  assert.equal(classifyDashboardRequestError({ response: { status: 401 } }), 'unauthorized')
+  assert.equal(classifyDashboardRequestError({ response: { status: 403 } }), 'unauthorized')
+  assert.equal(classifyDashboardRequestError({ code: 'ECONNABORTED' }), 'unavailable')
+  assert.equal(classifyDashboardRequestError(new Error('Network Error')), 'unavailable')
 })

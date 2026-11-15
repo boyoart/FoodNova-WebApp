@@ -38,12 +38,15 @@ test('Admin shell collapses on tablet and provides a mobile drawer', () => {
 
 test('Dashboard metrics are permission-scoped and request failures do not become zeroes', () => {
   assert.match(dashboard, /includeOrders: canViewOrders, includeProducts: canViewStock/)
-  assert.match(dashboard, /Dashboard data could not be loaded/)
+  assert.match(dashboard, /Dashboard services are unavailable/)
+  assert.match(dashboard, /normalizeSmartOperations\(stats\?\.smart_operations\)/)
+  assert.match(dashboard, /metricPrice\(smartOperations\.revenue\.average\)/)
+  assert.match(dashboard, /Some dashboard metrics are unavailable/)
   assert.match(dashboard, /Recent Orders/)
   assert.match(dashboard, /Order Status/)
   assert.match(dashboard, /Payment Queue/)
   assert.match(dashboard, /Stock Alerts/)
   assert.doesNotMatch(dashboard, /stats\?\.[a-z_]+ \|\| 0/)
-  assert.match(api, /getDashboardStats: async \(\{ includeOrders = true, includeProducts = true \} = \{\}\)/)
+  assert.match(api, /getDashboardStats: async \(\{ includeOrders = true, includeProducts = true, includeDispatch = false \} = \{\}\)/)
   assert.doesNotMatch(api, /Using fallback/)
 })

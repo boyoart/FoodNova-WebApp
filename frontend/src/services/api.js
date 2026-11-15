@@ -1,5 +1,5 @@
 import axios from "axios";
-import { summarizeBusinessIntelligence, summarizeDashboardOrders, summarizeDashboardProducts } from "../utils/adminDashboardMetrics.js";
+import { buildSmartOperationsSummary, classifyDashboardRequestError, normalizeDashboardListResponse, summarizeDashboardOrders, summarizeDashboardProducts } from "../utils/adminDashboardMetrics.js";
 
 const RENDER_API_BASE_URL = "https://foodnova-webapp.onrender.com";
 const normalizeApiBaseUrl = (value) => {
@@ -373,19 +373,53 @@ export const adminAPI = {
   createPack: async (payload) => (await api.post("/admin/packs", toStockFormData(payload), multipartConfig)).data,
   updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toStockFormData(payload), multipartConfig)).data,
   deletePack: async (id) => (await api.delete(`/admin/packs/${id}`)).data,
-  getDashboardStats: async ({ includeOrders = true, includeProducts = true } = {}) => {
-    const [ordersRes, productsRes, ridersRes] = await Promise.all([
-      includeOrders ? api.get("/admin/orders") : Promise.resolve(null),
-      includeProducts ? api.get("/admin/products") : Promise.resolve(null),
-      api.get("/admin/riders").catch(() => null),
+  getDashboardStats: async ({ includeOrders = true, includeProducts = true, includeDispatch = false } = {}) => {
+    const requestList = async (request, keys) => {
+      try {
+        const response = await request;
+        const normalized = normalizeDashboardListResponse(response.data, keys);
+        return { ...normalized, failure: normalized.available ? null : 'unavailable' };
+      } catch (error) {
+        return { available: false, data: null, failure: classifyDashboardRequestError(error) };
+      }
+    };
+    const [ordersResult, productsResult, ridersResult] = await Promise.all([
+      requestList(includeOrders ? api.get("/admin/orders") : Promise.resolve({ data: [] }), ["orders"]),
+      requestList(includeProducts ? api.get("/admin/products") : Promise.resolve({ data: [] }), ["products"]),
+      requestList(includeDispatch ? api.get("/admin/riders") : Promise.resolve({ data: [] }), ["riders", "workers"]),
     ]);
-    const orders = ordersRes ? normalizeList(ordersRes.data, ["orders"]) : [];
-    const products = productsRes ? normalizeList(productsRes.data, ["products"]) : [];
-    const riders = ridersRes ? normalizeList(ridersRes.data, ["riders"]) : [];
+    const orders = ordersResult.data;
+    const products = productsResult.data;
+    const riders = ridersResult.data;
     const stats = {};
-    if (includeOrders) Object.assign(stats, summarizeDashboardOrders(orders));
-    if (includeProducts) Object.assign(stats, summarizeDashboardProducts(products));
-    Object.assign(stats, { smart_operations: summarizeBusinessIntelligence({ orders, products, riders }) });
+    if (includeOrders && ordersResult.available) Object.assign(stats, summarizeDashboardOrders(orders));
+    else if (includeOrders) Object.assign(stats, {
+      total_orders: null,
+      total_revenue: null,
+      pending_payments: null,
+      receipt_submitted: null,
+      delivered_orders: null,
+      status_distribution: null,
+      recent_orders: null,
+      attention_orders: null,
+    });
+    if (includeProducts && productsResult.available) Object.assign(stats, summarizeDashboardProducts(products));
+    else if (includeProducts) Object.assign(stats, {
+      total_products: null,
+      low_stock_products: null,
+      out_of_stock_products: null,
+      stock_alerts: null,
+    });
+    stats.data_sources = {
+      orders: includeOrders ? (ordersResult.available ? 'available' : ordersResult.failure) : 'not_requested',
+      inventory: includeProducts ? (productsResult.available ? 'available' : productsResult.failure) : 'not_requested',
+      dispatch: includeDispatch ? (ridersResult.available ? 'available' : ridersResult.failure) : 'not_requested',
+    };
+    stats.smart_operations = buildSmartOperationsSummary({
+      orders: includeOrders && ordersResult.available ? orders : null,
+      products: includeProducts && productsResult.available ? products : null,
+      riders: includeDispatch && ridersResult.available ? riders : null,
+    });
     return { data: stats };
   },
   getPendingPayments: async () => {

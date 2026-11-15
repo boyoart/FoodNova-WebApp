@@ -7,6 +7,68 @@ const numericValue = (value, fallback = 0) => {
 
 const normalizeText = (value) => String(value ?? '').trim().toLowerCase()
 
+const nullableNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const result = Number(value)
+  return Number.isFinite(result) ? result : null
+}
+
+const objectValue = (value) => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+
+export const normalizeSmartOperations = (value) => {
+  const source = objectValue(value)
+  const revenue = objectValue(source.revenue)
+  const fulfillment = objectValue(source.fulfillment)
+  const inventory = objectValue(source.inventory)
+  const riders = objectValue(source.riders)
+  const health = objectValue(source.operational_health)
+
+  return {
+    revenue: {
+      total: nullableNumber(revenue.total),
+      average: nullableNumber(revenue.average),
+      paid_orders: nullableNumber(revenue.paid_orders),
+    },
+    fulfillment: {
+      delivered: nullableNumber(fulfillment.delivered),
+      rate: nullableNumber(fulfillment.rate),
+      total_orders: nullableNumber(fulfillment.total_orders),
+    },
+    inventory: {
+      low_stock: nullableNumber(inventory.low_stock),
+      out_of_stock: nullableNumber(inventory.out_of_stock),
+      alerts: Array.isArray(inventory.alerts) ? inventory.alerts.filter(Boolean) : null,
+    },
+    riders: {
+      total: nullableNumber(riders.total),
+      available: nullableNumber(riders.available),
+      busy: nullableNumber(riders.busy),
+      utilization: nullableNumber(riders.utilization),
+    },
+    alerts: Array.isArray(source.alerts) ? source.alerts.filter(Boolean) : null,
+    operational_health: {
+      score: nullableNumber(health.score),
+      label: typeof health.label === 'string' ? health.label : null,
+      detail: typeof health.detail === 'string' ? health.detail : null,
+    },
+  }
+}
+
+export const normalizeDashboardListResponse = (body, keys = []) => {
+  if (Array.isArray(body)) return { available: true, data: body }
+  if (!body || typeof body !== 'object') return { available: false, data: null }
+  for (const key of keys) {
+    if (Array.isArray(body[key])) return { available: true, data: body[key] }
+  }
+  if (Array.isArray(body.data)) return { available: true, data: body.data }
+  return { available: false, data: null }
+}
+
+export const classifyDashboardRequestError = (error) => {
+  const status = Number(error?.response?.status)
+  return status === 401 || status === 403 ? 'unauthorized' : 'unavailable'
+}
+
 const isPaidOrder = (order) => PAID_STATUSES.has(normalizeText(order.payment_status || order.status || order.order_status))
 
 const productStock = (product) => numericValue(product.stock_qty ?? product.stock ?? 0)
@@ -39,23 +101,26 @@ const operationalStatusLabel = (score) => {
   return 'Critical'
 }
 
-export const summarizeBusinessIntelligence = ({ orders = [], products = [], riders = [] } = {}) => {
-  const activeOrders = Array.isArray(orders) ? orders : []
-  const activeProducts = (Array.isArray(products) ? products : []).filter((product) => product.is_active !== false && product.active !== false)
-  const activeRiders = Array.isArray(riders) ? riders : []
+export const summarizeBusinessIntelligence = ({ orders, products, riders } = {}) => {
+  const hasOrders = Array.isArray(orders)
+  const hasProducts = Array.isArray(products)
+  const hasRiders = Array.isArray(riders)
+  const activeOrders = hasOrders ? orders : []
+  const activeProducts = (hasProducts ? products : []).filter((product) => product.is_active !== false && product.active !== false)
+  const activeRiders = hasRiders ? riders : []
 
   const paidOrders = activeOrders.filter(isPaidOrder)
-  const totalRevenue = paidOrders.reduce((sum, order) => sum + Number(order.total_amount ?? order.total ?? 0), 0)
-  const averageOrderValue = paidOrders.length ? totalRevenue / paidOrders.length : 0
+  const totalRevenue = hasOrders ? paidOrders.reduce((sum, order) => sum + Number(order.total_amount ?? order.total ?? 0), 0) : null
+  const averageOrderValue = hasOrders ? (paidOrders.length ? totalRevenue / paidOrders.length : 0) : null
   const deliveredOrders = activeOrders.filter(orderDelivered)
-  const fulfillmentRate = activeOrders.length ? Math.round((deliveredOrders.length / activeOrders.length) * 100) : 0
+  const fulfillmentRate = hasOrders ? (activeOrders.length ? Math.round((deliveredOrders.length / activeOrders.length) * 100) : 0) : null
 
   const paymentReviewOrders = activeOrders.filter((order) => ['pending_payment', 'receipt_submitted'].includes(normalizeText(order.payment_status || order.status || '')))
-  const lowStockItems = activeProducts.filter((product) => isLowStockProduct(product))
-  const outOfStockItems = activeProducts.filter(isOutOfStockProduct)
+  const lowStockItems = hasProducts ? activeProducts.filter((product) => isLowStockProduct(product)) : []
+  const outOfStockItems = hasProducts ? activeProducts.filter(isOutOfStockProduct) : []
 
-  const riderAvailableCount = activeRiders.filter(riderAvailable).length
-  const riderUtilization = activeRiders.length ? Math.round((riderAvailableCount / activeRiders.length) * 100) : 0
+  const riderAvailableCount = hasRiders ? activeRiders.filter(riderAvailable).length : null
+  const riderUtilization = hasRiders ? (activeRiders.length ? Math.round((riderAvailableCount / activeRiders.length) * 100) : 0) : null
 
   const stockAlerts = [...lowStockItems, ...outOfStockItems].slice(0, 6).map((product) => ({
     id: product.id,
@@ -66,7 +131,7 @@ export const summarizeBusinessIntelligence = ({ orders = [], products = [], ride
   }))
 
   const alerts = []
-  if (paymentReviewOrders.length) {
+  if (hasOrders && paymentReviewOrders.length) {
     alerts.push({
       type: 'payment_review',
       level: 'warning',
@@ -75,7 +140,7 @@ export const summarizeBusinessIntelligence = ({ orders = [], products = [], ride
     })
   }
 
-  if (stockAlerts.length) {
+  if (hasProducts && stockAlerts.length) {
     alerts.push({
       type: 'inventory',
       level: outOfStockItems.length ? 'critical' : 'warning',
@@ -84,37 +149,41 @@ export const summarizeBusinessIntelligence = ({ orders = [], products = [], ride
     })
   }
 
-  const healthScore = Math.min(100, Math.max(0, Math.round((fulfillmentRate + riderUtilization + (paymentReviewOrders.length ? 40 : 60)) / 2)))
+  const healthScore = hasOrders && hasProducts && hasRiders
+    ? Math.min(100, Math.max(0, Math.round((fulfillmentRate + riderUtilization + (paymentReviewOrders.length ? 40 : 60)) / 2)))
+    : null
 
   return {
-    total_orders: activeOrders.length,
+    data_availability: { orders: hasOrders, inventory: hasProducts, dispatch: hasRiders },
+    total_orders: hasOrders ? activeOrders.length : null,
     total_revenue: totalRevenue,
-    paid_orders: paidOrders.length,
-    delivered_orders: deliveredOrders.length,
+    paid_orders: hasOrders ? paidOrders.length : null,
+    delivered_orders: hasOrders ? deliveredOrders.length : null,
     fulfillment_rate: fulfillmentRate,
     average_order_value: averageOrderValue,
-    low_stock_items: lowStockItems.length,
-    out_of_stock_items: outOfStockItems.length,
-    rider_total: activeRiders.length,
+    low_stock_items: hasProducts ? lowStockItems.length : null,
+    out_of_stock_items: hasProducts ? outOfStockItems.length : null,
+    rider_total: hasRiders ? activeRiders.length : null,
     rider_available: riderAvailableCount,
-    rider_busy: Math.max(0, activeRiders.length - riderAvailableCount),
+    rider_busy: hasRiders ? Math.max(0, activeRiders.length - riderAvailableCount) : null,
     rider_utilization: riderUtilization,
     alerts,
     operational_health: {
       score: healthScore,
-      label: operationalStatusLabel(healthScore),
-      detail: paymentReviewOrders.length || stockAlerts.length ? 'Payment reviews and inventory risk need attention.' : 'Operations are on track.',
+      label: healthScore === null ? 'Unavailable' : operationalStatusLabel(healthScore),
+      detail: healthScore === null ? 'Some dashboard sources are unavailable.' : paymentReviewOrders.length || stockAlerts.length ? 'Payment reviews and inventory risk need attention.' : 'Operations are on track.',
     },
-    orders: activeOrders,
-    products: activeProducts,
-    riders: activeRiders,
+    orders: hasOrders ? activeOrders : null,
+    products: hasProducts ? activeProducts : null,
+    riders: hasRiders ? activeRiders : null,
     stock_alerts: stockAlerts,
   }
 }
 
-export const buildSmartOperationsSummary = ({ orders = [], products = [], riders = [] } = {}) => {
+export const buildSmartOperationsSummary = ({ orders, products, riders } = {}) => {
   const summary = summarizeBusinessIntelligence({ orders, products, riders })
   return {
+    data_availability: summary.data_availability,
     revenue: {
       total: summary.total_revenue,
       average: summary.average_order_value,
@@ -128,7 +197,7 @@ export const buildSmartOperationsSummary = ({ orders = [], products = [], riders
     inventory: {
       low_stock: summary.low_stock_items,
       out_of_stock: summary.out_of_stock_items,
-      alerts: summary.stock_alerts,
+      alerts: summary.data_availability.inventory ? summary.stock_alerts : null,
     },
     riders: {
       total: summary.rider_total,
