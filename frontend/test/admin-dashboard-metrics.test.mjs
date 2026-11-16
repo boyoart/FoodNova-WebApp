@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { summarizeDashboardOrders, summarizeDashboardProducts, summarizeBusinessIntelligence, buildSmartOperationsSummary, normalizeSmartOperations, normalizeDashboardListResponse, classifyDashboardRequestError } from '../src/utils/adminDashboardMetrics.js'
+import { summarizeDashboardOrders, summarizeDashboardProducts, summarizeBusinessIntelligence, buildSmartOperationsSummary, buildSmartOperationsSummaryFromAggregates, normalizeSmartOperations, normalizeDashboardListResponse, normalizeDashboardReportResponse, classifyDashboardRequestError } from '../src/utils/adminDashboardMetrics.js'
+import { toPackFormData } from '../src/utils/adminPackFormData.js'
 
 test('revenue includes only explicitly paid orders and queues payment reviews', () => {
   const summary = summarizeDashboardOrders([
@@ -79,12 +80,12 @@ test('smart operations intelligence turns live order and stock data into actiona
   assert.equal(summary.total_revenue, 3200)
   assert.equal(summary.fulfillment_rate, 33)
   assert.equal(summary.average_order_value, 1600)
-  assert.equal(summary.rider_utilization, 67)
+  assert.equal(summary.rider_utilization, 50)
   assert.equal(summary.low_stock_items, 1)
   assert.equal(summary.out_of_stock_items, 1)
   assert.deepEqual(summary.alerts.map(({ type }) => type), ['payment_review', 'inventory'])
-  assert.equal(summary.operational_health.score, 70)
-  assert.deepEqual(summary.operational_health.label, 'Watchlist')
+  assert.equal(summary.operational_health.score, null)
+  assert.deepEqual(summary.operational_health.label, 'Unavailable')
 
   const smart = buildSmartOperationsSummary({
     orders: summary.orders,
@@ -94,8 +95,24 @@ test('smart operations intelligence turns live order and stock data into actiona
 
   assert.equal(smart.revenue.total, 3200)
   assert.equal(smart.inventory.low_stock, 1)
-  assert.equal(smart.riders.available, 2)
+  assert.equal(smart.riders.available, 1)
+  assert.equal(smart.riders.busy, 1)
   assert.equal(smart.alerts.length, 2)
+
+  const dispatch = buildSmartOperationsSummary({
+    orders: [],
+    products: [],
+    riders: [
+      { status: 'ACTIVE', availability: 'ONLINE' },
+      { status: 'ACTIVE', availability: 'BUSY' },
+      { status: 'ONBOARDING', availability: 'OFFLINE' },
+      { status: 'INACTIVE', availability: 'OFFLINE' },
+    ],
+  })
+  assert.equal(dispatch.riders.total, 2)
+  assert.equal(dispatch.riders.available, 1)
+  assert.equal(dispatch.riders.busy, 1)
+  assert.equal(dispatch.riders.utilization, 50)
 })
 
 test('missing and null revenue metrics remain unavailable while valid zero stays zero', () => {
@@ -115,6 +132,9 @@ test('empty and partial dashboard responses preserve unavailable source state', 
   assert.deepEqual(normalizeDashboardListResponse({}, ['orders']), { available: false, data: null })
   assert.deepEqual(normalizeDashboardListResponse({ orders: [] }, ['orders']), { available: true, data: [] })
   assert.deepEqual(normalizeDashboardListResponse({ success: true, data: [{ id: 1 }] }, ['orders']), { available: true, data: [{ id: 1 }] })
+  assert.deepEqual(normalizeDashboardReportResponse({ summary: { total_orders: null } }), { available: false, data: null })
+  assert.deepEqual(normalizeDashboardReportResponse({ summary: {} }), { available: false, data: null })
+  assert.equal(normalizeDashboardReportResponse({ summary: { total_orders: 0 } }).available, true)
 
   const partial = buildSmartOperationsSummary({ orders: [{ payment_status: 'payment_confirmed', total_amount: 500 }], products: null, riders: null })
   assert.equal(partial.revenue.total, 500)
@@ -135,4 +155,71 @@ test('dashboard request failures distinguish unauthorized from unavailable backe
   assert.equal(classifyDashboardRequestError({ response: { status: 403 } }), 'unauthorized')
   assert.equal(classifyDashboardRequestError({ code: 'ECONNABORTED' }), 'unavailable')
   assert.equal(classifyDashboardRequestError(new Error('Network Error')), 'unavailable')
+})
+
+test('aggregate dashboard summaries keep missing metrics unavailable and use server-calculated revenue', () => {
+  const missing = buildSmartOperationsSummaryFromAggregates({ reportSummary: null, products: null, riders: null })
+  const valid = buildSmartOperationsSummaryFromAggregates({
+    reportSummary: {
+      total_orders: 3,
+      gross_collected_revenue: 4200,
+      average_order_value: 2100,
+      paid_orders: 2,
+      completed_orders: 1,
+      fulfillment_rate: 33,
+      attention_count: 2,
+      pending_payments: 1,
+      unassigned_dispatch_orders: 1,
+    },
+    products: [],
+    riders: [],
+    attentionOrders: [{ id: 8, attention_reason: 'payment_review' }],
+  })
+
+  assert.equal(missing.revenue.total, null)
+  assert.equal(missing.fulfillment.rate, null)
+  assert.equal(missing.inventory.low_stock, null)
+  assert.equal(missing.riders.available, null)
+  assert.equal(valid.revenue.total, 4200)
+  assert.equal(valid.revenue.average, 2100)
+  assert.equal(valid.fulfillment.rate, 33)
+  assert.equal(valid.riders.total, 0)
+  assert.equal(valid.attention_count, 2)
+  assert.deepEqual(valid.alerts.map(({ type }) => type), ['payment_review', 'dispatch'])
+  assert.equal(valid.operational_health.score, null)
+})
+
+test('Combo Pack create and update payloads send the replacement under the backend image field', async () => {
+  const upload = new Blob(['image-bytes'], { type: 'image/png' })
+  const formData = toPackFormData({
+    name: 'Pantry Pack',
+    price: 2500,
+    is_active: true,
+    items: ['Rice', 'Beans'],
+    components: [{ product_id: 1, quantity_per_pack: 2 }],
+    image_files: [{ file: upload, preview: 'blob:preview' }],
+  })
+
+  assert.equal(formData.get('name'), 'Pantry Pack')
+  assert.deepEqual(JSON.parse(formData.get('items')), ['Rice', 'Beans'])
+  assert.deepEqual(JSON.parse(formData.get('components')), [{ product_id: 1, quantity_per_pack: 2 }])
+  assert.equal(formData.get('image').type, 'image/png')
+  assert.equal(formData.has('images'), false)
+})
+
+test('partial paginated lists cannot become business-wide inventory or rider metrics', () => {
+  assert.deepEqual(normalizeDashboardListResponse({ products: [{ id: 1 }], total: 105 }, ['products']), { available: false, data: null })
+  assert.deepEqual(normalizeDashboardListResponse({ data: [{ id: 1 }], pagination: { total: 2 } }), { available: false, data: null })
+  assert.deepEqual(normalizeDashboardListResponse({ products: [], total: 0 }, ['products']), { available: true, data: [] })
+})
+
+test('approved KYC does not turn a suspended or inactive rider into available capacity', () => {
+  const summary = buildSmartOperationsSummaryFromAggregates({ riders: [
+    { kyc_status: 'approved', status: 'INACTIVE', availability: 'ONLINE' },
+    { kyc_status: 'approved', status: 'SUSPENDED', availability: 'BUSY' },
+    { kyc_status: 'approved', status: 'ACTIVE', availability: 'ONLINE' },
+  ] })
+  assert.equal(summary.riders.total, 1)
+  assert.equal(summary.riders.available, 1)
+  assert.equal(summary.riders.busy, 0)
 })

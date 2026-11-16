@@ -34,6 +34,8 @@ test('homepage loads packs once from the existing endpoint and renders live data
   assert.match(source, /<h2 id="home-combo-packs-title">Combo Food Packs<\/h2>/)
   assert.match(source, /Everyday food essentials\. Better value\./)
   assert.match(source, /<h3>\{pack\.name\}<\/h3>/)
+  assert.match(source, /resolveMediaUrl\(pack\.image_url \|\| '\/uploads\/catalog\/foodnova-placeholder\.svg'\)/)
+  assert.match(source, /onError=\{handleImageError\}/)
   assert.match(source, /formatPrice\(pack\.price\)/)
   assert.match(source, /hasConfirmedFivePercentDiscount\(pack\)/)
   assert.doesNotMatch(source, /₦19,760|₦21,375|₦52,915/)
@@ -56,6 +58,7 @@ test('active packs remain visible in the homepage promotion without stock messag
 test('promo banner uses responsive branded price cards and a tappable CTA', () => {
   assert.match(styles, /\.home-combo-packs\s*\{[^}]*#032b18/s)
   assert.match(styles, /\.home-combo-pack-price\s*\{[^}]*background:\s*#fff/s)
+  assert.match(styles, /\.home-combo-pack-price\s*>\s*img\s*\{[^}]*aspect-ratio:\s*4\s*\/\s*3[^}]*object-fit:\s*contain/s)
   assert.match(styles, /\.home-combo-pack-discount\s*\{[^}]*#ffda4f/s)
   assert.match(styles, /@media \(max-width: 900px\)[\s\S]*\.home-combo-packs\s*\{/)
   assert.match(styles, /@media \(max-width: 560px\)[\s\S]*\.home-combo-packs\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)

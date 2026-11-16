@@ -1,13 +1,16 @@
+import asyncio
+import io
 import os
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from starlette.datastructures import Headers
 
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
@@ -172,6 +175,44 @@ class ComboPackInventoryTests(unittest.TestCase):
         self.assertNotIn("product_id", customer_payload["components"][0])
         self.assertEqual(admin_payload["components"][0]["product_id"], self.rice.id)
         self.assertEqual(admin_payload["components"][0]["stock_qty"], self.rice.stock_qty)
+
+    def test_admin_pack_image_replacement_persists_and_public_catalog_returns_new_url(self):
+        self.first_pack.image_url = "/uploads/packs/old-pack-image.png"
+        self.db.commit()
+        self.db.expire_all()
+        replacement_url = "/uploads/packs/new-pack-image.png"
+        upload = main.UploadFile(
+            filename="new-pack-image.png",
+            file=io.BytesIO(b"test image bytes"),
+            headers=Headers({"content-type": "image/png"}),
+        )
+
+        with patch.object(main, "require_permission", return_value={"id": 1}), \
+             patch.object(main, "save_uploaded_image", new=AsyncMock(return_value=replacement_url)), \
+             patch.object(main, "create_admin_audit_log"):
+            response = asyncio.run(main.admin_update_pack(
+                self.first_pack.id,
+                request=None,
+                name=None,
+                price=None,
+                description=None,
+                items=None,
+                components=None,
+                is_active=None,
+                active=None,
+                image=upload,
+            ))
+
+        self.assertEqual(response["pack"]["image_url"], replacement_url)
+        self.db.expire_all()
+        public_pack = main.get_pack(self.first_pack.id)
+        self.assertEqual(public_pack["image_url"], replacement_url)
+        listed = {pack["id"]: pack for pack in main.list_packs()}
+        self.assertEqual(listed[self.first_pack.id]["image_url"], replacement_url)
+        searched = main.list_packs(search=self.first_pack.name, page=1, page_size=10)
+        self.assertEqual(searched["items"][0]["image_url"], replacement_url)
+        self.assertEqual(public_pack["price"], 2000)
+        self.assertEqual(len(public_pack["components"]), 2)
 
     def test_single_and_multiple_packs_deduct_component_quantities(self):
         single_item = {"item_type": "pack", "product_id": self.first_pack.id, "quantity": 1}
