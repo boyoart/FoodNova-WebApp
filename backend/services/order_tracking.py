@@ -62,28 +62,39 @@ def resolve(db, raw):
     return row['order_id'] if row else None
 
 
-def limited(db, identity, secret, maximum=5, seconds=900):
+def limited(db, identity, secret, maximum=5, seconds=900, table=None):
+    rate_table = limits if table is None else table
     now = datetime.utcnow()
     window = int(now.timestamp()) // seconds
     key = hmac.new(secret.encode(), f'{identity}:{window}'.encode(), hashlib.sha256).hexdigest()
-    db.execute(delete(limits).where(limits.c.expires_at < now))
-    result = db.execute(update(limits).where(limits.c.key_hash == key).values(count=limits.c.count + 1))
+    db.execute(delete(rate_table).where(rate_table.c.expires_at < now))
+    result = db.execute(update(rate_table).where(rate_table.c.key_hash == key).values(count=rate_table.c.count + 1))
     if not result.rowcount:
         try:
             with db.begin_nested():
-                db.execute(limits.insert().values(key_hash=key, count=1, expires_at=now + timedelta(seconds=seconds * 2)))
+                db.execute(rate_table.insert().values(key_hash=key, count=1, expires_at=now + timedelta(seconds=seconds * 2)))
         except IntegrityError:
-            db.execute(update(limits).where(limits.c.key_hash == key).values(count=limits.c.count + 1))
+            db.execute(update(rate_table).where(rate_table.c.key_hash == key).values(count=rate_table.c.count + 1))
     db.commit()
-    return db.execute(select(limits.c.count).where(limits.c.key_hash == key)).scalar_one() > maximum
+    return db.execute(select(rate_table.c.count).where(rate_table.c.key_hash == key)).scalar_one() > maximum
+
+
+def approved_frontend_origin(frontend):
+    origin = urlparse(frontend)
+    allowed = {'https://foodnova.com.ng', 'https://www.foodnova.com.ng'}
+    allowed.update(value.strip().rstrip('/') for value in os.getenv('CUSTOMER_LINK_ALLOWED_ORIGINS', '').split(',') if value.strip())
+    candidate = f'{origin.scheme}://{origin.netloc}'
+    if origin.scheme != 'https' or origin.username or origin.password or origin.path not in {'', '/'} or origin.query or origin.fragment or candidate not in allowed:
+        return None
+    return candidate
 
 
 def link(raw, frontend):
-    origin = urlparse(frontend)
-    if origin.scheme != 'https' or origin.hostname not in {'foodnova.com.ng', 'www.foodnova.com.ng'}:
+    origin = approved_frontend_origin(frontend)
+    if not origin:
         return None
     # Fragments never reach HTTP access logs or third-party Referer headers.
-    return f'{origin.scheme}://{origin.netloc}/orders#track={raw}'
+    return f'{origin}/track-order#track={raw}'
 
 
 def confirmation_link(order_id, frontend):

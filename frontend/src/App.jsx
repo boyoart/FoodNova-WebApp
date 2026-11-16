@@ -6,7 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import FloatingCartButton from './components/FloatingCartButton'
 import BackToTopButton from './components/BackToTopButton'
 import AnalyticsConsent from './components/AnalyticsConsent'
-import FloatingOrderTracking, { FullTrackingEntry, OrderTrackingProvider } from './components/OrderTracking'
+import FloatingOrderTracking, { OrderTrackingProvider } from './components/OrderTracking'
 import HomePage from './pages/HomePage'
 import ProductsPage from './pages/ProductsPage'
 import CartPage from './pages/CartPage'
@@ -14,7 +14,8 @@ import CheckoutPage from './pages/CheckoutPage'
 import LoginPage from './pages/LoginPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import RegisterPage from './pages/RegisterPage'
-import OrderHistoryPage from './pages/OrderHistoryPage'
+import TrackOrderPage, { LegacyOrdersPage } from './pages/TrackOrderPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
 import AdminLoginPage from './pages/AdminLoginPage'
 import AdminDashboard from './pages/AdminDashboard'
 import AdminWebsiteAnalytics from './pages/AdminWebsiteAnalytics'
@@ -56,7 +57,9 @@ function AppLayout() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/orders" element={<><FullTrackingEntry /><OrderHistoryPage /></>} />
+              <Route path="/orders" element={<LegacyOrdersPage />} />
+              <Route path="/track-order" element={<TrackOrderPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
               <Route path="/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/inbox" element={<InboxPage />} />

@@ -22,11 +22,34 @@ class User(Base):
     fcm_tokens_json = Column(Text, default="[]")
     is_active = Column(Boolean, default=True)
     session_version = Column(Integer, default=0, nullable=False)
+    account_status = Column(String(24), default="active", nullable=False)
+    account_status_reason = Column(Text, default="")
+    account_deleted_at = Column(DateTime, nullable=True)
+    email_verified_at = Column(DateTime, nullable=True)
+    email_verification_required = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     profile = relationship("Profile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     addresses = relationship("Address", back_populates="user", cascade="all, delete-orphan")
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(64), unique=True, nullable=False, index=True)
+    email_digest = Column(String(64), nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class AccountActionLimit(Base):
+    __tablename__ = "account_action_limits"
+    key_hash = Column(String(64), primary_key=True)
+    count = Column(Integer, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
 
 
 class PasswordResetToken(Base):
@@ -559,6 +582,7 @@ class Order(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     order_code = Column(String(30), unique=True, index=True, nullable=False)
+    checkout_request_hash = Column(String(64), nullable=True)
     customer_name = Column(String(150), default="")
     customer_email = Column(String(150), index=True, default="")
     customer_phone = Column(String(50), default="")

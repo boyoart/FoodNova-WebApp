@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Package, ChevronUp, X } from 'lucide-react'
+import { Package } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { trackingAPI } from '../services/api'
 import { canonicalOrderStatus, orderStatusLabel } from '../utils/orderStatusModel'
@@ -25,7 +25,7 @@ export function OrderTrackingProvider({ children }) {
   const currentRequest = useRef(null)
   const orderCode = useRef('')
   const data = result?.kind === 'customer' && result.owner !== identity ? null : result
-  const fullPage = location.pathname === '/orders'
+  const fullPage = ['/orders', '/track-order'].includes(location.pathname)
   const allowed = !isAdmin && !location.pathname.startsWith('/admin')
   const apply = (response, owner) => {
     if (response.status === 'authorized' && identityRef.current === owner && owner) setResult({ kind: 'customer', order: response.order, owner })
@@ -90,10 +90,10 @@ function TrackingContent({ fullPage }) {
       <button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Track Order'}</button></form>
     <p role="status">{message}</p>
     {data && <section className="tracking-progress" aria-label="Current order progress"><h3>{orderStatusLabel(canonicalOrderStatus(data.order))}</h3><p>Current recorded status. No estimated arrival time is provided.</p><ol>{trackingTimeline(data.order).map((step) => <li key={step.label} className={step.completed ? 'is-complete' : ''}>{step.completed ? '✓ ' : ''}{step.label}<span className="sr-only">{step.completed ? ' reached' : ' not yet reached'}</span></li>)}</ol>
-      {data.kind === 'customer' ? <><p>Order {data.order.order_code}</p><p>Total: {formatPrice(data.order.total_amount)} · Payment: {data.order.payment_status}</p><ul>{data.order.items?.map((item, i) => <li key={i}>{item.product_name || item.name} × {item.quantity || item.qty}</li>)}</ul><Link to={`/orders?order=${encodeURIComponent(data.order.order_code)}`} onClick={() => tracking.setOpen(false)}>View Full Tracking</Link></>
-        : <><p>This private link permits limited progress only.</p><Link to="/login" state={{ from: '/orders' }} onClick={() => tracking.setOpen(false)}>Log In for Full Details</Link></>}
+      {data.kind === 'customer' ? <><p>Order {data.order.order_code}</p><p>Total: {formatPrice(data.order.total_amount)} · Payment: {data.order.payment_status}</p><ul>{data.order.items?.map((item, i) => <li key={i}>{item.product_name || item.name} × {item.quantity || item.qty}</li>)}</ul><Link to={`/track-order?order=${encodeURIComponent(data.order.order_code)}`}>View Full Tracking</Link></>
+        : <><p>This private link permits limited progress only.</p><Link to="/login" state={{ from: '/track-order' }}>Log In for Full Details</Link></>}
     </section>}
-    {!data && <p><Link to="/login" state={{ from: '/orders' }}>Sign in to My Orders</Link> for private order details.</p>}
+    {!data && <p><Link to="/login" state={{ from: '/track-order' }}>Sign in to My Orders</Link> for private order details.</p>}
   </>
 }
 
@@ -105,33 +105,7 @@ export function FullTrackingEntry() {
 export default function FloatingOrderTracking() {
   const tracking = useContext(TrackingContext)
   const location = useLocation()
-  const dialog = useRef(null)
-  const launcher = useRef(null)
-  const [expanded, setExpanded] = useState(false)
-  const [code, setCode] = useState('')
-  const visible = tracking?.allowed && !['/orders', '/checkout', '/cart'].includes(location.pathname)
-  const opened = visible && tracking?.open
-  useEffect(() => {
-    if (!opened) return undefined
-    const previous = document.activeElement
-    const originalOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    dialog.current?.querySelector('button, input, a')?.focus()
-    const onKey = (event) => {
-      if (event.key === 'Escape') { event.preventDefault(); tracking.setOpen(false) }
-      if (event.key !== 'Tab') return
-      const focusable = Array.from(dialog.current?.querySelectorAll('button:not(:disabled), input:not(:disabled), a[href]') || [])
-      const first = focusable[0], last = focusable.at(-1)
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = originalOverflow; if (previous?.isConnected) previous.focus(); else launcher.current?.focus() }
-  }, [opened, tracking?.setOpen])
-  useEffect(() => { tracking?.setOpen(false); setExpanded(false) }, [location.pathname])
+  const visible = tracking?.allowed && !['/orders', '/track-order', '/checkout', '/cart'].includes(location.pathname)
   if (!visible) return null
-  return <><div className="floating-order-tracking"><button ref={launcher} type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-controls="tracking-widget-form"><Package size={19} /><span>Track Your Order</span><ChevronUp size={16} /></button>
-    {expanded && <div id="tracking-widget-form" className="tracking-widget-panel"><h2>Track Your Order</h2><form onSubmit={(event) => { event.preventDefault(); tracking.setOpen(true); tracking.lookup(code) }}><label htmlFor="widget-order-number">Order number</label><input id="widget-order-number" value={code} onChange={(event) => setCode(event.target.value)} maxLength={40} required autoComplete="off" /><button type="submit" disabled={tracking.busy}>Track Order</button></form><Link to="/orders">Open My Orders</Link><button type="button" onClick={() => setExpanded(false)}>Collapse</button></div>}</div>
-    {opened && <div className="tracking-modal-layer"><div className="tracking-modal-backdrop" onClick={() => tracking.setOpen(false)} /><section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="quick-tracking-title" className="tracking-modal"><button type="button" className="tracking-close" aria-label="Close tracking" onClick={() => tracking.setOpen(false)}><X size={20} /></button><TrackingContent /><button type="button" onClick={() => tracking.setOpen(false)}>Close</button></section></div>}
-  </>
+  return <div className="floating-order-tracking"><Link className="tracking-shortcut" to="/track-order"><Package size={19} /><span>Track Your Order</span></Link></div>
 }

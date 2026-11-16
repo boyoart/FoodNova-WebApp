@@ -2,6 +2,7 @@
 from typing import Dict, List, Literal, Optional
 from uuid import uuid4
 import base64
+import asyncio
 import csv
 import hashlib
 import hmac
@@ -108,6 +109,7 @@ except Exception:
     socketio = None
 
 load_dotenv()
+from services.customer_security import needs_verification as customer_needs_verification, security_fields as customer_security_fields, check_customer as check_customer_account
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development").strip().lower() or "development"
 PRODUCTION_ENVIRONMENTS = {"production", "prod"}
@@ -787,6 +789,7 @@ PASSWORD_RESET_RATE_LIMIT = {}
 
 
 class OrderPayload(BaseModel):
+    idempotency_key: Optional[str] = None
     order_source: Literal['customer_app', 'customer_web'] = 'customer_app'
     items: Optional[list] = []
     total: Optional[float] = 0
@@ -1272,6 +1275,10 @@ def public_user(user: dict) -> dict:
         "phone": user.get("phone", ""),
         "role": user.get("role", "customer"),
         "is_active": user.get("is_active", True),
+        "account_status": user.get("account_status", "active"),
+        "email_verified": bool(user.get("email_verified", False)),
+        "email_verified_at": user.get("email_verified_at"),
+        "email_verification_required": customer_needs_verification(user),
     }
     if data["role"] == "admin":
         data["admin_role"] = normalize_admin_role(user.get("admin_role"))
@@ -1312,6 +1319,31 @@ def decode_access_token(token: str) -> Optional[dict]:
         return None
 
 
+SOCKET_EVENT_LOOP = None
+
+
+def _socket_order_allowed(token, order_id):
+    if not str(order_id).isdigit():
+        return False
+    db = SessionLocal()
+    try:
+        order = active_order_filter(db.query(DBOrder)).filter(DBOrder.id == int(order_id)).first()
+        if not order:
+            return False
+        require_order_access(Request({'type': 'http', 'headers': [(b'authorization', ('Bearer ' + token).encode())]}), order, db)
+        return True
+    except HTTPException:
+        return False
+    finally:
+        db.close()
+
+
+async def disconnect_customer_sockets(user_id):
+    if sio:
+        for sid, _ in list(sio.manager.get_participants('/', f'user:{user_id}')):
+            await sio.disconnect(sid)
+
+
 def _socket_user_rooms(user: dict) -> List[str]:
     rooms = []
     if not user:
@@ -1334,7 +1366,25 @@ def socket_emit(event: str, payload: dict, room: Optional[str] = None) -> None:
     try:
         import asyncio
         target = room or None
-        asyncio.run(sio.emit(event, payload or {}, room=target))
+        async def authorized_emit():
+            for sid, _ in list(sio.manager.get_participants('/', target)):
+                session = await sio.get_session(sid)
+                live = _get_user_from_token('Bearer ' + str(session.get('token') or ''))
+                order_allowed = not target or not target.startswith('order:') or _socket_order_allowed(str(session.get('token') or ''), target.split(':', 1)[1])
+                if not live or customer_needs_verification(live) or not order_allowed:
+                    await sio.disconnect(sid)
+            await sio.emit(event, payload or {}, room=target)
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+        if SOCKET_EVENT_LOOP and SOCKET_EVENT_LOOP.is_running():
+            if current_loop is SOCKET_EVENT_LOOP:
+                SOCKET_EVENT_LOOP.create_task(authorized_emit())
+            else:
+                asyncio.run_coroutine_threadsafe(authorized_emit(), SOCKET_EVENT_LOOP).result(timeout=10)
+        else:
+            asyncio.run(authorized_emit())
     except Exception as error:
         print("SOCKET_EMIT_ERROR", json_dump({"event": event, "room": room or "", "error": repr(error)}))
 
@@ -1342,6 +1392,8 @@ def socket_emit(event: str, payload: dict, room: Optional[str] = None) -> None:
 if sio:
     @sio.event
     async def connect(sid, environ, auth):
+        global SOCKET_EVENT_LOOP
+        SOCKET_EVENT_LOOP = asyncio.get_running_loop()
         token = ""
         if isinstance(auth, dict):
             token = str(auth.get("token") or "").strip()
@@ -1349,13 +1401,13 @@ if sio:
         if not token and query:
             parsed = urllib.parse.parse_qs(query)
             token = str((parsed.get("token") or [""])[0]).strip()
-        user = decode_access_token(token)
-        if not user:
+        user = _get_user_from_token('Bearer ' + token)
+        if not user or customer_needs_verification(user):
             print("SOCKET_CONNECT_REJECTED", json_dump({"sid": sid}))
             return False
         for room in _socket_user_rooms(user):
             await sio.enter_room(sid, room)
-        await sio.save_session(sid, {"user": user})
+        await sio.save_session(sid, {"user": user, "token": token})
         print("SOCKET_CONNECTED", json_dump({"sid": sid, "role": user.get("role"), "user_id": user.get("user_id")}))
 
     @sio.event
@@ -1366,7 +1418,15 @@ if sio:
     async def socket_order_subscribe(sid, payload):
         data = payload if isinstance(payload, dict) else {}
         order_id = str(data.get("order_id") or data.get("orderId") or "").strip()
-        if not order_id:
+        if not order_id.isdigit():
+            return
+        session = await sio.get_session(sid)
+        token = str(session.get('token') or '')
+        user = _get_user_from_token('Bearer ' + token)
+        if not user or customer_needs_verification(user):
+            await sio.disconnect(sid)
+            return
+        if not _socket_order_allowed(token, order_id):
             return
         await sio.enter_room(sid, f"order:{order_id}")
         await sio.emit("order:subscribed", {"order_id": order_id}, room=sid)
@@ -1374,9 +1434,12 @@ if sio:
     @sio.on("dispatch:subscribe")
     async def socket_dispatch_subscribe(sid, payload):
         session = await sio.get_session(sid)
-        user = session.get("user") or {}
+        user = _get_user_from_token('Bearer ' + str(session.get('token') or ''))
+        if not user:
+            await sio.disconnect(sid)
+            return
         if str(user.get("role") or "").lower() in {"rider", "messenger"}:
-            await sio.enter_room(sid, f"dispatch:{user.get('user_id')}")
+            await sio.enter_room(sid, f"dispatch:{user.get('id') or user.get('user_id')}")
             await sio.emit("dispatch:subscribed", {"success": True}, room=sid)
 
 
@@ -1487,6 +1550,8 @@ def _get_user_from_token(authorization: Optional[str]) -> Optional[dict]:
             return None
         if not getattr(user, "is_active", True):
             return None
+        if user.role == 'customer' and user.account_status != 'active':
+            return None
         if int((payload or {}).get("session_version", 0)) != int(getattr(user, "session_version", 0) or 0):
             return None
         if (user.role or "") in ["rider", "messenger"]:
@@ -1519,9 +1584,14 @@ def require_order_access(request: Request, order: DBOrder, db) -> dict:
     if role == "admin":
         return user
     if role == "customer":
+        if customer_needs_verification(user):
+            raise HTTPException(403, detail={'code': 'EMAIL_VERIFICATION_REQUIRED', 'message': 'Verify your email to access private order details.'})
         user_email = str(user.get("email") or "").strip().lower()
         order_email = str(order.customer_email or "").strip().lower()
-        if user_email and user_email == order_email:
+        if order.customer_user_id is not None:
+            if order.customer_user_id == user.get('id'):
+                return user
+        elif user_email and user_email == order_email:
             return user
     if role in {"rider", "messenger"}:
         worker = db.query(DBDeliveryWorker).filter(DBDeliveryWorker.user_id == user.get("id")).first()
@@ -3392,6 +3462,7 @@ def db_user_to_dict(user: DBUser) -> dict:
         "permissions_json": getattr(user, "permissions_json", None),
         "permissions": get_admin_permissions(user) if (user.role or "") == "admin" else [],
         "is_active": bool(getattr(user, "is_active", True)),
+        **customer_security_fields(user),
         "created_at": iso(user.created_at),
         "updated_at": iso(user.updated_at),
     }
@@ -9135,10 +9206,15 @@ def get_pack(pack_id: int):
 
 
 @app.post("/auth/register")
-def register(payload: RegisterPayload):
+def register(payload: RegisterPayload, request: Request = None):
     email = payload.email.lower().strip()
     db = SessionLocal()
     try:
+        if request is not None:
+            from services.customer_security import rate_limited
+            from services.order_tracking import request_identity
+            if rate_limited(db, 'register:' + request_identity(request), JWT_SECRET, maximum=5):
+                raise HTTPException(429, 'Please wait before creating another account.', headers={'Retry-After': '3600'})
         if get_db_user_by_email(db, email):
             raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -9155,6 +9231,7 @@ def register(payload: RegisterPayload):
             phone=payload.phone or "",
             password=_hash_new_password(payload.password),
             role="customer",
+            email_verification_required=True,
         )
         db.add(user)
         db.commit()
@@ -9171,7 +9248,13 @@ def register(payload: RegisterPayload):
 
         token = create_access_token(user)
 
-        return auth_response("Registration successful", db_user_to_dict(user), token)
+        from services.customer_security import verification_email
+        try:
+            verification_email(db, user)
+        except Exception:
+            db.rollback()
+            print('VERIFICATION_EMAIL_UNAVAILABLE')
+        return auth_response("Registration successful. Verify your email to place orders.", db_user_to_dict(user), token)
     finally:
         db.close()
 
@@ -10118,8 +10201,8 @@ def api_health():
 
 
 @app.post("/api/auth/register")
-def api_auth_register(payload: RegisterPayload):
-    return register(payload)
+def api_auth_register(payload: RegisterPayload, request: Request = None):
+    return register(payload, request)
 
 
 @app.post("/api/auth/login")
@@ -11961,8 +12044,8 @@ def decline_delivery_offer(offer_id: int, request: Request, payload: DeliveryOff
 
 
 @app.post("/register")
-def register_fallback(payload: RegisterPayload):
-    return register(payload)
+def register_fallback(payload: RegisterPayload, request: Request = None):
+    return register(payload, request)
 
 
 @app.post("/login")
@@ -12433,6 +12516,20 @@ def create_order(payload: OrderPayload, request: Request):
 
     db = SessionLocal()
     try:
+        account = db.query(DBUser).filter(DBUser.id == current_user.get('id')).with_for_update().first()
+        check_customer_account(account, verified=True)
+        from services.customer_security import checkout_hash
+        request_hash = checkout_hash(payload)
+        if payload.idempotency_key and not re.fullmatch(r'[A-Za-z0-9-]{16,64}', payload.idempotency_key):
+            raise HTTPException(422, 'Invalid checkout request identifier.')
+        checkout_key = f'customer:{account.id}:{payload.idempotency_key}' if payload.idempotency_key else None
+        if checkout_key:
+            previous = db.query(DBOrder).filter(DBOrder.manual_idempotency_key == checkout_key).first()
+            if previous:
+                if previous.checkout_request_hash != request_hash:
+                    raise HTTPException(409, 'This checkout was already submitted with different details. Review My Orders before submitting another order.')
+                data = order_to_dict_for_context(previous, db, 'customer')
+                return {'success': True, 'order': data, 'data': data, 'idempotent_replay': True}
         validate_delivery_destination_for_zone(
             db,
             delivery_method,
@@ -12458,6 +12555,9 @@ def create_order(payload: OrderPayload, request: Request):
             "status": "pending_payment", "payment_status": "pending_payment",
             "order_status": "order_placed", "fulfillment_status": "order_placed",
             "order_source": payload.order_source,
+            "customer_user_id": account.id,
+            "manual_idempotency_key": checkout_key,
+            "checkout_request_hash": request_hash,
             },
         )
         db.commit()
@@ -12582,13 +12682,15 @@ def create_manual_order(payload: ManualOrderPayload, request: Request):
             data = order_to_dict_for_context(existing, db, "admin")
             return {"success": True, "duplicate": True, "order": data, "data": data}
         if payload.customer_user_id:
-            linked_customer = db.query(DBUser).filter(DBUser.id == payload.customer_user_id, DBUser.role == "customer").first()
+            linked_customer = db.query(DBUser).filter(DBUser.id == payload.customer_user_id, DBUser.role == "customer").with_for_update().first()
             if not linked_customer:
                 raise HTTPException(status_code=404, detail="Selected customer was not found")
         elif str(payload.customer_email or "").strip():
             linked_customer = db.query(DBUser).filter(
                 DBUser.role == "customer", func.lower(DBUser.email) == str(payload.customer_email).strip().lower()
-            ).first()
+            ).with_for_update().first()
+        if linked_customer:
+            check_customer_account(linked_customer)
         customer_name = (linked_customer.full_name if linked_customer else payload.customer_name or "Walk-in Customer").strip()
         customer_email = (linked_customer.email if linked_customer else payload.customer_email or "").strip().lower()
         try:
@@ -12693,10 +12795,14 @@ def create_manual_order(payload: ManualOrderPayload, request: Request):
 @app.get("/orders/my")
 def my_orders(request: Request):
     user = require_user(request)
+    if customer_needs_verification(user):
+        raise HTTPException(403, detail={'code': 'EMAIL_VERIFICATION_REQUIRED', 'message': 'Verify your email to access private order details.'})
     email = user.get("email")
     db = SessionLocal()
     try:
-        customer_orders = active_order_filter(db.query(DBOrder)).filter(DBOrder.customer_email == email).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
+        legacy_owner = and_(DBOrder.customer_user_id.is_(None), func.lower(DBOrder.customer_email) == str(email or '').lower())
+        owner = or_(DBOrder.customer_user_id == user['id'], legacy_owner) if user.get('id') else legacy_owner
+        customer_orders = active_order_filter(db.query(DBOrder)).filter(owner).order_by(DBOrder.created_at.desc(), DBOrder.id.desc()).all()
         orders = []
         for order in customer_orders:
             provision_legacy_ready_pickup_pin(db, order)
@@ -16123,12 +16229,28 @@ def admin_delete_pack(pack_id: int, request: Request):
 
 
 @app.get("/admin/customers")
-def admin_customers(request: Request):
+def admin_customers(request: Request, search: Optional[str] = None, account_status: Optional[str] = None, verification: Optional[str] = None, page: Optional[int] = None, page_size: int = 20):
     require_any_permission(request, ["customers:view", "orders:manual_create"])
 
     db = SessionLocal()
     try:
-        customers = db.query(DBUser).filter(DBUser.role == "customer").all()
+        query = db.query(DBUser).filter(DBUser.role == "customer")
+        if search:
+            term = f'%{search[:150]}%'
+            query = query.filter(or_(DBUser.full_name.ilike(term), DBUser.email.ilike(term), DBUser.phone.ilike(term)))
+        if account_status:
+            if account_status not in {'active', 'suspended', 'deactivated', 'deleted'}:
+                raise HTTPException(422, 'Invalid customer status filter.')
+            query = query.filter(DBUser.account_status == account_status)
+        if verification:
+            if verification not in {'verified', 'unverified'}:
+                raise HTTPException(422, 'Invalid verification filter.')
+            query = query.filter(DBUser.email_verified_at.isnot(None) if verification == 'verified' else DBUser.email_verified_at.is_(None))
+        if page is not None and (page < 1 or page_size < 1 or page_size > 100):
+            raise HTTPException(422, 'Choose a valid customer page and page size (1–100).')
+        total = query.count()
+        query = query.order_by(DBUser.created_at.desc(), DBUser.id.desc())
+        customers = query.offset((page - 1) * page_size).limit(page_size).all() if page is not None else query.all()
         result = []
 
         for customer in customers:
@@ -16163,6 +16285,7 @@ def admin_customers(request: Request):
 
             result.append({
                 "id": customer.id,
+                **customer_security_fields(customer),
                 "full_name": customer.full_name or "Customer",
                 "name": customer.full_name or "Customer",
                 "email": customer.email,
@@ -16184,7 +16307,11 @@ def admin_customers(request: Request):
             "success": True,
             "customers": result,
             "data": result,
+            "total": total, "page": page or 1, "page_size": page_size if page is not None else total,
+            "total_pages": max(1, math.ceil(total / page_size)) if page is not None else 1,
         }
+    except HTTPException:
+        raise
     except Exception as error:
         print("ADMIN CUSTOMERS LOAD ERROR:", repr(error))
         return {"success": True, "customers": [], "data": []}
@@ -17972,6 +18099,8 @@ import sys as _sys
 fastapi_app.include_router(build_website_analytics_router(_sys.modules[__name__]))
 from routes.order_tracking import build_router as build_order_tracking_router
 fastapi_app.include_router(build_order_tracking_router(_sys.modules[__name__]))
+from routes.customer_security import build_router as build_customer_security_router
+fastapi_app.include_router(build_customer_security_router(_sys.modules[__name__]))
 
 if sio:
     app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

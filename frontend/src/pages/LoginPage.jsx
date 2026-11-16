@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import { Mail, Lock } from 'lucide-react'
 import './AuthPages.css'
 import BrandLogo from '../components/BrandLogo'
+import { authReturnPath } from '../utils/checkoutFlow'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -29,7 +30,7 @@ export default function LoginPage() {
       const res = await authAPI.login(formData)
       login(res.data.user, res.data.access_token)
       toast.success('Login successful!')
-      navigate(location.state?.from === '/orders' ? '/orders' : '/')
+      navigate(authReturnPath(location.state?.from, res.data.user?.email_verification_required ? '/verify-email' : '/'))
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed')
     } finally {
@@ -84,7 +85,7 @@ export default function LoginPage() {
           <p className="auth-footer"><Link to="/reset-password">Forgot Password?</Link></p>
 
           <p className="auth-footer">
-            Don't have an account? <Link to="/register">Register here</Link>
+            Don't have an account? <Link to="/register" state={{ from: location.state?.from }}>Register here</Link>
           </p>
         </div>
       </div>

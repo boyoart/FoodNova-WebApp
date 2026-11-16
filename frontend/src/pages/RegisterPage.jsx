@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Mail, Lock, User, Phone } from 'lucide-react'
 import './AuthPages.css'
 import BrandLogo from '../components/BrandLogo'
+import { authReturnPath } from '../utils/checkoutFlow'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -68,13 +70,12 @@ export default function RegisterPage() {
       const { user, token } = extractAuthPayload(res)
 
       if (!user || !token) {
-        console.error('Unexpected registration response:', res)
         throw new Error('Registration response missing user or token')
       }
 
       login(user, token)
       toast.success('Registration successful!')
-      navigate('/')
+      navigate(authReturnPath(location.state?.from, '/verify-email'))
     } catch (error) {
       console.error('Registration error:', error)
       toast.error(error.response?.data?.detail || error.message || 'Registration failed')
@@ -173,7 +174,7 @@ export default function RegisterPage() {
           </form>
 
           <p className="auth-footer">
-            Already have an account? <Link to="/login">Login here</Link>
+            Already have an account? <Link to="/login" state={{ from: location.state?.from }}>Login here</Link>
           </p>
         </div>
       </div>
