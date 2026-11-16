@@ -1,0 +1,8 @@
+.analytics-consent { position: fixed; left: 12px; bottom: 12px; z-index: 5100; width: min(400px, calc(100vw - 100px)); }
+.analytics-consent-panel { padding: 18px; border: 1px solid var(--fn-border); border-radius: 14px; color: var(--fn-text); background: var(--fn-surface); box-shadow: 0 8px 32px #0003; max-height: 65dvh; overflow-y: auto; }
+.analytics-consent-panel h2 { font-size: 1.1rem; margin-bottom: 8px; }
+.analytics-consent-panel p { font-size: .85rem; line-height: 1.55; margin-bottom: 10px; }
+.analytics-consent-panel > div { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.analytics-consent button { min-height: 44px; padding: 8px 12px; border-radius: 8px; background: #075338; color: #fff; border: 1px solid #5a8067; cursor: pointer; }
+.analytics-consent button:focus-visible { outline: 3px solid #F5CB29; outline-offset: 3px; }
+.analytics-preferences { font-size: .75rem; box-shadow: 0 3px 12px #0002; }

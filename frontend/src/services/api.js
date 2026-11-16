@@ -254,6 +254,18 @@ export const authAPI = {
   },
 };
 
+import { websiteAnalytics } from '../utils/websiteAnalytics'
+
+export const websiteAnalyticsAPI = {
+  report: async (params, signal) => (await api.get('/admin/website-analytics', { params, signal, timeout: 65000 })).data,
+  summary: async (signal) => (await api.get('/admin/website-analytics/summary', { signal, timeout: 65000 })).data,
+}
+
+export const trackingAPI = {
+  lookup: async (payload, signal) => (await api.post('/tracking/lookup', payload, { signal })).data,
+  progress: async (token, signal) => (await api.post('/tracking/progress', { token }, { signal })).data,
+}
+
 export const ordersAPI = {
   create: async (payload) => {
     const response = await api.post("/orders", payload);
@@ -264,6 +276,7 @@ export const ordersAPI = {
     try {
       const response = await api.get("/orders/my");
       const orders = normalizeList(response.data, ["orders"]);
+      void websiteAnalytics.purchases(orders, (id, payload) => api.post(`/orders/${id}/analytics-purchase`, payload)).catch(() => {});
       return { data: orders, raw: response.data };
     } catch (error) {
       logEndpointError("GET /orders/my", error);

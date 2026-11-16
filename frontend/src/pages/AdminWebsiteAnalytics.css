@@ -1,0 +1,22 @@
+.website-analytics { display: grid; gap: 20px; min-width: 0; }
+.website-analytics > h1 { font-size: clamp(1.5rem, 3vw, 2rem); }
+.website-report-card { min-width: 0; padding: 22px; border: 1px solid var(--fn-border); border-radius: 14px; background: var(--fn-surface); color: var(--fn-text); margin-block: 16px; }
+.website-report-card h2 { font-size: 1.1rem; margin-bottom: 10px; }
+.website-report-card p, .website-report-note { font-size: .85rem; color: var(--fn-muted); line-height: 1.55; }
+.website-report-heading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+.website-report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.website-report-grid .website-report-card { margin: 0; }
+.website-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-block: 18px; }
+.website-metrics > div { min-width: 0; padding: 14px; border: 1px solid var(--fn-border); border-radius: 10px; background: var(--fn-surface-2); }
+.website-metrics dt { font-size: .8rem; color: var(--fn-muted); }
+.website-metrics dd { margin: 8px 0 0; font-size: 1.35rem; font-weight: 800; overflow-wrap: anywhere; }
+.website-table-scroll { overflow-x: auto; }
+.website-table-scroll table { border-collapse: collapse; width: 100%; font-size: .83rem; }
+.website-table-scroll th, .website-table-scroll td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--fn-border); overflow-wrap: anywhere; }
+.website-date-filter { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.website-date-filter label { display: grid; gap: 6px; }
+.website-date-filter :is(select, input, button) { min-height: 44px; max-width: 100%; padding: 8px 12px; border: 1px solid var(--fn-border); border-radius: 8px; background: var(--fn-surface); color: var(--fn-text); }
+.website-date-filter button { background: #075338; color: #fff; cursor: pointer; }
+.website-analytics :is(a, button, input, select):focus-visible { outline: 3px solid #F5CB29; outline-offset: 3px; }
+@media (max-width: 900px) { .website-report-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 390px) { .website-metrics { grid-template-columns: minmax(0, 1fr); } .website-report-card { padding: 14px; } }

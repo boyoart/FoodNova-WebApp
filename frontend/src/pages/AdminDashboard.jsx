@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import { AlertTriangle, ArrowUpRight, BarChart3, CircleDollarSign, Clock3, Package, RefreshCw, ShoppingBag, Truck } from 'lucide-react'
 import { adminTools, isAdminToolAllowed } from './adminNavigation'
 import './AdminDashboard.css'
+import { WebsiteTrafficSummary } from './AdminWebsiteAnalytics'
 
 const statusTone = (value) => {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return 'tone-blue'
@@ -127,6 +128,7 @@ export default function AdminDashboard() {
   if (!isAdmin) return <div className="admin-page"><p>Access denied. Admin login required.</p></div>
 
   return <div className="admin-page admin-dashboard-page">
+    <WebsiteTrafficSummary />
     <section className="admin-welcome">
       <div><p className="admin-welcome-kicker">FOODNOVA OPERATIONS</p><h2>Welcome, {adminName.split(/\s+/)[0]}</h2><p>Analytics range: {reportRangeLabel(stats?.report_range)}. Live dispatch and attention counts use current records.</p></div>
       {canViewOrders && <Link to="/admin/orders" className="admin-welcome-action">Open orders <ArrowUpRight size={17} /></Link>}

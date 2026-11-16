@@ -14,6 +14,7 @@ export const adminTools = [
   { group: 'Website & CMS', path: '/admin/coming-soon-subscribers', title: 'Coming Soon Subscribers', description: 'Review and export the launch list.', icon: Mail, permissions: ['subscribers:view', 'announcements:view'] },
   { group: 'Website & CMS', path: '/admin/delivery-zones', title: 'Delivery Zones', description: 'Configure the operational delivery radius.', icon: MapPin, permissions: ['delivery_zones:view', 'workforce:view', 'delivery:manage'] },
   { group: 'Insights', path: '/admin/reports', title: 'Reports', description: 'Analyze orders, revenue, payments, and products.', icon: FileBarChart, permission: 'reports:view' },
+  { group: 'Insights', path: '/admin/website-analytics', title: 'Website Analytics', description: 'View GA4 traffic, engagement and purchase conversions.', icon: BarChart3, permission: 'reports:view' },
   { group: 'Administration', path: '/admin/audit-logs', title: 'Activity Logs', description: 'Track admin actions and system changes.', icon: BarChart3, permission: 'audit:view' },
   { group: 'Administration', path: '/admin/users', title: 'Admin Users', description: 'Create and manage admin accounts.', icon: ShieldCheck, permissions: ['admins:view', 'admins:manage'] },
 ]

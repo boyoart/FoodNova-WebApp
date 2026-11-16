@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
@@ -9,6 +9,7 @@ import BrandLogo from '../components/BrandLogo'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuthStore()
   const [loading, setLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -28,7 +29,7 @@ export default function LoginPage() {
       const res = await authAPI.login(formData)
       login(res.data.user, res.data.access_token)
       toast.success('Login successful!')
-      navigate('/')
+      navigate(location.state?.from === '/orders' ? '/orders' : '/')
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed')
     } finally {

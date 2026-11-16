@@ -5,6 +5,8 @@ import Footer from './components/Footer'
 import ErrorBoundary from './components/ErrorBoundary'
 import FloatingCartButton from './components/FloatingCartButton'
 import BackToTopButton from './components/BackToTopButton'
+import AnalyticsConsent from './components/AnalyticsConsent'
+import FloatingOrderTracking, { FullTrackingEntry, OrderTrackingProvider } from './components/OrderTracking'
 import HomePage from './pages/HomePage'
 import ProductsPage from './pages/ProductsPage'
 import CartPage from './pages/CartPage'
@@ -15,6 +17,7 @@ import RegisterPage from './pages/RegisterPage'
 import OrderHistoryPage from './pages/OrderHistoryPage'
 import AdminLoginPage from './pages/AdminLoginPage'
 import AdminDashboard from './pages/AdminDashboard'
+import AdminWebsiteAnalytics from './pages/AdminWebsiteAnalytics'
 import AdminLayout from './pages/AdminLayout'
 import AdminOrders from './pages/AdminOrders'
 import AdminStock from './pages/AdminStock'
@@ -53,7 +56,7 @@ function AppLayout() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/orders" element={<OrderHistoryPage />} />
+              <Route path="/orders" element={<><FullTrackingEntry /><OrderHistoryPage /></>} />
               <Route path="/orders/:orderId/invoice" element={<InvoicePage />} />
               <Route path="/profile" element={<ProfilePage />} />
               <Route path="/inbox" element={<InboxPage />} />
@@ -63,6 +66,7 @@ function AppLayout() {
               <Route path="/admin/login" element={<AdminLoginPage />} />
               <Route path="/admin" element={<AdminLayout />}>
                 <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="website-analytics" element={<AdminWebsiteAnalytics />} />
                 <Route path="orders" element={<AdminOrders />} />
                 <Route path="orders/:orderId/invoice" element={<InvoicePage />} />
                 <Route path="riders" element={<AdminRiders />} />
@@ -90,13 +94,15 @@ function AppLayout() {
       {!isAdminRoute && <Footer />}
       {!isAdminRoute && <FloatingCartButton />}
       {!isAdminRoute && <BackToTopButton />}
+      <AnalyticsConsent />
+      <FloatingOrderTracking />
       <Toaster position="bottom-right" />
     </div>
   )
 }
 
 function App() {
-  return <BrowserRouter><ErrorBoundary><AppLayout /></ErrorBoundary></BrowserRouter>
+  return <BrowserRouter><ErrorBoundary><OrderTrackingProvider><AppLayout /></OrderTrackingProvider></ErrorBoundary></BrowserRouter>
 }
 
 export default App

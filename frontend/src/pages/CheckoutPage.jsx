@@ -113,6 +113,7 @@ export default function CheckoutPage() {
       }
       const deliveryAddress = deliveryMethod === 'pickup' ? 'Pickup selected' : formatFullAddress(finalAddress)
       const orderData = {
+        order_source: 'customer_web',
         customer_name: formData.name, customer_email: formData.email, customer_phone: formData.phone, phone: formData.phone, delivery_method: deliveryMethod,
         delivery_address_id: deliveryAddressId, delivery_address: deliveryAddress, address: deliveryAddress, delivery_address_snapshot: finalAddress,
         state: finalAddress?.state || '', city: finalAddress?.city || '', lga: finalAddress?.lga || '', street_address: finalAddress?.address_line || finalAddress?.street || '', landmark: finalAddress?.landmark || '', delivery_notes: formData.delivery_notes,

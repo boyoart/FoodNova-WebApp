@@ -155,7 +155,7 @@ def send_email(to, subject, html, text=None, event_type="", order=None):
         return {"status": "sent", "response": response}
     except Exception as error:
         error_type = type(error).__name__
-        if event_type in {"pickup_fulfillment_pin", "delivery_fulfillment_pin"}:
+        if event_type in {"pickup_fulfillment_pin", "delivery_fulfillment_pin", "order_placed", "tracking_link"}:
             print("EMAIL SEND ERROR:", error_type)
             return {"status": "failed", "error": error_type}
         print("EMAIL SEND ERROR:", repr(error))
@@ -184,6 +184,12 @@ def send_customer_order_email(order, event_type, extra=None):
             "<p style='margin:4px 0;'>Payment Narration: Use your Order Code</p>"
             "</div>"
         )
+        from services.order_tracking import confirmation_link
+        secure_link = confirmation_link(order.get('id'), FRONTEND_URL) if is_email_enabled() and order.get('id') else None
+        if secure_link:
+            cta_text = 'Track My Order'
+            cta_url = secure_link
+            message += ' Use the secure link below for limited progress without signing in. Full details require your FoodNova account.'
     elif event_type == "receipt_uploaded":
         subject = f"FoodNova Receipt Received - {order_code}"
         filename = extra.get("filename") or "your receipt"
@@ -234,8 +240,16 @@ def send_customer_order_email(order, event_type, extra=None):
         return {"status": "skipped", "reason": "unknown_event"}
 
     html = render_order_email_template(order, subject, message, cta_text, cta_url, extra_html)
-    text = f"{subject}\n\n{message}\n\nOrder Code: {order_code}\nTotal: {format_naira(order.get('total_amount') or order.get('total') or 0)}\n\n{_order_summary_text(order)}"
+    text = f"{subject}\n\n{message}\n\nOrder Code: {order_code}\nTotal: {format_naira(order.get('total_amount') or order.get('total') or 0)}\n\n{_order_summary_text(order)}\n\n{cta_text}: {cta_url}"
     return send_email(customer_email, subject, html, text=text, event_type=event_type, order=order)
+
+
+def send_tracking_link_email(email, code, url):
+    html = ("<h1>Track your FoodNova order</h1>"
+            f"<p>Order {escape(str(code))}</p><p><a href='{escape(url, quote=True)}'>Track My Order</a></p>"
+            "<p>This private link shows limited progress only and expires in 30 days. Sign in for full details. If you did not request it, ignore this email.</p>")
+    return send_email(email, 'FoodNova — Secure Order Tracking', html,
+                      text=f'Track your FoodNova order: {url}\nLimited progress only. Expires in 30 days.', event_type='tracking_link')
 
 
 def send_customer_fulfillment_pin_email(

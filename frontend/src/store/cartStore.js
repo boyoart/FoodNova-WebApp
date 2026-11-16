@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { websiteAnalytics } from '../utils/websiteAnalytics.js'
 
 const safeJsonParse = (key, fallback) => {
   try {
@@ -38,6 +39,7 @@ export const useCartStore = create((set, get) => ({
 
     localStorage.setItem('cart', JSON.stringify(newItems))
     set({ items: newItems })
+    websiteAnalytics.commerce('add_to_cart', [{ ...product, quantity: requestedQty }])
   },
 
   removeItem: (productId) => {

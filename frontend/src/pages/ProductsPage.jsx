@@ -20,6 +20,7 @@ import {
 } from './productsCatalog'
 import './ProductsPage.css'
 import { rememberProduct, unwrapItem } from '../utils/shopping'
+import { websiteAnalytics } from '../utils/websiteAnalytics'
 
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -175,6 +176,10 @@ export default function ProductsPage() {
       }
     }
   }
+
+  useEffect(() => {
+    websiteAnalytics.viewItem(modalItem)
+  }, [modalItem?.id, modalItem?.type])
 
   const closeProductModal = () => {
     setModalItem(null)

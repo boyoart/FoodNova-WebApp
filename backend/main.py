@@ -1,5 +1,5 @@
 ﻿from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from uuid import uuid4
 import base64
 import csv
@@ -787,6 +787,7 @@ PASSWORD_RESET_RATE_LIMIT = {}
 
 
 class OrderPayload(BaseModel):
+    order_source: Literal['customer_app', 'customer_web'] = 'customer_app'
     items: Optional[list] = []
     total: Optional[float] = 0
     total_amount: Optional[float] = 0
@@ -12456,7 +12457,7 @@ def create_order(payload: OrderPayload, request: Request):
             "delivery_notes": payload.delivery_notes or "",
             "status": "pending_payment", "payment_status": "pending_payment",
             "order_status": "order_placed", "fulfillment_status": "order_placed",
-            "order_source": "customer_app",
+            "order_source": payload.order_source,
             },
         )
         db.commit()
@@ -17965,6 +17966,12 @@ def delete_broadcast(broadcast_id: int, request: Request):
 
     raise HTTPException(status_code=404, detail="Broadcast not found")
 
+
+from routes.website_analytics import build_router as build_website_analytics_router
+import sys as _sys
+fastapi_app.include_router(build_website_analytics_router(_sys.modules[__name__]))
+from routes.order_tracking import build_router as build_order_tracking_router
+fastapi_app.include_router(build_order_tracking_router(_sys.modules[__name__]))
 
 if sio:
     app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

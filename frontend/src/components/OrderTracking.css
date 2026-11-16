@@ -1,0 +1,24 @@
+.floating-order-tracking { position: fixed; right: 28px; bottom: 154px; z-index: 81; max-width: calc(100vw - 36px); }
+[data-analytics-consent-open="true"] .floating-order-tracking { visibility: hidden; pointer-events: none; }
+.floating-order-tracking > button { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 12px 16px; background: #075338; color: #fff; border: 1px solid #F5CB29; border-radius: 28px; box-shadow: 0 8px 24px #0003; cursor: pointer; }
+.tracking-widget-panel { display: grid; gap: 10px; width: min(320px, calc(100vw - 36px)); max-height: 55dvh; overflow-y: auto; padding: 16px; margin-top: 8px; border: 1px solid var(--fn-border); border-radius: 12px; background: var(--fn-surface); color: var(--fn-text); }
+.tracking-widget-panel h2 { font-size: 1.1rem; }
+.tracking-widget-panel form { display: grid; gap: 8px; }
+.tracking-widget-panel input { width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--fn-border); border-radius: 8px; background: var(--fn-input-bg); color: var(--fn-text); }
+.tracking-widget-panel button, .tracking-modal button, .tracking-full-entry button { min-height: 44px; padding: 10px 14px; background: #075338; color: #fff; border: 1px solid #416650; border-radius: 8px; cursor: pointer; }
+.tracking-modal-layer { position: fixed; inset: 0; z-index: 5200; display: grid; place-items: center; padding: 12px; }
+.tracking-modal-backdrop { position: absolute; inset: 0; background: #0009; }
+.tracking-modal { position: relative; width: min(560px, 100%); max-height: 88dvh; overflow-y: auto; padding: 24px; background: var(--fn-surface); color: var(--fn-text); border-radius: 16px; box-shadow: 0 12px 48px #0005; }
+.tracking-close { float: right; }
+.tracking-modal h2, .tracking-full-entry h2 { margin-bottom: 16px; font-size: 1.35rem; }
+.tracking-modal form, .tracking-full-entry form { display: grid; gap: 8px; clear: both; }
+.tracking-modal input, .tracking-full-entry input { min-width: 0; width: 100%; min-height: 44px; padding: 10px; border: 1px solid var(--fn-border); border-radius: 8px; background: var(--fn-input-bg); color: var(--fn-text); }
+.tracking-modal p, .tracking-full-entry p { margin-block: 12px; line-height: 1.5; }
+.tracking-progress { border-top: 1px solid var(--fn-border); margin-top: 18px; padding-top: 16px; }
+.tracking-progress ol { list-style: none; margin-block: 14px; padding: 0; display: grid; gap: 10px; }
+.tracking-progress ol li { padding: 10px; border-left: 3px solid var(--fn-border); }
+.tracking-progress ol li.is-complete { border-color: #0B8754; font-weight: 700; }
+.tracking-full-entry { width: min(680px, calc(100% - 2rem)); margin: 28px auto; padding: 24px; background: var(--fn-surface); color: var(--fn-text); border: 1px solid var(--fn-border); border-radius: 16px; }
+:is(.floating-order-tracking, .tracking-modal, .tracking-full-entry) :is(button, input, a):focus-visible { outline: 3px solid #F5CB29; outline-offset: 3px; }
+@media (max-width: 640px) { .floating-order-tracking { right: 18px; bottom: 138px; } .floating-order-tracking > button { font-size: .8rem; padding: 10px 12px; } .tracking-modal { padding: 18px; } }
+@media (prefers-reduced-motion: reduce) { .floating-order-tracking *, .tracking-modal * { transition: none !important; animation: none !important; } }

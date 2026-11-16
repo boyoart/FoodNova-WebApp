@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { ordersAPI, notificationsAPI } from '../services/api'
 import toast from 'react-hot-toast'
@@ -18,6 +18,7 @@ import {
 import './OrderHistoryPage.css'
 
 export default function OrderHistoryPage() {
+  const location = useLocation()
   const { isAuthenticated } = useAuthStore()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -26,6 +27,12 @@ export default function OrderHistoryPage() {
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
   const [refreshingOrder, setRefreshingOrder] = useState(false)
   const [loadError, setLoadError] = useState('')
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get('order')
+    if (!isAuthenticated || !code) return
+    const match = orders.find((order) => order.order_code === code)
+    if (match) setSelectedOrder((current) => current?.id === match.id ? current : match)
+  }, [orders, location.search, isAuthenticated])
 
   useEffect(() => {
     if (isAuthenticated) {
