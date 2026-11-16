@@ -25,12 +25,58 @@ test('branding renders the full original logo and is reused in all web identity 
   assert.match(logo, /Quality Foodstuff\. Reliable Supply\./)
   assert.match(css, /height: auto/)
   assert.match(css, /object-fit: contain/)
+  assert.match(css, /background: transparent/)
+  assert.doesNotMatch(css, /background: #fff/)
   assert.doesNotMatch(css, /filter:|object-fit: cover/)
   for (const path of ['components/Navbar.jsx', 'components/Footer.jsx', 'pages/AdminLayout.jsx', 'pages/LoginPage.jsx', 'pages/AdminLoginPage.jsx', 'pages/RegisterPage.jsx', 'pages/ResetPasswordPage.jsx']) {
     const content = await source(`../src/${path}`)
     assert.match(content, /<BrandLogo/)
     assert.doesNotMatch(content, /src="\/foodnova-logo\.png"|setLogoSrc/)
   }
+})
+
+test('mobile logo components preserve artwork without white background plates', async () => {
+  const flutter = await source('../../foodnova-customer-app/lib/widgets/brand_logo.dart')
+  const expo = await source('../../foodnova-dispatch-app/src/components/Logo.tsx')
+  assert.doesNotMatch(flutter, /Colors.white|DecoratedBox|ColorFiltered/)
+  assert.match(flutter, /BoxFit.contain/)
+  assert.doesNotMatch(expo, /backgroundColor: "#fff"|rgba\(255/)
+  assert.match(expo, /contentFit="contain"/)
+  const config = JSON.parse(await source('../../foodnova-dispatch-app/app.json'))
+  const splash = config.expo.plugins.find((entry) => Array.isArray(entry) && entry[0] === 'expo-splash-screen')[1]
+  assert.equal(splash.image, './assets/images/foodnova-dispatch-logo.png')
+  assert.equal(splash.resizeMode, 'contain')
+})
+
+test('late mounted widgets and cards are observed once without restarting existing animations', () => {
+  let intersect, mutate, mutationDisconnected = false
+  const observed = []
+  let animations = 0
+  const card = { animate: () => { animations++; return { cancel() {} } } }
+  const widget = { animate: () => { animations++; return { cancel() {} } } }
+  let children = [card]
+  class Observer {
+    constructor(callback, options) { intersect = callback; assert.equal(options.threshold, 0) }
+    observe(element) { observed.push(element) }
+    unobserve() {}
+    disconnect() {}
+  }
+  class Mutations {
+    constructor(callback) { mutate = callback }
+    observe(_, options) { assert.deepEqual(options, { childList: true, subtree: true }) }
+    disconnect() { mutationDisconnected = true }
+  }
+  const cleanup = observeScrollReveals({ root: { querySelectorAll: () => children }, Observer, Mutations, media: null })
+  assert.deepEqual(observed, [card])
+  intersect([{ target: card, isIntersecting: true }])
+  children = [card, widget]
+  mutate()
+  mutate()
+  assert.deepEqual(observed, [card, widget])
+  intersect([{ target: widget, isIntersecting: true }, { target: card, isIntersecting: true }])
+  assert.equal(animations, 2)
+  cleanup()
+  assert.equal(mutationDisconnected, true)
 })
 
 test('sticky header measures anchor offset, reacts to scroll intersections, and cleans up', () => {

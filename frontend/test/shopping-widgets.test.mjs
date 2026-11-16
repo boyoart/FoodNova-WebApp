@@ -113,16 +113,16 @@ test('validated lines merge with the existing Zustand cart rather than creating 
   useCartStore.getState().clearCart()
 })
 
-test('yellow header uses transparent official artwork and shopping widgets preserve private API boundaries', async () => {
+test('charcoal header uses transparent official artwork and shopping widgets preserve private API boundaries', async () => {
   const read = (path) => readFile(new URL(path, import.meta.url), 'utf8')
   const css = await read('../src/components/Navbar.css')
   const widgets = await read('../src/components/ShoppingWidgets.jsx')
   const search = await read('../src/components/ProductSearch.jsx')
   const gap = await read('../../STOREFRONT_WIDGETS.md')
-  assert.match(css, /background: #FFCC16/)
+  assert.match(css, /background: #171B19/)
   assert.match(css, /\.navbar \.brand-logo-surface \{ background: transparent; border: 0;/)
   assert.match(css, /#075338/)
-  assert.match(css, /#0B8754/)
+  assert.match(css, /#F5CB29/)
   assert.match(widgets, /ordersAPI\.getCustomerOrders\(\)/)
   assert.match(widgets, /if \(!customer\) return/)
   assert.match(widgets, /identityRef\.current !== session/)

@@ -85,10 +85,8 @@ export default function HomePage() {
   const revealedElements = useRef(new WeakSet())
 
   useEffect(() => {
-    const elements = Array.from(homepageRef.current?.querySelectorAll('.home-combo-packs, .feature-card, .home-section-heading, .home-product-card, .category-card, .home-trust, .cta') || [])
-    elements.push(...document.querySelectorAll('.footer .footer-section'))
-    return observeScrollReveals({ elements, seen: revealedElements.current })
-  }, [products.length, categories.length, comboPacks.length])
+    return observeScrollReveals({ root: homepageRef.current, elements: Array.from(document.querySelectorAll('.footer .footer-section')), seen: revealedElements.current })
+  }, [])
   const slides = useMemo(() => {
     const fallbackSlides = heroSlides.map((item) => ({
       ...item,

@@ -21,20 +21,11 @@ class FoodNovaLogo extends StatelessWidget {
     return SizedBox(
       width: targetWidth,
       height: height,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(4),
-          child: Image.asset(
-            'assets/brand/foodnova-logo.png',
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-            semanticLabel: 'FoodNova. Quality Foodstuff. Reliable Supply.',
-          ),
-        ),
+      child: Image.asset(
+        'assets/brand/foodnova-logo.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        semanticLabel: 'FoodNova. Quality Foodstuff. Reliable Supply.',
       ),
     );
   }

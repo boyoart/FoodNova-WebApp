@@ -49,7 +49,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-image.png",
+          "image": "./assets/images/foodnova-dispatch-logo.png",
           "imageWidth": 260,
           "resizeMode": "contain",
           "backgroundColor": "#00C261"

@@ -1,5 +1,7 @@
 # Storefront shopping tools
 
+This document records the original shopping-tools release. The subsequent charcoal header, transparent mobile wrappers and animation lifecycle correction are documented in `BRANDING_CORRECTION.md` and supersede the colour/mobile status below.
+
 This release reuses the existing product, pack, customer-order and cart services. No backend routes, inventory timing, prices, component configurations or checkout database were changed. Header colour is #FFCC16 with #075338 navigation and #0B8754 hover; the exact transparent approved logo sits directly on the header without a plate. The previous hero restoration and scroll reveals remain in place.
 
 - Search debounces public catalogue queries, displays product/category suggestions and supports arrow keys, Enter and Escape. Product links open the existing catalogue details dialog.

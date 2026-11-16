@@ -17,6 +17,6 @@ export function Logo({ size = 28, inverse = false, style }: { size?: number; inv
 }
 
 const styles = StyleSheet.create({
-  wrap: { justifyContent: "center", backgroundColor: "#fff", borderRadius: 6, alignSelf: "flex-start" },
-  inverse: { backgroundColor: "rgba(255,255,255,0.92)", borderRadius: 10, paddingHorizontal: 8, alignSelf: "flex-start" },
+  wrap: { justifyContent: "center", backgroundColor: "transparent", alignSelf: "flex-start" },
+  inverse: { backgroundColor: "transparent", alignSelf: "flex-start" },
 });
