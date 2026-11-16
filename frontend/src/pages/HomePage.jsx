@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck, Shiel
 import api, { packsAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice, handleImageError } from '../utils/formatters'
 import { hasConfirmedFivePercentDiscount, selectFeaturedComboPacks } from './homepageComboPacks'
+import { normalizeHeroBanner } from './homepageHero'
 import './HomePage.css'
 
 const heroSlides = [
@@ -81,26 +82,23 @@ export default function HomePage() {
       ...item,
       products: (item.productRefs || []).slice(0, 3).map((reference) => resolveHeroProduct(products, reference)).filter(Boolean),
     }))
-    if (managedSlides.length) return managedSlides
-    return fallbackSlides
+    const campaignSlides = managedSlides.map((item) => ({
+      ...item,
+      products: (item.productRefs || []).slice(0, 3).map((reference) => resolveHeroProduct(products, reference)).filter(Boolean),
+    }))
+    return [...campaignSlides, ...fallbackSlides]
   }, [managedSlides, products])
   const slide = slides[Math.min(activeSlide, slides.length - 1)]
 
   useEffect(() => {
     api.get('/announcements/active').then(({ data }) => {
       const items = data?.announcements || data?.data || []
-      const banners = items.filter((item) => item.display_type === 'hero_banner').map((item) => ({
-        id: item.id || item.slug || item.title,
-        eyebrow: 'FoodNova marketplace',
-        headline: item.title || 'Fresh essentials for your kitchen',
-        highlight: '',
-        subtext: item.message || 'Everyday staples, food packs and trusted essentials from FoodNova.',
-        primary: item.button_text || 'Shop Products',
-        primaryTo: item.button_link || '/products',
-        secondary: undefined,
-        promotionalImage: resolveMediaUrl(item.image_url) || undefined,
-        products: [],
-      }))
+      const banners = (Array.isArray(items) ? items : [])
+        .filter((item) => item?.display_type === 'hero_banner')
+        .map((item) => {
+          const banner = normalizeHeroBanner(item, heroSlides[0])
+          return { ...banner, promotionalImage: resolveMediaUrl(banner.promotionalImage) || undefined }
+        })
       if (banners.length) {
         setManagedSlides(banners)
         setActiveSlide(0)
@@ -161,10 +159,10 @@ export default function HomePage() {
   return (
     <div className="home-page">
       <section className={`hero-slider ${isHeroPaused ? 'is-paused' : ''}`} aria-label="FoodNova highlights" onMouseEnter={() => setIsHeroPaused(true)} onMouseLeave={() => setIsHeroPaused(false)} onFocusCapture={() => setIsHeroPaused(true)} onBlurCapture={() => setIsHeroPaused(false)} onKeyDown={(event) => { if (event.key === 'ArrowLeft') goPrevious(); if (event.key === 'ArrowRight') goNext() }}>
-        <div className="hero-slide" key={slide.id || `${slide.headline}-${activeSlide}`}>
+        <div className={`hero-slide${slide.promotionalImage ? ' hero-campaign' : ''}`} key={slide.id || `${slide.headline}-${activeSlide}`}>
           <div className="hero-content">
             <p className="hero-kicker">{slide.eyebrow || 'FoodNova marketplace'}</p>
-            <h1>{slide.headline}{slide.highlight && <span>{slide.highlight}</span>}</h1>
+            <h1 className="hero-headline">{slide.headline}{slide.highlight && <span>{slide.highlight}</span>}</h1>
             <p>{slide.subtext}</p>
             <div className="hero-buttons">
               <Link to={slide.primaryTo} className="btn btn-primary">{slide.primary}</Link>
@@ -174,7 +172,7 @@ export default function HomePage() {
 
           <div className={`hero-image ${slide.promotionalImage ? 'hero-promo-image' : 'hero-product-composition'}`}>
             {slide.promotionalImage ? (
-              <img src={slide.promotionalImage} alt="FoodNova pantry product collection" loading="lazy" />
+              <img src={slide.promotionalImage} alt="FoodNova pantry product collection" loading="eager" fetchPriority="high" />
             ) : slide.products.map((product, index) => (
               <div className={`hero-product hero-product-${index + 1}`} key={product.id}>
                 <img
@@ -200,7 +198,7 @@ export default function HomePage() {
           {slides.map((item, index) => (
             <button
               type="button"
-              key={item.headline}
+              key={item.id || `slide-${index}`}
               className={index === activeSlide ? 'active' : ''}
               onClick={() => selectSlide(index)}
               aria-label={`Show slide ${index + 1}`}

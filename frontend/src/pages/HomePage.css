@@ -553,13 +553,13 @@
 }
 
 @keyframes hero-slide-reveal {
-  from { opacity: 0.35; }
-  to { opacity: 1; }
+  from { transform: translateY(4px); }
+  to { transform: translateY(0); }
 }
 
 @keyframes hero-copy-enter {
-  from { opacity: 0; transform: translate3d(-26px, 12px, 0); }
-  to { opacity: 1; transform: translate3d(0, 0, 0); }
+  from { transform: translate3d(-12px, 6px, 0); }
+  to { transform: translate3d(0, 0, 0); }
 }
 
 @keyframes hero-image-campaign {
@@ -574,8 +574,8 @@
 }
 
 @keyframes hero-product-enter {
-  from { opacity: 0; transform: translate3d(30px, 24px, 0) scale(.88); }
-  to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  from { transform: translate3d(30px, 24px, 0) scale(.88); }
+  to { transform: translate3d(0, 0, 0) scale(1); }
 }
 
 @keyframes hero-product-float {
@@ -588,6 +588,8 @@
 }
 
 .home-page .hero-content > * {
+  opacity: 1;
+  visibility: visible;
   animation: hero-copy-enter 720ms cubic-bezier(.22, .75, .2, 1) both;
 }
 
@@ -667,6 +669,85 @@
   animation: hero-slide-reveal 900ms ease both;
 }
 
+/* Keep the approved e824b74 green/gold carousel; integrate CMS campaign artwork
+   into that composition without hiding copy or shrinking its original artwork. */
+.home-page .hero-slide {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  padding: clamp(2.5rem, 5vw, 4rem) max(4rem, calc((100vw - 1200px) / 2));
+  background:
+    radial-gradient(ellipse at 80% 38%, rgba(255, 218, 79, .17), transparent 48%),
+    radial-gradient(ellipse at 12% 0%, rgba(56, 159, 96, .23), transparent 55%),
+    linear-gradient(110deg, #032b18 0%, #064425 54%, #087a34 100%);
+}
+
+.home-page .hero-content { min-width: 0; }
+.home-page .hero-slide.hero-campaign { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+.home-page .hero-content .hero-headline {
+  font-size: clamp(2.4rem, 4.7vw, 4.8rem);
+  font-weight: 900;
+  line-height: 1.04;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+  color: #fff;
+  opacity: 1;
+  visibility: visible;
+}
+.home-page .hero-content .hero-headline span { color: #ffda4f; }
+.home-page .hero-slider .hero-kicker {
+  color: #ffda4f;
+  background: rgba(255, 218, 79, .09);
+  border: 1px solid rgba(255, 218, 79, .26);
+}
+.home-page .hero-slider .hero-buttons .btn-primary {
+  color: #032b18;
+  background: #ffda4f;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .18);
+}
+.home-page .hero-slider .hero-buttons .btn-primary:hover { background: #ffe681; }
+.home-page .hero-slider .hero-buttons .btn:focus-visible,
+.home-page .hero-slider button:focus-visible { outline: 3px solid #ffda4f; outline-offset: 4px; }
+.home-page .hero-promo-image {
+  align-self: center;
+  min-height: 0;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 218, 79, .2);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, .24), 0 0 60px rgba(255, 218, 79, .08);
+}
+.home-page .hero-promo-image img { height: auto; max-height: 520px; object-fit: contain; }
+.home-page .hero-arrow { z-index: 2; width: 44px; height: 44px; }
+.home-page .hero-dots { z-index: 2; gap: .25rem; bottom: .5rem; }
+.home-page .hero-dots button {
+  width: 28px;
+  height: 28px;
+  border: 8px solid #064425;
+  border-radius: 999px;
+}
+.home-page .hero-dots button.active { width: 48px; }
+
+@media (max-width: 1024px) {
+  .home-page .hero-slide { padding: 2.75rem 3.75rem; gap: 1.5rem; }
+  .home-page .hero-slide.hero-campaign { grid-template-columns: minmax(0, 1fr); }
+  .home-page .hero-campaign .hero-promo-image { width: 100%; max-width: none; }
+  .home-page .hero-content .hero-headline { font-size: clamp(2.2rem, 4.7vw, 3.5rem); }
+}
+@media (max-width: 860px) {
+  .home-page .hero-slide { grid-template-columns: minmax(0, 1fr); padding: 2.5rem 3.5rem 3.25rem; gap: 1.5rem; }
+  .home-page .hero-image { width: min(100%, 480px); max-height: none; margin-inline: auto; }
+  .home-page .hero-content .hero-headline { max-width: 650px; font-size: clamp(2.3rem, 7vw, 3.8rem); }
+  .home-page .hero-promo-image img { max-height: 440px; }
+}
+@media (max-width: 520px) {
+  .home-page .hero-slide { padding: 2rem 1.25rem 4.5rem; gap: 1.5rem; }
+  .home-page .hero-content .hero-headline { font-size: clamp(2.1rem, 9.6vw, 3rem); }
+  .home-page .hero-content p:not(.hero-kicker) { margin-bottom: 1.25rem; }
+  .home-page .hero-promo-image { min-height: 0; }
+  .home-page .hero-promo-image img { max-height: none; }
+  .home-page .hero-arrow { top: auto; bottom: .6rem; transform: none; }
+  .home-page .hero-arrow-left { left: 1rem; }
+  .home-page .hero-arrow-right { right: 1rem; }
+}
+
 .home-page .hero-slider.is-paused .placeholder-image img,
 .home-page .hero-slider.is-paused .hero-product,
 .home-page .hero-slider.is-paused .hero-dots button.active span {
@@ -703,7 +784,7 @@
   .home-page .hero-product-2 { width: 36%; }
   .home-page .hero-product-3 { width: 34%; }
   .home-page .hero-product span { font-size: .62rem; padding: .25rem .5rem; }
-  .home-page .hero-promo-image { min-height: 240px; }
+  .home-page .hero-promo-image { min-height: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
