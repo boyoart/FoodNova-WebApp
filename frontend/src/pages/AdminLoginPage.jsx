@@ -5,6 +5,7 @@ import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Mail, Lock } from 'lucide-react'
 import './AuthPages.css'
+import BrandLogo from '../components/BrandLogo'
 
 export default function AdminLoginPage() {
   const navigate = useNavigate()
@@ -45,6 +46,7 @@ export default function AdminLoginPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
+          <BrandLogo />
           <h1>Admin Login</h1>
           <p className="auth-subtitle">Access the admin panel</p>
 

@@ -1,0 +1,33 @@
+.brand-logo-surface {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 156px;
+  padding: 4px 6px;
+  border: 1px solid #e3e9df;
+  border-radius: 8px;
+  background: #fff;
+  line-height: 0;
+}
+.brand-logo-surface .brand-logo-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: 828 / 394;
+  object-fit: contain;
+  flex: 0 1 auto;
+}
+.auth-card > .brand-logo-surface { display: flex; width: min(240px, 100%); margin: 0 auto 1.5rem; }
+.footer-brand .brand-logo-surface { width: 220px; max-width: 100%; }
+.admin-brand .brand-logo-surface { width: 185px; }
+.admin-shell .admin-brand { flex-direction: column; align-items: flex-start; gap: 6px; }
+.admin-brand > .brand-logo-surface { display: inline-flex; }
+.admin-shell.is-collapsed .admin-brand > .brand-logo-surface { display: inline-flex; width: 50px; padding: 2px; }
+.admin-shell.is-collapsed .admin-brand > small { display: none; }
+@media (max-width: 860px) {
+  .admin-shell.is-collapsed .admin-brand > .brand-logo-surface { width: 185px; padding: 4px 6px; }
+  .admin-shell.is-collapsed .admin-brand > small { display: block; }
+}

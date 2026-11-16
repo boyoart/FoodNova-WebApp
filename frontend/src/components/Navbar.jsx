@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Download, Home, Inbox, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Search, ShoppingCart, Sun, User, Users, X } from 'lucide-react'
+import { Bell, Download, Home, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Search, ShoppingCart, Sun, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI, resolveMediaUrl } from '../services/api'
@@ -15,6 +15,8 @@ import {
   setReadKeys,
 } from '../utils/notifications'
 import './Navbar.css'
+import BrandLogo from './BrandLogo'
+import { observeStickyHeader } from '../utils/stickyHeader'
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -23,15 +25,15 @@ export default function Navbar() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [profile, setProfile] = useState(null)
   const [avatarOpen, setAvatarOpen] = useState(false)
-  const [adminMenuOpen, setAdminMenuOpen] = useState(false)
   const [refreshingNotifications, setRefreshingNotifications] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem('foodnova_theme') || 'light')
-  const [logoSrc, setLogoSrc] = useState('/foodnova-logo.png')
-  const [logoFailed, setLogoFailed] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const notificationRef = useRef(null)
   const avatarRef = useRef(null)
-  const adminMenuRef = useRef(null)
+  const headerRef = useRef(null)
+  const sentinelRef = useRef(null)
+  const menuButtonRef = useRef(null)
 
   const { user, admin, isAuthenticated, isAdmin, logout } = useAuthStore()
   const { getTotalItems } = useCartStore()
@@ -66,14 +68,32 @@ export default function Navbar() {
     setTheme((current) => (current === 'dark' ? 'light' : 'dark'))
   }
 
-  const handleLogoError = () => {
-    if (logoSrc === '/foodnova-logo.png') {
-      setLogoSrc('/logo.png')
-      return
-    }
+  useEffect(() => observeStickyHeader({ header: headerRef.current, sentinel: sentinelRef.current, onScrollChange: setScrolled }), [])
 
-    setLogoFailed(true)
-  }
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false)
+        setNotificationsOpen(false)
+        setAvatarOpen(false)
+        menuButtonRef.current?.focus()
+      }
+    }
+    const closeOutside = (event) => {
+      if (!headerRef.current?.contains(event.target)) {
+        setMobileMenuOpen(false)
+        setNotificationsOpen(false)
+        setAvatarOpen(false)
+      }
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    document.addEventListener('pointerdown', closeOutside)
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape)
+      document.removeEventListener('pointerdown', closeOutside)
+    }
+  }, [mobileMenuOpen])
 
   const isActivePath = (path) => {
     if (path === '/') return location.pathname === '/'
@@ -130,8 +150,7 @@ export default function Navbar() {
     setMobileMenuOpen(false)
     setNotificationsOpen(false)
     setAvatarOpen(false)
-    setAdminMenuOpen(false)
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   useEffect(() => {
     if (!isAuthenticated || isAdmin) {
@@ -155,7 +174,7 @@ export default function Navbar() {
   }, [isAuthenticated, isAdmin])
 
   useEffect(() => {
-    if (!notificationsOpen && !avatarOpen && !adminMenuOpen) return undefined
+    if (!notificationsOpen && !avatarOpen) return undefined
 
     const handleClickOutside = (event) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target)) {
@@ -166,9 +185,6 @@ export default function Navbar() {
         setAvatarOpen(false)
       }
 
-      if (adminMenuRef.current && !adminMenuRef.current.contains(event.target)) {
-        setAdminMenuOpen(false)
-      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -178,7 +194,7 @@ export default function Navbar() {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('touchstart', handleClickOutside)
     }
-  }, [notificationsOpen, avatarOpen, adminMenuOpen])
+  }, [notificationsOpen, avatarOpen])
 
   const handleLogout = () => {
     const wasAdmin = isAdmin
@@ -228,20 +244,12 @@ export default function Navbar() {
   const toggleNotifications = () => {
     setNotificationsOpen((value) => !value)
     setAvatarOpen(false)
-    setAdminMenuOpen(false)
     if (!notificationsOpen) loadCustomerHeaderData()
   }
 
   const toggleAvatarMenu = () => {
     setAvatarOpen((value) => !value)
     setNotificationsOpen(false)
-    setAdminMenuOpen(false)
-  }
-
-  const toggleAdminMenu = () => {
-    setAdminMenuOpen((value) => !value)
-    setNotificationsOpen(false)
-    setAvatarOpen(false)
   }
 
   const handleDropdownLogout = () => {
@@ -256,35 +264,7 @@ export default function Navbar() {
     { to: '/cart', label: 'Cart' },
   ]
 
-  const adminPermissions = Array.isArray(admin?.permissions) ? admin.permissions : []
-  const isSuperAdminDisplay = admin?.admin_role === 'super_admin' || (admin?.role === 'admin' && (!admin?.admin_role || adminPermissions.length === 0))
-  const canAdmin = (permission) => {
-    if (!isAdmin) return false
-    if (isSuperAdminDisplay) return true
-    return adminPermissions.includes(permission)
-  }
-  const canAnyAdmin = (permissions) => permissions.some((permission) => canAdmin(permission))
-
-  const adminMenuLinks = [
-    { to: '/admin/orders', label: 'Manage Orders', show: canAdmin('orders:view') },
-    { to: '/admin/riders', label: 'Delivery Riders', show: canAnyAdmin(['rider_kyc:view', 'rider_kyc:review', 'orders:delivery', 'delivery:manage', 'riders:manage', 'workforce:view', 'workforce:manage']) },
-    { to: '/admin/stock', label: 'Stock Management', show: canAdmin('stock:view') },
-    { to: '/admin/payments', label: 'Payment Approvals', show: canAdmin('payments:view') || canAdmin('payments:approve') },
-    { to: '/admin/broadcasts', label: 'Broadcasts', show: canAdmin('broadcasts:view') },
-    { to: '/admin/customers', label: 'Customers', show: canAdmin('customers:view') },
-    { to: '/admin/audit-logs', label: 'Activity Logs', show: canAdmin('audit:view') },
-    { to: '/admin/users', label: 'Admin Users', show: canAdmin('admins:view') || canAdmin('admins:manage') },
-    { to: '/admin/reports', label: 'Reports', show: canAdmin('reports:view') },
-    { to: '/admin/categories', label: 'Categories', show: canAnyAdmin(['categories:view', 'stock:view']) },
-    { to: '/admin/announcements', label: 'Announcements', show: canAnyAdmin(['announcements:view', 'announcements:manage']) },
-    { to: '/admin/banners', label: 'Homepage Banners', show: canAnyAdmin(['announcements:view', 'announcements:manage']) },
-    { to: '/admin/delivery-zones', label: 'Delivery Zones', show: canAnyAdmin(['delivery_zones:view', 'workforce:view', 'delivery:manage']) },
-    { to: '/admin/website-settings', label: 'Website Settings', show: canAnyAdmin(['website_settings:view', 'announcements:manage']) },
-    { to: '/admin/coming-soon-subscribers', label: 'Coming Soon Subscribers', show: canAnyAdmin(['subscribers:view', 'announcements:view']) },
-  ].filter((link) => link.show)
-
-  const avatarMenuLinks = isAdmin ? [{ to: '/admin/dashboard', label: 'Dashboard' }, ...adminMenuLinks] : customerMenuLinks
-  const isAdminMenuActive = adminMenuLinks.some((link) => isActivePath(link.to))
+  const avatarMenuLinks = isAdmin ? [{ to: '/admin/dashboard', label: 'Admin Dashboard' }] : customerMenuLinks
 
   const themeToggle = (
     <button
@@ -300,11 +280,12 @@ export default function Navbar() {
   )
 
   return (
-    <nav className="navbar">
+    <>
+    <div ref={sentinelRef} className="header-scroll-sentinel" aria-hidden="true" />
+    <nav ref={headerRef} className={`navbar${scrolled ? ' is-scrolled' : ''}`} aria-label="Main navigation">
       <div className="navbar-container">
-        <Link to="/" className="navbar-logo">
-          {!logoFailed && <img src={logoSrc} alt="FoodNova" className="logo-image" onError={handleLogoError} />}
-          <span className={logoFailed ? 'logo-wordmark visible' : 'logo-wordmark'}>FoodNova</span>
+        <Link to="/" className="navbar-logo" aria-label="FoodNova home">
+          <BrandLogo decorative />
         </Link>
 
         {!isAdmin && <form className="navbar-search" role="search" onSubmit={handleCatalogSearch}>
@@ -313,11 +294,17 @@ export default function Navbar() {
           <button type="submit" aria-label="Search products"><Search size={18} /></button>
         </form>}
 
-        <button type="button" className="menu-toggle" onClick={() => setMobileMenuOpen((value) => !value)} aria-label="Toggle navigation menu">
+        {!isAdmin && <Link to="/cart" className="header-cart" aria-label={`Shopping cart, ${totalCartItems} items`}><ShoppingCart size={22} />{totalCartItems > 0 && <span className="cart-badge">{totalCartItems}</span>}</Link>}
+        <button ref={menuButtonRef} type="button" className="menu-toggle" onClick={() => setMobileMenuOpen((value) => !value)} aria-label="Toggle navigation menu" aria-expanded={mobileMenuOpen} aria-controls="customer-navigation">
           {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
 
-        <ul className={`nav-menu ${mobileMenuOpen ? 'active' : ''}`}>
+        <ul id="customer-navigation" className={`nav-menu ${mobileMenuOpen ? 'active' : ''}`}>
+          {!isAdmin && <li className="nav-item mobile-catalog-search"><form role="search" onSubmit={handleCatalogSearch}>
+            <label className="sr-only" htmlFor="navbar-mobile-search">Search products</label>
+            <input id="navbar-mobile-search" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search products…" />
+            <button type="submit" aria-label="Search products"><Search size={18} /></button>
+          </form></li>}
           <li className="nav-item"><Link to="/" className={navLinkClass('/')}><Home size={18} /><span>Home</span></Link></li>
           <li className="nav-item"><Link to="/products" className={navLinkClass('/products')}><Package size={18} /><span>Products</span></Link></li>
           {!isAdmin && <li className="nav-item"><Link to="/app" className={navLinkClass('/app')}><Download size={18} /><span>Download App</span></Link></li>}
@@ -325,8 +312,6 @@ export default function Navbar() {
           {isAuthenticated && !isAdmin && (
             <>
               <li className="nav-item"><Link to="/orders" className={navLinkClass('/orders')}><span>Orders</span></Link></li>
-              <li className="nav-item"><Link to="/profile" className={navLinkClass('/profile')}><User size={18} /><span>Profile</span></Link></li>
-              <li className="nav-item"><Link to="/inbox" className={navLinkClass('/inbox')}><Inbox size={18} /><span>Inbox</span></Link></li>
               <li className="nav-item nav-bell" ref={notificationRef}>
                 <button type="button" className="nav-link bell-btn" onClick={toggleNotifications} aria-label="Notifications">
                   <Bell size={18} />
@@ -369,34 +354,10 @@ export default function Navbar() {
             </>
           )}
 
-          {isAdmin && (
-            <>
-              <li className="nav-item"><Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>Dashboard</Link></li>
-              <li className="nav-item admin-menu" ref={adminMenuRef}>
-                <button type="button" className={`nav-link admin-menu-button ${isAdminMenuActive ? 'active' : ''}`} onClick={toggleAdminMenu} aria-haspopup="menu" aria-expanded={adminMenuOpen}>
-                  <Users size={18} />
-                  <span>Admin Menu</span>
-                </button>
-                {adminMenuOpen && (
-                  <div className="admin-menu-dropdown" role="menu">
-                    {adminMenuLinks.length ? (
-                      adminMenuLinks.map((link) => (
-                        <Link key={link.to} to={link.to} className={isActivePath(link.to) ? 'active' : ''} role="menuitem">
-                          {link.label}
-                        </Link>
-                      ))
-                    ) : (
-                      <span className="admin-menu-empty">No admin tools available</span>
-                    )}
-                  </div>
-                )}
-              </li>
-            </>
-          )}
+          {isAdmin && <li className="nav-item"><Link to="/admin/dashboard" className={navLinkClass('/admin/dashboard')}>Dashboard</Link></li>}
 
           <li className="nav-item nav-theme">{themeToggle}</li>
 
-          {isAuthenticated && !isAdmin && <li className="nav-item"><Link to="/cart" className={navLinkClass('/cart', 'cart-link')}><ShoppingCart size={20} /><span>Cart</span>{totalCartItems > 0 && <span className="cart-badge">{totalCartItems}</span>}</Link></li>}
 
           {(isAuthenticated || isAdmin) ? (
             <>
@@ -430,7 +391,6 @@ export default function Navbar() {
                   </div>
                 )}
               </li>
-              <li className="nav-item"><button type="button" className="nav-link logout-btn" onClick={handleLogout}><LogOut size={18} /><span>Logout</span></button></li>
             </>
           ) : (
             <>
@@ -441,5 +401,6 @@ export default function Navbar() {
         </ul>
       </div>
     </nav>
+    </>
   )
 }

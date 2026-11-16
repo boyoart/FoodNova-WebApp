@@ -43,7 +43,7 @@ function AppLayout() {
   return (
     <div className={isAdminRoute ? 'admin-app-frame' : 'public-app-frame'} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {!isAdminRoute && <Navbar />}
-      <main style={{ flex: 1, paddingTop: isAdminRoute ? 0 : '60px' }}>
+      <main style={{ flex: 1 }}>
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/products" element={<ProductsPage />} />

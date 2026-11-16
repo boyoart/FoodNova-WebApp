@@ -76,7 +76,7 @@ export default function AppLandingPage() {
             <div className="app-phone-speaker" />
             <div className="app-phone-screen">
               <header className="app-phone-header">
-                <img src="/foodnova-logo.png" alt="" />
+                <img src="/branding/foodnova-logo.png" alt="" width="828" height="394" />
                 <span><BellRing size={16} /></span>
               </header>
               <div className="app-phone-welcome"><small>GOOD FOOD, MADE SIMPLE</small><strong>Everyday essentials,<br />right at your fingertips.</strong></div>

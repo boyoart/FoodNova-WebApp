@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { authAPI } from '../services/api'
 import './AuthPages.css'
+import BrandLogo from '../components/BrandLogo'
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
@@ -39,6 +40,7 @@ export default function ResetPasswordPage() {
   }
 
   return <div className="auth-page"><div className="auth-container"><div className="auth-card">
+    <BrandLogo />
     {complete ? <><h1>Password changed</h1><p className="auth-subtitle">Your FoodNova password has been updated. Sign in again to continue.</p><Link className="btn btn-primary btn-large" to="/login">Return to Login</Link></>
       : token ? <><h1>Create New Password</h1><p className="auth-subtitle">Choose a new password for your FoodNova account.</p><form onSubmit={confirmReset}><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="New password" required minLength="6" /><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Confirm password" required minLength="6" /><button className="btn btn-primary btn-large" disabled={loading}>{loading ? 'Saving...' : 'Change Password'}</button></form></>
       : sent ? <><h1>Check your email</h1><p className="auth-subtitle">If an account exists for this email, password reset instructions have been sent.</p><button className="btn btn-primary btn-large" onClick={() => setSent(false)}>Resend instructions</button></>

@@ -5,6 +5,7 @@ import api, { packsAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice, handleImageError } from '../utils/formatters'
 import { hasConfirmedFivePercentDiscount, selectFeaturedComboPacks } from './homepageComboPacks'
 import { normalizeHeroBanner } from './homepageHero'
+import { observeScrollReveals } from '../utils/scrollReveals'
 import './HomePage.css'
 
 const heroSlides = [
@@ -77,6 +78,14 @@ export default function HomePage() {
   const [managedSlides, setManagedSlides] = useState([])
   const [isHeroPaused, setIsHeroPaused] = useState(false)
   const resumeTimer = useRef(null)
+  const homepageRef = useRef(null)
+  const revealedElements = useRef(new WeakSet())
+
+  useEffect(() => {
+    const elements = Array.from(homepageRef.current?.querySelectorAll('.home-combo-packs, .feature-card, .home-section-heading, .home-product-card, .category-card, .home-trust, .cta') || [])
+    elements.push(...document.querySelectorAll('.footer .footer-section'))
+    return observeScrollReveals({ elements, seen: revealedElements.current })
+  }, [products.length, categories.length, comboPacks.length])
   const slides = useMemo(() => {
     const fallbackSlides = heroSlides.map((item) => ({
       ...item,
@@ -157,7 +166,7 @@ export default function HomePage() {
   const selectSlide = (index) => { pauseAfterInteraction(); setActiveSlide(index) }
 
   return (
-    <div className="home-page">
+    <div className="home-page" ref={homepageRef}>
       <section className={`hero-slider ${isHeroPaused ? 'is-paused' : ''}`} aria-label="FoodNova highlights" onMouseEnter={() => setIsHeroPaused(true)} onMouseLeave={() => setIsHeroPaused(false)} onFocusCapture={() => setIsHeroPaused(true)} onBlurCapture={() => setIsHeroPaused(false)} onKeyDown={(event) => { if (event.key === 'ArrowLeft') goPrevious(); if (event.key === 'ArrowRight') goNext() }}>
         <div className={`hero-slide${slide.promotionalImage ? ' hero-campaign' : ''}`} key={slide.id || `${slide.headline}-${activeSlide}`}>
           <div className="hero-content">
@@ -260,7 +269,7 @@ export default function HomePage() {
           {products.slice(0, 8).map((product) => {
             const available = product.is_available !== false && product.stock_status !== 'out_of_stock'
             return <article className="home-product-card" key={product.id}>
-              <Link to={`/products?search=${encodeURIComponent(product.name || '')}`} className="home-product-image"><img src={getProductImage(product)} alt={product.name} /></Link>
+              <Link to={`/products?search=${encodeURIComponent(product.name || '')}`} className="home-product-image"><img src={getProductImage(product)} alt={product.name} loading="lazy" decoding="async" /></Link>
               <span className="home-product-category">{product.category || 'Food essentials'}</span><h3>{product.name}</h3><div className="home-product-meta"><strong>₦{Number(product.price || 0).toLocaleString()}</strong><em className={available ? 'available' : 'unavailable'}>{available ? 'In stock' : 'Out of stock'}</em></div><Link className="home-product-action" to={`/products?search=${encodeURIComponent(product.name || '')}`}>{available ? 'View Product' : 'View details'}</Link>
             </article>
           })}

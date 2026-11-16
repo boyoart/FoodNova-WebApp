@@ -4,6 +4,7 @@ import { ChevronRight, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftO
 import { useAuthStore } from '../store/authStore'
 import { adminTools, isAdminToolAllowed } from './adminNavigation'
 import './AdminLayout.css'
+import BrandLogo from '../components/BrandLogo'
 
 const normalizeRole = (role) => String(role || '').toLowerCase().replaceAll('-', '_').replaceAll(' ', '_')
 
@@ -40,8 +41,8 @@ export default function AdminLayout() {
       <aside className={`admin-sidebar${mobileOpen ? ' is-mobile-open' : ''}`} aria-label="Admin navigation">
         <div className="admin-brand-row">
           <NavLink to="/admin/dashboard" className="admin-brand" onClick={() => setMobileOpen(false)} aria-label="FoodNova Admin dashboard">
-            <img src="/foodnova-logo.png" alt="" onError={(event) => { event.currentTarget.hidden = true }} />
-            <span>FoodNova <small>OPERATIONS</small></span>
+            <BrandLogo decorative />
+            <small>OPERATIONS</small>
           </NavLink>
           <button type="button" className="admin-icon-button admin-mobile-close" aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={19} /></button>
         </div>

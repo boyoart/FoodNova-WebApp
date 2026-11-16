@@ -5,6 +5,7 @@ import { authAPI } from '../services/api'
 import toast from 'react-hot-toast'
 import { Mail, Lock, User, Phone } from 'lucide-react'
 import './AuthPages.css'
+import BrandLogo from '../components/BrandLogo'
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -86,6 +87,7 @@ export default function RegisterPage() {
     <div className="auth-page">
       <div className="auth-container">
         <div className="auth-card">
+          <BrandLogo />
           <h1>Create Account</h1>
           <p className="auth-subtitle">Join FoodNova today</p>
 

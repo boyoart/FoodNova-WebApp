@@ -2,26 +2,16 @@ import { Link } from 'react-router-dom'
 import { Instagram, Mail, Phone, MapPin } from 'lucide-react'
 import { FOODNOVA_CONTACT, FOODNOVA_SOCIAL_LINKS } from '../utils/contactUtils'
 import './Footer.css'
+import BrandLogo from './BrandLogo'
 
 export default function Footer() {
-  const handleLogoError = (event) => {
-    if (event.currentTarget.dataset.fallback !== 'true') {
-      event.currentTarget.dataset.fallback = 'true'
-      event.currentTarget.src = '/logo.png'
-      return
-    }
-
-    event.currentTarget.style.display = 'none'
-  }
-
   return (
     <footer className="footer">
       <div className="footer-container">
         <div className="footer-content">
           <div className="footer-section">
             <div className="footer-brand">
-              <img src="/foodnova-logo.png" alt="FoodNova" onError={handleLogoError} />
-              <h4>FoodNova</h4>
+              <BrandLogo />
             </div>
             <p>Fresh food delivery for everyone, everywhere.</p>
             <div className="social-links">
