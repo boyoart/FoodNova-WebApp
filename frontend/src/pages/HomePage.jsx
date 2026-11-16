@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck, ShieldCheck, PackageCheck } from 'lucide-react'
 import api, { packsAPI, resolveMediaUrl } from '../services/api'
-import { formatPrice } from '../utils/formatters'
+import { formatPrice, handleImageError } from '../utils/formatters'
 import { hasConfirmedFivePercentDiscount, selectFeaturedComboPacks } from './homepageComboPacks'
 import './HomePage.css'
 
@@ -219,6 +219,7 @@ export default function HomePage() {
         <div className="home-combo-pack-prices" aria-label="Featured Combo Pack prices">
           {comboPacks.map((pack) => (
             <article className="home-combo-pack-price" key={pack.id}>
+              <img src={resolveMediaUrl(pack.image_url || '/uploads/catalog/foodnova-placeholder.svg')} alt={pack.name || 'FoodNova Combo Pack'} onError={handleImageError} />
               <h3>{pack.name}</h3>
               <strong>{formatPrice(pack.price)}</strong>
               {hasConfirmedFivePercentDiscount(pack) && <span className="home-combo-pack-discount">5% OFF</span>}

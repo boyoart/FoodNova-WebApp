@@ -16264,11 +16264,15 @@ def get_payment_audit_logs(
 
 @app.get("/admin/reports/summary")
 def admin_reports_summary(request: Request, start_date: Optional[str] = None, end_date: Optional[str] = None):
-    admin = require_permission(request, "reports:view")
+    admin = require_any_permission(request, ["reports:view", "orders:view"])
     print("ADMIN_REPORTS_REQUEST_STARTED", json_dump({"admin_id": admin.get("id"), "start_date": start_date or "default", "end_date": end_date or "default"}))
     now = datetime.utcnow()
     start_dt = parse_report_date(start_date, now - timedelta(days=30))
     end_dt = parse_report_date(end_date, now)
+    if start_dt.date() > end_dt.date():
+        raise HTTPException(status_code=400, detail="Start date must not be after end date.")
+    start_dt = datetime.combine(start_dt.date(), datetime.min.time())
+    end_dt = datetime.combine(end_dt.date(), datetime.min.time())
     end_exclusive = end_dt + timedelta(days=1)
     db = SessionLocal()
     try:
@@ -16279,33 +16283,72 @@ def admin_reports_summary(request: Request, start_date: Optional[str] = None, en
             .all()
         )
         products = db.query(DBProduct).all()
+        inventory_products = [product_to_dict(product) for product in products if product.is_active]
         low_stock_threshold = 5
 
+        paid_statuses = {str(status).strip().lower() for status in DELIVERY_MATCH_CONFIRMED_PAYMENTS}
         payment_statuses = [str(order.payment_status or order.status or "pending_payment").lower() for order in orders]
         order_statuses = [str(order.order_status or order.fulfillment_status or order.status or "order_placed").lower() for order in orders]
+        paid_orders = [order for order in orders if str(order.payment_status or "").lower() in paid_statuses]
+        pending_order_statuses = {"pending_payment", "receipt_submitted"}
         total_order_value = sum(float(order.total_amount or 0) for order in orders)
-        confirmed_revenue = sum(float(order.total_amount or 0) for order in orders if str(order.payment_status or "").lower() == "payment_confirmed")
-        active_customers = len({order.customer_email for order in orders if order.customer_email}) or db.query(DBUser).filter(DBUser.role == "customer").count()
+        confirmed_revenue = sum(float(order.total_amount or 0) for order in paid_orders)
+        outstanding_payments = sum(
+            float(order.total_amount or 0)
+            for order, status in zip(orders, payment_statuses)
+            if status in pending_order_statuses
+            and str(order.order_status or order.fulfillment_status or "").lower() not in {"cancelled", "canceled"}
+        )
+        processed_refund_orders = [
+            order for order in orders
+            if str(order.refund_status or "").strip().lower() == "processed"
+        ]
+        refund_adjustment_orders = [
+            order for order in orders
+            if str(order.refund_status or "").strip().lower() in {"pending", "approved", "processed"}
+            or str(order.cancellation_status or "").strip().lower() == "approved"
+            or (
+                str(order.payment_status or "").strip().lower() in paid_statuses
+                and str(order.order_status or order.fulfillment_status or "").strip().lower() in {"cancelled", "canceled"}
+            )
+        ]
+        active_customers = len({order.customer_email for order in orders if order.customer_email})
+        product_categories = {
+            product.id: str(product.category or product.category_name or "Uncategorised").strip() or "Uncategorised"
+            for product in products
+        }
         low_stock_products = [
-            product for product in products
-            if int(product.stock_qty if product.stock_qty is not None else product.stock or 0) > 0
-            and int(product.stock_qty if product.stock_qty is not None else product.stock or 0) <= low_stock_threshold
+            product for product in inventory_products
+            if 0 < product["stock_qty"] <= low_stock_threshold
         ]
         out_of_stock_products = [
-            product for product in products
-            if int(product.stock_qty if product.stock_qty is not None else product.stock or 0) <= 0
+            product for product in inventory_products
+            if product["stock_qty"] <= 0
         ]
 
         revenue_by_day_map = {}
         top_products_map = {}
+        category_revenue_map = {}
+        payment_method_map = {}
         for order in orders:
             day = (order.created_at or now).date().isoformat()
             day_data = revenue_by_day_map.setdefault(day, {"date": day, "revenue": 0, "confirmed_revenue": 0, "orders": 0})
             amount = float(order.total_amount or 0)
             day_data["revenue"] += amount
-            if str(order.payment_status or "").lower() == "payment_confirmed":
+            is_paid = str(order.payment_status or "").lower() in paid_statuses
+            if is_paid:
                 day_data["confirmed_revenue"] += amount
             day_data["orders"] += 1
+
+            method = str(order.payment_method or "unknown").strip().lower() or "unknown"
+            method_data = payment_method_map.setdefault(method, {"payment_method": method, "orders": 0, "paid_orders": 0, "gross_collected_revenue": 0})
+            method_data["orders"] += 1
+            if is_paid:
+                method_data["paid_orders"] += 1
+                method_data["gross_collected_revenue"] += amount
+
+            if not is_paid:
+                continue
 
             for item in order.items or []:
                 quantity = int(item.quantity or item.qty or 1)
@@ -16322,6 +16365,10 @@ def admin_reports_summary(request: Request, start_date: Optional[str] = None, en
                 })
                 current["quantity_sold"] += quantity
                 current["revenue"] += line_total
+                category = "Combo Packs" if str(item.item_type or "").lower() == "pack" else product_categories.get(product_id, "Uncategorised")
+                category_data = category_revenue_map.setdefault(category, {"category": category, "revenue": 0, "quantity_sold": 0})
+                category_data["revenue"] += line_total
+                category_data["quantity_sold"] += quantity
 
         recent_orders = [
             {
@@ -16331,44 +16378,176 @@ def admin_reports_summary(request: Request, start_date: Optional[str] = None, en
                 "total_amount": order.total_amount or 0,
                 "payment_status": order.payment_status or order.status or "",
                 "order_status": order.order_status or order.fulfillment_status or order.status or "",
+                "delivery_method": order.delivery_method or "",
+                "delivery_status": order.delivery_status or "",
+                "rider_id": order.delivery_worker_id or order.rider_id,
+                "rider_name": order.rider_name or "",
                 "created_at": iso(order.created_at),
             }
             for order in orders[:10]
         ]
+
+        live_order_status = func.lower(func.coalesce(func.nullif(DBOrder.order_status, ""), DBOrder.fulfillment_status, ""))
+        live_orders_query = active_order_filter(db.query(DBOrder)).filter(
+            live_order_status.notin_({"cancelled", "canceled", "delivered", "picked_up", "picked_up_by_customer"})
+        )
+        attention_query = live_orders_query.filter(or_(
+            func.lower(func.coalesce(DBOrder.payment_status, DBOrder.status, "")).in_(pending_order_statuses),
+            and_(
+                func.lower(func.coalesce(DBOrder.delivery_method, "")) == "delivery",
+                func.lower(func.coalesce(DBOrder.order_status, DBOrder.fulfillment_status, "")) == "ready_for_pickup",
+                DBOrder.delivery_worker_id.is_(None),
+                DBOrder.rider_id.is_(None),
+            ),
+            func.lower(func.coalesce(DBOrder.delivery_status, "")).in_({"failed", "delivery_failed"}),
+        ))
+        attention_count = attention_query.count()
+        unassigned_dispatch_count = live_orders_query.filter(
+            func.lower(func.coalesce(DBOrder.delivery_method, "")) == "delivery",
+            func.lower(func.coalesce(DBOrder.order_status, DBOrder.fulfillment_status, "")) == "ready_for_pickup",
+            DBOrder.delivery_worker_id.is_(None),
+            DBOrder.rider_id.is_(None),
+        ).count()
+        operational_snapshot = {
+            "new_orders_24h": active_order_filter(db.query(DBOrder)).filter(DBOrder.created_at >= now - timedelta(hours=24)).count(),
+            "pending_payment_confirmation": live_orders_query.filter(
+                func.lower(func.coalesce(DBOrder.payment_status, DBOrder.status, "")) == "pending_payment"
+            ).count(),
+            "receipt_submitted_orders": live_orders_query.filter(
+                func.lower(func.coalesce(DBOrder.payment_status, DBOrder.status, "")) == "receipt_submitted"
+            ).count(),
+            "processing_orders": live_orders_query.filter(
+                func.lower(func.coalesce(DBOrder.order_status, DBOrder.fulfillment_status, "")) == "processing"
+            ).count(),
+            "awaiting_dispatch": unassigned_dispatch_count,
+            "assigned_deliveries": live_orders_query.filter(
+                func.upper(func.coalesce(DBOrder.delivery_status, "")).in_(DISPATCH_ACTIVE_DELIVERY_STATUSES)
+            ).count(),
+            "active_deliveries": live_orders_query.filter(
+                func.upper(func.coalesce(DBOrder.delivery_status, "")).in_(DISPATCH_ACTIVE_DELIVERY_STATUSES)
+            ).count(),
+            "completed_deliveries": active_order_filter(db.query(DBOrder)).filter(
+                func.upper(func.coalesce(DBOrder.delivery_status, "")).in_({"DELIVERED", "COMPLETED"})
+            ).count(),
+            "failed_deliveries": live_orders_query.filter(
+                func.lower(func.coalesce(DBOrder.delivery_status, "")).in_({"failed", "delivery_failed"})
+            ).count(),
+            "cancelled_deliveries": active_order_filter(db.query(DBOrder)).filter(
+                func.upper(func.coalesce(DBOrder.delivery_status, "")).in_({"CANCELLED", "CANCELED"})
+            ).count(),
+        }
+        attention_orders = []
+        for order in attention_query.order_by(DBOrder.updated_at.desc(), DBOrder.created_at.desc(), DBOrder.id.desc()).limit(10).all():
+            payment_status = str(order.payment_status or order.status or "").lower()
+            delivery_status = str(order.delivery_status or "").lower()
+            order_status = str(order.order_status or order.fulfillment_status or "").lower()
+            reason = "payment_review" if payment_status in pending_order_statuses else (
+                "delivery_failed" if delivery_status in {"failed", "delivery_failed"} else "awaiting_dispatch"
+            )
+            attention_orders.append({
+                "id": order.id,
+                "order_code": order.order_code or "",
+                "total_amount": order.total_amount or 0,
+                "payment_status": payment_status,
+                "order_status": order_status,
+                "delivery_status": order.delivery_status or "",
+                "attention_reason": reason,
+                "created_at": iso(order.created_at),
+                "updated_at": iso(order.updated_at),
+            })
 
         summary = {
             "total_orders": len(orders),
             "total_revenue": confirmed_revenue,
             "total_order_value": total_order_value,
             "confirmed_revenue": confirmed_revenue,
+            "gross_collected_revenue": confirmed_revenue,
+            "paid_orders": len(paid_orders),
+            "average_order_value": confirmed_revenue / len(paid_orders) if paid_orders else 0,
+            "outstanding_payments": outstanding_payments,
+            "processed_refund_orders": len(processed_refund_orders),
+            "refund_adjustment_orders": len(refund_adjustment_orders),
+            "refund_adjustment_amount": None,
+            "net_revenue": None,
+            "pending_payment_orders": payment_statuses.count("pending_payment"),
+            "receipt_submitted_orders": payment_statuses.count("receipt_submitted"),
             "pending_payments": payment_statuses.count("pending_payment") + payment_statuses.count("receipt_submitted"),
-            "confirmed_payments": payment_statuses.count("payment_confirmed"),
+            "confirmed_payments": len(paid_orders),
             "rejected_payments": payment_statuses.count("payment_rejected"),
             "delivered_orders": order_statuses.count("delivered"),
-            "cancelled_orders": order_statuses.count("cancelled"),
+            "completed_orders": sum(status in {"delivered", "picked_up", "picked_up_by_customer"} for status in order_statuses),
+            "cancelled_orders": order_statuses.count("cancelled") + order_statuses.count("canceled"),
             "active_customers": active_customers,
             "low_stock_products": len(low_stock_products),
             "out_of_stock_products": len(out_of_stock_products),
-            "assigned_deliveries": len([order for order in orders if order.rider_id or order.rider_name]),
+            "assigned_deliveries": len([order for order in orders if order.delivery_worker_id or order.rider_id or order.rider_name]),
             "out_for_delivery_orders": order_statuses.count("out_for_delivery"),
+            "active_deliveries": sum(str(order.delivery_status or "").upper() in DISPATCH_ACTIVE_DELIVERY_STATUSES for order in orders),
+            "failed_deliveries": sum(str(order.delivery_status or "").lower() in {"failed", "delivery_failed"} for order in orders),
+            "unassigned_dispatch_orders": unassigned_dispatch_count,
+            "fulfillment_rate": round((sum(status in {"delivered", "picked_up", "picked_up_by_customer"} for status in order_statuses) / len(orders)) * 100) if orders else 0,
         }
+        period_start = {
+            "today": datetime.combine(now.date(), datetime.min.time()),
+            "yesterday": datetime.combine(now.date() - timedelta(days=1), datetime.min.time()),
+            "week": datetime.combine(now.date() - timedelta(days=now.weekday()), datetime.min.time()),
+            "month": datetime.combine(now.date().replace(day=1), datetime.min.time()),
+        }
+        period_start["previous_week"] = period_start["week"] - timedelta(days=7)
+        period_end = {
+            "today": period_start["today"] + timedelta(days=1),
+            "yesterday": period_start["today"],
+            "week": period_start["today"] + timedelta(days=1),
+            "month": period_start["today"] + timedelta(days=1),
+            "previous_week": period_start["week"],
+        }
+        period_revenue = {}
+        for key, period_start_dt in period_start.items():
+            if start_dt > period_start_dt or end_exclusive <= period_start_dt:
+                period_revenue[key] = None
+                continue
+            period_revenue[key] = sum(
+                float(order.total_amount or 0)
+                for order in paid_orders
+                if period_start_dt <= (order.created_at or now) < min(period_end[key], end_exclusive)
+            )
+        order_status_breakdown = report_status_counts(
+            order_statuses,
+            ["order_placed", "pending_payment", "receipt_submitted", "processing", "ready_for_pickup", "picked_up_from_store", "out_for_delivery", "arrived", "delivered", "picked_up", "picked_up_by_customer", "cancelled", "canceled"],
+        )
+        status_counts = {entry["status"]: entry["count"] for entry in order_status_breakdown}
+        status_distribution = [
+            {"label": "Pending", "count": sum(status_counts.get(status, 0) for status in ("order_placed", "pending_payment", "receipt_submitted"))},
+            {"label": "Processing", "count": status_counts.get("processing", 0)},
+            {"label": "Fulfilment", "count": sum(status_counts.get(status, 0) for status in ("ready_for_pickup", "picked_up_from_store", "out_for_delivery", "arrived"))},
+            {"label": "Completed", "count": sum(status_counts.get(status, 0) for status in ("delivered", "picked_up", "picked_up_by_customer"))},
+            {"label": "Cancelled", "count": status_counts.get("cancelled", 0) + status_counts.get("canceled", 0)},
+        ]
         payload = {
             "success": True,
+            "financial_basis": "Gross paid order amounts, including paid cancellations, grouped by order creation date in UTC; payment confirmation timestamps and refund amounts are not stored, so net revenue is unavailable.",
             "range": {
                 "start_date": start_dt.date().isoformat(),
                 "end_date": end_dt.date().isoformat(),
             },
             "summary": summary,
-            "orders_by_status": report_status_counts(order_statuses, ["order_placed", "processing", "ready_for_pickup", "out_for_delivery", "delivered", "cancelled"]),
+            "operational_snapshot": operational_snapshot,
+            "period_revenue": period_revenue,
+            "orders_by_status": order_status_breakdown,
+            "status_distribution": status_distribution,
             "payments_by_status": report_status_counts(payment_statuses, ["pending_payment", "receipt_submitted", "payment_confirmed", "payment_rejected"]),
             "revenue_by_day": sorted(revenue_by_day_map.values(), key=lambda item: item["date"]),
             "top_products": sorted(top_products_map.values(), key=lambda item: item["revenue"], reverse=True)[:10],
+            "revenue_by_category": sorted(category_revenue_map.values(), key=lambda item: item["revenue"], reverse=True),
+            "payments_by_method": sorted(payment_method_map.values(), key=lambda item: item["gross_collected_revenue"], reverse=True),
+            "attention_count": attention_count,
+            "attention_orders": attention_orders,
             "low_stock": [
                 {
-                    "id": product.id,
-                    "name": product.name or "",
-                    "stock_qty": int(product.stock_qty if product.stock_qty is not None else product.stock or 0),
-                    "category": product.category or product.category_name or "",
+                    "id": product["id"],
+                    "name": product["name"],
+                    "stock_qty": product["stock_qty"],
+                    "category": product["category"],
                 }
                 for product in low_stock_products[:10]
             ],

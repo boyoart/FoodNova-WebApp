@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI, resolveMediaUrl } from '../services/api'
 import { formatPrice } from '../utils/formatters'
@@ -70,6 +70,9 @@ const fulfillmentPinEmailEligible = (order) => {
 
 export default function AdminOrders() {
   const { isAdmin, admin } = useAuthStore()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const orderSearch = searchParams.get('search') || ''
+  const [searchDraft, setSearchDraft] = useState(orderSearch)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
@@ -94,10 +97,14 @@ export default function AdminOrders() {
   const canUpdateOrders = adminPermissions.includes('*') || adminPermissions.includes('orders:update')
 
   useEffect(() => {
+    setSearchDraft(orderSearch)
+  }, [orderSearch])
+
+  useEffect(() => {
     if (isAdmin) {
       fetchOrders()
     }
-  }, [isAdmin, filter])
+  }, [isAdmin, filter, orderSearch])
 
   const normalizeOrderResponse = (res) => {
     if (Array.isArray(res)) return res
@@ -112,8 +119,8 @@ export default function AdminOrders() {
       setLoading(true)
       setLoadError('')
       const params = filter === 'archived'
-        ? { include_deleted: true }
-        : filter !== 'all' ? { status: filter } : {}
+        ? { include_deleted: true, ...(orderSearch ? { search: orderSearch } : {}) }
+        : { ...(filter !== 'all' ? { status: filter } : {}), ...(orderSearch ? { search: orderSearch } : {}) }
       const res = await adminAPI.getOrders(params)
       setOrders(normalizeOrderResponse(res))
     } catch (error) {
@@ -420,6 +427,18 @@ export default function AdminOrders() {
           </button>
         ))}
       </div>
+
+      <form className="admin-orders-search" onSubmit={(event) => {
+        event.preventDefault()
+        const next = new URLSearchParams(searchParams)
+        if (searchDraft.trim()) next.set('search', searchDraft.trim())
+        else next.delete('search')
+        setSearchParams(next)
+      }}>
+        <label htmlFor="admin-order-search">Search orders</label>
+        <input id="admin-order-search" type="search" value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Order code or number" />
+        <button type="submit" className="btn-primary">Search</button>
+      </form>
 
       {loading ? (
         <div className="loading">Loading orders...</div>

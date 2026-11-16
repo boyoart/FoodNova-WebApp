@@ -57,11 +57,21 @@ export const normalizeSmartOperations = (value) => {
 export const normalizeDashboardListResponse = (body, keys = []) => {
   if (Array.isArray(body)) return { available: true, data: body }
   if (!body || typeof body !== 'object') return { available: false, data: null }
+  const total = nullableNumber(body.total ?? body.pagination?.total)
   for (const key of keys) {
-    if (Array.isArray(body[key])) return { available: true, data: body[key] }
+    if (Array.isArray(body[key])) return total !== null && total > body[key].length
+      ? { available: false, data: null } : { available: true, data: body[key] }
   }
-  if (Array.isArray(body.data)) return { available: true, data: body.data }
+  if (Array.isArray(body.data)) return total !== null && total > body.data.length
+    ? { available: false, data: null } : { available: true, data: body.data }
   return { available: false, data: null }
+}
+
+export const normalizeDashboardReportResponse = (body) => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return { available: false, data: null }
+  const summary = objectValue(body.summary ?? body.data)
+  if (nullableNumber(summary.total_orders) === null) return { available: false, data: null }
+  return { available: true, data: { ...body, summary } }
 }
 
 export const classifyDashboardRequestError = (error) => {
@@ -86,20 +96,17 @@ const orderStatusText = (order) => normalizeText(order.order_status || order.ful
 
 const orderDelivered = (order) => ['delivered', 'picked_up', 'picked_up_by_customer'].includes(orderStatusText(order))
 
-const riderStatusText = (rider) => normalizeText(rider.status || rider.availability || rider.state || '')
+const riderStatusText = (rider) => normalizeText(rider.availability_status || rider.availability || rider.operational_status || rider.state || rider.status || '')
 
-const riderAvailable = (rider) => {
-  const status = riderStatusText(rider)
-  const active = rider.is_active !== false && rider.active !== false && rider.status !== 'inactive'
-  return active && ['available', 'online', 'on_duty', 'idle', 'ready', 'busy'].includes(status) ? true : active
+const isApprovedActiveRider = (rider) => {
+  const inactiveStatuses = new Set(['inactive', 'deactivated', 'deleted', 'suspended', 'onboarding', 'pending_review', 'kyc_pending', 'rejected'])
+  return rider.is_active !== false && rider.active !== false &&
+    ![rider.kyc_status, rider.lifecycle_status, rider.status].some((status) => inactiveStatuses.has(normalizeText(status)))
 }
 
-const operationalStatusLabel = (score) => {
-  if (score >= 85) return 'Excellent'
-  if (score >= 70) return 'Watchlist'
-  if (score >= 60) return 'Stable'
-  return 'Critical'
-}
+const riderAvailable = (rider) => isApprovedActiveRider(rider) && ['available', 'online', 'on_duty', 'idle', 'ready'].includes(riderStatusText(rider))
+
+const riderBusy = (rider) => isApprovedActiveRider(rider) && ['busy', 'assigned', 'on_delivery', 'in_transit'].includes(riderStatusText(rider))
 
 export const summarizeBusinessIntelligence = ({ orders, products, riders } = {}) => {
   const hasOrders = Array.isArray(orders)
@@ -119,8 +126,10 @@ export const summarizeBusinessIntelligence = ({ orders, products, riders } = {})
   const lowStockItems = hasProducts ? activeProducts.filter((product) => isLowStockProduct(product)) : []
   const outOfStockItems = hasProducts ? activeProducts.filter(isOutOfStockProduct) : []
 
-  const riderAvailableCount = hasRiders ? activeRiders.filter(riderAvailable).length : null
-  const riderUtilization = hasRiders ? (activeRiders.length ? Math.round((riderAvailableCount / activeRiders.length) * 100) : 0) : null
+  const operationalRiders = hasRiders ? activeRiders.filter(isApprovedActiveRider) : []
+  const riderAvailableCount = hasRiders ? operationalRiders.filter(riderAvailable).length : null
+  const riderBusyCount = hasRiders ? operationalRiders.filter(riderBusy).length : null
+  const riderUtilization = hasRiders ? (operationalRiders.length ? Math.round((riderBusyCount / operationalRiders.length) * 100) : 0) : null
 
   const stockAlerts = [...lowStockItems, ...outOfStockItems].slice(0, 6).map((product) => ({
     id: product.id,
@@ -149,10 +158,6 @@ export const summarizeBusinessIntelligence = ({ orders, products, riders } = {})
     })
   }
 
-  const healthScore = hasOrders && hasProducts && hasRiders
-    ? Math.min(100, Math.max(0, Math.round((fulfillmentRate + riderUtilization + (paymentReviewOrders.length ? 40 : 60)) / 2)))
-    : null
-
   return {
     data_availability: { orders: hasOrders, inventory: hasProducts, dispatch: hasRiders },
     total_orders: hasOrders ? activeOrders.length : null,
@@ -163,15 +168,15 @@ export const summarizeBusinessIntelligence = ({ orders, products, riders } = {})
     average_order_value: averageOrderValue,
     low_stock_items: hasProducts ? lowStockItems.length : null,
     out_of_stock_items: hasProducts ? outOfStockItems.length : null,
-    rider_total: hasRiders ? activeRiders.length : null,
+    rider_total: hasRiders ? operationalRiders.length : null,
     rider_available: riderAvailableCount,
-    rider_busy: hasRiders ? Math.max(0, activeRiders.length - riderAvailableCount) : null,
+    rider_busy: riderBusyCount,
     rider_utilization: riderUtilization,
     alerts,
     operational_health: {
-      score: healthScore,
-      label: healthScore === null ? 'Unavailable' : operationalStatusLabel(healthScore),
-      detail: healthScore === null ? 'Some dashboard sources are unavailable.' : paymentReviewOrders.length || stockAlerts.length ? 'Payment reviews and inventory risk need attention.' : 'Operations are on track.',
+      score: null,
+      label: 'Unavailable',
+      detail: 'A validated operational health scoring definition is not configured.',
     },
     orders: hasOrders ? activeOrders : null,
     products: hasProducts ? activeProducts : null,
@@ -207,6 +212,79 @@ export const buildSmartOperationsSummary = ({ orders, products, riders } = {}) =
     },
     alerts: summary.alerts,
     operational_health: summary.operational_health,
+  }
+}
+
+export const buildSmartOperationsSummaryFromAggregates = ({ reportSummary, products, riders, attentionOrders = [], operationalSnapshot } = {}) => {
+  const report = objectValue(reportSummary)
+  const hasOrders = nullableNumber(report.total_orders) !== null
+  const hasProducts = Array.isArray(products)
+  const hasRiders = Array.isArray(riders)
+  const inventory = hasProducts ? summarizeDashboardProducts(products) : null
+  const allRiders = hasRiders ? riders : []
+  const activeRiders = hasRiders ? allRiders.filter(isApprovedActiveRider) : []
+  const availableRiders = hasRiders ? activeRiders.filter(riderAvailable).length : null
+  const busyRiders = hasRiders ? activeRiders.filter(riderBusy).length : null
+  const alerts = []
+  const liveOperations = objectValue(operationalSnapshot)
+  const pendingPayments = nullableNumber(liveOperations.pending_payment_confirmation ?? report.pending_payments)
+  const unassignedDispatch = nullableNumber(liveOperations.awaiting_dispatch ?? report.unassigned_dispatch_orders)
+
+  if (pendingPayments > 0) {
+    alerts.push({
+      type: 'payment_review',
+      level: 'warning',
+      title: `${pendingPayments} payment review${pendingPayments === 1 ? '' : 's'} pending`,
+      detail: 'Customer payments need approval before the queue can fully clear.',
+    })
+  }
+  if (unassignedDispatch > 0) {
+    alerts.push({
+      type: 'dispatch',
+      level: 'warning',
+      title: `${unassignedDispatch} delivery order${unassignedDispatch === 1 ? '' : 's'} awaiting dispatch`,
+      detail: 'Assign an eligible delivery worker to continue fulfillment.',
+    })
+  }
+  if (inventory && (inventory.low_stock_products || inventory.out_of_stock_products)) {
+    alerts.push({
+      type: 'inventory',
+      level: inventory.out_of_stock_products ? 'critical' : 'warning',
+      title: `${inventory.low_stock_products} low-stock and ${inventory.out_of_stock_products} out-of-stock item${inventory.out_of_stock_products === 1 ? '' : 's'}`,
+      detail: 'Inventory risk is elevated and restocking should be prioritized.',
+    })
+  }
+
+  const paidRevenue = nullableNumber(report.gross_collected_revenue ?? report.confirmed_revenue)
+  const averageOrderValue = nullableNumber(report.average_order_value)
+  const paidOrders = nullableNumber(report.paid_orders)
+  const delivered = nullableNumber(report.completed_orders ?? report.delivered_orders)
+  const totalOrders = nullableNumber(report.total_orders)
+  const fulfillmentRate = nullableNumber(report.fulfillment_rate)
+
+  return {
+    data_availability: { orders: hasOrders, inventory: hasProducts, dispatch: hasRiders },
+    revenue: { total: paidRevenue, average: averageOrderValue, paid_orders: paidOrders },
+    fulfillment: { delivered, rate: fulfillmentRate, total_orders: totalOrders },
+    inventory: {
+      low_stock: inventory?.low_stock_products ?? null,
+      out_of_stock: inventory?.out_of_stock_products ?? null,
+      alerts: inventory?.stock_alerts ?? null,
+    },
+    riders: {
+      total: hasRiders ? activeRiders.length : null,
+      available: availableRiders,
+      busy: busyRiders,
+      utilization: hasRiders ? (activeRiders.length ? Math.round((busyRiders / activeRiders.length) * 100) : 0) : null,
+    },
+    alerts: hasOrders || hasProducts ? alerts : null,
+    operational_health: {
+      score: null,
+      label: 'Unavailable',
+      detail: 'A validated operational health scoring definition is not configured.',
+    },
+    attention_count: nullableNumber(report.attention_count),
+    attention_orders: Array.isArray(attentionOrders) ? attentionOrders.filter(Boolean) : null,
   }
 }
 

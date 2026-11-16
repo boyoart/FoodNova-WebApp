@@ -1,5 +1,6 @@
 import axios from "axios";
-import { buildSmartOperationsSummary, classifyDashboardRequestError, normalizeDashboardListResponse, summarizeDashboardOrders, summarizeDashboardProducts } from "../utils/adminDashboardMetrics.js";
+import { buildSmartOperationsSummaryFromAggregates, classifyDashboardRequestError, normalizeDashboardListResponse, normalizeDashboardReportResponse, summarizeDashboardProducts } from "../utils/adminDashboardMetrics.js";
+import { toPackFormData } from "../utils/adminPackFormData.js";
 
 const RENDER_API_BASE_URL = "https://foodnova-webapp.onrender.com";
 const normalizeApiBaseUrl = (value) => {
@@ -370,10 +371,10 @@ export const adminAPI = {
     const response = await api.get("/admin/stock/movements");
     return normalizeList(response.data, ["movements"]);
   },
-  createPack: async (payload) => (await api.post("/admin/packs", toStockFormData(payload), multipartConfig)).data,
-  updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toStockFormData(payload), multipartConfig)).data,
+  createPack: async (payload) => (await api.post("/admin/packs", toPackFormData(payload), multipartConfig)).data,
+  updatePack: async (id, payload) => (await api.patch(`/admin/packs/${id}`, toPackFormData(payload), multipartConfig)).data,
   deletePack: async (id) => (await api.delete(`/admin/packs/${id}`)).data,
-  getDashboardStats: async ({ includeOrders = true, includeProducts = true, includeDispatch = false } = {}) => {
+  getDashboardStats: async ({ includeOrders = true, includeProducts = true, includeDispatch = false, signal } = {}) => {
     const requestList = async (request, keys) => {
       try {
         const response = await request;
@@ -383,16 +384,64 @@ export const adminAPI = {
         return { available: false, data: null, failure: classifyDashboardRequestError(error) };
       }
     };
+    const requestReport = async () => {
+      try {
+        const response = await api.get('/admin/reports/summary', { signal, timeout: 20000 });
+        const normalized = normalizeDashboardReportResponse(response?.data);
+        return { ...normalized, failure: normalized.available ? null : 'unavailable' };
+      } catch (error) {
+        return { available: false, data: null, failure: classifyDashboardRequestError(error) };
+      }
+    };
     const [ordersResult, productsResult, ridersResult] = await Promise.all([
-      requestList(includeOrders ? api.get("/admin/orders") : Promise.resolve({ data: [] }), ["orders"]),
-      requestList(includeProducts ? api.get("/admin/products") : Promise.resolve({ data: [] }), ["products"]),
-      requestList(includeDispatch ? api.get("/admin/riders") : Promise.resolve({ data: [] }), ["riders", "workers"]),
+      includeOrders ? requestReport() : Promise.resolve({ available: false, data: null, failure: 'not_requested' }),
+      requestList(includeProducts ? api.get('/admin/products', { signal, timeout: 20000 }) : Promise.resolve({ data: [] }), ["products"]),
+      requestList(includeDispatch ? api.get('/admin/riders', { signal, timeout: 20000 }) : Promise.resolve({ data: [] }), ["riders", "workers"]),
     ]);
-    const orders = ordersResult.data;
+    const report = ordersResult.data;
+    const reportSummary = report?.summary || report?.data || null;
     const products = productsResult.data;
     const riders = ridersResult.data;
     const stats = {};
-    if (includeOrders && ordersResult.available) Object.assign(stats, summarizeDashboardOrders(orders));
+    if (includeOrders && ordersResult.available) {
+      const reportAttention = Array.isArray(report.attention_orders) ? report.attention_orders : null;
+      const paymentsByStatus = Array.isArray(report.payments_by_status) ? report.payments_by_status : [];
+      const paymentCount = (status) => paymentsByStatus.find((entry) => entry?.status === status)?.count ?? null;
+      stats.operations = report.operational_snapshot || null;
+      stats.total_orders = reportSummary.total_orders ?? null;
+      stats.report_range = report.range || null;
+      stats.total_revenue = reportSummary.gross_collected_revenue ?? reportSummary.confirmed_revenue ?? null;
+      stats.pending_payments = stats.operations?.pending_payment_confirmation ?? reportSummary.pending_payment_orders ?? paymentCount('pending_payment');
+      stats.receipt_submitted = stats.operations?.receipt_submitted_orders ?? reportSummary.receipt_submitted_orders ?? paymentCount('receipt_submitted');
+      stats.delivered_orders = reportSummary.completed_orders ?? reportSummary.delivered_orders ?? null;
+      stats.status_distribution = Array.isArray(report.status_distribution) ? report.status_distribution : null;
+      stats.recent_orders = Array.isArray(report.recent_orders) ? report.recent_orders.slice(0, 5).map((order) => ({
+        id: order?.id,
+        order_code: order?.order_code || '',
+        status: order?.order_status || order?.fulfillment_status || order?.status || '',
+        payment_status: order?.payment_status || '',
+        created_at: order?.created_at || '',
+        total_amount: order?.total_amount ?? null,
+      })) : null;
+      stats.attention_count = report.attention_count ?? null;
+      stats.attention_orders = reportAttention;
+      stats.period_revenue = report.period_revenue || null;
+      stats.analytics = {
+        gross_collected_revenue: reportSummary.gross_collected_revenue ?? reportSummary.confirmed_revenue ?? null,
+        outstanding_payments: reportSummary.outstanding_payments ?? null,
+        net_revenue: reportSummary.net_revenue ?? null,
+        processed_refund_orders: reportSummary.processed_refund_orders ?? null,
+        refund_adjustment_orders: reportSummary.refund_adjustment_orders ?? null,
+        average_order_value: reportSummary.average_order_value ?? null,
+        paid_orders: reportSummary.paid_orders ?? null,
+        cancelled_orders: reportSummary.cancelled_orders ?? null,
+        top_products: Array.isArray(report.top_products) ? report.top_products : null,
+        revenue_by_category: Array.isArray(report.revenue_by_category) ? report.revenue_by_category : null,
+        payments_by_method: Array.isArray(report.payments_by_method) ? report.payments_by_method : null,
+        revenue_by_day: Array.isArray(report.revenue_by_day) ? report.revenue_by_day : null,
+        financial_basis: typeof report.financial_basis === 'string' ? report.financial_basis : null,
+      };
+    }
     else if (includeOrders) Object.assign(stats, {
       total_orders: null,
       total_revenue: null,
@@ -402,6 +451,11 @@ export const adminAPI = {
       status_distribution: null,
       recent_orders: null,
       attention_orders: null,
+      attention_count: null,
+      report_range: null,
+      period_revenue: null,
+      operations: null,
+      analytics: null,
     });
     if (includeProducts && productsResult.available) Object.assign(stats, summarizeDashboardProducts(products));
     else if (includeProducts) Object.assign(stats, {
@@ -415,10 +469,12 @@ export const adminAPI = {
       inventory: includeProducts ? (productsResult.available ? 'available' : productsResult.failure) : 'not_requested',
       dispatch: includeDispatch ? (ridersResult.available ? 'available' : ridersResult.failure) : 'not_requested',
     };
-    stats.smart_operations = buildSmartOperationsSummary({
-      orders: includeOrders && ordersResult.available ? orders : null,
+    stats.smart_operations = buildSmartOperationsSummaryFromAggregates({
+      reportSummary: includeOrders && ordersResult.available ? reportSummary : null,
       products: includeProducts && productsResult.available ? products : null,
       riders: includeDispatch && ridersResult.available ? riders : null,
+      attentionOrders: includeOrders && ordersResult.available ? report.attention_orders : null,
+      operationalSnapshot: includeOrders && ordersResult.available ? report.operational_snapshot : null,
     });
     return { data: stats };
   },

@@ -24,7 +24,7 @@ export const formatPrice = (amount) => {
  * @returns {string} Image URL or placeholder
  */
 export const getImageUrl = (item) => {
-  if (!item) return '/placeholder.png'
+  if (!item) return resolveMediaUrl('/uploads/catalog/foodnova-placeholder.svg')
   
   // Try image_url first (backend image field)
   if (item.image_url) return resolveMediaUrl(item.image_url)
@@ -33,7 +33,7 @@ export const getImageUrl = (item) => {
   if (item.image) return resolveMediaUrl(item.image)
   
   // Fallback to placeholder
-  return '/placeholder.png'
+  return resolveMediaUrl('/uploads/catalog/foodnova-placeholder.svg')
 }
 
 /**
@@ -41,5 +41,7 @@ export const getImageUrl = (item) => {
  * @param {event} e - The error event from img element
  */
 export const handleImageError = (e) => {
-  e.target.src = '/placeholder.png'
+  const image = e.currentTarget || e.target
+  image.onerror = null
+  image.src = resolveMediaUrl('/uploads/catalog/foodnova-placeholder.svg')
 }

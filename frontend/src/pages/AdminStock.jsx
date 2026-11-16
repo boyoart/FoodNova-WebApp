@@ -7,6 +7,10 @@ import './AdminPages.css'
 
 const emptyProduct = { name: '', description: '', price: '', stock_qty: '', stock_unit: 'unit', category: '', is_active: true, image_url: '', images: [], image_files: [], remove_image_ids: [] }
 const emptyPack = { name: '', price: '', description: '', items: [], components: [], is_active: true, image_url: '' }
+const handleStockImageError = (event) => {
+  event.currentTarget.onerror = null
+  event.currentTarget.src = resolveMediaUrl('/uploads/catalog/foodnova-placeholder.svg')
+}
 
 export default function AdminStock() {
   const { isAdmin } = useAuthStore()
@@ -59,6 +63,7 @@ export default function AdminStock() {
 
   const clearPreview = (data = formData) => {
     if (data.image_preview) URL.revokeObjectURL(data.image_preview)
+    ;(data.image_files || []).forEach((entry) => URL.revokeObjectURL(entry.preview))
   }
 
   const openCreateModal = () => {
@@ -111,7 +116,14 @@ export default function AdminStock() {
       event.target.value = ''
       return
     }
-    setFormData((current) => ({ ...current, image_files: [...(current.image_files || []), ...files.map((file) => ({ file, preview: URL.createObjectURL(file) }))] }))
+    const uploads = files.map((file) => ({ file, preview: URL.createObjectURL(file) }))
+    setFormData((current) => {
+      if (!isProduct) (current.image_files || []).forEach((entry) => URL.revokeObjectURL(entry.preview))
+      return {
+        ...current,
+        image_files: isProduct ? [...(current.image_files || []), ...uploads] : uploads.slice(0, 1),
+      }
+    })
   }
 
   const handleSubmit = async (event) => {
@@ -161,6 +173,7 @@ export default function AdminStock() {
   const renderImageUpload = (label) => {
     const existing = formData.images || []
     const pending = formData.image_files || []
+    const currentPackImage = !isProduct && formData.image_url && !pending.length
     return (
       <section className="stock-image-upload">
         <div>
@@ -171,14 +184,15 @@ export default function AdminStock() {
           <div className="stock-image-actions">
             <label className="stock-file-button">
               Upload Images
-              <input type="file" accept="image/*" multiple onChange={handleImageChange} />
+              <input type="file" accept="image/*" multiple={isProduct} onChange={handleImageChange} />
             </label>
           </div>
         </div>
         <div className="stock-image-gallery">
-          {existing.map((entry) => <div className={`stock-image-card ${entry.is_primary ? 'primary' : ''}`} key={entry.id || entry.image_url}><img src={resolveMediaUrl(entry.image_url)} alt="Product" /><strong>{entry.is_primary ? 'Primary' : ''}</strong>{!entry.is_primary && entry.id && <button type="button" onClick={() => setFormData((current) => ({ ...current, primary_image_id: entry.id, images: current.images.map((image) => ({ ...image, is_primary: image.id === entry.id })) }))}>Set Primary</button>}<button type="button" onClick={() => setFormData((current) => ({ ...current, images: current.images.filter((image) => image !== entry), remove_image_ids: entry.id ? [...(current.remove_image_ids || []), entry.id] : current.remove_image_ids }))}>Remove</button></div>)}
-          {pending.map((entry, index) => <div className="stock-image-card" key={entry.preview}><img src={entry.preview} alt="New product" /><strong>New</strong><button type="button" onClick={() => setFormData((current) => ({ ...current, image_files: current.image_files.filter((_, itemIndex) => itemIndex !== index) }))}>Remove</button></div>)}
-          {!existing.length && !pending.length && <span>No images uploaded</span>}
+          {currentPackImage && <div className="stock-image-card primary"><img src={resolveMediaUrl(formData.image_url)} alt={`${formData.name || 'Pack'} current image`} onError={handleStockImageError} /><strong>Current</strong></div>}
+          {existing.map((entry) => <div className={`stock-image-card ${entry.is_primary ? 'primary' : ''}`} key={entry.id || entry.image_url}><img src={resolveMediaUrl(entry.image_url)} alt="Product" onError={handleStockImageError} /><strong>{entry.is_primary ? 'Primary' : ''}</strong>{!entry.is_primary && entry.id && <button type="button" onClick={() => setFormData((current) => ({ ...current, primary_image_id: entry.id, images: current.images.map((image) => ({ ...image, is_primary: image.id === entry.id })) }))}>Set Primary</button>}<button type="button" onClick={() => setFormData((current) => ({ ...current, images: current.images.filter((image) => image !== entry), remove_image_ids: entry.id ? [...(current.remove_image_ids || []), entry.id] : current.remove_image_ids }))}>Remove</button></div>)}
+          {pending.map((entry, index) => <div className="stock-image-card" key={entry.preview}><img src={entry.preview} alt={isProduct ? 'New product' : 'New pack'} /><strong>{isProduct ? 'New' : 'Replacement'}</strong><button type="button" onClick={() => setFormData((current) => { URL.revokeObjectURL(entry.preview); return { ...current, image_files: current.image_files.filter((_, itemIndex) => itemIndex !== index) } })}>Remove</button></div>)}
+          {!existing.length && !currentPackImage && !pending.length && <span>No images uploaded</span>}
         </div>
       </section>
     )
@@ -188,7 +202,7 @@ export default function AdminStock() {
     const imageUrl = resolveMediaUrl(item.image_url || item.image)
     return (
       <div className="stock-table-thumb">
-        {imageUrl ? <img src={imageUrl} alt={item.name || 'Stock item'} /> : <span>No image</span>}
+        {imageUrl ? <img src={imageUrl} alt={item.name || 'Stock item'} onError={handleStockImageError} /> : <img src={resolveMediaUrl('/uploads/catalog/foodnova-placeholder.svg')} alt="No image available" />}
       </div>
     )
   }
@@ -207,7 +221,8 @@ export default function AdminStock() {
         <div className="combo-pack-admin-status">
           <span className={`status ${item.is_active ? 'active' : 'inactive'}`}>{item.is_active ? 'Active' : 'Inactive'}</span>
           {!(item.components || []).length && <span className="stock-badge out">Needs contents</span>}
-          {(item.components || []).length > 0 && !item.is_available && <span className="stock-badge low">Insufficient stock</span>}
+          {(item.components || []).length > 0 && !item.is_available && <span className="stock-badge low">Check component stock/configuration</span>}
+          {(item.components || []).length > 0 && <span className={Number(item.available_combo_quantity) > 0 ? 'status active' : 'stock-badge low'}>Max fulfillable: {item.available_combo_quantity ?? 'Unavailable'}</span>}
         </div>
       )
     }
@@ -519,7 +534,7 @@ export default function AdminStock() {
                     <>
                       <td>{item.description?.substring(0, 50)}{item.description?.length > 50 ? '...' : ''}</td>
                       <td>{(item.components || []).length
-                        ? item.components.map((component) => `${component.name} (${component.quantity_per_pack} ${component.unit})`).join(', ')
+                        ? <>{item.components.map((component) => `${component.name} (${component.quantity_per_pack} ${component.unit} per pack; ${component.stock_qty ?? 'Unavailable'} ${component.unit} on hand${component.available === false ? '; check component' : ''})`).join(', ')}<br /><small>Maximum fulfillable: {item.available_combo_quantity ?? 'Unavailable'}</small></>
                         : 'Needs contents configuration'}</td>
                     </>
                   )}

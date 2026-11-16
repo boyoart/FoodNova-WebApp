@@ -49,6 +49,10 @@
   background:var(--fn-surface);
   box-shadow:0 5px 18px rgba(21,62,48,.04);
 }
+.admin-analytics-section { margin:0 0 28px; }
+.admin-analytics-section > .admin-ops-heading { margin-bottom:13px; }
+.admin-analytics-section .admin-finance-stats { margin:0 0 14px; }
+.admin-analytics-section .cms-grid { margin-bottom:14px; }
 .admin-smart-alert {
   display:flex; align-items:flex-start; gap:10px;
   padding:12px 0;
@@ -72,6 +76,9 @@
 .admin-ops-heading > svg { color:var(--fn-primary); }
 .admin-ops-heading > a { display:grid; width:34px; height:34px; place-items:center; border:1px solid var(--fn-border); border-radius:5px; color:var(--fn-primary); }
 .admin-recent-orders,.admin-attention-list,.admin-stock-alerts { display:grid; }
+.admin-live-flow { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 16px; }
+.admin-live-flow > div { display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:39px; border-top:1px solid var(--fn-border); color:var(--fn-muted); font-size:11px; }
+.admin-live-flow strong { color:var(--fn-heading); font-size:13px; }
 .admin-recent-order,.admin-attention-order { display:flex; align-items:center; gap:10px; min-width:0; padding:10px 0; border-top:1px solid var(--fn-border); }
 .admin-recent-order:hover,.admin-attention-order:hover { color:var(--fn-primary); }
 .admin-order-dot { width:8px; height:8px; flex:0 0 auto; border-radius:50%; background:#3269c8; }
