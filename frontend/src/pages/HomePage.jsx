@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, DollarSign, Lock, ShoppingCart, Truck, ShieldCheck, PackageCheck } from 'lucide-react'
 import api, { packsAPI, resolveMediaUrl } from '../services/api'
@@ -7,6 +7,9 @@ import { hasConfirmedFivePercentDiscount, selectFeaturedComboPacks } from './hom
 import { normalizeHeroBanner } from './homepageHero'
 import { observeScrollReveals } from '../utils/scrollReveals'
 import './HomePage.css'
+
+const ShoppingWidgets = lazy(() => import('../components/ShoppingWidgets'))
+const ComboPackExplorer = lazy(() => import('../components/ShoppingWidgets').then((module) => ({ default: module.ComboPackExplorer })))
 
 const heroSlides = [
   {
@@ -236,6 +239,7 @@ export default function HomePage() {
         <Link className="home-combo-packs-cta" to="/products?tab=packs">
           Explore Combo Packs <span aria-hidden="true">→</span>
         </Link>
+        <Suspense fallback={<p>Loading pack comparison…</p>}><ComboPackExplorer packs={comboPacks} onPackUpdated={(fresh) => setComboPacks((current) => current.map((pack) => pack.id === fresh.id ? fresh : pack))} /></Suspense>
       </section>
 
       <section className="features">
@@ -262,6 +266,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <Suspense fallback={<div className="shopping-loading" role="status">Loading shopping tools…</div>}><ShoppingWidgets products={products} /></Suspense>
 
       <section className="home-merchandising">
         <div className="home-section-heading"><div><p className="hero-kicker">Fresh picks for your kitchen</p><h2>Shop Popular Essentials</h2></div><Link to="/products">View all products <span aria-hidden="true">→</span></Link></div>

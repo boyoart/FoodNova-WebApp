@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Download, Home, LogIn, LogOut, Menu, Moon, Package, RefreshCw, Search, ShoppingCart, Sun, X } from 'lucide-react'
+import { Bell, Download, Home, LogIn, LogOut, Menu, Moon, Package, RefreshCw, ShoppingCart, Sun, X } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useCartStore } from '../store/cartStore'
 import { notificationsAPI, ordersAPI, profileAPI, resolveMediaUrl } from '../services/api'
@@ -17,6 +17,7 @@ import {
 import './Navbar.css'
 import BrandLogo from './BrandLogo'
 import { observeStickyHeader } from '../utils/stickyHeader'
+import ProductSearch from './ProductSearch'
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -288,11 +289,7 @@ export default function Navbar() {
           <BrandLogo decorative />
         </Link>
 
-        {!isAdmin && <form className="navbar-search" role="search" onSubmit={handleCatalogSearch}>
-          <label className="sr-only" htmlFor="navbar-product-search">Search products</label>
-          <input id="navbar-product-search" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search products or categories…" />
-          <button type="submit" aria-label="Search products"><Search size={18} /></button>
-        </form>}
+        {!isAdmin && <ProductSearch value={catalogSearch} onChange={setCatalogSearch} onSubmit={handleCatalogSearch} onNavigate={() => setMobileMenuOpen(false)} mobileOpen={mobileMenuOpen} />}
 
         {!isAdmin && <Link to="/cart" className="header-cart" aria-label={`Shopping cart, ${totalCartItems} items`}><ShoppingCart size={22} />{totalCartItems > 0 && <span className="cart-badge">{totalCartItems}</span>}</Link>}
         <button ref={menuButtonRef} type="button" className="menu-toggle" onClick={() => setMobileMenuOpen((value) => !value)} aria-label="Toggle navigation menu" aria-expanded={mobileMenuOpen} aria-controls="customer-navigation">
@@ -300,11 +297,6 @@ export default function Navbar() {
         </button>
 
         <ul id="customer-navigation" className={`nav-menu ${mobileMenuOpen ? 'active' : ''}`}>
-          {!isAdmin && <li className="nav-item mobile-catalog-search"><form role="search" onSubmit={handleCatalogSearch}>
-            <label className="sr-only" htmlFor="navbar-mobile-search">Search products</label>
-            <input id="navbar-mobile-search" value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search products…" />
-            <button type="submit" aria-label="Search products"><Search size={18} /></button>
-          </form></li>}
           <li className="nav-item"><Link to="/" className={navLinkClass('/')}><Home size={18} /><span>Home</span></Link></li>
           <li className="nav-item"><Link to="/products" className={navLinkClass('/products')}><Package size={18} /><span>Products</span></Link></li>
           {!isAdmin && <li className="nav-item"><Link to="/app" className={navLinkClass('/app')}><Download size={18} /><span>Download App</span></Link></li>}

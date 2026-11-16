@@ -19,11 +19,13 @@ import {
   updateCatalogQuery,
 } from './productsCatalog'
 import './ProductsPage.css'
+import { rememberProduct, unwrapItem } from '../utils/shopping'
 
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab = searchParams.get('tab') === 'packs' ? 'packs' : 'products'
   const searchTerm = searchParams.get('search') || ''
+  const linkedProduct = searchParams.get('product') || ''
   const category = activeTab === 'products' ? (searchParams.get('category') || '') : ''
   const page = getPageNumber(searchParams.get('page'))
   const [items, setItems] = useState([])
@@ -150,6 +152,7 @@ export default function ProductsPage() {
   }
 
   const openProductModal = async (item) => {
+    if (item.type !== 'pack') { try { rememberProduct(item.id, sessionStorage) } catch { /* Optional history. */ } }
     setModalItem(item)
     setModalTab('details')
     setModalQuantity(1)
@@ -173,7 +176,28 @@ export default function ProductsPage() {
     }
   }
 
-  const closeProductModal = () => setModalItem(null)
+  const closeProductModal = () => {
+    setModalItem(null)
+    if (linkedProduct) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('product')
+      setSearchParams(next, { replace: true })
+    }
+  }
+
+  useEffect(() => {
+    const id = Number(linkedProduct)
+    if (!Number.isSafeInteger(id) || id < 1) return undefined
+    let current = true
+    productsAPI.getById(id).then((response) => {
+      if (!current) return
+      const fresh = normalizeStoreItem(unwrapItem(response))
+      setModalItem(fresh); setModalTab('details'); setModalQuantity(1)
+      setModalUnavailable(fresh.is_active === false); setModalImage(galleryImagesFor(fresh)[0] || '')
+      try { rememberProduct(fresh.id, sessionStorage) } catch { /* Optional history. */ }
+    }).catch(() => { if (current) toast.error('This product could not be opened. Please browse the catalogue.') })
+    return () => { current = false }
+  }, [linkedProduct])
 
   const selectModalVariant = (variant) => {
     if (!modalItem || !variant.is_available) return

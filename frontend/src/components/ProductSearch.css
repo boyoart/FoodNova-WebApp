@@ -1,0 +1,14 @@
+.navbar .smart-search { position: relative; overflow: visible; }
+.navbar .smart-search > input { flex: 1; width: 0; }
+.navbar .smart-search > button { flex: 0 0 44px; }
+.search-suggestions { position: absolute; inset: calc(100% + 8px) 0 auto; min-width: min(390px, calc(100vw - 24px)); max-height: 360px; overflow-y: auto; background: var(--fn-surface); color: var(--fn-text); border: 1px solid var(--fn-border); border-radius: 12px; box-shadow: 0 14px 32px #032b1826; z-index: 8; }
+.search-suggestions ul { padding: 4px; margin: 0; list-style: none; }
+.navbar .search-suggestions button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; background: transparent; color: var(--fn-text); text-align: left; border-radius: 8px; }
+.navbar .search-suggestions button:hover, .navbar .search-suggestions button[aria-selected="true"] { background: var(--fn-surface-2); }
+.search-suggestions img { object-fit: contain; flex-shrink: 0; background: #fff; border-radius: 5px; }
+.search-suggestions span { display: grid; flex: 1; min-width: 0; }
+.search-suggestions strong { font-size: .85rem; overflow-wrap: anywhere; }
+.search-suggestions small, .search-suggestions p { font-size: .76rem; color: var(--fn-muted); }
+.search-suggestions p { padding: 10px; }
+.search-suggestions b { font-size: .8rem; white-space: nowrap; }
+@media (max-width: 1120px) { .search-suggestions { min-width: 0; } }

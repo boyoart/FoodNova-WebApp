@@ -4,6 +4,8 @@
   color: var(--fn-text);
 }
 
+.home-page .shopping-loading { min-height: 420px; width: min(1200px, calc(100% - 2rem)); margin: 2rem auto; }
+
 .hero-slider {
   position: relative;
   max-width: 1240px;
