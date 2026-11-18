@@ -1,5 +1,28 @@
 # Customer experience and security — review release
 
+## Integration with production main (2026-11-17)
+
+Production main now includes PR #2 at `f4c5dd8`. The database migration and schema verification have already succeeded according to the operator; no production connection or migration is part of this branch integration. The feature keeps `backend/scripts/migrate_customer_security.py` byte-for-byte from that main release, including its independent metadata, explicit apply/verify modes, prerequisites and lock protection. The older ORM-importing feature migration is superseded. Do not rerun migration as part of deploying this feature. The historical migration-before-deployment instructions below describe the original rollout sequence, not an instruction to repeat it.
+
+Only the standalone migration, its tests and runbook arrive from main. Customer-management, email-verification, checkout, order-tracking and WebSocket authorization implementation remain from the feature branch. Schema compatibility tests compare feature column types/nullability, token/limit keys and indexes against the authoritative migration. Its legacy-schema test includes the existing session_version/manual_idempotency_key prerequisites and asserts that session versions are preserved. Test databases are local isolated fixtures; no production or staging schema command is executed by this integration task.
+
+### Render configuration review (required values, not live configuration inspection)
+
+- Keep the current DATABASE_URL and JWT_SECRET unchanged. The existing database has been migrated; retain all existing signing/session and payment configuration. Do not rotate keys or modify deployment/start commands for this merge.
+- Verification delivery requires EMAIL_ENABLED=true, RESEND_API_KEY and a verified EMAIL_FROM identity in the existing Resend account. Validate delivery in staging with owned addresses. New registrations always require verification; a missing email configuration prevents those customers from completing checkout.
+- FRONTEND_URL must be the canonical HTTPS customer website origin (https://www.foodnova.com.ng or https://foodnova.com.ng). CUSTOMER_LINK_ALLOWED_ORIGINS is only needed for additional explicit HTTPS staging origins. Never allow arbitrary preview origins or expose Resend credentials in Vercel/frontend variables. Disable provider link-click rewriting for verification/capability links.
+- CUSTOMER_EMAIL_VERIFICATION_REQUIRED defaults false for legacy grace accounts. Turning it true requires an announced legacy cutover and tested recovery/client handling; do not silently flip it during this release. New-account verification is enforced regardless of this flag.
+- ORDER_TRACKING_LINKS_ENABLED=true requires the existing order_tracking_tokens and order_tracking_limits tables from the prior tracking release. The customer-security migration does not create those tables. Preserve the current flag until those prerequisites are independently confirmed; do not infer them from customer-security schema verification.
+- ORDER_TRACKING_TRUSTED_PROXIES must contain only the actual trusted proxy CIDRs. Missing/misconfigured proxy trust can collapse abuse limits onto a shared peer address. Preserve the existing CORS_ORIGINS/canonical origins, Admin roles and notification/payment settings. No new infrastructure, credentials or broker is introduced by this merge.
+
+### Vercel and activation review
+
+The frontend reads VITE_API_BASE_URL (the older example name VITE_API_URL is not the active setting). Keep it pointed at the existing backend; configure exact staging frontend origins in backend CORS and approved link origins when testing previews. No new customer-security frontend environment variable is required. Keep server credentials out of VITE_* variables and preserve existing analytics/consent settings.
+
+Backend and frontend activation must be coordinated: verify /verify-email and /track-order SPA rewrites, HTTPS email links, checkout return/cart preservation and authorized Admin actions in staging. The API's verification-required response also affects existing mobile clients; validate their handling before legacy cutover. Browser/mobile, real Resend delivery, cross-worker WebSocket revocation and production environment values are not established by unit tests. This integration authorizes a feature-branch push only, not deployment or a merge into main. Check Render/Vercel branch deployment settings before any later approved release.
+
+Integration validation: 237 backend tests and 16 subtests passed; 33 focused security/schema tests passed (overlapping the full suite); 91 frontend tests passed; frontend lint, production build, Python syntax and git whitespace checks passed. Existing framework/UTC deprecation warnings remain. The migration Git blob is identical to origin/main; feature backend/frontend implementation files are unchanged by this merge except that authoritative migration resolution. No production database or live environment configuration was accessed or changed.
+
 Implementation branch: `feat/customer-security-tracking`, based on production `512a76c`. Audit was written before application changes in `CUSTOMER_SECURITY_AUDIT.md`. No push to main, deployment, production migration, configuration change or real verification email is performed by this work.
 
 ## Behavior

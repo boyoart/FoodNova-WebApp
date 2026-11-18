@@ -193,9 +193,9 @@ def test_additive_migration_is_repeatable_and_never_falsely_verifies_legacy_acco
     from sqlalchemy import text, inspect
     engine = create_engine('sqlite://')
     with engine.begin() as connection:
-        connection.execute(text('CREATE TABLE users (id INTEGER PRIMARY KEY, is_active BOOLEAN)'))
-        connection.execute(text('CREATE TABLE orders (id INTEGER PRIMARY KEY)'))
-        connection.execute(text('INSERT INTO users VALUES (1, FALSE)'))
+        connection.execute(text('CREATE TABLE users (id INTEGER PRIMARY KEY, is_active BOOLEAN, session_version INTEGER NOT NULL DEFAULT 0)'))
+        connection.execute(text('CREATE TABLE orders (id INTEGER PRIMARY KEY, manual_idempotency_key VARCHAR(160) UNIQUE)'))
+        connection.execute(text('INSERT INTO users VALUES (1, FALSE, 7)'))
     migrate(engine)
     with engine.begin() as connection:
         row = connection.execute(text('SELECT account_status, email_verified_at, email_verification_required FROM users')).one()
@@ -205,6 +205,7 @@ def test_additive_migration_is_repeatable_and_never_falsely_verifies_legacy_acco
     assert {'email_verification_tokens', 'account_action_limits'} <= set(inspect(engine).get_table_names())
     with engine.connect() as connection:
         assert connection.execute(text('SELECT account_status FROM users')).scalar_one() == 'suspended'
+        assert connection.execute(text('SELECT session_version FROM users')).scalar_one() == 7
     engine.dispose()
 
 
