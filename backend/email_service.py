@@ -155,7 +155,7 @@ def send_email(to, subject, html, text=None, event_type="", order=None):
         return {"status": "sent", "response": response}
     except Exception as error:
         error_type = type(error).__name__
-        if event_type in {"pickup_fulfillment_pin", "delivery_fulfillment_pin", "order_placed", "tracking_link"}:
+        if event_type in {"pickup_fulfillment_pin", "delivery_fulfillment_pin", "order_placed", "tracking_link", "email_verification"}:
             print("EMAIL SEND ERROR:", error_type)
             return {"status": "failed", "error": error_type}
         print("EMAIL SEND ERROR:", repr(error))
@@ -250,6 +250,17 @@ def send_tracking_link_email(email, code, url):
             "<p>This private link shows limited progress only and expires in 30 days. Sign in for full details. If you did not request it, ignore this email.</p>")
     return send_email(email, 'FoodNova — Secure Order Tracking', html,
                       text=f'Track your FoodNova order: {url}\nLimited progress only. Expires in 30 days.', event_type='tracking_link')
+
+
+def send_customer_verification_email(email, raw_token):
+    from services.order_tracking import approved_frontend_origin
+    origin = approved_frontend_origin(FRONTEND_URL)
+    if not origin:
+        return {'status': 'skipped'}
+    url = f'{origin}/verify-email#token={raw_token}'
+    return send_email(email, 'FoodNova — Verify your email',
+        f"<h1>Verify your FoodNova email</h1><p><a href='{escape(url, quote=True)}'>Verify Email</a></p><p>This single-use link expires in 30 minutes. Ignore it if you did not create an account.</p>",
+        text=f'Verify your FoodNova email: {url}\nThis single-use link expires in 30 minutes.', event_type='email_verification')
 
 
 def send_customer_fulfillment_pin_email(

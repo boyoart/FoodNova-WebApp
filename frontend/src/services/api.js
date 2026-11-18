@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useAuthStore } from '../store/authStore.js';
 import { buildSmartOperationsSummaryFromAggregates, classifyDashboardRequestError, normalizeDashboardListResponse, normalizeDashboardReportResponse, summarizeDashboardProducts } from "../utils/adminDashboardMetrics.js";
 import { toPackFormData } from "../utils/adminPackFormData.js";
 
@@ -45,6 +46,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error?.response?.status === 401) {
+      const path = String(error.config?.url || '')
+      const token = localStorage.getItem('token') || localStorage.getItem('foodnova_token')
+      const authorization = error.config?.headers?.Authorization || error.config?.headers?.authorization
+      if (!path.startsWith('/admin') && !/^\/auth\/(?:login|admin\/login|register|password-reset)/.test(path) && token && authorization === 'Bearer ' + token) {
+        useAuthStore.getState().expireCustomerSession()
+      }
       console.warn("FoodNova API session expired or unauthorized", error.config?.url);
     }
     return Promise.reject(error);
@@ -259,6 +266,12 @@ import { websiteAnalytics } from '../utils/websiteAnalytics'
 export const websiteAnalyticsAPI = {
   report: async (params, signal) => (await api.get('/admin/website-analytics', { params, signal, timeout: 65000 })).data,
   summary: async (signal) => (await api.get('/admin/website-analytics/summary', { signal, timeout: 65000 })).data,
+}
+
+export const verificationAPI = {
+  status: async () => (await api.get('/auth/verification/status')).data,
+  resend: async () => (await api.post('/auth/verification/resend')).data,
+  confirm: async (token) => (await api.post('/auth/verification/confirm', { token })).data,
 }
 
 export const trackingAPI = {
@@ -496,9 +509,11 @@ export const adminAPI = {
     const orders = normalizeList(response.data, ["orders"]);
     return { data: orders.filter((order) => String(order.payment_status || order.status || "").toLowerCase() === "receipt_submitted") };
   },
-  getCustomers: async () => {
+  getCustomer: async (id) => (await api.get(`/admin/customers/${id}`)).data,
+  updateCustomerAccount: async (id, payload) => (await api.post(`/admin/customers/${id}/account-status`, payload)).data,
+  getCustomers: async (params = {}, signal) => {
     try {
-      const response = await api.get("/admin/customers");
+      const response = await api.get("/admin/customers", { params, signal });
       const customers = normalizeList(response.data, ["customers", "users"]);
       return { data: customers, raw: response.data };
     } catch (error) {

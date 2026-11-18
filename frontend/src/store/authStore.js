@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { clearCheckoutDraft, readCheckoutDraft } from '../utils/checkoutFlow.js'
 
 const safeJsonParse = (key, fallback) => {
   try {
@@ -19,6 +20,8 @@ export const useAuthStore = create((set) => ({
   isAdmin: !!localStorage.getItem('admin_token'),
 
   login: (user, token) => {
+    const owner = readCheckoutDraft()?.ownerId
+    if (owner && owner !== user?.id) clearCheckoutDraft()
     localStorage.setItem('token', token)
     localStorage.setItem('user', JSON.stringify(user))
     set({ user, isAuthenticated: true })
@@ -31,11 +34,19 @@ export const useAuthStore = create((set) => ({
   },
 
   logout: () => {
+    clearCheckoutDraft()
     localStorage.removeItem('token')
     localStorage.removeItem('user')
     localStorage.removeItem('admin_token')
     localStorage.removeItem('admin')
     set({ user: null, admin: null, isAuthenticated: false, isAdmin: false })
+  },
+
+  expireCustomerSession: () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('foodnova_token')
+    localStorage.removeItem('user')
+    set({ user: null, isAuthenticated: false })
   },
 
   updateUser: (user) => {

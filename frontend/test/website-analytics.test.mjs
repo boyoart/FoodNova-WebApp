@@ -114,12 +114,13 @@ test('tracking polling waits for each request, pauses hidden tabs and cancels re
   await callback(); assert.equal(calls, 1)
 })
 
-test('analytics routes and tracking dialogs preserve permission, accessibility and privacy contracts', async () => {
+test('analytics routes and dedicated tracking preserve permission, navigation and privacy contracts', async () => {
   const read = async (path) => readFile(new URL(path, import.meta.url), 'utf8')
   const page = await read('../src/pages/AdminWebsiteAnalytics.jsx')
   assert.match(page, /reports:view/); assert.match(page, /No historical collection/); assert.match(page, /Unavailable/)
   const widget = await read('../src/components/OrderTracking.jsx')
-  for (const pattern of [/aria-modal="true"/, /aria-labelledby="quick-tracking-title"/, /event.key === 'Escape'/, /event.key !== 'Tab'/, /originalOverflow/, /previous.focus/, /currentRequest.current\?\.abort/]) assert.match(widget, pattern)
+  for (const pattern of [/to="\/track-order"/, /className="tracking-shortcut"/, /currentRequest.current\?\.abort/]) assert.match(widget, pattern)
+  assert.doesNotMatch(widget, /role="dialog"|tracking-modal-layer/)
   assert.doesNotMatch(widget, /localStorage|sessionStorage|console\.log/)
   const html = await read('../index.html'); assert.match(html, /name="referrer" content="no-referrer"/)
 })

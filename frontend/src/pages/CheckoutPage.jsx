@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCartStore } from '../store/cartStore'
 import { useAuthStore } from '../store/authStore'
-import { ordersAPI, profileAPI } from '../services/api'
+import { ordersAPI, profileAPI, verificationAPI } from '../services/api'
+import { saveCheckoutDraft, readCheckoutDraft, checkoutRequestKey, clearCheckoutDraft } from '../utils/checkoutFlow'
+import EmailVerificationNotice from '../components/EmailVerificationNotice'
 import { formatPrice } from '../utils/formatters'
 import { buildWhatsAppLink } from '../utils/contactUtils'
 import { isComboPackInventoryError } from '../utils/checkoutErrors'
@@ -34,16 +36,27 @@ export default function CheckoutPage() {
   const navigate = useNavigate()
   const { items, getTotalPrice, clearCart } = useCartStore()
   const { user, isAuthenticated } = useAuthStore()
+  const resume = useRef(readCheckoutDraft()).current
+  const submitting = useRef(false)
   const [loading, setLoading] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
-  const [deliveryMethod, setDeliveryMethod] = useState('delivery')
-  const [addressMode, setAddressMode] = useState('new')
+  const [deliveryMethod, setDeliveryMethod] = useState(resume?.deliveryMethod || 'delivery')
+  const [addressMode, setAddressMode] = useState(resume?.addressMode || 'new')
   const [savedAddresses, setSavedAddresses] = useState([])
-  const [selectedAddressId, setSelectedAddressId] = useState('')
-  const [saveNewAddress, setSaveNewAddress] = useState(true)
-  const [makeDefaultAddress, setMakeDefaultAddress] = useState(false)
-  const [formData, setFormData] = useState({ name: user?.name || user?.full_name || user?.fullName || '', email: user?.email || '', phone: user?.phone || '', delivery_notes: '' })
-  const [manualAddress, setManualAddress] = useState({ ...emptyAddress, recipient_name: user?.name || user?.full_name || user?.fullName || '', phone: user?.phone || '' })
+  const [selectedAddressId, setSelectedAddressId] = useState(resume?.selectedAddressId || '')
+  const [saveNewAddress, setSaveNewAddress] = useState(resume?.saveNewAddress ?? true)
+  const [makeDefaultAddress, setMakeDefaultAddress] = useState(resume?.makeDefaultAddress ?? false)
+  const [formData, setFormData] = useState(resume?.formData || { name: user?.name || user?.full_name || user?.fullName || '', email: user?.email || '', phone: user?.phone || '', delivery_notes: '' })
+  const [manualAddress, setManualAddress] = useState(resume?.manualAddress || { ...emptyAddress, recipient_name: user?.name || user?.full_name || user?.fullName || '', phone: user?.phone || '' })
+  useEffect(() => { saveCheckoutDraft({ ownerId: user?.id || readCheckoutDraft()?.ownerId, deliveryMethod, addressMode, selectedAddressId, formData, manualAddress, saveNewAddress, makeDefaultAddress }) }, [deliveryMethod, addressMode, selectedAddressId, formData, manualAddress, saveNewAddress, makeDefaultAddress, user?.id])
+  useEffect(() => {
+    if (!isAuthenticated) return undefined
+    const refresh = async () => {
+      try { const status = await verificationAPI.status(); const current = useAuthStore.getState().user; if (current?.id === user?.id) useAuthStore.getState().updateUser({ ...current, ...status }) } catch { /* Submission still revalidates on the backend. */ }
+    }
+    refresh(); window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [isAuthenticated, user?.id])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -58,9 +71,8 @@ export default function CheckoutPage() {
         setManualAddress((current) => ({ ...current, recipient_name: current.recipient_name || profile.full_name || profile.name || '', phone: current.phone || profile.phone || '' }))
         if (Array.isArray(addresses) && addresses.length > 0) {
           setSavedAddresses(addresses)
-          const defaultAddress = addresses.find((address) => address.is_default) || addresses[0]
-          setSelectedAddressId(String(defaultAddress.id))
-          setAddressMode('saved')
+          const defaultAddress = addresses.find((address) => String(address.id) === resume?.selectedAddressId) || addresses.find((address) => address.is_default) || addresses[0]
+          if (!resume || resume.addressMode === 'saved') { setSelectedAddressId(String(defaultAddress.id)); setAddressMode('saved') }
         }
       } catch (error) {
         console.warn('Failed to load saved addresses for checkout', error)
@@ -94,8 +106,10 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (submitting.current || !isAuthenticated || user?.email_verification_required) return
     const activeAddress = getActiveAddress()
     if (deliveryMethod === 'delivery' && !validateAddress(activeAddress)) { toast.error('Please complete your delivery address: state, city, full address, and landmark are required'); return }
+    submitting.current = true
     try {
       setLoading(true)
       let finalAddress = activeAddress
@@ -113,6 +127,7 @@ export default function CheckoutPage() {
       }
       const deliveryAddress = deliveryMethod === 'pickup' ? 'Pickup selected' : formatFullAddress(finalAddress)
       const orderData = {
+        idempotency_key: checkoutRequestKey(),
         order_source: 'customer_web',
         customer_name: formData.name, customer_email: formData.email, customer_phone: formData.phone, phone: formData.phone, delivery_method: deliveryMethod,
         delivery_address_id: deliveryAddressId, delivery_address: deliveryAddress, address: deliveryAddress, delivery_address_snapshot: finalAddress,
@@ -123,16 +138,18 @@ export default function CheckoutPage() {
       }
       const createdOrder = extractOrder(await ordersAPI.create(orderData))
       if (!createdOrder?.id) throw new Error('Order was created but no order ID was returned')
-      clearCart(); toast.success('Order placed successfully. Use your Order Code as payment narration, then upload your receipt.'); navigate('/orders')
+      clearCart(); clearCheckoutDraft(); toast.success('Order placed successfully. Use your Order Code as payment narration, then upload your receipt.'); navigate('/orders')
     } catch (error) {
       console.error('Checkout error:', error)
       toast.error(isComboPackInventoryError(error, items)
         ? 'We could not place this order. Please review your cart and contact FoodNova for help.'
         : getFriendlyErrorMessage(error, 'Failed to place order'))
-    } finally { setLoading(false) }
+    } finally { submitting.current = false; setLoading(false) }
   }
 
   if (items.length === 0) return <div className="checkout-page"><div className="empty-cart-message"><p>Your cart is empty. Please add items before checking out.</p><button onClick={() => navigate('/products')} className="btn btn-primary">Continue Shopping</button></div></div>
+  if (!isAuthenticated) return <div className="checkout-page"><section className="auth-card"><h1>Continue checkout</h1><p>Your cart and delivery draft will stay here while you sign in.</p><Link className="btn btn-primary" to="/register" state={{ from: '/checkout' }}>Create Account</Link> <Link className="btn btn-primary" to="/login" state={{ from: '/checkout' }}>Log In</Link></section></div>
+  if (user?.email_verification_required) return <div className="checkout-page"><EmailVerificationNotice /></div>
 
   return (
     <div className="checkout-page"><div className="checkout-container"><div className="checkout-form"><h1>Checkout</h1><form onSubmit={handleSubmit}>

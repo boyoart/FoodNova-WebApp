@@ -226,7 +226,7 @@ def test_shared_rate_limits_and_neutral_email_verification(client, db, order):
             result = client.post('/tracking/lookup', json={'order_code': order.order_code, 'email': order.customer_email})
             assert result.status_code == 202
         assert send.call_count == 2
-        assert '/orders#track=' in send.call_args.args[2]
+        assert '/track-order#track=' in send.call_args.args[2]
     assert len(db.execute(select(tracking.limits)).all()) > 0
     assert 'owner@example.com' not in str(db.execute(select(tracking.limits)).all())
 

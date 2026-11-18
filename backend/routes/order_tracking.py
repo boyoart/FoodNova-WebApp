@@ -40,8 +40,14 @@ def build_router(core):
                 response.status_code = 202
                 return {'status': 'verification_required', 'message': 'Secure guest tracking is not enabled yet. Sign in to My Orders for authorized tracking.'}
             order = core.active_order_filter(db.query(core.DBOrder)).filter(func.upper(core.DBOrder.order_code) == payload.order_code.upper()).first()
-            owns = bool(order and user and user.get('role') == 'customer' and user.get('email') and tracking.same_email(order.customer_email, user['email']))
-            if owns:
+            owns = False
+            if order and user and user.get('role') == 'customer':
+                try:
+                    core.require_order_access(request, order, db)
+                    owns = True
+                except HTTPException:
+                    pass
+            if owns and not core.customer_needs_verification(user):
                 return {'status': 'authorized', 'order': core.order_to_dict_for_context(order, db, 'customer')}
             if not ready:
                 response.status_code = 202
