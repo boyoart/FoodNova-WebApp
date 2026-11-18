@@ -1,5 +1,7 @@
 # Customer deletion and retained order ledger
 
+Private receipt evidence is now implemented on this branch; RETAINED_RECEIPTS_RELEASE.md supersedes the earlier attestation-only receipt instructions below. Durable checksum-verified copies, authenticated viewing and a separate Cloudinary restriction approval are required before receipt protection is declared complete.
+
 ## Audit before implementation
 
 Branch feat/customer-deletion-ledger starts at cdad4b1. No production connection or live deletion is authorized.

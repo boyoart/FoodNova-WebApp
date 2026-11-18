@@ -338,15 +338,8 @@ async def delivery_diagnostics_middleware(request: Request, call_next):
     normalized_path = posixpath.normpath('/' + request.url.path.replace('\\', '/').lstrip('/'))
     if normalized_path == '/uploads/invoices' or normalized_path.startswith('/uploads/invoices/'):
         return JSONResponse(status_code=404, content={'detail': 'Use the authorized invoice endpoint.'})
-    if normalized_path.startswith('/uploads/receipts/'):
-        db = SessionLocal()
-        try:
-            retained = db.query(DBOrder.id).filter(DBOrder.receipt.contains(normalized_path),
-                or_(DBOrder.operational_removed_at.isnot(None), DBOrder.personal_data_erased_at.isnot(None))).first()
-            if retained:
-                return JSONResponse(status_code=404, content={'detail': 'Retained payment evidence requires authorized ledger access.'})
-        finally:
-            db.close()
+    if normalized_path == '/uploads/receipts' or normalized_path.startswith('/uploads/receipts/'):
+        return JSONResponse(status_code=404, content={'detail': 'Payment evidence requires an authenticated receipt endpoint.'})
     path = request.url.path
     should_log = any(
         path == endpoint or path.startswith(f"{endpoint}/")
@@ -3429,6 +3422,25 @@ def _receipt_file_type(mime_type: str) -> str:
 
 
 async def save_uploaded_receipt(file: UploadFile) -> dict:
+    if os.getenv('RETAINED_PAYMENT_EVIDENCE_PROTECTED', '').lower() == 'true' and os.getenv('PRIVATE_RECEIPT_UPLOADS_ENABLED', '').lower() != 'true':
+        raise HTTPException(503, 'Public receipt uploads are disabled while protected evidence mode is active. Enable private receipt storage.')
+    if os.getenv('PRIVATE_RECEIPT_UPLOADS_ENABLED', '').lower() == 'true':
+        from services import receipt_evidence
+        from starlette.concurrency import run_in_threadpool
+        if file.content_type not in RECEIPT_CONTENT_TYPES:
+            raise HTTPException(400, 'Only JPG, PNG, WEBP, or PDF receipts are allowed.')
+        contents = await file.read(receipt_evidence.MAX_BYTES + 1)
+        try:
+            receipt_evidence.media_type(contents)
+        except receipt_evidence.EvidenceError:
+            raise HTTPException(400, 'Receipt must contain valid JPG, PNG, WEBP or PDF bytes and be at most 10MB.')
+        source = receipt_evidence.PREFIX + uuid4().hex + uuid4().hex
+        try:
+            record = await run_in_threadpool(receipt_evidence.store, source, contents)
+        except (receipt_evidence.EvidenceError, OSError):
+            raise HTTPException(503, 'Private receipt storage is unavailable. No public upload fallback was attempted.')
+        return {'url': source, 'filename': file.filename or 'receipt', 'mime_type': record['mime_type'],
+                'file_type': _receipt_file_type(record['mime_type']), 'uploaded_at': datetime.utcnow().isoformat()}
     result = await upload_to_cloudinary(
         file,
         "foodnova/receipts",

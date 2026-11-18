@@ -350,9 +350,26 @@ export default function AdminOrders() {
     return mimeType === 'application/pdf' || fileType === 'pdf' || source.includes('.pdf')
   }
 
-  const openReceiptUrl = (receipt = {}) => {
-    const receiptUrl = getReceiptUrl(receipt)
-    if (receiptUrl) window.open(receiptUrl, '_blank', 'noopener,noreferrer')
+  const openReceiptUrl = async (_receipt = {}, auditLogId) => {
+    if (!selectedOrder?.id) return
+    const viewer = window.open('about:blank', '_blank')
+    if (viewer) viewer.opener = null
+    let privateUrl
+    try {
+      const blob = await adminAPI.getReceiptEvidence(selectedOrder.id, auditLogId)
+      privateUrl = URL.createObjectURL(blob)
+      if (viewer) viewer.location.replace(privateUrl)
+      else {
+        const link = document.createElement('a')
+        link.href = privateUrl; link.download = 'payment-receipt'
+        document.body.appendChild(link); link.click(); link.remove()
+      }
+    } catch {
+      if (viewer) viewer.close()
+      toast.error('Verified private receipt unavailable or access denied. Reconcile receipt storage; public URLs are not used as a fallback.')
+    } finally {
+      if (privateUrl) window.setTimeout(() => URL.revokeObjectURL(privateUrl), 60000)
+    }
   }
 
   const openCustomerWhatsApp = (order) => {
@@ -693,13 +710,6 @@ export default function AdminOrders() {
                   </div>
                   {getReceiptUrl(selectedOrder.receipt) && (
                     <div className="admin-receipt-inline">
-                      {!isPdfReceipt(selectedOrder.receipt) && (
-                        <img
-                          src={getReceiptUrl(selectedOrder.receipt)}
-                          alt="Payment receipt"
-                          className="receipt-preview-image"
-                        />
-                      )}
                       <button
                         type="button"
                         className="btn-view-receipt"
@@ -722,7 +732,7 @@ export default function AdminOrders() {
                         <p>{log.old_payment_status || 'N/A'} -&gt; {log.new_payment_status || 'N/A'}</p>
                         <p>{log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}</p>
                         {(log.note || log.rejection_reason) && <p>{log.note || log.rejection_reason}</p>}
-                        {log.receipt_url && <button type="button" className="btn-view-receipt" onClick={() => window.open(resolveMediaUrl(log.receipt_url), '_blank', 'noopener,noreferrer')}>View Receipt</button>}
+                        {log.receipt_url && <button type="button" className="btn-view-receipt" onClick={() => openReceiptUrl({}, log.id)}>View Receipt</button>}
                       </div>
                     ))}
                   </div>

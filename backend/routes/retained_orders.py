@@ -2,6 +2,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from services import retained_orders as retention
+from services import receipt_evidence as evidence
 
 
 class Removal(BaseModel):
@@ -17,6 +18,78 @@ def build_router(core):
         if core.normalize_admin_role(admin.get('admin_role')) != 'super_admin':
             raise HTTPException(403, 'Only Super Admins can manage retained orders.')
         return admin
+
+    def receipt_response(order_id, request, audit_log_id, ledger=False):
+        admin = super_admin(request) if ledger else core.require_any_permission(request, ['payments:view', 'payments:approve'])
+        db = core.SessionLocal()
+        try:
+            retention.transaction_limits(db)
+            order = db.query(core.DBOrder).filter(core.DBOrder.id == order_id).with_for_update().first()
+            if not order:
+                raise HTTPException(404, 'Receipt evidence not found', headers={'Cache-Control': 'no-store'})
+            if (order.operational_removed_at or order.personal_data_erased_at) and core.normalize_admin_role(admin.get('admin_role')) != 'super_admin':
+                raise HTTPException(403, 'Retained evidence requires Super Admin access.', headers={'Cache-Control': 'no-store'})
+            log = None
+            if audit_log_id is not None:
+                log = db.query(core.DBPaymentApprovalLog).filter(core.DBPaymentApprovalLog.id == audit_log_id,
+                    core.DBPaymentApprovalLog.order_id == order_id).first()
+                if not log:
+                    raise HTTPException(404, 'Receipt evidence not found', headers={'Cache-Control': 'no-store'})
+            try:
+                source = log.receipt_url if log else evidence.read_receipt(order.receipt)
+                if not source:
+                    raise evidence.EvidenceError('missing_receipt_reference')
+                record, data = evidence.verified(source)
+            except (evidence.EvidenceError, OSError):
+                retention.activity(core, db, admin, 'payment_receipt_access', 'order', order_id,
+                    'Authorized private receipt request', outcome='unavailable', summary={'payment_log_id': audit_log_id})
+                db.commit()
+                raise HTTPException(404, 'Verified private receipt is unavailable. Reconcile the evidence migration; no public fallback is permitted.', headers={'Cache-Control': 'no-store'})
+            retention.activity(core, db, admin, 'payment_receipt_access', 'order', order_id,
+                'Authorized private receipt request', outcome='authorized',
+                summary={'source_id': record['source_id'], 'payment_log_id': audit_log_id})
+            db.commit()
+            extension = {'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp'}[record['mime_type']]
+            return Response(content=data, media_type=record['mime_type'], headers={
+                'Cache-Control': 'no-store, private', 'Pragma': 'no-cache', 'X-Content-Type-Options': 'nosniff',
+                'Content-Security-Policy': "sandbox; default-src 'none'", 'Referrer-Policy': 'no-referrer',
+                'Content-Disposition': f'attachment; filename="receipt-{order_id}-{record["source_id"][:10]}.{extension}"'})
+        finally:
+            db.close()
+
+    @router.get('/admin/orders/{order_id}/receipt-evidence')
+    def active_receipt(order_id: int, request: Request, audit_log_id: int = None):
+        return receipt_response(order_id, request, audit_log_id)
+
+    @router.get('/admin/historical-orders/{order_id}/receipt')
+    def retained_receipt(order_id: int, request: Request, audit_log_id: int = None):
+        return receipt_response(order_id, request, audit_log_id, ledger=True)
+
+    @router.get('/admin/historical-orders/{order_id}/receipts')
+    def receipt_inventory(order_id: int, request: Request, response: Response):
+        super_admin(request)
+        response.headers['Cache-Control'] = 'no-store, private'
+        db = core.SessionLocal()
+        try:
+            order = db.query(core.DBOrder).filter(core.DBOrder.id == order_id).first()
+            if not order:
+                raise HTTPException(404, 'Order not found')
+            result = []
+            try:
+                sources = evidence.order_sources(core, db, order)
+            except evidence.EvidenceError:
+                raise HTTPException(409, 'Receipt references need reconciliation.')
+            for source in sources:
+                item = {'source_id': evidence.source_id(source), 'available': False}
+                try:
+                    record, _ = evidence.verified(source)
+                    item.update({'available': True, 'sha256': record['sha256'], 'bytes': record['bytes'], 'mime_type': record['mime_type']})
+                except (evidence.EvidenceError, OSError):
+                    pass
+                result.append(item)
+            return {'order_id': order_id, 'evidence': result}
+        finally:
+            db.close()
 
     @router.post('/admin/orders/{order_id}/remove-permanently')
     def remove(order_id: int, payload: Removal, request: Request):

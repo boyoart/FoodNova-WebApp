@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime
 from fastapi import HTTPException
 from sqlalchemy import text
+from services import receipt_evidence
 
 
 def require_guards(db):
@@ -80,6 +81,12 @@ def blockers(order, core=None, db=None):
                 (getattr(order, 'receipt', None) or any(log.receipt_url for log in logs)) and
                 os.getenv('RETAINED_PAYMENT_EVIDENCE_PROTECTED', '').lower() != 'true'):
             reasons.append('payment_evidence_protection: approve private durable retention of original receipts before erasure/removal')
+        if db.get_bind().dialect.name == 'postgresql':
+            try:
+                for source in receipt_evidence.order_sources(core, db, order):
+                    receipt_evidence.verified(source)
+            except (receipt_evidence.EvidenceError, OSError):
+                reasons.append('payment_evidence_missing: migrate and checksum-verify every current/historical receipt before erasure/removal')
         paid = paid or any(normalized(log.new_payment_status) in {'payment_confirmed', 'confirmed', 'paid'} for log in logs)
         requests = db.query(core.DBCancellationRequest).filter(core.DBCancellationRequest.order_id == order.id).all()
         offers = db.query(core.DBDeliveryOffer).filter(core.DBDeliveryOffer.order_id == order.id).all()
