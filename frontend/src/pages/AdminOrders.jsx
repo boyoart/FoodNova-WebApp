@@ -7,6 +7,7 @@ import { normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
 import { MessageCircle } from 'lucide-react'
 import ManualOrderModal from '../components/ManualOrderModal'
+import { retentionErrorMessage } from '../utils/retentionErrors'
 import {
   adminOrderStatusOptions,
   apiErrorMessage,
@@ -88,7 +89,7 @@ export default function AdminOrders() {
   const [confirmingPickup, setConfirmingPickup] = useState(false)
   const [reissuingPickupPin, setReissuingPickupPin] = useState(false)
   const [resendingFulfillmentPinEmail, setResendingFulfillmentPinEmail] = useState(false)
-  const [_deletingOrderId, setDeletingOrderId] = useState(null)
+  const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [archivingOrderId, setArchivingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
   const [manualOrderOpen, setManualOrderOpen] = useState(false)
@@ -235,6 +236,22 @@ export default function AdminOrders() {
     } finally {
       setArchivingOrderId(null)
     }
+  }
+
+  const handlePermanentRemoval = async (order) => {
+    const reason = window.prompt('Reason for permanent operational removal (8–500 characters). Do not include personal information. Financial, payment, refund and invoice records will be retained.')
+    if (!reason || reason.trim().length < 8 || reason.length > 500) return
+    const confirmation = window.prompt(`Type REMOVE ORDER ${order.id} to remove this archived order permanently from operational lists. It will remain in the protected historical ledger.`)
+    if (confirmation !== `REMOVE ORDER ${order.id}`) return
+    try {
+      setDeletingOrderId(order.id)
+      await adminAPI.removeArchivedOrder(order.id, { reason, confirmation })
+      setOrders((current) => current.filter((item) => item.id !== order.id))
+      if (selectedOrder?.id === order.id) handleCloseOrder()
+      toast.success('Removed from operations. Financial history retained.')
+    } catch (error) {
+      toast.error(retentionErrorMessage(error, 'Removal failed'))
+    } finally { setDeletingOrderId(null) }
   }
 
   const handleRestoreOrder = async (order) => {
@@ -508,9 +525,12 @@ export default function AdminOrders() {
                         Details
                       </button>
                       {filter === 'archived' ? (
+                        <>
                         <button type="button" className="btn-view" disabled={archivingOrderId === order.id} onClick={() => handleRestoreOrder(order)}>
                           {archivingOrderId === order.id ? 'Restoring...' : 'Restore'}
                         </button>
+                        {admin?.admin_role === 'super_admin' && <button type="button" className="btn-view" disabled={deletingOrderId === order.id} onClick={() => handlePermanentRemoval(order)}>{deletingOrderId === order.id ? 'Removing…' : 'Remove permanently'}</button>}
+                        </>
                       ) : (
                         <>
                           <button type="button" className="btn-view" disabled={archivingOrderId === order.id} onClick={() => handleArchiveOrder(order)}>

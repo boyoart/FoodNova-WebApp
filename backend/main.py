@@ -334,6 +334,19 @@ app.add_middleware(
 
 @app.middleware("http")
 async def delivery_diagnostics_middleware(request: Request, call_next):
+    import posixpath
+    normalized_path = posixpath.normpath('/' + request.url.path.replace('\\', '/').lstrip('/'))
+    if normalized_path == '/uploads/invoices' or normalized_path.startswith('/uploads/invoices/'):
+        return JSONResponse(status_code=404, content={'detail': 'Use the authorized invoice endpoint.'})
+    if normalized_path.startswith('/uploads/receipts/'):
+        db = SessionLocal()
+        try:
+            retained = db.query(DBOrder.id).filter(DBOrder.receipt.contains(normalized_path),
+                or_(DBOrder.operational_removed_at.isnot(None), DBOrder.personal_data_erased_at.isnot(None))).first()
+            if retained:
+                return JSONResponse(status_code=404, content={'detail': 'Retained payment evidence requires authorized ledger access.'})
+        finally:
+            db.close()
     path = request.url.path
     should_log = any(
         path == endpoint or path.startswith(f"{endpoint}/")
@@ -4127,6 +4140,8 @@ def order_to_dict(order: DBOrder) -> dict:
     except Exception:
         items = []
     return {
+        'operational_removed_at': iso(getattr(order, 'operational_removed_at', None)),
+        'personal_data_erased_at': iso(getattr(order, 'personal_data_erased_at', None)),
         "id": order.id,
         "order_code": order.order_code,
         "order_number": public_order_number_from_code(order.order_code),
@@ -4298,7 +4313,7 @@ def order_to_dict_for_context(order: DBOrder, db=None, context: str = "") -> dic
 
 
 def active_order_filter(query):
-    return query.filter(or_(DBOrder.is_deleted == False, DBOrder.is_deleted == None))
+    return query.filter(or_(DBOrder.is_deleted == False, DBOrder.is_deleted == None), DBOrder.operational_removed_at.is_(None))
 
 
 def distance_meters(lat1, lon1, lat2, lon2) -> float:
@@ -6283,7 +6298,7 @@ def public_tracking_order_to_dict(order: DBOrder) -> dict:
     }
 
 
-INVOICE_STORAGE_DIR = Path(__file__).resolve().parent / "uploads" / "invoices"
+INVOICE_STORAGE_DIR = Path(os.environ['RETAINED_INVOICE_STORAGE_DIR']) if os.environ.get('RETAINED_INVOICE_STORAGE_DIR') else Path(__file__).resolve().parent / "uploads" / "invoices"
 
 
 def _pdf_escape(value: object) -> str:
@@ -6715,6 +6730,8 @@ def build_invoice_legacy_pdf_bytes(order: dict) -> bytes:
 
 def ensure_order_invoice_pdf(order: dict) -> Path:
     path = invoice_file_path(order)
+    if (order.get('operational_removed_at') or order.get('personal_data_erased_at')) and path.exists():
+        return path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(build_invoice_pdf_bytes(order))
     return path
@@ -12863,6 +12880,8 @@ def get_order_invoice(order_id: int, request: Request):
             raise HTTPException(status_code=403, detail="You can only download invoices for your own orders")
 
         order_data = order_to_dict(order)
+        if order.personal_data_erased_at and normalize_admin_role(user.get('admin_role')) != 'super_admin':
+            raise HTTPException(403, 'Retained invoices require Super Admin ledger access.')
         invoice_path = ensure_order_invoice_pdf(order_data)
         headers = {
             "Content-Disposition": f'inline; filename="{invoice_path.name}"',
@@ -13017,7 +13036,7 @@ def admin_orders(request: Request, include_deleted: bool = False, status: Option
         query = db.query(DBOrder)
         if include_deleted:
             require_permission(request, "orders:delete")
-            query = query.filter(DBOrder.is_deleted == True)
+            query = query.filter(DBOrder.is_deleted == True, DBOrder.operational_removed_at.is_(None))
         else:
             query = active_order_filter(query)
         clean_status = str(status or "").strip().lower()
@@ -14101,7 +14120,7 @@ def restore_admin_order(order_id: int, request: Request):
     admin = require_permission(request, "orders:delete")
     db = SessionLocal()
     try:
-        order = db.query(DBOrder).filter(DBOrder.id == order_id, DBOrder.is_deleted == True).first()
+        order = db.query(DBOrder).filter(DBOrder.id == order_id, DBOrder.is_deleted == True, DBOrder.operational_removed_at.is_(None)).with_for_update().first()
         if not order:
             raise HTTPException(status_code=404, detail="Archived order not found")
         order.is_deleted = False
@@ -16234,7 +16253,7 @@ def admin_customers(request: Request, search: Optional[str] = None, account_stat
 
     db = SessionLocal()
     try:
-        query = db.query(DBUser).filter(DBUser.role == "customer")
+        query = db.query(DBUser).filter(DBUser.role == "customer", DBUser.account_status != 'deleted')
         if search:
             term = f'%{search[:150]}%'
             query = query.filter(or_(DBUser.full_name.ilike(term), DBUser.email.ilike(term), DBUser.phone.ilike(term)))
@@ -16887,7 +16906,8 @@ def get_cancellation_requests(request: Request, status: Optional[str] = None, re
     require_any_permission(request, ["cancellations:view", "cancellations:manage", "orders:update", "payments:approve"])
     db = SessionLocal()
     try:
-        query = db.query(DBCancellationRequest)
+        query = db.query(DBCancellationRequest).join(DBOrder, DBOrder.id == DBCancellationRequest.order_id).filter(
+            DBOrder.operational_removed_at.is_(None), DBOrder.personal_data_erased_at.is_(None))
         if status:
             query = query.filter(DBCancellationRequest.status == status)
         if request_type:
@@ -18101,6 +18121,15 @@ from routes.order_tracking import build_router as build_order_tracking_router
 fastapi_app.include_router(build_order_tracking_router(_sys.modules[__name__]))
 from routes.customer_security import build_router as build_customer_security_router
 fastapi_app.include_router(build_customer_security_router(_sys.modules[__name__]))
+from routes.retained_orders import build_router as build_retained_orders_router
+fastapi_app.include_router(build_retained_orders_router(_sys.modules[__name__]))
+
+from sqlalchemy.exc import DBAPIError as _RetentionDBAPIError
+@fastapi_app.exception_handler(_RetentionDBAPIError)
+async def retained_record_error(request, error):
+    if getattr(getattr(error.orig, 'diag', None), 'constraint_name', None) == 'foodnova_retained_record_guard':
+        return JSONResponse(status_code=409, content={'detail': 'This retained order/customer is closed to operational changes. Reload and review the ledger.'})
+    return JSONResponse(status_code=500, content={'detail': 'Database operation failed.'})
 
 if sio:
     app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)

@@ -18,6 +18,7 @@ import main
 from models import EmailVerificationToken
 from routes.customer_security import build_router
 from routes.order_tracking import build_router as tracking_router
+from routes.retained_orders import build_router as retained_router
 from services import customer_security as security
 from services import order_tracking
 
@@ -34,7 +35,11 @@ def setup():
     db.add_all([customer, admin]); db.commit()
     app = FastAPI()
     app.include_router(build_router(main)); app.include_router(tracking_router(main))
+    app.include_router(retained_router(main))
+    app.get('/admin/orders')(main.admin_orders)
+    app.post('/admin/orders/{order_id}/restore')(main.restore_admin_order)
     app.post('/orders')(main.create_order)
+    app.get('/orders/{order_id}')(main.get_order)
     app.get('/admin/customers')(main.admin_customers)
     app.post('/auth/register')(main.register)
     app.post('/api/auth/register')(main.api_auth_register)
@@ -75,22 +80,30 @@ def test_account_deletion_blocks_unfinished_orders_and_refunds(setup, status, re
     db.refresh(user); assert user.is_active
 
 
-def test_delete_retains_transaction_history_and_email_reservation(setup):
+def test_delete_retains_transactions_and_erases_identifiable_email(setup):
     db, user, admin, client, _ = setup
     address = main.DBAddress(user_id=user.id, address_line='Historical test delivery address')
     db.add(address); db.flush()
-    order = main.DBOrder(order_code='FN-COMPLETE', customer_email=user.email, customer_user_id=user.id, delivery_address_id=address.id, order_status='delivered', refund_status='none', total_amount=100)
+    address_id = address.id
+    order = main.DBOrder(order_code='FN-COMPLETE', customer_email=user.email, customer_user_id=user.id, delivery_address_id=address.id, order_status='delivered', refund_status='none', payment_status='payment_confirmed', total_amount=100)
     db.add(order); db.flush(); db.add(main.DBOrderItem(order_id=order.id, name='Rice', quantity=1, unit_price=100)); db.commit()
     old = headers(user)
+    security.issue_verification(db, user)
     assert action(client, admin, user, 'delete').status_code == 200
     db.refresh(user); assert user.account_status == 'deleted' and not user.is_active
     assert db.query(main.DBOrder).count() == 1 and db.query(main.DBOrderItem).count() == 1
-    assert db.query(main.DBAddress).filter_by(id=address.id).count() == 1
+    assert db.query(main.DBAddress).filter_by(id=address_id).count() == 0
     assert client.get(f'/admin/customers/{user.id}', headers=headers(admin)).json()['customer']['addresses'] == []
-    assert user.email == 'customer@example.com' and user.phone == ''
+    assert user.email.endswith('@erased.invalid') and user.phone == ''
+    assert db.query(EmailVerificationToken).filter_by(user_id=user.id).count() == 0
+    db.refresh(order)
+    assert not order.customer_email and order.customer_user_id == user.id and order.personal_data_erased_at
     assert client.get('/whoami', headers=old).status_code == 401
     assert action(client, admin, user, 'reactivate').status_code == 409
-    assert client.post('/auth/register', json={'email': user.email, 'password': 'Password123', 'name': 'Another person'}).status_code == 400
+    assert client.post('/auth/register', json={'email': 'customer@example.com', 'password': 'Password123', 'name': 'Another person'}).status_code == 200
+    replacement = db.query(main.DBUser).filter_by(email='customer@example.com').one()
+    replacement.email_verified_at = datetime.utcnow(); db.commit()
+    assert client.get(f'/orders/{order.id}', headers=headers(replacement)).status_code == 403
 
 
 def test_account_actions_require_super_admin_reason_and_confirmation(setup):

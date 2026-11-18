@@ -329,6 +329,7 @@ export const adminAPI = {
   resendFulfillmentPinEmail: async (id) => (await api.post(`/admin/orders/${id}/fulfillment-pin/email`)).data,
   deleteOrder: async (id) => (await api.delete(`/admin/orders/${id}`)).data,
   archiveOrder: async (id) => (await api.post(`/admin/orders/${id}/archive`)).data,
+  removeArchivedOrder: async (id, payload) => (await api.post(`/admin/orders/${id}/remove-permanently`, payload)).data,
   restoreOrder: async (id) => (await api.post(`/admin/orders/${id}/restore`)).data,
   updateOrderStatus: async (id, payload = {}) => {
     const status = payload.status || payload.order_status || payload.fulfillment_status;

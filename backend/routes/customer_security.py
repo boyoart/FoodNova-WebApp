@@ -82,12 +82,14 @@ def build_router(core):
 
     @router.get('/admin/customers/{customer_id}')
     def details(customer_id: int, request: Request, response: Response):
-        core.require_permission(request, 'customers:view')
+        admin = core.require_permission(request, 'customers:view')
         response.headers['Cache-Control'] = 'no-store, private'
         db = core.SessionLocal()
         try:
             user = db.query(User).filter(User.id == customer_id, User.role == 'customer').first()
             if not user:
+                raise HTTPException(404, 'Customer not found')
+            if user.account_status == 'deleted' and core.normalize_admin_role(admin.get('admin_role')) != 'super_admin':
                 raise HTTPException(404, 'Customer not found')
             orders = security.customer_orders(core, db, user).order_by(core.DBOrder.created_at.desc()).limit(20).all()
             return {'customer': {'id': user.id, 'full_name': user.full_name, 'email': user.email, 'phone': user.phone,
