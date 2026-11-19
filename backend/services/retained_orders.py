@@ -9,6 +9,14 @@ from sqlalchemy import text
 from services import receipt_evidence
 
 
+def require_deletion_enabled():
+    if os.getenv('CUSTOMER_DELETION_ENABLED', '').strip().lower() != 'true':
+        raise HTTPException(503, detail={
+            'code': 'CUSTOMER_DELETION_DISABLED',
+            'message': 'Customer identity erasure and permanent archived-order removal are disabled. No records were changed.'},
+            headers={'Cache-Control': 'no-store'})
+
+
 def require_guards(db):
     if db.get_bind().dialect.name == 'postgresql':
         if os.getenv('RETAINED_INVOICE_STORAGE_DURABLE', '').lower() != 'true' or not Path(os.getenv('RETAINED_INVOICE_STORAGE_DIR', '')).is_absolute():

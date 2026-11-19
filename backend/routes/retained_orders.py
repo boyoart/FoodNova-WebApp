@@ -97,6 +97,7 @@ def build_router(core):
         reason = retention.safe_reason(payload.reason)
         if payload.confirmation != f'REMOVE ORDER {order_id}':
             raise HTTPException(422, f'Type REMOVE ORDER {order_id} exactly.')
+        retention.require_deletion_enabled()
         db = core.SessionLocal()
         try:
             retention.transaction_limits(db)

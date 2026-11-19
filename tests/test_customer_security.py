@@ -24,7 +24,10 @@ from services import order_tracking
 
 
 @pytest.fixture
-def setup():
+def setup(monkeypatch):
+    # Existing destructive-action regressions exercise the explicitly enabled release.
+    # Activation-gate regressions override/remove this setting in their own cases.
+    monkeypatch.setenv('CUSTOMER_DELETION_ENABLED', 'true')
     engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
     main.Base.metadata.create_all(engine)
     order_tracking.metadata.create_all(engine)

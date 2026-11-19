@@ -81,6 +81,8 @@ def change_account(core, db, admin, customer_id, action, reason, confirmation):
         raise HTTPException(403, 'Only Super Admins can change customer account status.')
     if action not in {'suspend', 'reactivate', 'deactivate', 'delete'} or len(reason.strip()) < 8 or len(reason) > 500 or confirmation != f'{action.upper()} CUSTOMER {customer_id}':
         raise HTTPException(422, 'Provide a reason (8–500 characters) and the exact confirmation phrase.')
+    if action == 'delete':
+        retained_orders.require_deletion_enabled()
     retained_orders.transaction_limits(db)
     user = db.query(User).filter(User.id == customer_id, User.role == 'customer').with_for_update().first()
     if not user:
