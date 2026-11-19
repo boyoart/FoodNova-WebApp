@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -40,16 +41,21 @@ import InvoicePage from './pages/InvoicePage'
 import AppLandingPage from './pages/AppLandingPage'
 import './modal-scroll-fix.css'
 
+// Review-only route; the approved production homepage above remains authoritative.
+const CinematicHomePage = lazy(() => import('./pages/CinematicHomePage'))
+
 function AppLayout() {
   const location = useLocation()
   const isAdminRoute = location.pathname.startsWith('/admin')
+  const isCinematicPreview = location.pathname === '/preview/cinematic-homepage'
 
   return (
-    <div className={isAdminRoute ? 'admin-app-frame' : 'public-app-frame'} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div className={isAdminRoute ? 'admin-app-frame' : `public-app-frame${isCinematicPreview ? ' cinematic-preview-frame' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {!isAdminRoute && <Navbar />}
       <main style={{ flex: 1 }}>
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/preview/cinematic-homepage" element={<Suspense fallback={<p role="status">Loading FoodNova preview…</p>}><CinematicHomePage /></Suspense>} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/app" element={<AppLandingPage />} />
               <Route path="/cart" element={<CartPage />} />
