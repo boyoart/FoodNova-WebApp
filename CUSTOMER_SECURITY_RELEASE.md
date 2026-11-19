@@ -1,5 +1,7 @@
 # Customer experience and security — review release
 
+The separate `feat/customer-deletion-ledger` improvement supersedes the email-reservation deletion policy below: see CUSTOMER_DELETION_LEDGER_RELEASE.md for pseudonymous identity erasure, retained evidence, migration/guard requirements and rollout restrictions. Historical notes below describe the earlier customer-security release.
+
 ## Integration with production main (2026-11-17)
 
 Production main now includes PR #2 at `f4c5dd8`. The database migration and schema verification have already succeeded according to the operator; no production connection or migration is part of this branch integration. The feature keeps `backend/scripts/migrate_customer_security.py` byte-for-byte from that main release, including its independent metadata, explicit apply/verify modes, prerequisites and lock protection. The older ORM-importing feature migration is superseded. Do not rerun migration as part of deploying this feature. The historical migration-before-deployment instructions below describe the original rollout sequence, not an instruction to repeat it.

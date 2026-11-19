@@ -324,11 +324,15 @@ export const adminAPI = {
     }
   },
   getOrder: async (id) => (await api.get(`/admin/orders/${id}`)).data,
+  getReceiptEvidence: async (id, auditLogId) => (await api.get(`/admin/orders/${id}/receipt-evidence`, {
+    responseType: 'blob', params: auditLogId == null ? {} : { audit_log_id: auditLogId },
+  })).data,
   updateOrder: async (id, payload) => (await api.patch(`/admin/orders/${id}`, payload)).data,
   reissuePickupPin: async (id) => (await api.post(`/admin/orders/${id}/pickup-pin/reissue`)).data,
   resendFulfillmentPinEmail: async (id) => (await api.post(`/admin/orders/${id}/fulfillment-pin/email`)).data,
   deleteOrder: async (id) => (await api.delete(`/admin/orders/${id}`)).data,
   archiveOrder: async (id) => (await api.post(`/admin/orders/${id}/archive`)).data,
+  removeArchivedOrder: async (id, payload) => (await api.post(`/admin/orders/${id}/remove-permanently`, payload)).data,
   restoreOrder: async (id) => (await api.post(`/admin/orders/${id}/restore`)).data,
   updateOrderStatus: async (id, payload = {}) => {
     const status = payload.status || payload.order_status || payload.fulfillment_status;

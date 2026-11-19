@@ -7,6 +7,7 @@ import { normalizePhoneForWhatsApp } from '../utils/contactUtils'
 import toast from 'react-hot-toast'
 import { MessageCircle } from 'lucide-react'
 import ManualOrderModal from '../components/ManualOrderModal'
+import { retentionErrorMessage } from '../utils/retentionErrors'
 import {
   adminOrderStatusOptions,
   apiErrorMessage,
@@ -88,7 +89,7 @@ export default function AdminOrders() {
   const [confirmingPickup, setConfirmingPickup] = useState(false)
   const [reissuingPickupPin, setReissuingPickupPin] = useState(false)
   const [resendingFulfillmentPinEmail, setResendingFulfillmentPinEmail] = useState(false)
-  const [_deletingOrderId, setDeletingOrderId] = useState(null)
+  const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [archivingOrderId, setArchivingOrderId] = useState(null)
   const [assignmentForm, setAssignmentForm] = useState({ rider_id: '', delivery_note: '' })
   const [manualOrderOpen, setManualOrderOpen] = useState(false)
@@ -237,6 +238,22 @@ export default function AdminOrders() {
     }
   }
 
+  const handlePermanentRemoval = async (order) => {
+    const reason = window.prompt('Reason for permanent operational removal (8–500 characters). Do not include personal information. Financial, payment, refund and invoice records will be retained.')
+    if (!reason || reason.trim().length < 8 || reason.length > 500) return
+    const confirmation = window.prompt(`Type REMOVE ORDER ${order.id} to remove this archived order permanently from operational lists. It will remain in the protected historical ledger.`)
+    if (confirmation !== `REMOVE ORDER ${order.id}`) return
+    try {
+      setDeletingOrderId(order.id)
+      await adminAPI.removeArchivedOrder(order.id, { reason, confirmation })
+      setOrders((current) => current.filter((item) => item.id !== order.id))
+      if (selectedOrder?.id === order.id) handleCloseOrder()
+      toast.success('Removed from operations. Financial history retained.')
+    } catch (error) {
+      toast.error(retentionErrorMessage(error, 'Removal failed'))
+    } finally { setDeletingOrderId(null) }
+  }
+
   const handleRestoreOrder = async (order) => {
     try {
       setArchivingOrderId(order.id)
@@ -333,9 +350,26 @@ export default function AdminOrders() {
     return mimeType === 'application/pdf' || fileType === 'pdf' || source.includes('.pdf')
   }
 
-  const openReceiptUrl = (receipt = {}) => {
-    const receiptUrl = getReceiptUrl(receipt)
-    if (receiptUrl) window.open(receiptUrl, '_blank', 'noopener,noreferrer')
+  const openReceiptUrl = async (_receipt = {}, auditLogId) => {
+    if (!selectedOrder?.id) return
+    const viewer = window.open('about:blank', '_blank')
+    if (viewer) viewer.opener = null
+    let privateUrl
+    try {
+      const blob = await adminAPI.getReceiptEvidence(selectedOrder.id, auditLogId)
+      privateUrl = URL.createObjectURL(blob)
+      if (viewer) viewer.location.replace(privateUrl)
+      else {
+        const link = document.createElement('a')
+        link.href = privateUrl; link.download = 'payment-receipt'
+        document.body.appendChild(link); link.click(); link.remove()
+      }
+    } catch {
+      if (viewer) viewer.close()
+      toast.error('Verified private receipt unavailable or access denied. Reconcile receipt storage; public URLs are not used as a fallback.')
+    } finally {
+      if (privateUrl) window.setTimeout(() => URL.revokeObjectURL(privateUrl), 60000)
+    }
   }
 
   const openCustomerWhatsApp = (order) => {
@@ -508,9 +542,12 @@ export default function AdminOrders() {
                         Details
                       </button>
                       {filter === 'archived' ? (
+                        <>
                         <button type="button" className="btn-view" disabled={archivingOrderId === order.id} onClick={() => handleRestoreOrder(order)}>
                           {archivingOrderId === order.id ? 'Restoring...' : 'Restore'}
                         </button>
+                        {admin?.admin_role === 'super_admin' && <button type="button" className="btn-view" disabled={deletingOrderId === order.id} onClick={() => handlePermanentRemoval(order)}>{deletingOrderId === order.id ? 'Removing…' : 'Remove permanently'}</button>}
+                        </>
                       ) : (
                         <>
                           <button type="button" className="btn-view" disabled={archivingOrderId === order.id} onClick={() => handleArchiveOrder(order)}>
@@ -673,13 +710,6 @@ export default function AdminOrders() {
                   </div>
                   {getReceiptUrl(selectedOrder.receipt) && (
                     <div className="admin-receipt-inline">
-                      {!isPdfReceipt(selectedOrder.receipt) && (
-                        <img
-                          src={getReceiptUrl(selectedOrder.receipt)}
-                          alt="Payment receipt"
-                          className="receipt-preview-image"
-                        />
-                      )}
                       <button
                         type="button"
                         className="btn-view-receipt"
@@ -702,7 +732,7 @@ export default function AdminOrders() {
                         <p>{log.old_payment_status || 'N/A'} -&gt; {log.new_payment_status || 'N/A'}</p>
                         <p>{log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}</p>
                         {(log.note || log.rejection_reason) && <p>{log.note || log.rejection_reason}</p>}
-                        {log.receipt_url && <button type="button" className="btn-view-receipt" onClick={() => window.open(resolveMediaUrl(log.receipt_url), '_blank', 'noopener,noreferrer')}>View Receipt</button>}
+                        {log.receipt_url && <button type="button" className="btn-view-receipt" onClick={() => openReceiptUrl({}, log.id)}>View Receipt</button>}
                       </div>
                     ))}
                   </div>

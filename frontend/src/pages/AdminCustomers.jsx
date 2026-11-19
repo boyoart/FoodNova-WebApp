@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../store/authStore'
 import { adminAPI } from '../services/api'
 import { formatPrice } from '../utils/formatters'
+import { retentionErrorMessage } from '../utils/retentionErrors'
 import './AdminCustomers.css'
 
 export default function AdminCustomers() {
@@ -47,7 +48,7 @@ export default function AdminCustomers() {
     try {
       const result = await adminAPI.updateCustomerAccount(selected.id, { action, reason, confirmation })
       setMessage(result.message); setSelected(null); setVersion((value) => value + 1)
-    } catch (error) { setMessage(typeof error.response?.data?.detail === 'string' ? error.response.data.detail : 'The account action could not be completed.') }
+    } catch (error) { setMessage(retentionErrorMessage(error)) }
     finally { setBusy(false) }
   }
   const reset = async () => {
@@ -60,7 +61,7 @@ export default function AdminCustomers() {
   if (!isAdmin) return <p role="alert">Admin authorization required.</p>
   return <div className="admin-page admin-customers-page"><h1>Customers</h1><p>Manage authoritative customer accounts. Transaction records are retained.</p>
     <div className="customers-toolbar"><label>Search<input value={query.search} maxLength={150} onChange={(event) => filter({ search: event.target.value })} placeholder="Name, email or phone" /></label>
-      <label>Account status<select value={query.account_status} onChange={(event) => filter({ account_status: event.target.value })}><option value="">All statuses</option>{['active', 'suspended', 'deactivated', 'deleted'].map((status) => <option key={status}>{status}</option>)}</select></label>
+      <label>Account status<select value={query.account_status} onChange={(event) => filter({ account_status: event.target.value })}><option value="">All statuses</option>{['active', 'suspended', 'deactivated'].map((status) => <option key={status}>{status}</option>)}</select></label>
       <label>Email<select value={query.verification} onChange={(event) => filter({ verification: event.target.value })}><option value="">All emails</option><option value="verified">Verified</option><option value="unverified">Unverified</option></select></label><button type="button" onClick={() => setVersion((value) => value + 1)}>Refresh</button></div>
     <p role="status">{loading ? 'Loading customers…' : message}</p><p>{pagination.total ?? 'Unavailable'} matching customers · Page {query.page} of {pagination.total_pages || 1}</p>
     <div className="customers-layout"><div className="customers-table-wrap"><table className="customers-table"><caption className="sr-only">Customer account management</caption><thead><tr><th>Customer</th><th>Status</th><th>Email</th><th>Orders</th><th>Action</th></tr></thead><tbody>{customers.map((customer) => <tr key={customer.id}><td><strong>{customer.full_name}</strong><span>{customer.email}</span></td><td>{customer.account_status}</td><td>{customer.email_verified ? 'Verified' : 'Unverified'}</td><td>{customer.orders_count}</td><td><button type="button" onClick={() => open(customer)}>View profile</button></td></tr>)}</tbody></table></div>
@@ -68,7 +69,7 @@ export default function AdminCustomers() {
         <button type="button" disabled={busy || selected.account_status !== 'active'} onClick={reset}>Send password reset</button>
         <h3>Saved addresses</h3>{selected.addresses?.map((address) => <p key={address.id}>{[address.address_line, address.street, address.city, address.state].filter(Boolean).join(', ')}</p>)}
         <h3>Recent orders</h3>{selected.orders?.map((order) => <p key={order.id}>{order.order_code} · {order.order_status} · {formatPrice(order.total_amount)}</p>)}
-        {superAdmin && selected.account_status !== 'deleted' && <form onSubmit={submit}><h3>Super Admin account action</h3><label>Action<select value={action} onChange={(event) => { setAction(event.target.value); setConfirmation('') }}>{['suspend', 'reactivate', 'deactivate', 'delete'].map((value) => <option key={value}>{value}</option>)}</select></label><p>Deletion permanently disables login and removes profile/contact display data. The email reservation and transaction history remain. Unfinished orders/refunds block deletion.</p><label>Reason (required)<textarea value={reason} minLength={8} maxLength={500} required onChange={(event) => setReason(event.target.value)} /></label><label>Type {action.toUpperCase() + ' CUSTOMER ' + selected.id}<input value={confirmation} required onChange={(event) => setConfirmation(event.target.value)} /></label><button type="submit" disabled={busy || confirmation !== action.toUpperCase() + ' CUSTOMER ' + selected.id}>{busy ? 'Updating…' : 'Confirm account action'}</button></form>}
+        {superAdmin && selected.account_status !== 'deleted' && <form onSubmit={submit}><h3>Super Admin account action</h3><label>Action<select value={action} onChange={(event) => { setAction(event.target.value); setConfirmation('') }}>{['suspend', 'reactivate', 'deactivate', 'delete'].map((value) => <option key={value}>{value}</option>)}</select></label><p>Deletion erases the login identity and personal profile. Internal IDs and legally required financial/invoice evidence remain in the protected ledger. Unresolved orders, refunds, disputes and retention holds block deletion. Do not include personal information in the reason.</p><label>Reason (required)<textarea value={reason} minLength={8} maxLength={500} required onChange={(event) => setReason(event.target.value)} /></label><label>Type {action.toUpperCase() + ' CUSTOMER ' + selected.id}<input value={confirmation} required onChange={(event) => setConfirmation(event.target.value)} /></label><button type="submit" disabled={busy || confirmation !== action.toUpperCase() + ' CUSTOMER ' + selected.id}>{busy ? 'Updating…' : 'Confirm account action'}</button></form>}
       </aside>}
     </div><div className="customers-toolbar"><button type="button" disabled={loading || query.page <= 1} onClick={() => setQuery({ ...query, page: query.page - 1 })}>Previous</button><button type="button" disabled={loading || query.page >= (pagination.total_pages || 1)} onClick={() => setQuery({ ...query, page: query.page + 1 })}>Next</button></div>
   </div>

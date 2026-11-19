@@ -1,6 +1,7 @@
 from datetime import datetime
 from html import escape
 import os
+from urllib.parse import quote
 
 try:
     import resend
@@ -406,8 +407,8 @@ def send_admin_order_email(order, event_type, extra=None):
         extra_html = ""
     elif event_type == "receipt_uploaded":
         subject = f"New Payment Receipt Uploaded - {order_code}"
-        receipt_url = extra.get("receipt_url") or ""
-        receipt_link = f"<p><strong>Receipt URL:</strong> <a href='{escape(receipt_url)}'>{escape(receipt_url)}</a></p>" if receipt_url else ""
+        receipt_url = f"{FRONTEND_URL}/admin/orders?search={quote(str(order_code), safe='')}"
+        receipt_link = f"<p>Sign in to Admin Orders to review the receipt: <a href='{escape(receipt_url)}'>Review payment evidence</a></p>"
         message = "A customer uploaded a payment receipt."
         extra_html = f"{receipt_link}<p><strong>Payment Status:</strong> {escape(str(order.get('payment_status') or 'receipt_submitted'))}</p>"
     elif event_type == "cancellation_request":
