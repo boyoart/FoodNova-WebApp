@@ -2168,7 +2168,14 @@ def get_app_setting(db, key: str, default: str = "") -> str:
     return setting.value if setting and setting.value is not None else default
 
 
+def lock_app_setting(db, key: str) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                   {"key": f"foodnova_app_setting:{key}"})
+
+
 def set_app_setting(db, key: str, value: str) -> DBAppSetting:
+    lock_app_setting(db, key)
     setting = db.query(DBAppSetting).filter(DBAppSetting.key == key).first()
     if not setting:
         setting = DBAppSetting(key=key, value=value)
@@ -2250,6 +2257,7 @@ def update_admin_website_settings(payload: WebsiteSettingsPayload, request: Requ
     admin = require_any_permission(request, ["website_settings:manage", "announcements:manage", "admins:manage"])
     db = SessionLocal()
     try:
+        lock_app_setting(db, WEBSITE_SETTINGS_KEY)
         current = get_website_settings_from_db(db)
         updates = {key: value for key, value in payload.dict(exclude_unset=True).items() if value is not None}
         next_settings = save_website_settings_to_db(db, {**current, **updates})
@@ -8963,6 +8971,7 @@ def category_to_dict(db, category: dict) -> dict:
 
 
 def load_category_records(db) -> list:
+    lock_app_setting(db, PRODUCT_CATEGORIES_KEY)
     setting = db.query(DBAppSetting).filter(DBAppSetting.key == PRODUCT_CATEGORIES_KEY).with_for_update().first()
     raw = setting.value if setting else "[]"
     parsed = json_load(raw, [])

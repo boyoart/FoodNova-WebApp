@@ -10,7 +10,7 @@ import os
 import sys
 from pathlib import Path
 
-from sqlalchemy import func, inspect
+from sqlalchemy import func, inspect, text
 
 BACKEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND))
@@ -186,6 +186,8 @@ def main():
             db.query(DeliveryWorker).filter(
                 DeliveryWorker.id.in_(worker_ids), DeliveryWorker.operational_status == "BUSY"
             ).update({DeliveryWorker.operational_status: "ONLINE"}, synchronize_session=False)
+        if backend_name.startswith("postgres"):
+            db.execute(text("SELECT pg_advisory_xact_lock(hashtext('foodnova_public_order_number'))"))
         setting = db.query(AppSetting).filter(AppSetting.key == SEQUENCE_KEY).with_for_update().first()
         if setting:
             setting.value = "0"
