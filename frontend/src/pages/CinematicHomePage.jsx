@@ -109,7 +109,6 @@ export default function CinematicHomePage() {
   const stories = products.slice(0, 3)
   useCinematicMotion(root, data)
   return <div className="cinematic-homepage" ref={root}>
-    <div className="cinema-preview-note">Cinematic preview <span>Explore the new FoodNova experience</span><Link to="/">Current homepage <ArrowUpRight size={14} /></Link></div>
     <section className="cinema-hero" aria-labelledby="cinema-title">
       <div className="cinema-hero-grain" aria-hidden="true" />
       <div className="cinema-hero-copy"><p className="cinema-eyebrow"><span /> YOUR EVERYDAY, WELL STOCKED.</p><h1 id="cinema-title">Good Food.<br /><em>Better Value.</em></h1>

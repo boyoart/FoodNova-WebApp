@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import { Toaster } from 'react-hot-toast'
 import Navbar from './components/Navbar'
@@ -8,7 +8,6 @@ import FloatingCartButton from './components/FloatingCartButton'
 import BackToTopButton from './components/BackToTopButton'
 import AnalyticsConsent from './components/AnalyticsConsent'
 import FloatingOrderTracking, { OrderTrackingProvider } from './components/OrderTracking'
-import HomePage from './pages/HomePage'
 import ProductsPage from './pages/ProductsPage'
 import CartPage from './pages/CartPage'
 import CheckoutPage from './pages/CheckoutPage'
@@ -41,21 +40,21 @@ import InvoicePage from './pages/InvoicePage'
 import AppLandingPage from './pages/AppLandingPage'
 import './modal-scroll-fix.css'
 
-// Review-only route; the approved production homepage above remains authoritative.
+// Approved homepage; HomePage.jsx/CSS remain unchanged for rollback.
 const CinematicHomePage = lazy(() => import('./pages/CinematicHomePage'))
 
 function AppLayout() {
   const location = useLocation()
   const isAdminRoute = location.pathname.startsWith('/admin')
-  const isCinematicPreview = location.pathname === '/preview/cinematic-homepage'
+  const isCinematicHomepage = location.pathname === '/'
 
   return (
-    <div className={isAdminRoute ? 'admin-app-frame' : `public-app-frame${isCinematicPreview ? ' cinematic-preview-frame' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div className={isAdminRoute ? 'admin-app-frame' : `public-app-frame${isCinematicHomepage ? ' cinematic-homepage-frame' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {!isAdminRoute && <Navbar />}
       <main style={{ flex: 1 }}>
             <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/preview/cinematic-homepage" element={<Suspense fallback={<p role="status">Loading FoodNova preview…</p>}><CinematicHomePage /></Suspense>} />
+              <Route path="/" element={<Suspense fallback={<p role="status">Loading FoodNova...</p>}><CinematicHomePage /></Suspense>} />
+              <Route path="/preview/cinematic-homepage" element={<Navigate to="/" replace />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/app" element={<AppLandingPage />} />
               <Route path="/cart" element={<CartPage />} />
