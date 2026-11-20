@@ -589,6 +589,7 @@ export const adminAPI = {
   getReports: async (params = {}) => (await api.get('/admin/reports/summary', { params })).data,
   exportReport: async (type) => (await api.get(`/admin/export/${type}`, { responseType: 'blob' })).data,
   getAnnouncements: async () => (await api.get('/admin/announcements')).data,
+  initializeTicker: async () => (await api.post('/admin/announcements/initialize-ticker')).data,
   createAnnouncement: async (payload) => (await api.post('/admin/announcements', payload)).data,
   updateAnnouncement: async (id, payload) => (await api.patch(`/admin/announcements/${id}`, payload)).data,
   deleteAnnouncement: async (id) => (await api.delete(`/admin/announcements/${id}`)).data,

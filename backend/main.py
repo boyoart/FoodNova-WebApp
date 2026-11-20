@@ -17195,26 +17195,6 @@ def claim_ticker_initialization(db):
     return result.rowcount == 1
 
 
-def initialize_ticker_announcements(db):
-    if db.query(DBAppSetting.id).filter(DBAppSetting.key == TICKER_INITIALIZED_KEY).first():
-        return
-    if not claim_ticker_initialization(db):
-        return
-    existing = db.query(DBAnnouncement.id).filter(DBAnnouncement.display_type == "top_bar").first()
-    # Existing deletion history is ambiguous, so preserve the empty CMS.
-    deleted = db.query(DBAdminAuditLog.id).filter(
-        DBAdminAuditLog.entity_type == "announcement", DBAdminAuditLog.action == "announcement_deleted"
-    ).first()
-    if not existing and not deleted:
-        db.add_all([
-            DBAnnouncement(title=title, message=message, display_type="top_bar",
-                           priority=len(TICKER_STARTERS) - index, is_active=True,
-                           created_by_admin_name="FoodNova starter content")
-            for index, (title, message) in enumerate(TICKER_STARTERS)
-        ])
-    db.commit()
-
-
 def clean_announcement_payload(data: dict, partial: bool = False) -> dict:
     cleaned = {}
     for key, value in data.items():
@@ -17253,7 +17233,6 @@ def clean_announcement_payload(data: dict, partial: bool = False) -> dict:
 def get_active_announcements():
     db = SessionLocal()
     try:
-        initialize_ticker_announcements(db)
         now = datetime.utcnow()
         rows = db.query(DBAnnouncement).order_by(
             DBAnnouncement.priority.desc(),
@@ -17296,17 +17275,53 @@ def get_admin_announcements(request: Request):
     require_any_permission(request, ["announcements:view", "announcements:manage"])
     db = SessionLocal()
     try:
-        initialize_ticker_announcements(db)
         announcements = [
             announcement_to_dict(announcement)
             for announcement in db.query(DBAnnouncement)
             .order_by(DBAnnouncement.priority.desc(), DBAnnouncement.created_at.desc(), DBAnnouncement.id.desc())
             .all()
         ]
-        return {"success": True, "announcements": announcements, "data": announcements}
+        initialized = db.query(DBAppSetting.id).filter(DBAppSetting.key == TICKER_INITIALIZED_KEY).first() is not None
+        return {"success": True, "announcements": announcements, "data": announcements,
+                "ticker_initialized": initialized}
     except Exception as error:
         print("ADMIN ANNOUNCEMENTS LOAD ERROR:", repr(error))
         raise HTTPException(status_code=500, detail="Unable to load announcements")
+    finally:
+        db.close()
+
+
+@app.post("/admin/announcements/initialize-ticker")
+def initialize_ticker_announcements(request: Request):
+    admin = require_permission(request, "announcements:manage")
+    db = SessionLocal()
+    try:
+        if not claim_ticker_initialization(db):
+            db.rollback()
+            return {"success": True, "status": "already_initialized"}
+        existing = db.query(DBAnnouncement.id).filter(DBAnnouncement.display_type == "top_bar").first()
+        deleted = db.query(DBAdminAuditLog.id).filter(
+            DBAdminAuditLog.entity_type == "announcement", DBAdminAuditLog.action == "announcement_deleted"
+        ).first()
+        if existing or deleted:
+            status = "existing_announcements" if existing else "previous_deletion"
+        else:
+            db.add_all([
+                DBAnnouncement(title=title, message=message, display_type="top_bar",
+                               priority=len(TICKER_STARTERS) - index, is_active=True,
+                               created_by_admin_id=admin.get("id"),
+                               created_by_admin_name=admin.get("full_name") or admin.get("email") or "Admin")
+                for index, (title, message) in enumerate(TICKER_STARTERS)
+            ])
+            status = "created"
+        db.commit()
+        create_admin_audit_log(request, admin, "ticker_initialization", "announcement", "",
+                               f"Admin initialized ticker starter content: {status}", {"status": status})
+        return {"success": True, "status": status}
+    except Exception as error:
+        db.rollback()
+        print("TICKER INITIALIZATION ERROR:", repr(error))
+        raise HTTPException(status_code=500, detail="Unable to initialize ticker announcements")
     finally:
         db.close()
 

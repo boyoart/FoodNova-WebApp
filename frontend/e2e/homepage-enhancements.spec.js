@@ -11,6 +11,38 @@ test.beforeEach(async ({ context }) => {
   await mkdir(captures, { recursive: true })
 })
 
+test('starter initialization requires Admin confirmation and is not repeated', async ({ page }) => {
+  let initialized = false
+  let calls = 0
+  await page.addInitScript(() => {
+    localStorage.setItem('admin_token', 'fixture-token')
+    localStorage.setItem('admin', JSON.stringify({ role: 'admin', admin_role: 'super_admin' }))
+  })
+  await page.route('**/admin/announcements**', async (route) => {
+    const request = route.request()
+    if (request.isNavigationRequest()) return route.fallback()
+    if (request.method() === 'POST') {
+      calls++
+      initialized = true
+      return route.fulfill({ json: { success: true, status: 'created' } })
+    }
+    return route.fulfill({ json: { ticker_initialized: initialized, announcements: initialized
+      ? [{ id: 1, title: 'Welcome', message: 'Starter notice', display_type: 'top_bar', is_active: true }]
+      : [] } })
+  })
+  await page.goto('/admin/announcements')
+  const button = page.getByRole('button', { name: 'Initialize starter announcements' })
+  await expect(button).toBeVisible()
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await button.click()
+  expect(calls).toBe(0)
+  page.once('dialog', (dialog) => dialog.accept())
+  await button.click()
+  await expect(page.locator('.cms-record')).toContainText('Starter notice')
+  await expect(button).toHaveCount(0)
+  expect(calls).toBe(1)
+})
+
 test('Admin can edit and delete starter records used by the homepage', async ({ page }) => {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))

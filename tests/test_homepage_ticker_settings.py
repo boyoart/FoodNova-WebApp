@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -16,6 +16,8 @@ sys.path.insert(0, str(ROOT / 'backend'))
 os.environ.setdefault('DATABASE_URL', f'sqlite:///{ROOT / "test_foodnova_contracts.db"}')
 import main
 
+REAL_REQUIRE_PERMISSION = main.require_permission
+
 
 @pytest.fixture
 def client():
@@ -25,6 +27,7 @@ def client():
     app = FastAPI()
     app.get('/announcements/active')(main.get_active_announcements)
     app.get('/admin/announcements')(main.get_admin_announcements)
+    app.post('/admin/announcements/initialize-ticker')(main.initialize_ticker_announcements)
     app.post('/admin/announcements')(main.create_announcement)
     app.patch('/admin/announcements/{announcement_id}')(main.update_announcement)
     app.delete('/admin/announcements/{announcement_id}')(main.delete_announcement)
@@ -61,6 +64,11 @@ def test_admin_can_persist_global_ticker_switch_and_public_feed_returns_it(clien
 
 
 def test_starters_are_persisted_editable_and_never_reseeded(client):
+    assert client.get('/announcements/active').json()['announcements'] == []
+    assert client.get('/admin/announcements').json()['ticker_initialized'] is False
+    with main.SessionLocal() as db:
+        assert db.query(main.DBAppSetting).filter_by(key=main.TICKER_INITIALIZED_KEY).first() is None
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'created'
     public = client.get('/announcements/active').json()['announcements']
     assert [item['message'] for item in public] == [
         'WELCOME TO FOODNOVA — Your everyday food shopping made easier.',
@@ -79,15 +87,44 @@ def test_starters_are_persisted_editable_and_never_reseeded(client):
         assert client.delete(f"/admin/announcements/{item['id']}").status_code == 200
     assert client.get('/announcements/active').json()['announcements'] == []
     assert client.get('/admin/announcements').json()['announcements'] == []
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'already_initialized'
+    assert client.get('/announcements/active').json()['announcements'] == []
 
 
-def test_admin_first_read_initializes_and_disabled_records_stay_disabled(client):
+def test_disabled_records_stay_disabled_after_repeated_initialization(client):
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'created'
     admin = client.get('/admin/announcements').json()['announcements']
     assert len(admin) == 5
     for item in admin:
         assert client.patch(f"/admin/announcements/{item['id']}", json={'is_active': False}).status_code == 200
     assert client.get('/announcements/active').json()['announcements'] == []
     assert len(client.get('/admin/announcements').json()['announcements']) == 5
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'already_initialized'
+    assert client.get('/announcements/active').json()['announcements'] == []
+
+
+def test_initialization_requires_manage_permission(client):
+    with patch.object(main, 'require_permission', REAL_REQUIRE_PERMISSION):
+        with patch.object(main, 'require_admin', side_effect=HTTPException(status_code=401, detail='Login required')):
+            assert client.post('/admin/announcements/initialize-ticker').status_code == 401
+        with patch.object(main, 'require_admin', return_value={'admin_role': 'viewer', 'permissions': ['announcements:view']}):
+            assert client.post('/admin/announcements/initialize-ticker').status_code == 403
+    with main.SessionLocal() as db:
+        assert db.query(main.DBAnnouncement).count() == 0
+        assert db.query(main.DBAppSetting).filter_by(key=main.TICKER_INITIALIZED_KEY).first() is None
+
+
+def test_initialization_preserves_settings_and_non_ticker_announcements(client):
+    with main.SessionLocal() as db:
+        db.add(main.DBAnnouncement(title='Campaign', message='Existing banner', display_type='hero_banner', is_active=True))
+        db.commit()
+    before = client.patch('/admin/website-settings', json={'siteName': 'Existing name', 'tickerEnabled': False}).json()['settings']
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'created'
+    assert client.get('/admin/website-settings').json()['settings'] == before
+    feed = client.get('/announcements/active').json()
+    assert feed['ticker_enabled'] is False
+    assert len(feed['announcements']) == 6
+    assert any(item['message'] == 'Existing banner' for item in feed['announcements'])
 
 
 def test_existing_custom_notice_takes_precedence_and_is_not_overwritten(client):
@@ -102,6 +139,7 @@ def test_existing_disabled_notice_and_historical_deletion_prevent_seeding(client
     with main.SessionLocal() as db:
         db.add(main.DBAnnouncement(title='Disabled', message='Do not publish', display_type='top_bar', is_active=False))
         db.commit()
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'existing_announcements'
     assert client.get('/announcements/active').json()['announcements'] == []
     assert len(client.get('/admin/announcements').json()['announcements']) == 1
 
@@ -110,32 +148,37 @@ def test_historical_deletion_keeps_empty_cms_empty(client):
     with main.SessionLocal() as db:
         db.add(main.DBAdminAuditLog(action='announcement_deleted', entity_type='announcement'))
         db.commit()
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'previous_deletion'
     assert client.get('/announcements/active').json()['announcements'] == []
     assert client.get('/admin/announcements').json()['announcements'] == []
 
 
 def test_seed_failure_is_explicit_and_rolls_back_marker(client):
     with patch.object(main, 'TICKER_STARTERS', (('Broken', None),)):
-        assert client.get('/announcements/active').status_code == 503
+        assert client.post('/admin/announcements/initialize-ticker').status_code == 500
     with main.SessionLocal() as db:
         assert db.query(main.DBAppSetting).filter_by(key=main.TICKER_INITIALIZED_KEY).first() is None
+    assert client.post('/admin/announcements/initialize-ticker').json()['status'] == 'created'
     assert len(client.get('/announcements/active').json()['announcements']) == 5
 
 
-def test_simultaneous_first_reads_create_one_set(tmp_path):
+def test_simultaneous_initializations_create_one_set(tmp_path):
     engine = create_engine(f'sqlite:///{tmp_path / "ticker.db"}', connect_args={'check_same_thread': False, 'timeout': 30})
     main.Base.metadata.create_all(engine)
     sessions = sessionmaker(bind=engine)
     app = FastAPI()
-    app.get('/announcements/active')(main.get_active_announcements)
+    app.post('/admin/announcements/initialize-ticker')(main.initialize_ticker_announcements)
     try:
-        with patch.object(main, 'SessionLocal', sessions):
-            def read_feed(_):
+        with patch.object(main, 'SessionLocal', sessions), \
+                patch.object(main, 'require_permission', return_value={'id': 1}), \
+                patch.object(main, 'create_admin_audit_log'):
+            def initialize(_):
                 with TestClient(app) as local:
-                    return local.get('/announcements/active')
+                    return local.post('/admin/announcements/initialize-ticker')
             with ThreadPoolExecutor(max_workers=4) as executor:
-                responses = list(executor.map(read_feed, range(4)))
-        assert all(response.status_code == 200 and len(response.json()['announcements']) == 5 for response in responses)
+                responses = list(executor.map(initialize, range(4)))
+        assert all(response.status_code == 200 for response in responses)
+        assert sorted(response.json()['status'] for response in responses) == ['already_initialized'] * 3 + ['created']
         with sessions() as db:
             assert db.query(main.DBAnnouncement).count() == 5
             assert db.query(main.DBAppSetting).filter_by(key=main.TICKER_INITIALIZED_KEY).count() == 1
