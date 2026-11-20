@@ -10,13 +10,21 @@ The global CMS ticker switch is an additive backend compatibility change in `bac
 
 Read-only compatibility check on 2026-11-20: production `GET /announcements/active` returned HTTP 200 and the legacy announcement fields, with no `ticker_enabled` field. The ticker content can use the deployed contract; the persistent global on/off switch requires the additive backend deployment above.
 
+### Starter notices and initialization
+
+The upgraded backend initializes the five starter top-bar notices as normal, editable announcement records when the public feed or Admin announcement list is first read. Initialization and its `homepage_ticker_initialized_v1` setting are committed together; concurrent initial reads claim the setting through its existing unique key. Existing top-bar records, including disabled or scheduled ones, take precedence. Existing announcement deletion audit history also prevents seeding, conservatively protecting previously emptied CMS installations. If historic deletions predate the retained audit trail, an empty database cannot be distinguished from a fresh one; review that condition before authorizing deployment.
+
+Administrators can edit, prioritize, deactivate, or delete starter records using the existing manager. Once initialized, an empty or disabled ticker stays empty; the frontend never manufactures replacement records. The ticker initially reserves its height with a loading message while the server determines the actual visibility and content.
+
+**Operational gate:** the first feed/Admin read against the upgraded backend can write the marker and five starter records to its configured database. Do not deploy this backend against production without explicit approval for that initialization and a review of the existing CMS and audit history. No production seed was performed during development. The currently deployed older backend cannot persist these starters automatically; if it has no active top-bar records the preview will not show the starters until the upgraded backend is used. It retains existing behavior for real published notices. The global switch and persisted defaults both require the upgraded backend.
+
 No public number-only tracking route, tracking email change, tracking-only UI, or tracking API configuration is part of Release A. Release B remains on `feat/foodnova-homepage-tracking-enhancements` and is not activated by this release.
 
 ## Vercel preview
 
 1. Push `release/foodnova-homepage-enhancements` and locate its Preview deployment in the existing FoodNova Vercel project. Do not promote it to Production.
 2. Before interactive preview acceptance, point the **Preview-only** `VITE_API_BASE_URL` at an approved staging backend. Do not change Production environment values. If staging is unavailable, use the browser fixtures and limit the preview to visual checks; do not exercise order creation, payment, or dispatch workflows.
-3. If validating the CMS global switch, first deploy this branch's additive backend change to staging and verify the staged `/announcements/active` response contains `ticker_enabled`. No database migration is required.
+3. If validating starter notices or the global switch, first deploy this branch's backend change to an approved staging database and verify the staged `/announcements/active` response contains `ticker_enabled` and the editable starter records. The first request initializes the staging database; no schema migration is required.
 4. Review the Preview URL at desktop and mobile widths, test schedules, pause/focus/reduced-motion behavior, category fallbacks, sound opt-in, and existing shopping navigation. Keep Music disabled.
 
 The repository does not establish whether the current Vercel Git integration auto-creates Preview deployments on branch pushes. Confirm the deployment type and URL in Vercel; no production deployment or promotion is authorized here.
@@ -32,4 +40,4 @@ The repository does not establish whether the current Vercel Git integration aut
 
 ## Rollback
 
-For a preview-only issue, stop using that Preview and return to the last approved production deployment; Production is not changed by this release branch. If the backend additive change is later deployed to staging and causes an issue, redeploy the prior staging backend. The change is additive, has no schema migration, and existing clients ignore the added response field. Any production rollback requires separate authorization and a reviewed revert; do not reset or force-push shared branches.
+For a preview-only issue, stop using that Preview and return to the last approved production deployment; Production is not changed by this release branch. If the backend change is later deployed to staging and causes an issue, redeploy the prior staging backend. The initialized records and marker remain in the database on rollback; do not automatically delete them, because an administrator may have edited them. Existing clients ignore the added response field. Any production rollback or data cleanup requires separate authorization and review; do not reset or force-push shared branches.

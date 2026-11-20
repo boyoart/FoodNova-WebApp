@@ -11,7 +11,94 @@ test.beforeEach(async ({ context }) => {
   await mkdir(captures, { recursive: true })
 })
 
+test('Admin can edit and delete starter records used by the homepage', async ({ page }) => {
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('dialog', (dialog) => dialog.accept())
+  let items = [{ id: 1, title: 'Welcome to FoodNova', message: 'WELCOME TO FOODNOVA — Your everyday food shopping made easier.', display_type: 'top_bar', priority: 5, is_active: true }]
+  await page.addInitScript(() => {
+    localStorage.setItem('admin_token', 'fixture-token')
+    localStorage.setItem('admin', JSON.stringify({ role: 'admin', admin_role: 'super_admin' }))
+  })
+  await page.route('**/admin/announcements**', async (route) => {
+    const request = route.request()
+    if (request.isNavigationRequest()) return route.fallback()
+    if (request.method() === 'PATCH') {
+      items = [{ ...items[0], ...request.postDataJSON() }]
+      return route.fulfill({ json: { announcement: items[0] } })
+    }
+    if (request.method() === 'DELETE') {
+      items = []
+      return route.fulfill({ json: { success: true } })
+    }
+    return route.fulfill({ json: { announcements: items } })
+  })
+  await page.route('**/announcements/active', (route) => route.fulfill({ json: { ticker_enabled: true, announcements: items.filter((item) => item.is_active) } }))
+  await page.route('**/products?**', (route) => route.fulfill({ json: { items: [] } }))
+  await page.route('**/packs?**', (route) => route.fulfill({ json: { items: [] } }))
+  await page.route('**/categories', (route) => route.fulfill({ json: [] }))
+  await page.goto('/admin/announcements')
+  const record = page.locator('.cms-record').first()
+  await expect(record).toContainText('WELCOME TO FOODNOVA')
+  await record.getByRole('button', { name: 'Edit', exact: true }).click()
+  await page.locator('.cms-form textarea').fill('Edited starter announcement')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(record).toContainText('Edited starter announcement')
+  await page.goto('/')
+  await expect(page.getByRole('complementary', { name: 'FoodNova announcements' })).toContainText('Edited starter announcement')
+  await page.goto('/admin/announcements')
+  await page.locator('.cms-record').first().getByRole('button', { name: 'Delete', exact: true }).click()
+  await expect(page.locator('.cms-record')).toHaveCount(0)
+  await page.goto('/')
+  await expect(page.getByRole('complementary', { name: 'FoodNova announcements' })).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
 for (const width of [320, 1440]) {
+  test(`ticker shows CMS content immediately and keeps short messages readable at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    const errors = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    let response = { announcements: [{ id: 1, display_type: 'top_bar', message: 'WELCOME TO FOODNOVA — Your everyday food shopping made easier.' }] }
+    await page.route('**/announcements/active', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      await route.fulfill({ json: response })
+    })
+    await page.route('**/products?**', (route) => route.fulfill({ json: { items: [] } }))
+    await page.route('**/packs?**', (route) => route.fulfill({ json: { items: [] } }))
+    await page.route('**/categories', (route) => route.fulfill({ json: [] }))
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    const ticker = page.getByRole('complementary', { name: 'FoodNova announcements' })
+    await expect(ticker.getByRole('status')).toHaveText('Loading announcements…')
+    const loadingHeight = (await ticker.boundingBox()).height
+    await expect(ticker).toContainText('WELCOME TO FOODNOVA')
+    expect(Math.abs((await ticker.boundingBox()).height - loadingHeight)).toBeLessThan(1)
+    const track = ticker.locator('.homepage-ticker-track')
+    const before = await track.evaluate((el) => getComputedStyle(el).transform)
+    await expect.poll(() => track.evaluate((el) => getComputedStyle(el).transform)).not.toBe(before)
+    const coverage = await track.evaluate((el) => {
+      const animation = el.getAnimations()[0]
+      animation.pause()
+      const duration = animation.effect.getTiming().duration
+      return [0, 0.25, 0.5, 0.75, 0.99].map((fraction) => {
+        animation.currentTime = duration * fraction
+        const bounds = el.parentElement.getBoundingClientRect()
+        return [...el.querySelectorAll('.homepage-ticker-group>span')].some((span) => {
+          const box = span.getBoundingClientRect()
+          return Math.min(box.right - 30, bounds.right) - Math.max(box.left, bounds.left) > 10
+        })
+      })
+    })
+    expect(coverage).toEqual([true, true, true, true, true])
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await expect(track).toHaveCSS('animation-name', 'none')
+    await expect(ticker.locator('.homepage-ticker-group:not([aria-hidden])>span:not([aria-hidden])')).toHaveCount(1)
+    response = { ticker_enabled: false, announcements: [{ id: 1, display_type: 'top_bar', message: 'Edited notice' }] }
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+    await expect(ticker).toHaveCount(0)
+    expect(errors).toEqual([])
+  })
+
   test(`CMS ticker, category fallback and optional audio at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const errors = []

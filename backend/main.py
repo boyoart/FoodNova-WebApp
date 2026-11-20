@@ -17172,6 +17172,47 @@ def deactivate_admin_user(admin_id: int, request: Request):
 
 ANNOUNCEMENT_DISPLAY_TYPES = {"top_bar", "hero_banner", "popup"}
 ANNOUNCEMENT_THEMES = {"green", "yellow", "dark", "light", "promo", "urgent"}
+TICKER_INITIALIZED_KEY = "homepage_ticker_initialized_v1"
+TICKER_STARTERS = (
+    ("Welcome to FoodNova", "WELCOME TO FOODNOVA — Your everyday food shopping made easier."),
+    ("Food Combo Packs", "FOOD COMBO PACKS — Explore affordable food packs for individuals and families."),
+    ("Shop Your Essentials", "SHOP YOUR ESSENTIALS — Discover Rice, Beans, Garri, Oils and more."),
+    ("FoodNova Gift Packs", "FOODNOVA GIFT PACKS — Share thoughtful food packages with loved ones."),
+    ("Good Food. Better Value.", "GOOD FOOD. BETTER VALUE. — Discover more with FoodNova."),
+)
+
+
+def claim_ticker_initialization(db):
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert
+    else:
+        raise RuntimeError(f"Unsupported ticker initialization database: {dialect}")
+    statement = insert(DBAppSetting).values(key=TICKER_INITIALIZED_KEY, value="true")
+    result = db.execute(statement.on_conflict_do_nothing(index_elements=["key"]))
+    return result.rowcount == 1
+
+
+def initialize_ticker_announcements(db):
+    if db.query(DBAppSetting.id).filter(DBAppSetting.key == TICKER_INITIALIZED_KEY).first():
+        return
+    if not claim_ticker_initialization(db):
+        return
+    existing = db.query(DBAnnouncement.id).filter(DBAnnouncement.display_type == "top_bar").first()
+    # Existing deletion history is ambiguous, so preserve the empty CMS.
+    deleted = db.query(DBAdminAuditLog.id).filter(
+        DBAdminAuditLog.entity_type == "announcement", DBAdminAuditLog.action == "announcement_deleted"
+    ).first()
+    if not existing and not deleted:
+        db.add_all([
+            DBAnnouncement(title=title, message=message, display_type="top_bar",
+                           priority=len(TICKER_STARTERS) - index, is_active=True,
+                           created_by_admin_name="FoodNova starter content")
+            for index, (title, message) in enumerate(TICKER_STARTERS)
+        ])
+    db.commit()
 
 
 def clean_announcement_payload(data: dict, partial: bool = False) -> dict:
@@ -17212,6 +17253,7 @@ def clean_announcement_payload(data: dict, partial: bool = False) -> dict:
 def get_active_announcements():
     db = SessionLocal()
     try:
+        initialize_ticker_announcements(db)
         now = datetime.utcnow()
         rows = db.query(DBAnnouncement).order_by(
             DBAnnouncement.priority.desc(),
@@ -17242,8 +17284,9 @@ def get_active_announcements():
         return {"success": True, "announcements": announcements, "data": announcements,
                 "ticker_enabled": get_website_settings_from_db(db)["tickerEnabled"]}
     except Exception as error:
+        db.rollback()
         print("ACTIVE ANNOUNCEMENTS LOAD ERROR:", repr(error))
-        return {"success": True, "announcements": [], "data": []}
+        raise HTTPException(status_code=503, detail="Announcements are temporarily unavailable")
     finally:
         db.close()
 
@@ -17253,6 +17296,7 @@ def get_admin_announcements(request: Request):
     require_any_permission(request, ["announcements:view", "announcements:manage"])
     db = SessionLocal()
     try:
+        initialize_ticker_announcements(db)
         announcements = [
             announcement_to_dict(announcement)
             for announcement in db.query(DBAnnouncement)
@@ -17280,6 +17324,8 @@ def create_announcement(payload: AnnouncementPayload, request: Request):
     data = clean_announcement_payload(payload.dict())
     db = SessionLocal()
     try:
+        if (data.get("display_type") or "top_bar") == "top_bar":
+            claim_ticker_initialization(db)
         announcement = DBAnnouncement(
             title=data["title"],
             message=data["message"],
@@ -17314,6 +17360,8 @@ def update_announcement(announcement_id: int, payload: AnnouncementUpdatePayload
         announcement = db.query(DBAnnouncement).filter(DBAnnouncement.id == announcement_id).first()
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
+        if announcement.display_type == "top_bar" or updates.get("display_type") == "top_bar":
+            claim_ticker_initialization(db)
         old_data = announcement_to_dict(announcement)
         for field in [
             "title", "message", "display_type", "button_text", "button_link", "image_url",
@@ -17340,6 +17388,8 @@ def delete_announcement(announcement_id: int, request: Request):
         announcement = db.query(DBAnnouncement).filter(DBAnnouncement.id == announcement_id).first()
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
+        if announcement.display_type == "top_bar":
+            claim_ticker_initialization(db)
         old_data = announcement_to_dict(announcement)
         db.delete(announcement)
         db.commit()

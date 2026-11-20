@@ -1,10 +1,3 @@
-export const tickerDrafts = [
-  'Welcome to FoodNova — Quality Foodstuff, Reliable Supply.',
-  'Explore FoodNova Food Packs for Everyday Shopping.',
-  'Discover Rice, Beans, Garri, Oils and More.',
-  'Shop Your Everyday Essentials with FoodNova.',
-]
-
 export const safeAnnouncementLink = (value) => {
   const text = String(value || '').trim()
   if (/^\/(?!\/)/.test(text) && !/[\\\s]/.test(text)) return text

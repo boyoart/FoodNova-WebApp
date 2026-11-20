@@ -53,7 +53,7 @@ function AppLayout() {
   return (
     <div className={isAdminRoute ? 'admin-app-frame' : `public-app-frame${isCinematicHomepage ? ' cinematic-homepage-frame' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {!isAdminRoute && <Navbar />}
-      {isCinematicHomepage && <HomepageTicker announcements={cms.announcements} enabled={cms.tickerEnabled} />}
+      {isCinematicHomepage && <HomepageTicker announcements={cms.announcements} enabled={cms.tickerEnabled} loading={cms.loading} />}
       <main style={{ flex: 1 }}>
             <Routes>
               <Route path="/" element={<Suspense fallback={<p role="status">Loading FoodNova...</p>}><CinematicHomePage announcements={cms.announcements} /></Suspense>} />

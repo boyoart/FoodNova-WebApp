@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { categoryPhotos } from '../src/pages/cinematicCatalogue.js'
-import { tickerAnnouncements, tickerDrafts, safeAnnouncementLink, isLegacyHomepagePromotion } from '../src/utils/homepageAnnouncements.js'
+import { tickerAnnouncements, safeAnnouncementLink, isLegacyHomepagePromotion } from '../src/utils/homepageAnnouncements.js'
 import { createCinematicAudio } from '../src/utils/cinematicAudio.js'
 
 const source = (name) => readFileSync(new URL(`../src/${name}`, import.meta.url), 'utf8')
@@ -27,7 +27,7 @@ test('category images advance on failure and use approved logo fallback without 
   assert.match(page, /products\?category=\$\{encodeURIComponent\(category.name\)\}/)
 })
 
-test('ticker schedules, priority and active state use CMS data; draft text is never auto-published', () => {
+test('ticker schedules, priority and active state use CMS data', () => {
   const now = Date.parse('2026-11-20T12:00:00Z')
   const rows = [{ id:1, message:'First', display_type:'top_bar', priority:1 },
     { id:2, message:'Priority', display_type:'top_bar', priority:5 },
@@ -37,8 +37,7 @@ test('ticker schedules, priority and active state use CMS data; draft text is ne
     { id:6, message:'Hero', display_type:'hero_banner' },
     { id:7, message:'Malformed date', display_type:'top_bar', start_date:'bad' }]
   assert.deepEqual(tickerAnnouncements(rows, now).map((x) => x.id), [2,1])
-  assert.equal(tickerDrafts.length, 4)
-  assert.match(source('pages/AdminExpansion.jsx'), /message: event.target.value, is_active: false/)
+  assert.match(source('pages/AdminExpansion.jsx'), /adminAPI\.updateAnnouncement/)
   assert.match(source('pages/AdminExpansion.jsx'), /tickerSettingAvailable/)
   assert.match(source('components/HomepageTicker.jsx'), /data.ticker_enabled !== false/)
   assert.match(source('components/HomepageTicker.css'), /prefers-reduced-motion:reduce/)
