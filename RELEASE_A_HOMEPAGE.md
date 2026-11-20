@@ -50,9 +50,91 @@ not overwritten by initialization.
   current records, disabled/scheduled items, audit retention and prior
   intentional removals. If history is uncertain, do not initialize: use normal
   Admin creation only after explicit content approval.
-- Local SQLite tests cover atomic rollback, idempotency and concurrent
-  initialization. Actual production PostgreSQL concurrency and configuration
-  have not been tested; do not run concurrent initialization in production.
+- Local SQLite and isolated PostgreSQL 18 tests cover idempotency and
+  concurrent initialization. Actual production PostgreSQL concurrency and
+  configuration have not been tested; do not run concurrent initialization in
+  production.
+
+## Production app_settings compatibility gate
+
+The reported production schema lacks a unique index or constraint on
+`app_settings.key`. The initializer uses `ON CONFLICT (key)`, so it fails on
+that schema even though the SQLAlchemy model declares the key unique.
+`create_all` does not repair an existing table. Do not initialize or deploy
+this backend until the drift and its risks are resolved.
+
+The prepared `backend/scripts/apply_app_settings_unique_index.py` is a
+PostgreSQL-only, opt-in index migration; it never creates, updates or deletes
+settings or announcements. It rejects duplicate or null keys, refuses an
+existing conflicting index name, checks for an equivalent usable unique index,
+and otherwise creates `uq_app_settings_key_release_a` concurrently. Execution
+requires an explicit host, database name, schema, and backup confirmation; the default
+mode only inspects. A failed concurrent index build can leave an invalid index
+that needs separate inspection and authorization before removal. A same-name
+index is not automatically dropped or replaced.
+
+**Writer-first prerequisite:** the writer-only commit
+`7ffb7ccbbdbb2b9af9cb7a38f5edc1096e3dfc83` is based on the
+health-reported production backend `9f435af4b44a052a1475bc28e566184769095b4b`
+and contains only the settings locking fix. The independent
+`release/foodnova-settings-writer-preflight` ref makes that commit available
+without deploying the Release A head. Confirm the actual Render
+deployment and full diff before using it; a health environment override can be
+stale. The fix serializes cooperating PostgreSQL settings writers with
+transaction-scoped advisory locks before reads and writes. Existing order-number
+creation already has its own advisory lock; the maintenance reset now shares
+that lock. This does not protect older running instances, external SQL writers,
+or applications bypassing these locks. During deployment ensure old workers
+have drained; pause uncoordinated settings writers and never run an order reset
+concurrently with normal operations. Hash collisions can serialize unrelated
+keys, and long transactions can delay writers. The SQLite path is unchanged.
+
+A prior audit reporting no duplicates is not a substitute for rechecking
+immediately before index creation.
+
+After separate deployment and migration approval, a fresh backup and a
+verified target:
+
+1. Verify the backup and rollback prerequisites in the sections below.
+   Record the active Render and Vercel deployments, verify the backend SHA
+   really is the parent of the writer-only commit, and approve the Render
+   auto-deploy side effect. Stop if the deployed backend differs.
+2. Deploy the reviewed **writer-only** SHA
+   `7ffb7ccbbdbb2b9af9cb7a38f5edc1096e3dfc83` to Render. Confirm the SHA,
+   health and logs; ensure all older workers have drained and exclude external
+   writers before the index. Do not deploy the Release A head at this step.
+3. Obtain the reviewed migration script from the final Release A commit
+   independently of the running writer-only deployment; do not deploy the
+   final backend yet. Verify its SHA and integrity against the approved
+   repository. Use an authorized secure terminal, set `DATABASE_URL` without
+   recording it in history, and verify host, database and current schema
+   independently. Never paste credentials into chat. From the script's backend
+   directory, run `python scripts/apply_app_settings_unique_index.py` for
+   read-only preflight. Verify the sanitized target and `index_required` status.
+4. With uncoordinated settings writes stopped, run
+   `python scripts/apply_app_settings_unique_index.py --apply --confirm-host <exact-host> --confirm-database <exact-database> --confirm-schema <exact-schema> --confirm-reviewed-backup`.
+   It uses `CREATE UNIQUE INDEX CONCURRENTLY`, a five-second lock timeout and
+   five-minute statement timeout. It requires sufficient PostgreSQL privileges,
+   takes multiple scans and may wait on transactions; monitor blocking and disk.
+   Re-run preflight and require `already_present` after success. No production
+   migration has been authorized or executed as part of this preparation.
+5. If interrupted or a concurrent duplicate appears, stop: inspect `pg_index`
+   for validity/readiness and inspect key counts without exposing values. Do not
+   blindly rerun, delete duplicates or drop an index. Resolve under separate
+   approval. A concurrent build can leave an invalid index and can temporarily
+   affect writes.
+6. Only after a valid index is verified, deploy the final approved Release A
+   backend SHA and verify health, feed, logs and unchanged records. Then release
+   the approved frontend and, only after reviewing CMS eligibility and approval,
+   use the Admin initialization button. Never initialize on unverified history.
+7. Rollback only if the release owner approves after checking index dependencies,
+   ownership and the exact database/schema: first stop use of code that needs
+   `ON CONFLICT (key)`, then, only if this migration created that exact index
+   and it is not backing a constraint or needed by another deployment, run
+   schema-qualified `DROP INDEX CONCURRENTLY <schema>.uq_app_settings_key_release_a`
+   outside a transaction. Verify the result. Do not drop a pre-existing
+   equivalent index. Removing the index means this release's initializer
+   cannot run and future duplicate keys again become possible.
 
 ## Pre-release checklist: all gates required
 
@@ -67,9 +149,9 @@ not overwritten by initialization.
    Vercel production deployment ID/SHA, domains, project and build settings.
    Do not copy secrets into tickets, logs or screenshots.
 3. Check Render's current production schema and startup behavior against the
-   target version. This release adds no schema migration, but that does not
-   prove an older deployed backend is schema-compatible. Do not execute
-   migrations or startup schema mutations without separate authorization.
+   target version. This release requires the separately approved index
+   migration described above. Do not execute migrations or startup schema
+   mutations without separate authorization.
 4. Record existing active, inactive and scheduled announcements, priorities,
    relevant audit history and global website settings through authorized
    read-only Admin access. Do not publish customer or operational data.
@@ -115,7 +197,8 @@ Reference: [Render PostgreSQL backups](https://render.com/docs/postgresql-backup
 
 ## Render backend deployment (only after approval)
 
-1. Ensure the final approved commit is accessible in the service's linked
+1. Complete the writer-first and index migration sequence above. Ensure the
+   final approved commit is accessible in the service's linked
    repository. Recheck the backup, actual deployed SHA, schema compatibility,
    existing environment and rollback target. Do not edit environment variables
    or change the service branch as part of this plan.
