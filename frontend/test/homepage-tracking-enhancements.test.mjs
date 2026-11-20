@@ -113,3 +113,15 @@ test('public tracking uses a number-only POST with no auth, keeps authenticated 
   assert.match(source('components/Footer.jsx'), /to="\/track-order">Track Order/)
   assert.match(ui, /interval: data.kind === 'public' \? 60000/)
 })
+
+
+test('a missing or rejected future music asset cannot break the homepage audio controller', async () => {
+  const { calls, Context, AudioElement } = audioFixture()
+  class MissingAsset extends AudioElement { async play() { throw new Error('Synthetic missing recording') } }
+  const audio=createCinematicAudio({Context,AudioElement:MissingAsset,musicUrl:'/missing-approved-recording.ogg'})
+  await audio.setEnabled(true)
+  assert.equal(await audio.toggleMusic(),false)
+  assert.doesNotThrow(()=>audio.feedback('cart'))
+  audio.dispose()
+  assert.equal(calls.closed,1)
+})

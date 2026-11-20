@@ -66,7 +66,11 @@ def build_router(core):
             # Independent of email-link activation, but never of shared abuse protection.
             if not core.JWT_SECRET or not inspect(db.get_bind()).has_table(tracking.limits.name):
                 raise HTTPException(503, NEUTRAL, headers=HEADERS)
-            identity = tracking.request_identity(request)
+            try:
+                identity = public.request_identity(request)
+            except public.ProxyIdentityUnavailable:
+                logger.warning('public_tracking_identity_unavailable')
+                raise HTTPException(503, NEUTRAL, headers=HEADERS)
             limits = [('public-ip:' + identity, 30), ('public-network:' + public.network_identity(identity), 300), ('public-number:' + payload.order_number, 300)]
             for key, maximum in limits:
                 if tracking.limited(db, key, core.JWT_SECRET, maximum=maximum):

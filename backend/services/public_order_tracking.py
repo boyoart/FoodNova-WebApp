@@ -1,6 +1,55 @@
 """Non-identifying progress derived only from recorded fulfilment events."""
 import ipaddress
+import os
 import re
+
+
+class ProxyIdentityUnavailable(ValueError):
+    """Unsafe configuration or an unverifiable trusted forwarding chain."""
+
+
+def _ip_address(value):
+    address = ipaddress.ip_address(value)
+    if getattr(address, 'scope_id', None):
+        raise ValueError('Scoped addresses are not HTTP client identities.')
+    return getattr(address, 'ipv4_mapped', None) or address
+
+
+def request_identity(request):
+    """Canonical client, trusting only the explicitly configured right-hand hops.
+
+    If Uvicorn already validated/replaced the client, leave its untrusted client
+    address alone. An unsafe upstream rewrite cannot be repaired here.
+    """
+    try:
+        trusted = [ipaddress.ip_network(value.strip()) for value in
+                   os.getenv('ORDER_TRACKING_TRUSTED_PROXIES', '').split(',') if value.strip()]
+        if any(network.prefixlen == 0 for network in trusted):
+            raise ValueError('Universal proxy trust is not permitted.')
+    except ValueError:
+        raise ProxyIdentityUnavailable('Proxy identity is unavailable.') from None
+    try:
+        peer = _ip_address(request.client.host if request.client else '')
+    except ValueError:
+        # Non-IP ASGI peers share a conservative budget; headers cannot invent one.
+        return 'unknown'
+    if not any(peer in network for network in trusted):
+        return str(peer)
+    forwarded = ','.join(request.headers.getlist('x-forwarded-for'))
+    if not forwarded or len(forwarded) > 4096:
+        raise ProxyIdentityUnavailable('Proxy identity is unavailable.')
+    hops = forwarded.split(',')
+    if len(hops) > 32:
+        raise ProxyIdentityUnavailable('Proxy identity is unavailable.')
+    for value in reversed(hops):
+        try:
+            address = _ip_address(value.strip())
+        except ValueError:
+            raise ProxyIdentityUnavailable('Proxy identity is unavailable.') from None
+        if not any(address in network for network in trusted):
+            return str(address)
+    # No proven client boundary: never pick a caller-controlled leftmost value.
+    raise ProxyIdentityUnavailable('Proxy identity is unavailable.')
 
 
 def normalize_number(value):
@@ -16,7 +65,7 @@ def normalize_number(value):
 
 def network_identity(identity):
     try:
-        address = ipaddress.ip_address(identity)
+        address = _ip_address(identity)
         return str(ipaddress.ip_network(f'{address}/{24 if address.version == 4 else 64}', strict=False))
     except ValueError:
         return 'unknown'

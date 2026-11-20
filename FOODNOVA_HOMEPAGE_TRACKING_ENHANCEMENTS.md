@@ -1,5 +1,7 @@
 # FoodNova homepage and public tracking enhancements
 
+> **Production-readiness review of a330d09: NO-GO for production activation.** Public-only client-identity defects have been fixed and regression-tested. The actual Render/Uvicorn trust configuration and origin-covered API abuse controls still require operator/staging evidence. Passing local tests does not establish those deployment facts. See the final review below; no feature redesign, merge, production migration or deployment was performed.
+
 ## Audit before implementation
 
 Latest fetched main: 6b10d3e (PR #8, includes approved 0e4a9d6). New branch: feat/foodnova-homepage-tracking-enhancements. Unrelated local/untracked files preserved.
@@ -203,3 +205,119 @@ Screenshots remain local, untracked review artifacts:
 CMS/tracking failure scenarios use synthetic browser-local fixtures. Real catalogue tests use only public GET data and local cart state; all live non-read requests are blocked. Native Edge AudioContext opt-in and cleanup were checked; no music recording was played and audible sound quality/physical devices/Safari are not claimed.
 
 A revoked/expired email capability still cannot access its secure endpoint. As intentionally required by this release, it does not make general number-only progress private: only archive/removal/erasure exclusion or an unavailable protected service prevents that public lookup. The sequential-reference enumeration risk and proxy/WAF/staging checks above remain production review items. No merge, production deployment, environment update, schema migration or customer/order/receipt mutation was performed.
+
+## Final production-readiness review of a330d09
+
+### Decision and evidence boundary
+
+**NO-GO for production activation until the ingress and abuse-control gates below are verified.** The code is suitable for a controlled staging rehearsal after the fixes in this review. This is not a claim that production proxy settings, WAF rules or PostgreSQL concurrency were tested: no production credentials, customer data, environment settings or database were accessed.
+
+The repository contains a historical Render checklist with `uvicorn main:app --host 0.0.0.0 --port $PORT`, not an authoritative export of the running service configuration. No current Render Blueprint/start-command/environment evidence is available here. Therefore this review cannot confirm the real socket peer, forwarded-header rewriting, trusted CIDRs, effective FORWARDED_ALLOW_IPS, or API-origin WAF enforcement. These are explicit release blockers, not silently assumed successes.
+
+### Defects reproduced and scoped fixes
+
+Three new tests failed against a330d09 before changes:
+
+1. **Multi-hop identity error:** with trusted peer `10.0.0.9` and chain `spoofed-prefix, 198.51.100.7, 10.0.0.8`, the application charged `10.0.0.8` instead of the actual client. Legitimate clients could share a proxy budget, making per-client throttling unreliable and allowing one visitor to exhaust the shared budget.
+2. **IPv6 textual aliases:** compressed and expanded forms of the same address received different per-IP keys.
+3. **IPv4-mapped aliases:** an IPv4 address and its IPv4-mapped IPv6 form received different per-IP keys. The network budget still bounded abuse, but the stated per-IP budget could be bypassed.
+
+The fix is restricted to `services/public_order_tracking.py` and its public route caller. It canonicalizes IP addresses, collapses mapped IPv4, ignores identity headers from untrusted peers, and walks a bounded forwarded chain from right to left through explicitly trusted hops. It stops at the nearest untrusted client boundary and never trusts the caller-controlled prefix to its left. Duplicate X-Forwarded-For fields are treated as one chain. Unsafe universal/malformed application trust configuration, missing/invalid/all-trusted chains, scoped addresses and excessive chains fail closed with a generic 503 and no order query. Non-IP ASGI peers share a conservative unknown budget rather than inventing distinct identities.
+
+The existing private tracking/token helper is unchanged. No authentication, customer-deletion, payment, receipt, invoice or dispatch implementation was rewritten. No new dependency, table, column, migration or environment variable was introduced.
+
+### Public response, errors and enumeration assessment
+
+- The SQL SELECT projects only the eight progress/completion fields listed in the implementation above. It does not materialize a full order/customer/rider object or read items, totals, payment state, receipts, invoices, PINs, GPS, addresses or profiles. Account deletion state is used only to exclude erased accounts.
+- Success has exactly order_number, status, status_label, delivery_stage and timeline; each timeline member has only step, label and state. Labels come from fixed server mappings, not notes or submitted free text. Timestamps are used as completion evidence but never returned. No customer/rider/payment/PIN field is permitted by the response models.
+- Unknown, archived, operationally removed, erased and deleted-account records are indistinguishable unavailable responses. Invalid/extra/oversized inputs do not echo submitted data. Storage and proxy failures produce fixed errors; logs contain event names, not payloads or identifiers. POST results are no-store/private and noindex; tracking HTML retains noindex/no-store/no-referrer controls.
+- Quotas remain 30 valid lookups/IP/15min, 300/network/15min, and 300/reference/15min, stored atomically in the existing shared database table. All equivalent accepted reference forms normalize before counting. These are **fixed windows**, so up to two windows' allowance can be consumed across a boundary; this is not a rolling-window guarantee. Invalid bodies are bounded/rejected before the database limiter, so pre-validation flooding needs edge controls.
+- **Enumeration is not prevented.** A single allowed budget may cover a small shop's sequential active references. Slow or distributed scans still discover order existence and general progress. The 200/404 distinction intentionally conveys that public information. Codes, link revocation and rate limits are not ownership authentication. Revoking a secure capability does not revoke general public progress.
+- The allowlist and exclusion rules are sufficient to preserve the approved *limited public status* boundary. They are not sufficient to promise order-existence privacy or enumeration resistance. Do not expand this endpoint to items, timestamps, finances or identity data. Stronger privacy would require a separately approved high-entropy reference/capability policy, not an undisclosed extra verification field.
+- Shared NAT/network budgets can cause false positives, and a distributed attacker can exhaust a reference budget for legitimate users. These are availability tradeoffs that must be exercised during staging; limits must not simply be removed to resolve them.
+
+### Render/Uvicorn trust contract — operational blocker
+
+Uvicorn 0.32.1 is the pinned and locally exercised version. Its proxy middleware can rewrite ASGI client metadata *before* application code runs. Trusting all upstreams can select an attacker-supplied leftmost IP: the new tests deliberately demonstrate that unsafe configuration, rather than pretending the application can repair lost socket provenance.
+
+Preferred deployment contract for the whole existing application:
+
+1. Uvicorn is the **single forwarding authority**: proxy headers enabled, FORWARDED_ALLOW_IPS restricted to the verified ingress peer/hop addresses or CIDRs, never an unverified wildcard.
+2. `ORDER_TRACKING_TRUSTED_PROXIES` is empty in this mode. Both private and public application limiters use Uvicorn's already validated client metadata; public tracking canonicalizes the IP but does not re-parse an untrusted client's headers.
+3. If an application-level forwarding mode is already in use, do not copy guessed Render/private/Cloudflare CIDRs. Review the complete real chain and upstream rewriting before approving it. The public resolver's synthetic multi-hop tests do not certify another endpoint's proxy policy.
+
+An operator-approved start-command pattern is:
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port "$PORT" --proxy-headers --forwarded-allow-ips "$FORWARDED_ALLOW_IPS"
+```
+
+Here FORWARDED_ALLOW_IPS must already contain the **verified** allowlist from the actual service topology. This command is documentation, not a change made in Render. Do not use documentation-only test ranges or `*`, `0.0.0.0/0`, `::/0` as a convenient production allowlist. The exact real allowlist cannot be provided honestly from this repository.
+
+Required staging proof (synthetic orders, no real customer lookups):
+
+- Record the effective Uvicorn version/start command, forwarding mode and privately reviewed hop contract. Do not add a public endpoint that echoes IPs, headers or configuration.
+- From two independently controlled egress IPs, show that legitimate lookups use separate budgets. Rotate forged leftmost XFF, X-Real-IP, Forwarded, True-Client-IP and CF-Connecting-IP headers without changing the actual charged identity.
+- In protected staging, verify request 31 within one fixed window is throttled for client A while client B remains eligible. Test before a window boundary. Verify IPv6/mapped representations, malformed chains and fail-closed errors. Repeat across two application workers sharing PostgreSQL; SQLite tests are not a real PostgreSQL/load rehearsal.
+- Confirm no change to private tracking/ownership, checkout, payment approval, refunds, invoice access, dispatch/PIN completion or the existing customer-deletion activation gates.
+
+Official references: [Uvicorn proxy trust](https://uvicorn.dev/deployment/#proxies-and-forwarded-headers), [Uvicorn settings](https://uvicorn.dev/settings/), [Render's client-IP and targeted-abuse guidance](https://render.com/articles/how-render-handles-ddos-attacks). Render documents built-in DDoS protection but leaves targeted application abuse to the application/operator; it does not establish that FoodNova has custom API WAF rules.
+
+### Required API edge/WAF policy — coverage not verified
+
+These are review requirements/proposed initial policy, **not rules installed by this task**. Apply to the real API ingress, not just the Vercel storefront. The frontend currently calls the Render API directly. A WAF on www.foodnova.com.ng alone does not cover that request path.
+
+| Scope | Required behavior |
+|---|---|
+| Host/origin coverage | Cover the deployed API hostname, direct onrender alias and any alternate route to the same public endpoint. Prove an attacker cannot bypass a custom-domain WAF by using the origin. |
+| Path | Match normalized `/tracking/public` and its trailing-slash variant; include a gateway `/api` alias only if actually configured. No blanket rules over checkout, callbacks, payment or dispatch routes. |
+| Methods/CORS | Permit valid POST and required OPTIONS preflights; reject unsupported methods without returning tracking data. Do not count normal preflights as lookups. |
+| Request size/type | Reject decoded bodies over 1024 bytes, including chunked requests; require the supported JSON content type and reject unsupported encodings. Count malformed/rejected traffic at the edge too. |
+| Burst limit | Initial staging policy: at most 6 POSTs/min/IP, with a 15min mitigation interval. Normal public polling is once/min. Validate shared-NAT impact before production. |
+| Sustained limit | At most 30 POSTs/15min/IP at ingress, preferably rolling where supported; retain the application's shared IP/network/reference budgets. Edge rules complement rather than replace them. |
+| Distributed abuse | Monitor global volume, high unavailable/429 ratios and automated sequential scans; use the provider's approved bot/abuse controls. No claim that per-IP throttling stops a botnet. |
+| Privacy | Do not log bodies, order references, query values, auth headers or customer information. Keep only necessary short-retention operational aggregates/correlation data. |
+
+Render custom domains can retain a directly reachable onrender alias; [Render documents alias control](https://render.com/docs/custom-domains#disabling-your-onrendercom-subdomain). That alone is not proof that every alternate path to a custom origin is protected. Existing Vercel/Render account capabilities and any origin-authentication/access controls need operator verification. If the current plan/topology cannot enforce these controls, report that fact and obtain an approved equivalent design; do not silently add a proxy/provider, disable an origin or change environment settings.
+
+### CMS durability and music
+
+The new review test invokes the real existing announcement create/edit/list handlers and Website Settings PATCH with fixture sessions. Unauthenticated, customer and stock-manager writes are denied. The existing broadcast-manager role can create an inactive draft, edit text/link/priority/schedule, publish it and disable the ticker. Fresh database sessions and a second client read the persisted revision/flag; the three existing audit-log entries also persist. An unauthorized overwrite leaves the stored revision intact. This proves real transaction/persistence behavior in isolated fixtures, not an undisclosed production CMS write.
+
+The ticker still shares the existing announcement read with campaigns and refreshes without a frontend rebuild. No duplicate admin system/storage exists. Music remains disabled and unconfigured. Default mount does not fetch/create/play a recording. A new missing/rejected-asset regression confirms that even a future configured asset failure is caught without breaking other feedback or cleanup. No audio file or licence was added; the approved-asset requirement is unchanged.
+
+### Exact release sequence and rollback
+
+1. **Do not deploy while the above gates are unverified.** Review the fix commit and test evidence. Check the existing order_tracking_limits schema/primary key, retention columns and unchanged security flags through an authorized read-only operational review. Do not run any migration for this fix.
+2. Rehearse the actual ingress/proxy and API-origin edge policy on approved staging with synthetic records, shared PostgreSQL and multiple workers. Verify CMS persistence, generic failures, private workflows and quotas there. Keep production credentials/data out of the rehearsal.
+3. Obtain the normal release authorization only after gate evidence supports GO. Coordinate independent deployments: hold frontend production promotion while deploying the approved backend commit to Render. If a main merge auto-deploys both platforms, establish that release control before merging; this task does not change it.
+4. Validate backend health, schema prerequisites, public allowlist/no-store headers and old authenticated/capability endpoints first. Use an approved synthetic record; never enumerate real production orders as a smoke test. The old frontend continues to work with the additive backend.
+5. Promote the frontend to Vercel only after backend readiness. A new frontend against an old backend shows generic public-tracking unavailability, not private data or an auth bypass; this fallback is not a successful release. Preserve the approved API base/CORS settings and all customer-deletion, payment and receipt-security flags.
+6. Through the authorized CMS, review/publish actual top_bar announcements and the global switch; wait for the existing visible-page refresh or reload. Keep Music disabled. Smoke-test public UI, existing cart/auth/checkout entry, mobile navigation and reduced motion without creating live orders.
+
+Rollback: restore the last known-good Vercel frontend first, then restore its compatible backend deployment (pre-feature main is 6b10d3e). Retain independently validated proxy/WAF protections; do not blindly restore an unsafe forwarding configuration. The new client-identity fix requires no schema rollback, counter deletion, customer restoration or receipt changes. Keep all retention migrations and private evidence utilities intact. Old code ignores the ticker JSON setting. For source rollback create a separate reviewed revert branch; never reset/force-push main. No rollback/deployment action was executed during this review.
+
+### Review validation and scope
+
+The reviewed frontend runtime source/assets/package lock/Vercel config are byte-for-byte unchanged from a330d09; only an additional music-failure test was added. The implementation was not recreated or redesigned. A fresh production compilation was performed for validation.
+
+Executed review checks:
+
+| Check | Result |
+|---|---|
+| Focused public tracking and readiness tests | 61 passed, including 22 new readiness cases; the three identity regressions failed before the fix |
+| Backend suite: `python -m pytest -q --disable-warnings tests --ignore=tests/test_retained_orders_postgres.py` | 482 passed; 16 subtests passed; 3463 existing framework warnings |
+| `npm --prefix frontend test -- --run --reporter=basic` | 111 passed, zero failures |
+| `npm --prefix frontend run lint` | Passed |
+| Fresh Vite production build | Passed, 1544 modules transformed |
+| Python syntax: public route, public helper and new readiness tests | Passed |
+| `npm --prefix frontend run test:cinematic` (fresh build + Edge/Playwright) | 13 passed, runner exit 0; 4.2min browser run |
+| `git diff --check` | Passed |
+
+Backend tests used isolated SQLite fixtures (`DATABASE_URL=sqlite:///./test_foodnova_contracts.db`, no production connection) and an empty application proxy allowlist unless a test explicitly supplied synthetic peers. The opt-in live PostgreSQL module was excluded: no migration, multi-worker PostgreSQL concurrency or deployed ingress rehearsal is claimed.
+
+The browser suite exercised the fresh local production bundle at 1440, 1024, 768, 390, 360 and 320px: real catalogue reads/prices/photos, cart persistence/checkout entry, scroll/reduced-motion states, catalogue failure, canonical preview redirect, CMS ticker fixtures, disabled music/fallbacks, and number-only public tracking fixtures. Existing page-error and overflow assertions passed. Browser POST responses for tracking and CMS changes were isolated fixtures, not production writes or proof of deployed authorization. Captures remain under `.codex-attachments/cinematic-validation` and `.codex-attachments/cinematic-phase2-validation`, excluded from Git.
+
+Review changed-file manifest: this document, `backend/routes/public_order_tracking.py`, `backend/services/public_order_tracking.py`, `tests/test_public_tracking_readiness.py`, and `frontend/test/homepage-tracking-enhancements.test.mjs`. Build output, captures and unrelated local files are not part of the release commit.
+
+An AST comparison against pre-feature main 6b10d3e shows that the only changed backend/main.py definitions are default_website_settings, normalize_website_settings, WebsiteSettingsPayload and get_active_announcements. Payment, dispatch and order lifecycle functions are identical. Models, authentication, checkout/cart state, customer-deletion/retention services, private receipt services and production migration utilities remain unchanged. The intentional order-placed email CTA change in a330d09 remains; recipient, payment approval and invoice logic were not changed by this review.
