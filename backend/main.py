@@ -398,6 +398,7 @@ def default_website_settings() -> dict:
         "homepageBanners": "",
         "featuredPacks": "",
         "homepageAnnouncement": "",
+        "tickerEnabled": True,
         "subscribers": [],
     }
 
@@ -409,6 +410,7 @@ def normalize_website_settings(raw: dict = None) -> dict:
     settings["comingSoonEnabled"] = bool(settings.get("comingSoonEnabled"))
     settings["maintenanceMode"] = bool(settings.get("maintenanceMode"))
     settings["splashEnabled"] = bool(settings.get("splashEnabled"))
+    settings["tickerEnabled"] = settings.get("tickerEnabled") is True
     if not isinstance(settings.get("subscribers"), list):
         settings["subscribers"] = []
     for key in ["siteName", "siteDescription", "headline", "subtext", "launchDate", "homepageBanners", "featuredPacks", "homepageAnnouncement"]:
@@ -2181,6 +2183,7 @@ def set_app_setting(db, key: str, value: str) -> DBAppSetting:
 
 
 class WebsiteSettingsPayload(BaseModel):
+    tickerEnabled: Optional[bool] = None
     comingSoonEnabled: Optional[bool] = None
     maintenanceMode: Optional[bool] = None
     splashEnabled: Optional[bool] = None
@@ -17236,7 +17239,8 @@ def get_active_announcements():
             "active_image_urls": [item.get("image_url", "") for item in announcements],
             "rejected": rejected,
         }))
-        return {"success": True, "announcements": announcements, "data": announcements}
+        return {"success": True, "announcements": announcements, "data": announcements,
+                "ticker_enabled": get_website_settings_from_db(db)["tickerEnabled"]}
     except Exception as error:
         print("ACTIVE ANNOUNCEMENTS LOAD ERROR:", repr(error))
         return {"success": True, "announcements": [], "data": []}
