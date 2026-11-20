@@ -22,3 +22,6 @@
 :is(.floating-order-tracking, .tracking-modal, .tracking-full-entry) :is(button, input, a):focus-visible { outline: 3px solid #F5CB29; outline-offset: 3px; }
 @media (max-width: 640px) { .floating-order-tracking { right: 18px; bottom: 138px; } .floating-order-tracking > button { font-size: .8rem; padding: 10px 12px; } .tracking-modal { padding: 18px; } }
 @media (prefers-reduced-motion: reduce) { .floating-order-tracking *, .tracking-modal * { transition: none !important; animation: none !important; } }
+
+.tracking-progress .public-tracking-badge{display:inline-block;padding:8px 14px;border:1px solid #075338;border-radius:24px;background:#e6edda;color:#075338;font-size:1.05rem;line-height:1.4;max-width:100%;overflow-wrap:anywhere}
+.tracking-progress li[aria-current=step]{border-color:#c99c16;background:color-mix(in srgb,#f5cb29 12%,var(--fn-surface));font-weight:700}

@@ -9,7 +9,10 @@ import { formatPackContents, normalizeStoreItem, packEnquiryUrl } from './produc
 import { normalizeHeroBanner } from './homepageHero'
 import { unwrapItem } from '../utils/shopping'
 import { CinematicSection, useCinematicMotion } from '../components/CinematicMotion'
-import { catalogueRows, curatedProducts, photographicImage, optimizeCataloguePhoto, categoryPhoto, isActive, itemPrice, packLink, productLink, reviewCinematicPurchase } from './cinematicCatalogue'
+import { catalogueRows, curatedProducts, photographicImage, optimizeCataloguePhoto, categoryPhotos, isActive, itemPrice, packLink, productLink, reviewCinematicPurchase } from './cinematicCatalogue'
+import CategoryPhoto from '../components/CategoryPhoto'
+import CinematicAudio, { useCinematicAudio } from '../components/CinematicAudio'
+import { isLegacyHomepagePromotion } from '../utils/homepageAnnouncements'
 import './CinematicHomePage.css'
 
 const ShoppingWidgets = lazy(() => import('../components/ShoppingWidgets'))
@@ -29,7 +32,7 @@ function Price({ value }) {
   return value == null ? <span>See current price</span> : <span>{formatPrice(value)}</span>
 }
 
-function ProductCard({ raw, index }) {
+function ProductCard({ raw, index, audio }) {
   const [product, setProduct] = useState(raw)
   const [variantId, setVariantId] = useState(() => itemPrice(raw).variant?.id)
   const [busy, setBusy] = useState(false)
@@ -47,6 +50,7 @@ function ProductCard({ raw, index }) {
         return
       }
       addItem(line)
+      audio.feedback('cart')
       toast.success(`${product.name} added to cart`)
     } catch (error) { toast.error(error.message || 'Please check the current catalogue.') }
     finally { setBusy(false) }
@@ -60,7 +64,7 @@ function ProductCard({ raw, index }) {
   </article>
 }
 
-function PackCard({ raw, index }) {
+function PackCard({ raw, index, audio }) {
   const [pack, setPack] = useState(raw)
   const [busy, setBusy] = useState(false)
   const addItem = useCartStore((state) => state.addItem)
@@ -70,7 +74,7 @@ function PackCard({ raw, index }) {
     try {
       const { line, changed } = await reviewCinematicPurchase({ product: pack, type: 'pack', services })
       if (changed) { setPack(unwrapItem(await packsAPI.getById(pack.id))); toast('Review the updated pack price, then add again.'); return }
-      addItem(line); toast.success(`${pack.name} added to cart`)
+      addItem(line); audio.feedback('cart'); toast.success(`${pack.name} added to cart`)
     } catch { toast('Please enquire with FoodNova about this pack.') }
     finally { setBusy(false) }
   }
@@ -85,20 +89,21 @@ function PackCard({ raw, index }) {
   </article>
 }
 
-export default function CinematicHomePage() {
+export default function CinematicHomePage({ announcements = [] }) {
   const root = useRef(null)
-  const [data, setData] = useState({ products: [], packs: [], categories: [], campaigns: [] })
+  const audio = useCinematicAudio(root)
+  const [data, setData] = useState({ products: [], packs: [], categories: [] })
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState([])
   const [refresh, setRefresh] = useState(0)
   useEffect(() => {
     const controller = new AbortController()
-    const paths = ['/products?page=1&page_size=100', '/packs?page=1&page_size=100', '/categories', '/announcements/active']
+    const paths = ['/products?page=1&page_size=100', '/packs?page=1&page_size=100', '/categories']
     Promise.allSettled(paths.map((path) => api.get(path, { signal: controller.signal }))).then((results) => {
       if (controller.signal.aborted) return
-      const keys = ['products', 'packs', 'categories', 'announcements']
+      const keys = ['products', 'packs', 'categories']
       const lists = results.map((result, i) => result.status === 'fulfilled' ? catalogueRows(result.value, keys[i]) : [])
-      setData({ products: lists[0].filter(isActive), packs: lists[1].filter(isActive), categories: lists[2].filter(isActive), campaigns: lists[3].filter((item) => item.display_type === 'hero_banner') })
+      setData({ products: lists[0].filter(isActive), packs: lists[1].filter(isActive), categories: lists[2].filter(isActive) })
       setErrors(results.flatMap((result, i) => result.status === 'rejected' && i < 3 ? [keys[i]] : []))
       setLoading(false)
     })
@@ -108,7 +113,7 @@ export default function CinematicHomePage() {
   const hero = products[0] || data.packs.find(photographicImage)
   const stories = products.slice(0, 3)
   useCinematicMotion(root, data)
-  return <div className="cinematic-homepage" ref={root}>
+  return <div className="cinematic-homepage" ref={root} onClick={(event) => { if (event.target.closest('a.cinema-button')) audio.feedback('cta') }}>
     <section className="cinema-hero" aria-labelledby="cinema-title">
       <div className="cinema-hero-grain" aria-hidden="true" />
       <div className="cinema-hero-copy"><p className="cinema-eyebrow"><span /> YOUR EVERYDAY, WELL STOCKED.</p><h1 id="cinema-title">Good Food.<br /><em>Better Value.</em></h1>
@@ -124,10 +129,11 @@ export default function CinematicHomePage() {
       </> : <div className="cinema-hero-empty"><span>FOODNOVA</span><p>{loading ? 'Your pantry selection is loading…' : 'Explore the current catalogue for your kitchen essentials.'}</p><Link to="/products">Browse foodstuff <ArrowUpRight size={22} /></Link></div>}</div>
       <a href="#cinema-story" className="cinema-scroll-cue">A LITTLE SCROLL. A LOT TO DISCOVER. <ArrowDown size={17} /></a>
     </section>
+    <CinematicAudio audio={audio} />
     <div className="cinema-values-strip"><span>EVERYDAY ESSENTIALS</span><i aria-hidden="true">✳</i><span>THOUGHTFULLY PACKED</span><i aria-hidden="true">✳</i><span>FOODNOVA VALUE</span></div>
     {errors.length > 0 && <div className="cinema-api-notice" role="status">Some catalogue sections could not load. <button type="button" onClick={() => { setLoading(true); setRefresh((value) => value + 1) }}>Try again</button> or <Link to="/products">visit the catalogue</Link>.</div>}
     {products.length > 1 && <section className="cinema-assembly" data-cinema-assembly aria-labelledby="cinema-assembly-title"><div className="cinema-assembly-sticky"><div className="cinema-assembly-copy"><p className="cinema-eyebrow">THE INGREDIENTS OF A GOOD EVERYDAY</p><h2 id="cinema-assembly-title">A pantry.<br /><em>Full of possibility.</em></h2><p>Explore the essentials that bring your kitchen together.</p><Link className="cinema-text-link" to="/products">Build your pantry <ArrowUpRight size={20} /></Link></div><div className="cinema-assembly-art">{products.slice(0, 5).map((product, index) => <Link key={product.id} className={`cinema-assembly-layer assembly-layer-${index}`} data-cinema-layer to={productLink(product.id)} aria-label={`Explore ${product.name}`}><Photo item={product} /><span>{product.name} <b><Price value={itemPrice(product).price} /></b></span></Link>)}</div><span className="cinema-assembly-scroll">SCROLL TO BRING IT TOGETHER <ArrowDown size={16} /></span></div></section>}
-    {data.campaigns.map((item) => {
+    {announcements.filter((item) => item.display_type === 'hero_banner' && !isLegacyHomepagePromotion(item)).map((item) => {
       const campaign = normalizeHeroBanner(item, { headline: 'From the FoodNova pantry', primary: 'Shop FoodNova', primaryTo: '/products' })
       return <CinematicSection className="cinema-campaign" key={item.id}><div><p className="cinema-eyebrow">{campaign.eyebrow || 'FROM FOODNOVA'}</p><h2>{campaign.headline} {campaign.highlight && <em>{campaign.highlight}</em>}</h2><p>{campaign.subtext}</p><Link to={campaign.primaryTo} className="cinema-button cinema-button-dark">{campaign.primary} <ArrowUpRight size={19} /></Link></div>{campaign.promotionalImage && <img src={resolveMediaUrl(campaign.promotionalImage)} alt={campaign.headline} width="700" height="600" loading="lazy" decoding="async" />}</CinematicSection>
     })}
@@ -139,16 +145,16 @@ export default function CinematicHomePage() {
       </section>)}
     </section>
     <CinematicSection className="cinema-packs-section" id="cinema-packs"><div className="cinema-section-heading"><div><p className="cinema-eyebrow">LESS PLANNING. MORE LIVING.</p><h2>A whole lot<br />of <em>good.</em></h2></div><div><p>Discover our Food Packs. Your favourite essentials, brought together.</p><Link to="/products?tab=packs" className="cinema-text-link">Explore every pack <ArrowUpRight size={19} /></Link></div></div>
-      <div className="cinema-pack-grid">{data.packs.map((pack, index) => <PackCard raw={pack} index={index} key={pack.id} />)}</div>
+      <div className="cinema-pack-grid">{data.packs.map((pack, index) => <PackCard raw={pack} index={index} audio={audio} key={pack.id} />)}</div>
       {!loading && !data.packs.length && <p>Food Packs are currently unavailable to load. <Link to="/products?tab=packs">Visit Food Packs</Link>.</p>}
     </CinematicSection>
     <CinematicSection className="cinema-categories"><div className="cinema-section-heading"><div><p className="cinema-eyebrow">FIND YOUR EVERYDAY</p><h2>What’s on<br /><em>your list?</em></h2></div><Link to="/products" className="cinema-text-link">Shop the pantry <ArrowUpRight size={19} /></Link></div>
-      <div className="cinema-category-grid">{data.categories.map((category, index) => {
-        const image = categoryPhoto(category, data.products)
-        return <Link to={`/products?category=${encodeURIComponent(category.name)}`} key={category.id} className="cinema-category" data-cinema-reveal><div className="cinema-category-image">{image ? <img src={resolveMediaUrl(image)} alt={`Food selection in ${category.name}`} width="400" height="400" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.style.visibility = 'hidden' }} /> : <span aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>}</div><h3>{category.name}</h3><ArrowUpRight size={21} /></Link>
+      <div className="cinema-category-grid">{data.categories.map((category) => {
+        const candidates = categoryPhotos(category, data.products)
+        return <Link to={`/products?category=${encodeURIComponent(category.name)}`} key={category.id} className="cinema-category" data-cinema-reveal><CategoryPhoto key={candidates.join('|')} category={category} candidates={candidates} /><h3>{category.name}</h3><ArrowUpRight size={21} /></Link>
       })}</div>
     </CinematicSection>
-    <CinematicSection className="cinema-featured"><div className="cinema-section-heading"><div><p className="cinema-eyebrow">MAKE ROOM IN YOUR PANTRY</p><h2>Everyday <em>favourites.</em></h2></div><Link to="/products" className="cinema-text-link">Shop all essentials <ArrowUpRight size={19} /></Link></div><div className="cinema-product-grid">{products.map((product, index) => <ProductCard raw={product} index={index} key={product.id} />)}</div>
+    <CinematicSection className="cinema-featured"><div className="cinema-section-heading"><div><p className="cinema-eyebrow">MAKE ROOM IN YOUR PANTRY</p><h2>Everyday <em>favourites.</em></h2></div><Link to="/products" className="cinema-text-link">Shop all essentials <ArrowUpRight size={19} /></Link></div><div className="cinema-product-grid">{products.map((product, index) => <ProductCard raw={product} index={index} audio={audio} key={product.id} />)}</div>
       {loading && <p role="status">Loading the current FoodNova catalogue…</p>}
     </CinematicSection>
     <CinematicSection className="cinema-shopping"><Suspense fallback={<p>Loading shopping tools…</p>}><ShoppingWidgets products={data.products} /></Suspense></CinematicSection>

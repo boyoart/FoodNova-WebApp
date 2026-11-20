@@ -39,6 +39,7 @@ import InboxPage from './pages/InboxPage'
 import InvoicePage from './pages/InvoicePage'
 import AppLandingPage from './pages/AppLandingPage'
 import './modal-scroll-fix.css'
+import HomepageTicker, { useHomepageAnnouncements } from './components/HomepageTicker'
 
 // Approved homepage; HomePage.jsx/CSS remain unchanged for rollback.
 const CinematicHomePage = lazy(() => import('./pages/CinematicHomePage'))
@@ -47,13 +48,15 @@ function AppLayout() {
   const location = useLocation()
   const isAdminRoute = location.pathname.startsWith('/admin')
   const isCinematicHomepage = location.pathname === '/'
+  const cms = useHomepageAnnouncements(isCinematicHomepage)
 
   return (
     <div className={isAdminRoute ? 'admin-app-frame' : `public-app-frame${isCinematicHomepage ? ' cinematic-homepage-frame' : ''}`} style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {!isAdminRoute && <Navbar />}
+      {isCinematicHomepage && <HomepageTicker announcements={cms.announcements} enabled={cms.tickerEnabled} />}
       <main style={{ flex: 1 }}>
             <Routes>
-              <Route path="/" element={<Suspense fallback={<p role="status">Loading FoodNova...</p>}><CinematicHomePage /></Suspense>} />
+              <Route path="/" element={<Suspense fallback={<p role="status">Loading FoodNova...</p>}><CinematicHomePage announcements={cms.announcements} /></Suspense>} />
               <Route path="/preview/cinematic-homepage" element={<Navigate to="/" replace />} />
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/app" element={<AppLandingPage />} />

@@ -61,7 +61,7 @@ test('active combo packs retain neutral enquiry behavior and real component cont
 test('approved homepage is canonical, preview redirects and shared contracts remain authoritative', () => {
   const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
   const page = readFileSync(new URL('../src/pages/CinematicHomePage.jsx', import.meta.url), 'utf8')
-  assert.match(app, /path="\/" element=\{<Suspense[^\n]+<CinematicHomePage \/>/)
+  assert.match(app, /path="\/" element=\{<Suspense[^\n]+<CinematicHomePage announcements=\{cms\.announcements\} \/>/)
   assert.match(app, /path="\/preview\/cinematic-homepage" element=\{<Navigate to="\/" replace \/>\}/)
   assert.doesNotMatch(page, /cinema-preview-note|Current homepage/)
   assert.match(page, /normalizeHeroBanner/)

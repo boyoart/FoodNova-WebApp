@@ -35,7 +35,8 @@ const getTokenForRequest = (url = "") => {
 api.interceptors.request.use((config) => {
   const token = getTokenForRequest(config.url);
 
-  if (token) {
+  if (config.skipAuth) delete config.headers.Authorization
+  else if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
@@ -275,6 +276,7 @@ export const verificationAPI = {
 }
 
 export const trackingAPI = {
+  publicProgress: async (order_number, signal) => (await api.post('/tracking/public', { order_number }, { signal, skipAuth: true })).data,
   lookup: async (payload, signal) => (await api.post('/tracking/lookup', payload, { signal })).data,
   progress: async (token, signal) => (await api.post('/tracking/progress', { token }, { signal })).data,
 }

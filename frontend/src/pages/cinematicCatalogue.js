@@ -30,8 +30,14 @@ export const itemPrice = (raw, variantId) => {
   return { variant, price: value != null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null }
 }
 
-export const categoryPhoto = (category, products) => photographicImage(category) || photographicImage(products.find((p) => isActive(p)
-  && (p.category === category.name || p.category_name === category.name) && photographicImage(p)))
+export const categoryPhotos = (category, products) => {
+  const clean = (value) => String(value || '').trim().toLowerCase()
+  const matches = products.filter((p) => isActive(p) && (
+    (p.category_id != null && String(p.category_id) === String(category.id)) ||
+    [p.category, p.category_name].some((name) => name && clean(name) === clean(category.name))))
+  return [...new Set([photographicImage(category), ...matches.map(photographicImage)].filter(Boolean))]
+}
+export const categoryPhoto = (category, products) => categoryPhotos(category, products)[0] || ''
 export const packLink = (pack) => `/products?tab=packs&search=${encodeURIComponent(pack.name)}`
 export { productLink }
 

@@ -299,6 +299,7 @@ export default function Navbar() {
         <ul id="customer-navigation" className={`nav-menu ${mobileMenuOpen ? 'active' : ''}`}>
           <li className="nav-item"><Link to="/" className={navLinkClass('/')}><Home size={18} /><span>Home</span></Link></li>
           <li className="nav-item"><Link to="/products" className={navLinkClass('/products')}><Package size={18} /><span>Products</span></Link></li>
+          {!isAdmin && <li className="nav-item"><Link to="/track-order" className={navLinkClass('/track-order')}><span>Track Order</span></Link></li>}
           {!isAdmin && <li className="nav-item"><Link to="/app" className={navLinkClass('/app')}><Download size={18} /><span>Download App</span></Link></li>}
 
           {isAuthenticated && !isAdmin && (

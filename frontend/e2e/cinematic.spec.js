@@ -12,7 +12,7 @@ test.beforeEach(async ({ context }) => {
   await mkdir(screenshots, { recursive: true })
 })
 
-for (const width of [1440, 1024, 768, 390, 360]) {
+for (const width of [1440, 1024, 768, 390, 360, 320]) {
   test(`live catalogue layout and shopping at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const errors = []

@@ -174,6 +174,8 @@ def send_customer_order_email(order, event_type, extra=None):
     cta_url = f"{FRONTEND_URL}/orders"
 
     if event_type == "order_placed":
+        cta_text = 'Track My Order'
+        cta_url = f"{FRONTEND_URL}/track-order"
         subject = f"FoodNova Order Placed - {order_code}"
         message = "Your order has been placed successfully. Use your order code as payment narration and upload your receipt after payment."
         extra_html = (

@@ -37,7 +37,7 @@ export default function Footer() {
           <div className="footer-section">
             <h5>Help &amp; Support</h5>
             <ul>
-              <li><Link to="/orders">Track Order</Link></li>
+              <li><Link to="/track-order">Track Order</Link></li>
               <li><Link to="/contact">Customer Support</Link></li>
               <li><a href={`mailto:${FOODNOVA_CONTACT.email}`}>Report Issue</a></li>
             </ul>

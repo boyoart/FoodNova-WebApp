@@ -32,7 +32,7 @@ export function OrderTrackingProvider({ children }) {
     else if (response.status === 'limited') setResult({ kind: 'guest', order: response.progress })
     else { setMessage(response.message || 'Sign in or request a secure email link to continue.'); setResult(null) }
   }
-  const lookup = async (code, email = '') => {
+  const lookup = async (code) => {
     if (!allowed || !validOrderNumber(code)) { setMessage('Enter the order number shown in your FoodNova confirmation email.'); return }
     currentRequest.current?.abort()
     const controller = new AbortController()
@@ -41,9 +41,14 @@ export function OrderTrackingProvider({ children }) {
     setCode(code.trim())
     setBusy(true); setMessage(''); setResult(null)
     try {
-      const response = await trackingAPI.lookup({ order_code: code.trim(), email: email.trim() }, controller.signal)
-      if (!controller.signal.aborted && identityRef.current === owner) { orderCode.current = code.trim(); apply(response, owner) }
-    } catch { if (!controller.signal.aborted) setMessage('We could not verify this order. Sign in to My Orders or try again shortly.') }
+      const privateResult = owner ? await trackingAPI.lookup({ order_code: code.trim() }, controller.signal) : null
+      const response = privateResult?.status === 'authorized' ? privateResult : await trackingAPI.publicProgress(code.trim(), controller.signal)
+      if (!controller.signal.aborted && identityRef.current === owner) {
+        orderCode.current = code.trim()
+        if (response.timeline) setResult({ kind: 'public', order: response })
+        else apply(response, owner)
+      }
+    } catch (error) { if (!controller.signal.aborted) setMessage(error.response?.status === 429 ? 'Please wait before checking again.' : 'Order progress is unavailable. Check your order number or try again shortly.') }
     finally { if (!controller.signal.aborted) setBusy(false) }
   }
   useEffect(() => {
@@ -60,40 +65,50 @@ export function OrderTrackingProvider({ children }) {
     return () => controller.abort()
   }, [token, allowed])
   useEffect(() => {
-    if (!allowed || !(open || fullPage) || !data || terminalTracking(data.order)) return undefined
+    if (!allowed || !(open || fullPage) || !data || (data.kind === 'public' ? ['delivered', 'picked_up_by_customer', 'cancelled', 'delivery_update'].includes(data.order.status) : terminalTracking(data.order))) return undefined
     return startTrackingPolling({ refresh: async (signal) => {
       try {
-        const response = data.kind === 'guest' ? await trackingAPI.progress(token, signal) : await trackingAPI.lookup({ order_code: orderCode.current }, signal)
-        if (!signal.aborted) apply(response, identity)
+        const response = data.kind === 'guest' ? await trackingAPI.progress(token, signal) : data.kind === 'public' ? await trackingAPI.publicProgress(orderCode.current, signal) : await trackingAPI.lookup({ order_code: orderCode.current }, signal)
+        if (!signal.aborted) {
+          if (data.kind === 'public') setResult({ kind: 'public', order: response })
+          else apply(response, identity)
+        }
       } catch (error) {
         if (signal.aborted) return
-        if ([401, 403, 404].includes(error.response?.status)) { setResult(null); setMessage('Tracking access expired. Please sign in or request a new secure link.') }
+        if (data.kind === 'public' && [401, 403, 404].includes(error.response?.status)) { setResult(null); setMessage('Order progress is unavailable. Check your order number or contact FoodNova support.') }
+        else if ([401, 403, 404].includes(error.response?.status)) { setResult(null); setMessage('Tracking access expired. Please sign in or request a new secure link.') }
         else setMessage('Updates are temporarily unavailable. Last retrieved progress is shown.')
       }
-    } })
-  }, [allowed, open, fullPage, data?.kind, data?.order?.order_status, identity, token])
+    }, interval: data.kind === 'public' ? 60000 : 20000 })
+  }, [allowed, open, fullPage, data?.kind, data?.order?.order_status, data?.order?.status, identity, token])
   useEffect(() => () => currentRequest.current?.abort(), [])
   useEffect(() => {
     if (!(open || fullPage)) { currentRequest.current?.abort(); setBusy(false) }
   }, [open, fullPage])
-  return <TrackingContext.Provider value={{ allowed, open, setOpen, data, busy, message, lookup, code }}>{children}</TrackingContext.Provider>
+  const refresh = async () => {
+    if (data?.kind !== 'guest') return lookup(code)
+    setBusy(true)
+    try { apply(await trackingAPI.progress(token), '') }
+    catch { setMessage('Tracking is temporarily unavailable. Please try again shortly.') }
+    finally { setBusy(false) }
+  }
+  return <TrackingContext.Provider value={{ allowed, open, setOpen, data, busy, message, lookup, refresh, code }}>{children}</TrackingContext.Provider>
 }
 
 function TrackingContent({ fullPage }) {
   const tracking = useContext(TrackingContext)
   const [code, setCode] = useState(tracking.code || '')
-  const [email, setEmail] = useState('')
   const { data, busy, message, lookup } = tracking
-  return <><h2 id={fullPage ? 'full-tracking-title' : 'quick-tracking-title'}>Track Your Order</h2>
-    <form onSubmit={(event) => { event.preventDefault(); lookup(code, email) }}><label htmlFor={fullPage ? 'full-order-number' : 'quick-order-number'}>Order number</label><input id={fullPage ? 'full-order-number' : 'quick-order-number'} value={code} onChange={(event) => setCode(event.target.value)} maxLength={40} required autoComplete="off" placeholder="From your confirmation email" />
-      <label htmlFor={fullPage ? 'full-tracking-email' : 'quick-tracking-email'}>Order email (for a secure guest link)</label><input id={fullPage ? 'full-tracking-email' : 'quick-tracking-email'} type="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={254} autoComplete="email" />
+  return <><h2 id={fullPage ? 'full-tracking-title' : 'quick-tracking-title'}>Order progress</h2>
+    <p>Enter your order number to check your delivery progress. No account required.</p>
+    <form aria-busy={busy} onSubmit={(event) => { event.preventDefault(); lookup(code) }}><label htmlFor={fullPage ? 'full-order-number' : 'quick-order-number'}>Order Number</label><input id={fullPage ? 'full-order-number' : 'quick-order-number'} value={code} onChange={(event) => setCode(event.target.value)} maxLength={30} required autoComplete="off" placeholder="e.g. FN-001" />
       <button type="submit" disabled={busy}>{busy ? 'Checking…' : 'Track Order'}</button></form>
     <p role="status">{message}</p>
-    {data && <section className="tracking-progress" aria-label="Current order progress"><h3>{orderStatusLabel(canonicalOrderStatus(data.order))}</h3><p>Current recorded status. No estimated arrival time is provided.</p><ol>{trackingTimeline(data.order).map((step) => <li key={step.label} className={step.completed ? 'is-complete' : ''}>{step.completed ? '✓ ' : ''}{step.label}<span className="sr-only">{step.completed ? ' reached' : ' not yet reached'}</span></li>)}</ol>
+    {data?.kind === 'public' && <section className="tracking-progress" aria-label="Current order progress"><p>Order {data.order.order_number}</p><h3 className="public-tracking-badge">{data.order.status_label}</h3><p>{data.order.delivery_stage}</p><ol>{data.order.timeline.map((step) => <li key={step.step} className={step.state === 'completed' ? 'is-complete' : ''} aria-current={step.state === 'current' ? 'step' : undefined}>{step.label}<span className="sr-only"> — {step.state}</span></li>)}</ol><button type="button" disabled={busy} onClick={tracking.refresh}>Refresh status</button><p>Last retrieved general progress. No arrival estimate is provided.</p><Link to="/contact">Contact FoodNova support</Link></section>}
+    {data && data.kind !== 'public' && <section className="tracking-progress" aria-label="Current order progress"><h3>{orderStatusLabel(canonicalOrderStatus(data.order))}</h3><p>Current recorded status. No estimated arrival time is provided.</p><ol>{trackingTimeline(data.order).map((step) => <li key={step.label} className={step.completed ? 'is-complete' : ''}>{step.completed ? '✓ ' : ''}{step.label}<span className="sr-only">{step.completed ? ' reached' : ' not yet reached'}</span></li>)}</ol>
       {data.kind === 'customer' ? <><p>Order {data.order.order_code}</p><p>Total: {formatPrice(data.order.total_amount)} · Payment: {data.order.payment_status}</p><ul>{data.order.items?.map((item, i) => <li key={i}>{item.product_name || item.name} × {item.quantity || item.qty}</li>)}</ul><Link to={`/track-order?order=${encodeURIComponent(data.order.order_code)}`}>View Full Tracking</Link></>
         : <><p>This private link permits limited progress only.</p><Link to="/login" state={{ from: '/track-order' }}>Log In for Full Details</Link></>}
     </section>}
-    {!data && <p><Link to="/login" state={{ from: '/track-order' }}>Sign in to My Orders</Link> for private order details.</p>}
   </>
 }
 

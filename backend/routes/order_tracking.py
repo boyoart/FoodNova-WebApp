@@ -16,6 +16,8 @@ class Capability(BaseModel):
 
 def build_router(core):
     router = APIRouter(prefix='/tracking', tags=['tracking'])
+    from routes.public_order_tracking import build_router as public_router
+    router.include_router(public_router(core))
 
     def headers(response):
         response.headers['Cache-Control'] = 'no-store, private'
