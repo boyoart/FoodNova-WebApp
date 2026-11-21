@@ -1,11 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { categoryPhotos } from '../src/pages/cinematicCatalogue.js'
 import { tickerAnnouncements, safeAnnouncementLink, isLegacyHomepagePromotion } from '../src/utils/homepageAnnouncements.js'
 import { createCinematicAudio } from '../src/utils/cinematicAudio.js'
+import viteConfig from '../vite.config.js'
 
 const source = (name) => readFileSync(new URL(`../src/${name}`, import.meta.url), 'utf8')
+
+test('build enables signature music only when the expected public asset exists', () => {
+  const asset = new URL('../public/audio/foodnova-signature-lounge.mp3', import.meta.url)
+  assert.equal(viteConfig.define['import.meta.env.VITE_SIGNATURE_MUSIC_PRESENT'], JSON.stringify(existsSync(asset)))
+  assert.match(source('components/CinematicAudio.jsx'), /audio\/foodnova-signature-lounge\.mp3/)
+})
 
 test('category images prefer own photography and only explicitly associated active product photos', () => {
   const category = { id: 8, name: 'Oils', image_url: '/category.jpg' }
@@ -103,7 +111,7 @@ test('configured music starts only on opt-in, loops, fades, pauses and resumes',
   for(let i=0;i<20;i++) for(const fn of [...timers.values()]) fn()
   assert.equal(timers.size,0); assert.equal(calls.element.volume,0); assert.equal(calls.pauses,2)
   audio.dispose()
-  assert.match(source('components/CinematicAudio.jsx'), /No background music is configured/)
+  assert.match(source('components/CinematicAudio.jsx'), /VITE_SIGNATURE_MUSIC_PRESENT/)
 })
 
 test('a missing or rejected future music asset cannot break the homepage audio controller', async () => {
@@ -115,6 +123,16 @@ test('a missing or rejected future music asset cannot break the homepage audio c
   assert.doesNotThrow(()=>audio.feedback('cart'))
   audio.dispose()
   assert.equal(calls.closed,1)
+})
+
+test('a synchronous media failure does not disable interaction effects', async () => {
+  const { calls, Context, AudioElement } = audioFixture()
+  class BrokenAudio extends AudioElement { play() { throw new Error('Synthetic unsupported audio') } }
+  const audio = createCinematicAudio({ Context, AudioElement:BrokenAudio, musicUrl:'/missing.mp3' })
+  assert.equal(await audio.setEnabled(true),true)
+  audio.feedback('cart')
+  assert.equal(calls.tones,1)
+  audio.dispose()
 })
 
 test('save-data skips background music even after opt-in', async () => {

@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { Volume2, VolumeX } from 'lucide-react'
 import { createCinematicAudio } from '../utils/cinematicAudio'
 
-// No background music is configured until a suitable licensed recording is approved.
+const musicUrl = import.meta.env.VITE_SIGNATURE_MUSIC_PRESENT
+  ? `${import.meta.env.BASE_URL}audio/foodnova-signature-lounge.mp3` : ''
+
 export function useCinematicAudio() {
   const controller = useRef(null)
   const enabledRef = useRef(false)
   const toggleRequest = useRef(0)
   const [enabled, setEnabled] = useState(false)
   useEffect(() => {
-    const audio = createCinematicAudio()
+    const audio = createCinematicAudio({ musicUrl })
     controller.current = audio
     const visibility = () => audio.setHidden(document.hidden)
     document.addEventListener('visibilitychange', visibility)

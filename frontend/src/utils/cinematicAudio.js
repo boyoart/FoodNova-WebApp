@@ -15,13 +15,17 @@ export function createCinematicAudio({ Context = globalThis.AudioContext || glob
   }
   const startMusic = () => {
     if (!musicUrl || !AudioElement || hidden || saveData) return
-    if (!music) { music = new AudioElement(musicUrl); music.loop = true; music.volume = 0; music.preload = 'none' }
-    const request = generation
-    Promise.resolve(music.play()).then(() => {
-      if (disposed || !enabled || hidden) { music.pause(); return }
-      if (request !== generation) return
-      rampMusic(0.1)
-    }).catch((error) => console.warn('FoodNova background music could not play:', error))
+    try {
+      if (!music) { music = new AudioElement(musicUrl); music.loop = true; music.volume = 0; music.preload = 'none' }
+      const request = generation
+      Promise.resolve(music.play()).then(() => {
+        if (disposed || !enabled || hidden) { music.pause(); return }
+        if (request !== generation) return
+        rampMusic(0.1)
+      }).catch((error) => console.warn('FoodNova background music could not play:', error))
+    } catch (error) {
+      console.warn('FoodNova background music could not play:', error)
+    }
   }
   const setEnabled = async (value) => {
     if (disposed) return false

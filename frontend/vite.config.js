@@ -1,8 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_SIGNATURE_MUSIC_PRESENT': JSON.stringify(
+      existsSync(fileURLToPath(new URL('./public/audio/foodnova-signature-lounge.mp3', import.meta.url)))
+    )
+  },
   server: {
     port: 5173,
     proxy: {
