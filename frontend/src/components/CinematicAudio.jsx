@@ -1,32 +1,40 @@
-import { useEffect, useState } from 'react'
-import { Music, Volume2, VolumeX } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Volume2, VolumeX } from 'lucide-react'
 import { createCinematicAudio } from '../utils/cinematicAudio'
 
-// Music stays unconfigured until an approved asset and licence are committed.
-export function useCinematicAudio(root) {
-  const [controller, setController] = useState(null)
+// No background music is configured until a suitable licensed recording is approved.
+export function useCinematicAudio() {
+  const controller = useRef(null)
+  const enabledRef = useRef(false)
+  const toggleRequest = useRef(0)
   const [enabled, setEnabled] = useState(false)
   useEffect(() => {
     const audio = createCinematicAudio()
-    setController(audio)
-    const hide = () => { if (document.hidden) { audio.pause(); setEnabled(false) } }
-    document.addEventListener('visibilitychange', hide)
-    const scene = root.current?.querySelector('.cinema-story-intro')
-    let reached = false
-    const observer = scene && typeof IntersectionObserver === 'function' ? new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && !reached) { reached = true; audio.feedback('scene') }
-    }, { threshold: 0.3 }) : null
-    if (observer) observer.observe(scene)
-    return () => { observer?.disconnect(); document.removeEventListener('visibilitychange', hide); audio.dispose() }
-  }, [root])
-  return { feedback: (kind) => controller?.feedback(kind), enabled,
-    toggle: async () => { if (controller) setEnabled(await controller.setEnabled(!enabled)) } }
+    controller.current = audio
+    const visibility = () => audio.setHidden(document.hidden)
+    document.addEventListener('visibilitychange', visibility)
+    return () => { document.removeEventListener('visibilitychange', visibility); controller.current = null; enabledRef.current = false; audio.dispose() }
+  }, [])
+  return {
+    feedback: (kind) => controller.current?.feedback(kind),
+    enabled,
+    toggle: async () => {
+      const audio = controller.current
+      if (!audio) return
+      const next = !enabledRef.current
+      const request = ++toggleRequest.current
+      enabledRef.current = next
+      setEnabled(next)
+      const actual = await audio.setEnabled(next)
+      if (controller.current === audio && toggleRequest.current === request) { enabledRef.current = actual; setEnabled(actual) }
+    },
+  }
 }
 
 export default function CinematicAudio({ audio }) {
-  return <div className="cinema-audio-controls" aria-label="Optional homepage audio">
-    <button type="button" onClick={audio.toggle} aria-pressed={audio.enabled} aria-label={audio.enabled ? 'Disable sound effects' : 'Enable sound effects'}>{audio.enabled ? <Volume2 size={17} /> : <VolumeX size={17} />}<span>Sound {audio.enabled ? 'on' : 'off'}</span></button>
-    <button type="button" disabled aria-describedby="cinema-music-note"><Music size={17} />Music unavailable</button>
-    <span id="cinema-music-note">Music awaits an approved audio asset.</span>
-  </div>
+  const label = audio.enabled ? 'Mute Sound' : 'Enable Sound'
+  return <button className="cinema-audio-control" type="button" onClick={audio.toggle}
+    aria-pressed={audio.enabled} aria-label={label} title={label}>
+    {audio.enabled ? <Volume2 size={20} aria-hidden="true" /> : <VolumeX size={20} aria-hidden="true" />}
+  </button>
 }

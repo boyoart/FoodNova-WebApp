@@ -66,7 +66,7 @@ function audioFixture() {
     async suspend() { calls.suspended++; this.state='suspended' }
     async close() { calls.closed++ }
   }
-  class AudioElement { constructor(){ calls.music++; this.volume=0 } async play(){} pause(){} removeAttribute(){} load(){} }
+  class AudioElement { constructor(){ calls.music++; this.volume=0; calls.element=this } async play(){ calls.plays=(calls.plays || 0)+1 } pause(){ calls.pauses=(calls.pauses || 0)+1 } removeAttribute(){} load(){} }
   return { calls, Context, AudioElement }
 }
 
@@ -76,30 +76,34 @@ test('audio starts off, needs opt-in, shares one context, throttles feedback, pa
   let clock=0
   const audio = createCinematicAudio({ Context, AudioElement, now:()=>clock })
   audio.feedback('cart'); assert.equal(calls.contexts,0)
-  assert.equal(await audio.toggleMusic(),false)
   await audio.setEnabled(true); await audio.setEnabled(true)
   audio.feedback('cart'); audio.feedback('scene')
   assert.equal(calls.contexts,1); assert.equal(calls.tones,1)
   clock=1000; audio.feedback('cta'); assert.equal(calls.tones,2)
-  audio.pause(); clock=2000; audio.feedback(); assert.equal(calls.tones,2)
-  await audio.setEnabled(true); audio.feedback(); assert.equal(calls.tones,3)
+  audio.setHidden(true); clock=2000; audio.feedback(); assert.equal(calls.tones,2)
+  audio.setHidden(false); await Promise.resolve(); audio.feedback(); assert.equal(calls.tones,3)
   audio.dispose(); await audio.setEnabled(true); assert.equal(calls.contexts,1)
   assert.equal(calls.closed,1); assert.equal(calls.music,0)
 })
 
-test('music remains unavailable without approved asset and an opted-in configured controller fades safely', async () => {
+test('configured music starts only on opt-in, loops, fades, pauses and resumes', async () => {
   const { calls, Context, AudioElement } = audioFixture()
   const timers = new Map(); let seq=0
   const audio = createCinematicAudio({ Context, AudioElement, musicUrl:'/approved-test.ogg', schedule:(fn)=>{timers.set(++seq,fn);return seq}, cancel:(id)=>timers.delete(id) })
-  assert.equal(await audio.toggleMusic(),false); assert.equal(calls.music,0)
-  await audio.setEnabled(true); assert.equal(await audio.toggleMusic(),true)
+  assert.equal(calls.music,0)
+  await audio.setEnabled(true)
   for(let i=0;i<20;i++) for(const fn of [...timers.values()]) fn()
   assert.equal(calls.music,1)
+  assert.equal(calls.element.loop,true); assert.equal(calls.element.volume,0.1)
+  audio.setHidden(true); assert.equal(calls.element.volume,0); assert.equal(calls.pauses,1)
+  audio.setHidden(false); await Promise.resolve()
+  assert.equal(calls.plays,2)
+  for(let i=0;i<20;i++) for(const fn of [...timers.values()]) fn()
   await audio.setEnabled(false)
   for(let i=0;i<20;i++) for(const fn of [...timers.values()]) fn()
-  assert.equal(timers.size,0)
+  assert.equal(timers.size,0); assert.equal(calls.element.volume,0); assert.equal(calls.pauses,2)
   audio.dispose()
-  assert.match(source('components/CinematicAudio.jsx'), /disabled aria-describedby="cinema-music-note"/)
+  assert.match(source('components/CinematicAudio.jsx'), /No background music is configured/)
 })
 
 test('a missing or rejected future music asset cannot break the homepage audio controller', async () => {
@@ -107,8 +111,37 @@ test('a missing or rejected future music asset cannot break the homepage audio c
   class MissingAsset extends AudioElement { async play() { throw new Error('Synthetic missing recording') } }
   const audio=createCinematicAudio({Context,AudioElement:MissingAsset,musicUrl:'/missing-approved-recording.ogg'})
   await audio.setEnabled(true)
-  assert.equal(await audio.toggleMusic(),false)
+  await Promise.resolve()
   assert.doesNotThrow(()=>audio.feedback('cart'))
   audio.dispose()
   assert.equal(calls.closed,1)
+})
+
+test('save-data skips background music even after opt-in', async () => {
+  const { calls, Context, AudioElement } = audioFixture()
+  const audio = createCinematicAudio({ Context, AudioElement, musicUrl:'/approved-test.ogg', saveData:true })
+  await audio.setEnabled(true)
+  assert.equal(calls.music,0)
+  audio.feedback('cart'); assert.equal(calls.tones,1)
+  audio.dispose()
+})
+
+test('a late music play cannot restart sound after mute', async () => {
+  const { calls, Context, AudioElement } = audioFixture()
+  let resolvePlay
+  class DelayedAudio extends AudioElement {
+    play() { return new Promise((resolve) => { resolvePlay = resolve }) }
+  }
+  const timers = new Map(); let seq = 0
+  const audio = createCinematicAudio({ Context, AudioElement:DelayedAudio, musicUrl:'/approved-test.ogg',
+    schedule:(fn)=>{timers.set(++seq,fn);return seq}, cancel:(id)=>timers.delete(id) })
+  await audio.setEnabled(true)
+  await audio.setEnabled(false)
+  for (const fn of [...timers.values()]) fn()
+  const pauses = calls.pauses
+  resolvePlay(); await Promise.resolve()
+  assert.equal(calls.pauses, pauses + 1)
+  assert.equal(calls.element.volume, 0)
+  assert.equal(timers.size, 0)
+  audio.dispose()
 })

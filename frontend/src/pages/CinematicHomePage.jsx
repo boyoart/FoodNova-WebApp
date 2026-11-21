@@ -91,7 +91,7 @@ function PackCard({ raw, index, audio }) {
 
 export default function CinematicHomePage({ announcements = [] }) {
   const root = useRef(null)
-  const audio = useCinematicAudio(root)
+  const audio = useCinematicAudio()
   const [data, setData] = useState({ products: [], packs: [], categories: [] })
   const [loading, setLoading] = useState(true)
   const [errors, setErrors] = useState([])

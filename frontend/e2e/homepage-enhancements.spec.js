@@ -146,14 +146,19 @@ for (const width of [320, 1440]) {
     ] } }))
     await page.route('**/categories', (route) => route.fulfill({ json: [{ id: 8, name: 'Oils', image_url: '/broken-category.png' }, { id: 99, name: 'No category photograph' }] }))
     await page.route('**/products?**', (route) => route.fulfill({ json: { items: [{ id: 1, name: 'Palm Oil fixture', category: 'Oils', price: 100, is_active: true, image_url: '/fixture-oil.png', is_available: true }] } }))
+    await page.route('**/products/1', (route) => route.fulfill({ json: { id: 1, name: 'Palm Oil fixture', category: 'Oils', price: 100, is_active: true, image_url: '/fixture-oil.png', is_available: true } }))
     await page.route('**/packs?**', (route) => route.fulfill({ json: { items: [] } }))
     await page.route('**/broken-category.png', (route) => route.abort())
     const image = await readFile('public/branding/foodnova-logo.png')
     await page.route('**/fixture-oil.png', (route) => route.fulfill({ contentType: 'image/png', body: image }))
     await page.addInitScript(() => {
       window.__cinemaAudio = []
+      window.__cinemaTones = 0
       const Context = window.AudioContext
-      if (Context) window.AudioContext = class extends Context { constructor(...args) { super(...args); window.__cinemaAudio.push(this) } }
+      if (Context) window.AudioContext = class extends Context {
+        constructor(...args) { super(...args); window.__cinemaAudio.push(this) }
+        createOscillator() { window.__cinemaTones++; return super.createOscillator() }
+      }
     })
 
     await page.goto('/')
@@ -182,11 +187,30 @@ for (const width of [320, 1440]) {
     }
 
     expect(await page.evaluate(() => window.__cinemaAudio.length)).toBe(0)
-    await expect(page.getByRole('button', { name: 'Music unavailable', exact: true })).toBeDisabled()
-    await page.getByRole('button', { name: 'Enable sound effects', exact: true }).click()
-    await expect(page.getByRole('button', { name: 'Disable sound effects', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    const sound = page.getByRole('button', { name: 'Enable Sound', exact: true })
+    await expect(sound).toHaveAttribute('aria-pressed', 'false')
+    const soundBox = await sound.boundingBox()
+    for (const selector of ['.floating-cart-button', '.tracking-shortcut']) {
+      const target = page.locator(selector)
+      const box = await target.count() ? await target.boundingBox() : null
+      if (box) expect(soundBox.x + soundBox.width <= box.x || box.x + box.width <= soundBox.x ||
+        soundBox.y + soundBox.height <= box.y || box.y + box.height <= soundBox.y).toBe(true)
+    }
+    await sound.focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', { name: 'Mute Sound', exact: true })).toHaveAttribute('aria-pressed', 'true')
     expect(await page.evaluate(() => window.__cinemaAudio.length)).toBe(1)
-    await page.getByRole('button', { name: 'Disable sound effects', exact: true }).click()
+    const add = page.getByRole('button', { name: 'Add Palm Oil fixture to cart', exact: true })
+    await add.click()
+    await expect.poll(() => page.evaluate(() => window.__cinemaTones)).toBe(1)
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('cart') || '[]').length)).toBeGreaterThan(0)
+    const cartBox = await page.locator('.floating-cart-button').boundingBox()
+    expect(soundBox.y + soundBox.height <= cartBox.y).toBe(true)
+    await page.getByRole('button', { name: 'Mute Sound', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Enable Sound', exact: true })).toHaveAttribute('aria-pressed', 'false')
+    await page.waitForTimeout(1000)
+    await add.click()
+    expect(await page.evaluate(() => window.__cinemaTones)).toBe(1)
     await page.getByRole('button', { name: 'Pause announcements', exact: true }).click()
     await expect(page.getByRole('button', { name: 'Resume announcements', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await page.getByRole('button', { name: 'Resume announcements', exact: true }).click()
