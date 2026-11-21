@@ -23,7 +23,7 @@ export const useCartStore = create((set, get) => ({
     const existingItem = items.find(item => (item.cart_key || `${item.type || item.item_type || 'product'}-${item.id}-${item.variant_id || ''}`) === cartKey)
     const requestedQty = Number(product.quantity || 1)
     if (productType !== 'pack' && product.is_available === false) {
-      return
+      return false
     }
 
     let newItems
@@ -40,6 +40,7 @@ export const useCartStore = create((set, get) => ({
     localStorage.setItem('cart', JSON.stringify(newItems))
     set({ items: newItems })
     websiteAnalytics.commerce('add_to_cart', [{ ...product, quantity: requestedQty }])
+    return true
   },
 
   removeItem: (productId) => {

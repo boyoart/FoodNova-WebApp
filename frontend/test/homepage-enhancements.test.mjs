@@ -69,7 +69,7 @@ function audioFixture() {
   class Context {
     constructor() { calls.contexts++; this.currentTime=0; this.state='running' }
     createGain() { return { gain:{ value:0, setTargetAtTime(){}, setValueAtTime(){}, linearRampToValueAtTime(){}, exponentialRampToValueAtTime(){} }, connect(){}, disconnect(){} } }
-    createOscillator() { calls.tones++; return { frequency:{value:0}, connect(){}, disconnect(){}, start(){}, stop(){ calls.stopped++ } } }
+    createOscillator() { calls.tones++; return { frequency:{value:0, setValueAtTime(){}}, onended:null, connect(){}, disconnect(){}, start(){}, stop(time){ calls.stopped++; if (time === undefined) this.onended?.() } } }
     async resume() { this.state='running' }
     async suspend() { calls.suspended++; this.state='suspended' }
     async close() { calls.closed++ }
@@ -78,16 +78,16 @@ function audioFixture() {
   return { calls, Context, AudioElement }
 }
 
-test('audio starts off, needs opt-in, shares one context, throttles feedback, pauses and cleans up', async () => {
+test('audio starts off, needs opt-in, shares one context, prioritizes feedback and cleans up', async () => {
   assert.equal(await createCinematicAudio({ Context:null }).setEnabled(true), false)
   const { calls, Context, AudioElement } = audioFixture()
   let clock=0
   const audio = createCinematicAudio({ Context, AudioElement, now:()=>clock })
   audio.feedback('cart'); assert.equal(calls.contexts,0)
   await audio.setEnabled(true); await audio.setEnabled(true)
-  audio.feedback('cart'); audio.feedback('scene')
-  assert.equal(calls.contexts,1); assert.equal(calls.tones,1)
-  clock=1000; audio.feedback('cta'); assert.equal(calls.tones,2)
+  audio.feedback('cart'); audio.feedback('select')
+  assert.equal(calls.contexts,1); assert.equal(calls.tones,2)
+  clock=1000; audio.feedback('click'); assert.equal(calls.tones,2)
   audio.setHidden(true); clock=2000; audio.feedback(); assert.equal(calls.tones,2)
   audio.setHidden(false); await Promise.resolve(); audio.feedback(); assert.equal(calls.tones,3)
   audio.dispose(); await audio.setEnabled(true); assert.equal(calls.contexts,1)
@@ -131,7 +131,7 @@ test('a synchronous media failure does not disable interaction effects', async (
   const audio = createCinematicAudio({ Context, AudioElement:BrokenAudio, musicUrl:'/missing.mp3' })
   assert.equal(await audio.setEnabled(true),true)
   audio.feedback('cart')
-  assert.equal(calls.tones,1)
+  assert.equal(calls.tones,2)
   audio.dispose()
 })
 
@@ -140,7 +140,7 @@ test('save-data skips background music even after opt-in', async () => {
   const audio = createCinematicAudio({ Context, AudioElement, musicUrl:'/approved-test.ogg', saveData:true })
   await audio.setEnabled(true)
   assert.equal(calls.music,0)
-  audio.feedback('cart'); assert.equal(calls.tones,1)
+  audio.feedback('cart'); assert.equal(calls.tones,2)
   audio.dispose()
 })
 

@@ -21,6 +21,7 @@ import {
 import './ProductsPage.css'
 import { rememberProduct, unwrapItem } from '../utils/shopping'
 import { websiteAnalytics } from '../utils/websiteAnalytics'
+import { useCinematicAudio } from '../components/CinematicAudio'
 
 export default function ProductsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -42,6 +43,7 @@ export default function ProductsPage() {
   const [modalQuantity, setModalQuantity] = useState(1)
   const [modalUnavailable, setModalUnavailable] = useState(false)
   const { addItem } = useCartStore()
+  const audio = useCinematicAudio()
 
   useEffect(() => {
     setSearchInput(searchTerm)
@@ -135,7 +137,8 @@ export default function ProductsPage() {
       toast.error(itemType === 'pack' ? 'Online checkout is disabled for this pack' : 'This item is out of stock')
       return
     }
-    addItem(normalized)
+    if (!addItem(normalized)) return
+    audio.feedback('cart')
     toast.success('Added to cart!')
   }
 
@@ -318,6 +321,7 @@ export default function ProductsPage() {
                 key={cardKey}
                 className="product-card"
                 data-testid="product-card"
+                data-sound="select"
                 tabIndex="0"
                 aria-label={`View ${item.name} details`}
                 onClick={(event) => {
@@ -337,7 +341,7 @@ export default function ProductsPage() {
                 <div className="product-info">
                   {item.category && <span className="category">{item.category}</span>}
                   <h2>{item.name}</h2>
-                  <button type="button" className="product-view-details" onClick={() => openProductModal(item)}>
+                  <button type="button" className="product-view-details" data-sound="select" onClick={() => openProductModal(item)}>
                     View full details
                   </button>
 
@@ -353,6 +357,7 @@ export default function ProductsPage() {
                     <button
                       type="button"
                       className="btn-add"
+                      data-sound="defer"
                       onClick={() => handleAddToCart(item)}
                       disabled={unavailable}
                       aria-describedby={isFoodPack && unavailable ? `pack-enquiry-${item.id}` : undefined}
@@ -504,6 +509,7 @@ export default function ProductsPage() {
                 <button
                   type="button"
                   className="btn-add product-modal-add"
+                  data-sound="defer"
                   disabled={modalOutOfStock}
                   aria-describedby={modalOutOfStock && modalItem.type === 'pack' ? 'pack-modal-enquiry' : undefined}
                   onClick={() => handleAddToCart(modalItem, {

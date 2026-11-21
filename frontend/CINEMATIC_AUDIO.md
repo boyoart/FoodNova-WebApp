@@ -1,24 +1,27 @@
-# Cinematic homepage audio
+# FoodNova website audio
 
-The homepage starts muted and creates an audio context only when the visitor
-selects **Enable Sound**. Original synthesized tones accompany selected
-homepage actions. The control is not shown on checkout or other routes.
-Audio is muted when leaving the homepage or refreshing; a new gesture is
-required to enable it again. Hiding the tab suspends audio and returning
-resumes only a previously enabled session, subject to browser restrictions.
+The public storefront uses one audio provider and one floating speaker control
+across routes. Sound is off on first visit. After a visitor enables it, the
+preference is saved; a returning visitor's first gesture restores audio to
+respect browser autoplay restrictions. Muting stops active effects and music.
+The control is keyboard accessible and is not shown on Admin routes.
 
-**FoodNova Signature Lounge has not been supplied.** No music is included in
-this release. When the original, authorized recording is ready, add it as
-`public/audio/foodnova-signature-lounge.mp3`, document its ownership and
-permissions, and rebuild or restart Vite. At build/start time Vite detects
-whether that file exists; without it the page does not request music. Adding
-the file to an already built deployment alone does not enable it.
+One delegated interaction handler plays short synthesized click and product
+selection effects. Add-to-cart controls defer their sound until the cart store
+confirms the item was added, so failed actions remain silent. Effects are
+prioritized to avoid competing tones.
 
-The existing audio controller creates the music element only on the enable
-gesture, sets looping and fades to a 10% volume, subject to browser support
-(notably iOS Safari can ignore programmatic media volume). It pauses when the
-tab is hidden, resumes only after a prior opt-in, and skips music on Save-Data
-connections. A failed or unsupported recording leaves interaction effects
-available. Loop quality and actual playback must be tested with the supplied
-recording, including real mobile Safari; setting `loop` does not guarantee a
-gapless or seamless track.
+The checkout currently places bank-transfer orders before payment is verified.
+That response is remembered by order ID. The order-success sound is played once
+only after an authoritative order response reports `payment_status` as
+`payment_confirmed`, `confirmed`, or `paid`, and the order is not cancelled.
+Pending and rejected payments do not trigger it. The played marker is persisted
+to prevent polling, remounts, or refreshes from replaying the success sound.
+
+No background track is bundled in `public/audio/foodnova-signature-lounge.mp3`,
+and no commercial-use authorization is documented in the repository. Music
+therefore remains disabled; Vite checks for the asset at build time and does not
+request it when absent. Add the authorized original recording and document its
+rights before enabling it. When present, music starts only after opt-in, loops
+at 10% volume, fades on mute, pauses when the tab is hidden, and ducks during
+order confirmation. Browser volume support varies, particularly on iOS Safari.

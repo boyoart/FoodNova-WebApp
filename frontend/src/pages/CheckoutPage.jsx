@@ -8,6 +8,8 @@ import EmailVerificationNotice from '../components/EmailVerificationNotice'
 import { formatPrice } from '../utils/formatters'
 import { buildWhatsAppLink } from '../utils/contactUtils'
 import { isComboPackInventoryError } from '../utils/checkoutErrors'
+import { handleOrderAudioStatus } from '../utils/orderSuccessAudio'
+import { useCinematicAudio } from '../components/CinematicAudio'
 import toast from 'react-hot-toast'
 import { Home, MapPin, Mail, Phone, Truck, MessageCircle } from 'lucide-react'
 import AddressAutocomplete from '../components/AddressAutocomplete'
@@ -34,6 +36,7 @@ const normalizeNumericId = (value) => {
 
 export default function CheckoutPage() {
   const navigate = useNavigate()
+  const audio = useCinematicAudio()
   const { items, getTotalPrice, clearCart } = useCartStore()
   const { user, isAuthenticated } = useAuthStore()
   const resume = useRef(readCheckoutDraft()).current
@@ -138,6 +141,7 @@ export default function CheckoutPage() {
       }
       const createdOrder = extractOrder(await ordersAPI.create(orderData))
       if (!createdOrder?.id) throw new Error('Order was created but no order ID was returned')
+      handleOrderAudioStatus(createdOrder, { created: true, play: audio.feedback })
       clearCart(); clearCheckoutDraft(); toast.success('Order placed successfully. Use your Order Code as payment narration, then upload your receipt.'); navigate('/orders')
     } catch (error) {
       console.error('Checkout error:', error)

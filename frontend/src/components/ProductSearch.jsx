@@ -38,7 +38,7 @@ export default function ProductSearch({ value, onChange, onSubmit, onNavigate, m
     <button type="submit" aria-label="Search products"><Search size={18} /></button>
     {open && (options.length > 0 || status) && <div className="search-suggestions">
       <ul id="product-search-options" role="listbox" aria-label="Product and category suggestions">{options.map((option, index) => <li key={option.id} role="presentation">
-        <button type="button" role="option" id={`suggestion-${option.id}`} aria-selected={active === index} tabIndex={-1} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(option)}>
+        <button type="button" role="option" data-sound={option.kind === 'product' ? 'select' : undefined} id={`suggestion-${option.id}`} aria-selected={active === index} tabIndex={-1} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(option)}>
           {option.kind === 'product' && <img src={resolveMediaUrl(option.image_url || '/uploads/catalog/foodnova-placeholder.svg')} alt="" width="42" height="42" onError={handleImageError} />}
           <span><strong>{option.name}</strong><small>{option.kind === 'category' ? 'Browse category' : option.category}</small></span>
           {option.kind === 'product' && <b>{option.price != null && Number.isFinite(Number(option.price)) ? formatPrice(option.price) : 'View price'}</b>}

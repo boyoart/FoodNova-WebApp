@@ -40,12 +40,14 @@ import InvoicePage from './pages/InvoicePage'
 import AppLandingPage from './pages/AppLandingPage'
 import './modal-scroll-fix.css'
 import HomepageTicker, { useHomepageAnnouncements } from './components/HomepageTicker'
+import CinematicAudio, { CinematicAudioProvider, useCinematicAudio } from './components/CinematicAudio'
 
 // Approved homepage; HomePage.jsx/CSS remain unchanged for rollback.
 const CinematicHomePage = lazy(() => import('./pages/CinematicHomePage'))
 
 function AppLayout() {
   const location = useLocation()
+  const audio = useCinematicAudio()
   const isAdminRoute = location.pathname.startsWith('/admin')
   const isCinematicHomepage = location.pathname === '/'
   const cms = useHomepageAnnouncements(isCinematicHomepage)
@@ -105,6 +107,7 @@ function AppLayout() {
       {!isAdminRoute && <Footer />}
       {!isAdminRoute && <FloatingCartButton />}
       {!isAdminRoute && <BackToTopButton />}
+      {!isAdminRoute && <CinematicAudio audio={audio} />}
       <AnalyticsConsent />
       <FloatingOrderTracking />
       <Toaster position="bottom-right" />
@@ -113,7 +116,7 @@ function AppLayout() {
 }
 
 function App() {
-  return <BrowserRouter><ErrorBoundary><OrderTrackingProvider><AppLayout /></OrderTrackingProvider></ErrorBoundary></BrowserRouter>
+  return <BrowserRouter><CinematicAudioProvider><ErrorBoundary><OrderTrackingProvider><AppLayout /></OrderTrackingProvider></ErrorBoundary></CinematicAudioProvider></BrowserRouter>
 }
 
 export default App

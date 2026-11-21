@@ -16,9 +16,12 @@ import {
   pickupTimelineSteps,
 } from '../utils/orderStatusModel'
 import './OrderHistoryPage.css'
+import { useCinematicAudio } from '../components/CinematicAudio'
+import { handleOrderAudioStatus } from '../utils/orderSuccessAudio'
 
 export default function OrderHistoryPage() {
   const location = useLocation()
+  const audio = useCinematicAudio()
   const { isAuthenticated } = useAuthStore()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -27,6 +30,10 @@ export default function OrderHistoryPage() {
   const [uploadingReceipt, setUploadingReceipt] = useState(false)
   const [refreshingOrder, setRefreshingOrder] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const checkOrderAudio = (orders) => {
+    const records = Array.isArray(orders) ? orders : [orders]
+    records.filter(Boolean).forEach((order) => handleOrderAudioStatus(order, { play: audio.feedback }))
+  }
   useEffect(() => {
     const code = new URLSearchParams(location.search).get('order')
     if (!isAuthenticated || !code) return
@@ -50,6 +57,7 @@ export default function OrderHistoryPage() {
       try {
         const res = await ordersAPI.getCustomerOrders()
         if (!Array.isArray(res?.data)) return
+        checkOrderAudio(res.data)
         setOrders(res.data)
         setSelectedOrder((current) => (
           current ? res.data.find((order) => String(order.id) === String(current.id)) || current : current
@@ -92,6 +100,7 @@ export default function OrderHistoryPage() {
       setLoadError('')
       const res = await ordersAPI.getCustomerOrders()
       const rawOrders = Array.isArray(res?.data) ? res.data : []
+      checkOrderAudio(rawOrders)
 
       const seen = new Set()
       const uniqueOrders = rawOrders.filter((order) => {
@@ -141,6 +150,7 @@ export default function OrderHistoryPage() {
       const res = await ordersAPI.getById(order.id)
       const fresh = res?.order || res?.data || res
       if (fresh?.id) {
+        checkOrderAudio(fresh)
         setSelectedOrder((current) => (current && String(current.id) === String(fresh.id) ? fresh : current))
         setOrders((prev) => prev.map((item) => String(item.id) === String(fresh.id) ? fresh : item))
       }
@@ -162,6 +172,7 @@ export default function OrderHistoryPage() {
       const res = await ordersAPI.getById(selectedOrder.id)
       const fresh = res?.order || res?.data || res
       if (fresh?.id) {
+        checkOrderAudio(fresh)
         setSelectedOrder(fresh)
         setOrders((prev) => prev.map((o) => String(o.id) === String(fresh.id) ? fresh : o))
       }
@@ -216,6 +227,7 @@ export default function OrderHistoryPage() {
       setUploadingReceipt(true)
       const response = await ordersAPI.uploadReceipt(selectedOrder.id, receiptFile)
       const updatedOrder = response?.order || response?.data || response
+      checkOrderAudio(updatedOrder)
       toast.success('Receipt uploaded successfully. Payment awaiting confirmation.')
       await fetchOrders()
       if (updatedOrder?.id) setSelectedOrder(updatedOrder)
