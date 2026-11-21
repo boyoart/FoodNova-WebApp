@@ -398,6 +398,7 @@ def default_website_settings() -> dict:
         "homepageBanners": "",
         "featuredPacks": "",
         "homepageAnnouncement": "",
+        "tickerEnabled": True,
         "subscribers": [],
     }
 
@@ -409,6 +410,7 @@ def normalize_website_settings(raw: dict = None) -> dict:
     settings["comingSoonEnabled"] = bool(settings.get("comingSoonEnabled"))
     settings["maintenanceMode"] = bool(settings.get("maintenanceMode"))
     settings["splashEnabled"] = bool(settings.get("splashEnabled"))
+    settings["tickerEnabled"] = settings.get("tickerEnabled") is True
     if not isinstance(settings.get("subscribers"), list):
         settings["subscribers"] = []
     for key in ["siteName", "siteDescription", "headline", "subtext", "launchDate", "homepageBanners", "featuredPacks", "homepageAnnouncement"]:
@@ -2168,7 +2170,14 @@ def get_app_setting(db, key: str, default: str = "") -> str:
     return setting.value if setting and setting.value is not None else default
 
 
+def lock_app_setting(db, key: str) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                   {"key": f"foodnova_app_setting:{key}"})
+
+
 def set_app_setting(db, key: str, value: str) -> DBAppSetting:
+    lock_app_setting(db, key)
     setting = db.query(DBAppSetting).filter(DBAppSetting.key == key).first()
     if not setting:
         setting = DBAppSetting(key=key, value=value)
@@ -2181,6 +2190,7 @@ def set_app_setting(db, key: str, value: str) -> DBAppSetting:
 
 
 class WebsiteSettingsPayload(BaseModel):
+    tickerEnabled: Optional[bool] = None
     comingSoonEnabled: Optional[bool] = None
     maintenanceMode: Optional[bool] = None
     splashEnabled: Optional[bool] = None
@@ -2250,6 +2260,7 @@ def update_admin_website_settings(payload: WebsiteSettingsPayload, request: Requ
     admin = require_any_permission(request, ["website_settings:manage", "announcements:manage", "admins:manage"])
     db = SessionLocal()
     try:
+        lock_app_setting(db, WEBSITE_SETTINGS_KEY)
         current = get_website_settings_from_db(db)
         updates = {key: value for key, value in payload.dict(exclude_unset=True).items() if value is not None}
         next_settings = save_website_settings_to_db(db, {**current, **updates})
@@ -8963,6 +8974,7 @@ def category_to_dict(db, category: dict) -> dict:
 
 
 def load_category_records(db) -> list:
+    lock_app_setting(db, PRODUCT_CATEGORIES_KEY)
     setting = db.query(DBAppSetting).filter(DBAppSetting.key == PRODUCT_CATEGORIES_KEY).with_for_update().first()
     raw = setting.value if setting else "[]"
     parsed = json_load(raw, [])
@@ -17169,6 +17181,27 @@ def deactivate_admin_user(admin_id: int, request: Request):
 
 ANNOUNCEMENT_DISPLAY_TYPES = {"top_bar", "hero_banner", "popup"}
 ANNOUNCEMENT_THEMES = {"green", "yellow", "dark", "light", "promo", "urgent"}
+TICKER_INITIALIZED_KEY = "homepage_ticker_initialized_v1"
+TICKER_STARTERS = (
+    ("Welcome to FoodNova", "WELCOME TO FOODNOVA — Your everyday food shopping made easier."),
+    ("Food Combo Packs", "FOOD COMBO PACKS — Explore affordable food packs for individuals and families."),
+    ("Shop Your Essentials", "SHOP YOUR ESSENTIALS — Discover Rice, Beans, Garri, Oils and more."),
+    ("FoodNova Gift Packs", "FOODNOVA GIFT PACKS — Share thoughtful food packages with loved ones."),
+    ("Good Food. Better Value.", "GOOD FOOD. BETTER VALUE. — Discover more with FoodNova."),
+)
+
+
+def claim_ticker_initialization(db):
+    dialect = db.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert
+    else:
+        raise RuntimeError(f"Unsupported ticker initialization database: {dialect}")
+    statement = insert(DBAppSetting).values(key=TICKER_INITIALIZED_KEY, value="true")
+    result = db.execute(statement.on_conflict_do_nothing(index_elements=["key"]))
+    return result.rowcount == 1
 
 
 def clean_announcement_payload(data: dict, partial: bool = False) -> dict:
@@ -17236,10 +17269,12 @@ def get_active_announcements():
             "active_image_urls": [item.get("image_url", "") for item in announcements],
             "rejected": rejected,
         }))
-        return {"success": True, "announcements": announcements, "data": announcements}
+        return {"success": True, "announcements": announcements, "data": announcements,
+                "ticker_enabled": get_website_settings_from_db(db)["tickerEnabled"]}
     except Exception as error:
+        db.rollback()
         print("ACTIVE ANNOUNCEMENTS LOAD ERROR:", repr(error))
-        return {"success": True, "announcements": [], "data": []}
+        raise HTTPException(status_code=503, detail="Announcements are temporarily unavailable")
     finally:
         db.close()
 
@@ -17255,10 +17290,47 @@ def get_admin_announcements(request: Request):
             .order_by(DBAnnouncement.priority.desc(), DBAnnouncement.created_at.desc(), DBAnnouncement.id.desc())
             .all()
         ]
-        return {"success": True, "announcements": announcements, "data": announcements}
+        initialized = db.query(DBAppSetting.id).filter(DBAppSetting.key == TICKER_INITIALIZED_KEY).first() is not None
+        return {"success": True, "announcements": announcements, "data": announcements,
+                "ticker_initialized": initialized}
     except Exception as error:
         print("ADMIN ANNOUNCEMENTS LOAD ERROR:", repr(error))
         raise HTTPException(status_code=500, detail="Unable to load announcements")
+    finally:
+        db.close()
+
+
+@app.post("/admin/announcements/initialize-ticker")
+def initialize_ticker_announcements(request: Request):
+    admin = require_permission(request, "announcements:manage")
+    db = SessionLocal()
+    try:
+        if not claim_ticker_initialization(db):
+            db.rollback()
+            return {"success": True, "status": "already_initialized"}
+        existing = db.query(DBAnnouncement.id).filter(DBAnnouncement.display_type == "top_bar").first()
+        deleted = db.query(DBAdminAuditLog.id).filter(
+            DBAdminAuditLog.entity_type == "announcement", DBAdminAuditLog.action == "announcement_deleted"
+        ).first()
+        if existing or deleted:
+            status = "existing_announcements" if existing else "previous_deletion"
+        else:
+            db.add_all([
+                DBAnnouncement(title=title, message=message, display_type="top_bar",
+                               priority=len(TICKER_STARTERS) - index, is_active=True,
+                               created_by_admin_id=admin.get("id"),
+                               created_by_admin_name=admin.get("full_name") or admin.get("email") or "Admin")
+                for index, (title, message) in enumerate(TICKER_STARTERS)
+            ])
+            status = "created"
+        db.commit()
+        create_admin_audit_log(request, admin, "ticker_initialization", "announcement", "",
+                               f"Admin initialized ticker starter content: {status}", {"status": status})
+        return {"success": True, "status": status}
+    except Exception as error:
+        db.rollback()
+        print("TICKER INITIALIZATION ERROR:", repr(error))
+        raise HTTPException(status_code=500, detail="Unable to initialize ticker announcements")
     finally:
         db.close()
 
@@ -17276,6 +17348,8 @@ def create_announcement(payload: AnnouncementPayload, request: Request):
     data = clean_announcement_payload(payload.dict())
     db = SessionLocal()
     try:
+        if (data.get("display_type") or "top_bar") == "top_bar":
+            claim_ticker_initialization(db)
         announcement = DBAnnouncement(
             title=data["title"],
             message=data["message"],
@@ -17310,6 +17384,8 @@ def update_announcement(announcement_id: int, payload: AnnouncementUpdatePayload
         announcement = db.query(DBAnnouncement).filter(DBAnnouncement.id == announcement_id).first()
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
+        if announcement.display_type == "top_bar" or updates.get("display_type") == "top_bar":
+            claim_ticker_initialization(db)
         old_data = announcement_to_dict(announcement)
         for field in [
             "title", "message", "display_type", "button_text", "button_link", "image_url",
@@ -17336,6 +17412,8 @@ def delete_announcement(announcement_id: int, request: Request):
         announcement = db.query(DBAnnouncement).filter(DBAnnouncement.id == announcement_id).first()
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
+        if announcement.display_type == "top_bar":
+            claim_ticker_initialization(db)
         old_data = announcement_to_dict(announcement)
         db.delete(announcement)
         db.commit()

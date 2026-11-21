@@ -1,8 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-const screenshots = path.resolve('../.codex-attachments/cinematic-validation')
+const screenshots = path.join(tmpdir(), `foodnova-cinematic-release-${process.pid}`)
+test.afterAll(async () => { await rm(screenshots, { recursive: true, force: true }) })
 test.beforeEach(async ({ context }) => {
   // Local UI tests may read public catalogue data but must never create real orders or telemetry.
   await context.route('**/*', async (route) => {
@@ -12,7 +14,7 @@ test.beforeEach(async ({ context }) => {
   await mkdir(screenshots, { recursive: true })
 })
 
-for (const width of [1440, 1024, 768, 390, 360]) {
+for (const width of [1440, 1024, 768, 390, 360, 320]) {
   test(`live catalogue layout and shopping at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
     const errors = []
