@@ -18,10 +18,9 @@ only after an authoritative order response reports `payment_status` as
 Pending and rejected payments do not trigger it. The played marker is persisted
 to prevent polling, remounts, or refreshes from replaying the success sound.
 
-No background track is bundled in `public/audio/foodnova-signature-lounge.mp3`,
-and no commercial-use authorization is documented in the repository. Music
-therefore remains disabled; Vite checks for the asset at build time and does not
-request it when absent. Add the authorized original recording and document its
-rights before enabling it. When present, music starts only after opt-in, loops
-at 10% volume, fades on mute, pauses when the tab is hidden, and ducks during
-order confirmation. Browser volume support varies, particularly on iOS Safari.
+The supplied signature track is bundled at
+`public/audio/foodnova-signature-lounge.mp3`. Vite checks for the asset at build
+time and enables music only when it is present. Music starts only after opt-in,
+loops at 10% volume, fades on mute, pauses when the tab is hidden, and ducks
+during order confirmation. Browser volume support varies, particularly on iOS
+Safari.
